@@ -144,22 +144,60 @@ void Engine::Update(float a_deltaTime)
 
 void Engine::Draw()
 {
-    float r = (float)sin(glfwGetTime()) * 0.5f + 0.5f;
-    float g = (float)cos(glfwGetTime()) * 0.5f + 0.5f;
-    // std::cout << r << "      " << g << "     " << glfwGetTime() << std::endl;
-
-    const GLfloat red[] = {r, g, 0.0f, 1.0f};
-    // glClearBufferfv(GL_COLOR, 0, red);
-
-    basicShader->use();
-
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    float f = (float)glfwGetTime() * (float)M_PI * 0.1f;
+    glm::mat4 mv_matrix = 
+        glm::translate(0.0f, 0.0f, -4.0f) *
+        glm::translate(sinf(2.1f * f) * 0.5f, cosf(1.7f * f) * 0.5f, sinf(1.3f * f) * cosf(1.5f * f) * 2.0f) *
+        glm::rotate((float)glfwGetTime() * 45.0f, 0.0f, 1.0f, 0.0f) * 
+        glm::rotate((float)glfwGetTime() * 81.0f, 1.0f, 0.0f, 0.0f);
 }
 
 void Engine::ShutDown()
 {
     delete basicShader;
+}
+
+void CreateACube()
+{
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    static const GLfloat vertex_positions[] = 
+    {
+        -0.25f, 0.25f, -0.25f,
+        -0.25f, -0.25f, -0.25f,
+        0.25f, -0.25f, -0.25f,
+
+        0.25f, -0.25f, -0.25f,
+        0.25f, 0.25f, -0.25f,
+        -0.25f, 0.25f, -0.25f,
+
+        0.25, 0.25, 0.25,
+        0.25, -0.25, 0.25,
+        -0.25, 0.25, 0.25,
+
+        0.25, -0.25, -0.25,
+        -0.25, -0.25, 0.25,
+        -0.25, 0.25, 0.25,
+
+
+
+        -0.25f, 0.25f, -0.25f,
+        0.25f, 0.25f, -0.25f,
+        0.25f, 0.25f, 0.25f,
+
+        0.25f, 0.25f, 0.25f,
+        -0.25f, 0.25f, 0.25f,
+        -0.25f, 0.25f, -0.25f
+
+    };
+
+    glGenBuffers(1, &buffer);
+    glBindBuffers(GL_ARRAY_BUFFER, buffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(0);
+
+
 }
