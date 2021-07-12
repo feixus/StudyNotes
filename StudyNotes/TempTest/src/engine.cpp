@@ -145,11 +145,20 @@ void Engine::Update(float a_deltaTime)
 void Engine::Draw()
 {
     float f = (float)glfwGetTime() * (float)M_PI * 0.1f;
-    glm::mat4 mv_matrix = 
-        glm::translate(0.0f, 0.0f, -4.0f) *
-        glm::translate(sinf(2.1f * f) * 0.5f, cosf(1.7f * f) * 0.5f, sinf(1.3f * f) * cosf(1.5f * f) * 2.0f) *
-        glm::rotate((float)glfwGetTime() * 45.0f, 0.0f, 1.0f, 0.0f) * 
-        glm::rotate((float)glfwGetTime() * 81.0f, 1.0f, 0.0f, 0.0f);
+    glm::mat4 mv_matrix = glm::mat4(1.0f);
+    glm::translate(mv_matrix, glm::vec3(0.0f, 0.0f, -4.0f));
+    glm::translate(mv_matrix, glm::vec3(sinf(2.1f * f) * 0.5f, cosf(1.7f * f) * 0.5f, sinf(1.3f * f) * cosf(1.5f * f) * 2.0f));
+    glm::rotate(mv_matrix, glm::radians((float)glfwGetTime() * 45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::rotate(mv_matrix, glm::radians((float)glfwGetTime() * 81.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+       
+    glm::mat4 proj_matrix = glm::mat4(1.0f);
+    glm::perspective(glm::radians(50.0f), (float)this->screenWidth / this->screenHeight, 0.1f, 1000.0f);
+
+    static const glm::vec4 bgColor(0.2f, 0.4f, 0.5f, 1.0f);
+    glClearBufferfv(GL_COLOR, 0, &bgColor[0]);
+
+    
+
 }
 
 void Engine::ShutDown()
@@ -157,7 +166,7 @@ void Engine::ShutDown()
     delete basicShader;
 }
 
-void CreateACube()
+void Engine::CreateACube()
 {
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
@@ -192,8 +201,8 @@ void CreateACube()
 
     };
 
-    glGenBuffers(1, &buffer);
-    glBindBuffers(GL_ARRAY_BUFFER, buffer);
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);

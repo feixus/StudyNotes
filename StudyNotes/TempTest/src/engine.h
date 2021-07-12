@@ -6,8 +6,12 @@
 #include <GLFW\glfw3.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "shader.h"
+
+#define M_PI 3.14159
 
 // Header includes.
 // TODO: Include your headers here...
@@ -49,4 +53,6 @@ private:
     
     Shader* basicShader;
     unsigned int VAO, VBO;
+
+    void CreateACube();
 };
