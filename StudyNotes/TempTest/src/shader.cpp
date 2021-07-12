@@ -1,23 +1,24 @@
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
 #include "shader.h"
-#include <iostream>
-#include <fstream>
-#include <string.h>
 
-Shader::Shader(std::string a_vertexShaderSource, std::string a_fragmentShaderSource, std::string a_tcsShaderSource, std::string a_tesShaderSource, std::string a_gsShaderSource)
+Shader::Shader(const char* a_vertexShaderSource, const char* a_fragmentShaderSource)
 {
     setVertexShader(a_vertexShaderSource);
-
     setFragmentShader(a_fragmentShaderSource);
 
-    if (!a_tcsShaderSource.empty())
+    compile();
+}
+
+Shader::Shader(const char* a_vertexShaderSource, const char* a_fragmentShaderSource, const char* a_tcsShaderSource, const char* a_tesShaderSource, const char* a_gsShaderSource)
+{
+    setVertexShader(a_vertexShaderSource);
+    setFragmentShader(a_fragmentShaderSource);
+
+    if (a_tcsShaderSource != nullptr)
         setTessellationControlShader(a_tcsShaderSource);
-    if (!a_tesShaderSource.empty())
+    if (a_tesShaderSource != nullptr)
         setTessellationEvalutionShader(a_tesShaderSource);
 
-    if (!a_gsShaderSource.empty())
+    if (a_gsShaderSource != nullptr)
         setGeometryShader(a_gsShaderSource);
 
     compile();
@@ -225,4 +226,9 @@ bool Shader::shaderCompiled(unsigned int a_id)
     }
 
     return true;
+}
+
+void Shader::setMat4(const std::string &name, const glm::mat4 &mat) const
+{
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, name.c_str()), 1, GL_FALSE, &mat[0][0]);
 }

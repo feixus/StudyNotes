@@ -107,31 +107,10 @@ void Engine::ProcessInput(GLFWwindow *a_window)
 void Engine::SetupOpenGlRendering()
 {
     // TODO: Setup OpenGL code here...
-    basicShader = new Shader("src/shaders/basicVertexShader.glsl", 
-                             "src/shaders/basicFragmentShader.glsl",
-                             "",
-                             "",
-                             "");
+    basicShader = new Shader("src/shaders/basicVertexShader.glsl", "src/shaders/basicFragmentShader.glsl");
     
-    float vertices[] = {
-        0.0f, 1.0f,
-        0.0f, 0.0f,
-        1.0f, 0.0f,
-
-        0.0f, 1.0f,
-        1.0f, 0.0f,
-        1.0f, 1.0f};
-
-
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
+    CreateACube();
+    
     std::cout << glGetError() << "  -->>>>" << std::endl;
 
     glPointSize(50);
@@ -157,13 +136,16 @@ void Engine::Draw()
     static const glm::vec4 bgColor(0.2f, 0.4f, 0.5f, 1.0f);
     glClearBufferfv(GL_COLOR, 0, &bgColor[0]);
 
-    
+    basicShader->use();
+    basicShader->setMat4("mv_matrix", mv_matrix);
+    basicShader->setMat4("proj_matrix", proj_matrix);
 
+    glDrawArrays(GL_TRIANGLES, 0, 18);
 }
 
 void Engine::ShutDown()
 {
-    delete basicShader;
+    delete &basicShader;
 }
 
 void Engine::CreateACube()

@@ -1,8 +1,19 @@
 #version 450 core
-layout (location = 0) in vec2 aPos;
+
+in vec4 position;
+
+out VS_OUT 
+{
+   vec4 color;
+} vs_out;
+
+uniform mat4 mv_matrix;
+uniform mat4 proj_matrix;
 
 void main()
 {
-   gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);
+   gl_Position = proj_matrix * mv_matrix * position;
+
+   vs_out.color = position * 2.0 + vec4(0.5, 0.5, 0.5, 0.0);
   
 }

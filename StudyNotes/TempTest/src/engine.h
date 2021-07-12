@@ -1,3 +1,6 @@
+#ifndef __ENGINE__
+#define __ENGINE__
+
 // System libs.
 #include <iostream>
 
@@ -56,3 +59,5 @@ private:
 
     void CreateACube();
 };
+
+#endif
