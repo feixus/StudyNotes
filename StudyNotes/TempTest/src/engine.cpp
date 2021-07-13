@@ -220,6 +220,7 @@ void Engine::CreateACube()
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
 
+    //为什么attribindex = 0只输入3个顶点,而shader里却定义的vec4,且能正常运行
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
     glEnableVertexAttribArray(0);
 }
