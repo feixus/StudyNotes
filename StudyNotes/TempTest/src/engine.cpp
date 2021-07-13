@@ -13,7 +13,7 @@ int Engine::Initialize()
     glfwInit();
 
     // Tell GLFW that we want to use OpenGL 3.3
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); 
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 
     // Tell GLFW that we want to use the OpenGL's core profile.
@@ -106,14 +106,17 @@ void Engine::ProcessInput(GLFWwindow *a_window)
 
 void Engine::SetupOpenGlRendering()
 {
+    glEnable(GL_DEPTH_TEST);
+
     // TODO: Setup OpenGL code here...
     basicShader = new Shader("src/shaders/basicVertexShader.glsl", "src/shaders/basicFragmentShader.glsl");
-    
+
     CreateACube();
-    
+
     std::cout << glGetError() << "  -->>>>" << std::endl;
 
     glPointSize(50);
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
 void Engine::Update(float a_deltaTime)
@@ -123,24 +126,32 @@ void Engine::Update(float a_deltaTime)
 
 void Engine::Draw()
 {
-    float f = (float)glfwGetTime() * (float)M_PI * 0.1f;
-    glm::mat4 mv_matrix = glm::mat4(1.0f);
-    glm::translate(mv_matrix, glm::vec3(0.0f, 0.0f, -4.0f));
-    glm::translate(mv_matrix, glm::vec3(sinf(2.1f * f) * 0.5f, cosf(1.7f * f) * 0.5f, sinf(1.3f * f) * cosf(1.5f * f) * 2.0f));
-    glm::rotate(mv_matrix, glm::radians((float)glfwGetTime() * 45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::rotate(mv_matrix, glm::radians((float)glfwGetTime() * 81.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-       
-    glm::mat4 proj_matrix = glm::mat4(1.0f);
-    glm::perspective(glm::radians(50.0f), (float)this->screenWidth / this->screenHeight, 0.1f, 1000.0f);
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 0.0f, 3.0f) + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 perspective = glm::perspective(glm::radians(50.0f), (float)this->screenWidth / (float)this->screenHeight, 0.1f, 1000.0f);
 
     static const glm::vec4 bgColor(0.2f, 0.4f, 0.5f, 1.0f);
     glClearBufferfv(GL_COLOR, 0, &bgColor[0]);
 
-    basicShader->use();
-    basicShader->setMat4("mv_matrix", mv_matrix);
-    basicShader->setMat4("proj_matrix", proj_matrix);
+    // 每次重新绘制时都需要清空深度缓冲和模板缓冲，否则允许深度测试时看不到渲染目标，为什么？
+    glClearBufferfi(GL_DEPTH_STENCIL, 0, 1.0f, 0.0f);
 
-    glDrawArrays(GL_TRIANGLES, 0, 18);
+    basicShader->use();
+    basicShader->setMat4("vp_matrix", perspective * view);
+
+    for (int i = 0; i < 24; i++)
+    {
+        float f = (float)i + (float)glfwGetTime() * (float)M_PI * 0.1f;
+        
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(0.0f, 0.0f, -20.0f));
+        model = glm::translate(model, glm::vec3(sinf(2.1f * f) * 8.0f, cosf(1.7f * f) * 8.0f, sinf(1.3f * f) * cosf(1.5f * f) * 8.0f));
+        model = glm::rotate(model, glm::radians((float)glfwGetTime() * 45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::rotate(model, glm::radians((float)glfwGetTime() * 81.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+        basicShader->setMat4("m_matrix", model);
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
 }
 
 void Engine::ShutDown()
@@ -153,35 +164,57 @@ void Engine::CreateACube()
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
-    static const GLfloat vertex_positions[] = 
-    {
-        -0.25f, 0.25f, -0.25f,
-        -0.25f, -0.25f, -0.25f,
-        0.25f, -0.25f, -0.25f,
+    static const GLfloat vertex_positions[] =
+        {
+            -1.0f, 1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
 
-        0.25f, -0.25f, -0.25f,
-        0.25f, 0.25f, -0.25f,
-        -0.25f, 0.25f, -0.25f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, 1.0f, -1.0f,
+            -1.0f, 1.0f, -1.0f,
 
-        0.25, 0.25, 0.25,
-        0.25, -0.25, 0.25,
-        -0.25, 0.25, 0.25,
+            1.0f, 1.0f, 1.0f,
+            1.0f, -1.0f, 1.0f,
+            -1.0f, -1.0f, 1.0f,
 
-        0.25, -0.25, -0.25,
-        -0.25, -0.25, 0.25,
-        -0.25, 0.25, 0.25,
+            -1.0f, -1.0f, 1.0f,
+            -1.0f, 1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f,
 
+            1.0f, 1.0f, 1.0f,
+            1.0f, 1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
 
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f,
 
-        -0.25f, 0.25f, -0.25f,
-        0.25f, 0.25f, -0.25f,
-        0.25f, 0.25f, 0.25f,
+            -1.0f, 1.0f, 1.0f,
+            -1.0f, 1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,
 
-        0.25f, 0.25f, 0.25f,
-        -0.25f, 0.25f, 0.25f,
-        -0.25f, 0.25f, -0.25f
+            -1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f, 1.0f,
+            -1.0f, 1.0f, 1.0f,
 
-    };
+            1.0f, -1.0f, 1.0f,
+            1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,
+
+            -1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f, 1.0f,
+            1.0f, -1.0f, 1.0f,
+
+            -1.0f, 1.0f, -1.0f,
+            1.0f, 1.0f, -1.0f,
+            1.0f, 1.0f, 1.0f,
+
+            1.0f, 1.0f, 1.0f,
+            -1.0f, 1.0f, 1.0f,
+            -1.0f, 1.0f, -1.0f
+
+        };
 
     glGenBuffers(1, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
@@ -189,6 +222,4 @@ void Engine::CreateACube()
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
     glEnableVertexAttribArray(0);
-
-
 }

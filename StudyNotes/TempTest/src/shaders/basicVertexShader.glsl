@@ -7,13 +7,13 @@ out VS_OUT
    vec4 color;
 } vs_out;
 
-uniform mat4 mv_matrix;
-uniform mat4 proj_matrix;
+uniform mat4 vp_matrix;
+uniform mat4 m_matrix;
 
 void main()
 {
-   gl_Position = proj_matrix * mv_matrix * position;
+   gl_Position = vp_matrix * m_matrix * position;
 
-   vs_out.color = position * 2.0 + vec4(0.5, 0.5, 0.5, 0.0);
+   vs_out.color = position;
   
 }
