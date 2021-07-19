@@ -12,6 +12,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+// #define STB_IMAGE_IMPLEMENTATION
+// #include "stb_image.h"
+
 #include "shader.h"
 
 #define M_PI 3.14159
@@ -55,9 +58,11 @@ private:
     void SetupOpenGlRendering();
     
     Shader* basicShader;
-    unsigned int VAO, VBO;
+    unsigned int VAO, VBO, textureID;
 
     void CreateACube();
+
+    unsigned int LoadTexture(const char* path);
 };
 
 #endif
