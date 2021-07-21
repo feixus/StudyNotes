@@ -1,5 +1,11 @@
 #include "engine.h"
 
+//You must not #define STB_IMAGE_IMPLEMENTATION in header (.h) files.  
+//Only in one C/C++ file to create the implementation (the stuff that has to be unique and done only once.)
+//https://gamedev.stackexchange.com/questions/158106/why-am-i-getting-these-errors-when-including-stb-image-h
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 Engine::Engine(int a_width, int a_height, const char *a_windowName)
 {
     this->screenWidth = a_width;
@@ -111,10 +117,11 @@ void Engine::SetupOpenGlRendering()
     // TODO: Setup OpenGL code here...
     basicShader = new Shader("src/shaders/basicVertexShader.glsl", "src/shaders/basicFragmentShader.glsl");
 
+    std::cout << glGetError() << " 1 -->>>>" << std::endl;
     textureID = LoadTexture("D:/Workspace/Codes/githubs/Graphics/StudyNotes/TempTest/src/textures/1.jpg");
+    std::cout << glGetError() << " 2 -->>>>" << std::endl;
 
     CreateACube();
-
 
     std::cout << glGetError() << "  -->>>>" << std::endl;
 
@@ -172,65 +179,66 @@ void Engine::CreateACube()
 
     static const GLfloat vertex_positions[] =
         {
-            -1.0f, 1.0f, -1.0f,  0, 1,
-            -1.0f, -1.0f, -1.0f, 0, 0,
-            1.0f, -1.0f, -1.0f,  1, 0,
+            -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
+            -1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
+            1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
 
-            1.0f, -1.0f, -1.0f,  1, 0,
-            1.0f, 1.0f, -1.0f,   1, 1
-            -1.0f, 1.0f, -1.0f,  0, 1,
+            1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
+            1.0f, 1.0f, -1.0f,   1.0f, 1.0f,
+            -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
 
-            1.0f, 1.0f, 1.0f,    0, 1,
-            1.0f, -1.0f, 1.0f,   0, 0,
-            -1.0f, -1.0f, 1.0f,  1, 0,
+            1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
+            1.0f, -1.0f, 1.0f,   0.0f, 0.0f,
+            -1.0f, -1.0f, 1.0f,  1.0f, 0.0f,
 
-            -1.0f, -1.0f, 1.0f,  1, 0,
-            -1.0f, 1.0f, 1.0f,   1, 1,
-            1.0f, 1.0f, 1.0f,    0, 1,
+            -1.0f, -1.0f, 1.0f,  1.0f, 0.0f,
+            -1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
 
-            1.0f, 1.0f, 1.0f,    0, 1,
-            1.0f, 1.0f, -1.0f,   0, 0,
-            1.0f, -1.0f, -1.0f,  1, 0,
+            1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
+            1.0f, 1.0f, -1.0f,   0.0f, 0.0f,
+            1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
 
-            1.0f, -1.0f, -1.0f,  1, 0,
-            1.0f, -1.0f, 1.0f,   1, 1,
-            1.0f, 1.0f, 1.0f,    0, 1,
+            1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
+            1.0f, -1.0f, 1.0f,   1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
 
-            -1.0f, 1.0f, 1.0f,   0, 1,
-            -1.0f, 1.0f, -1.0f,  0, 0,
-            -1.0f, -1.0f, -1.0f, 1, 0,
+            -1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+            -1.0f, 1.0f, -1.0f,  0.0f, 0.0f,
+            -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
 
-            -1.0f, -1.0f, -1.0f, 1, 0,
-            -1.0f, -1.0f, 1.0f,  1, 1,
-            -1.0f, 1.0f, 1.0f,   0, 1,
+            -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
+            -1.0f, -1.0f, 1.0f,  1.0f, 1.0f,
+            -1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
 
-            1.0f, -1.0f, 1.0f,   0, 1,
-            1.0f, -1.0f, -1.0f,  0, 0,
-            -1.0f, -1.0f, -1.0f, 1, 0,
+             1.0f, -1.0f,  1.0f,  0.0f, 1.0f,
+             1.0f, -1.0f, -1.0f,  0.0f, 0.0f,
+            -1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
 
-            -1.0f, -1.0f, -1.0f, 1, 0,
-            -1.0f, -1.0f, 1.0f,  1, 1,
-            1.0f, -1.0f, 1.0f,   0, 1,
+            -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
+            -1.0f, -1.0f, 1.0f,  1.0f, 1.0f,
+            1.0f, -1.0f, 1.0f,   0.0f, 1.0f,
 
-            -1.0f, 1.0f, -1.0f,  0, 1,
-            1.0f, 1.0f, -1.0f,   0, 0,
-            1.0f, 1.0f, 1.0f,    1, 0,
+            -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
+            1.0f, 1.0f, -1.0f,   0.0f, 0.0f,
+            1.0f, 1.0f, 1.0f,    1.0f, 0.0f,
 
-            1.0f, 1.0f, 1.0f,    1, 0,
-            -1.0f, 1.0f, 1.0f,   1, 1,
-            -1.0f, 1.0f, -1.0f,  0, 1,
+             1.0f, 1.0f, 1.0f,    1.0f, 0.0f,
+            -1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+            -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
 
         };
 
+    
     glGenBuffers(1, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
 
     //为什么attribindex = 0只输入3个顶点,而shader里却定义的vec4,且能正常运行
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, NULL);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)0);
     glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5,  (void*)(sizeof(GL_FLOAT) * 3));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)(sizeof(GL_FLOAT) * 3));
     glEnableVertexAttribArray(1);
 }
 
@@ -238,19 +246,19 @@ unsigned int Engine::LoadTexture(const char *path)
 {
     unsigned int textureID;
 
-    // int width, height, channel;
-    // unsigned char *data = stbi_load(path, &width, &height, &channel, 0);
+    int width, height, channel;
+    unsigned char *data = stbi_load(path, &width, &height, &channel, 0);
 
-    // glCreateTextures(GL_TEXTURE_2D, 1, &textureID);
+    glCreateTextures(GL_TEXTURE_2D, 1, &textureID);
 
-    // GLenum internalformat = channel == 4 and GL_RGBA32F or GL_RGB32F;
-    // GLenum format = channel == 4 and GL_RGBA or GL_RGB;
-    // glTextureStorage2D(textureID, 0, internalformat, width, height);
-    // glTextureSubImage2D(textureID, 0, 0, 0, width, height, format, GL_FLOAT, data);
+    GLenum internalformat = channel == 4 and GL_RGBA32F or GL_RGB32F;
+    GLenum format = channel == 4 and GL_RGBA or GL_RGB;
+    glTextureStorage2D(textureID, 0, internalformat, width, height);
+    glTextureSubImage2D(textureID, 0, 0, 0, width, height, format, GL_FLOAT, data);
 
-    // glBindTexture(GL_TEXTURE_2D, textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
 
-    // stbi_image_free(data);
+    stbi_image_free(data);
 
     return textureID;
 }
