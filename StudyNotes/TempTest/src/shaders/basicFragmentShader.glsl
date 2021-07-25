@@ -2,8 +2,7 @@
 
 out vec4 fragColor;
 
-// layout (binding = 0) uniform sampler2D diffuse;
-uniform sampler2D diffuse;
+layout (binding = 0) uniform sampler2D diffuse;
 
 in VS_OUT
 {

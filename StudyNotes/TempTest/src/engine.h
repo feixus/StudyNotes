@@ -57,6 +57,7 @@ private:
     Shader* basicShader;
     unsigned int VAO = 0, VBO, textureID;
     unsigned int QuadVAO = 0, QuadVBO;
+    GLuint samplerObject;
 
     void DrawCube();
     void DrawQuad();

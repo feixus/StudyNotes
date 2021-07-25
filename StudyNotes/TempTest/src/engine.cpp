@@ -121,6 +121,12 @@ void Engine::SetupOpenGlRendering()
 
     textureID = LoadTexture("src/textures/1.jpg");
 
+    GLuint samplerObject;
+    glCreateSamplers(1, &samplerObject);
+    glSamplerParameteri(samplerObject, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glSamplerParameteri(samplerObject, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    
+
     std::cout << glGetError() << "  -->>>>" << std::endl;
 
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -146,7 +152,7 @@ void Engine::Draw()
     basicShader->setMat4("vp_matrix", perspective * view);
 
     glBindTexture(GL_TEXTURE_2D, textureID);
-    glActiveTexture(GL_TEXTURE0);
+    glBindSampler(0, samplerObject);
 
     for (int i = 0; i < 24; i++)
     {
@@ -175,7 +181,7 @@ void Engine::DrawCube()
     {
         glGenVertexArrays(1, &VAO);
         glBindVertexArray(VAO);
-        
+
         static const GLfloat vertex_positions[] =
             {
                 -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
@@ -259,10 +265,7 @@ unsigned int Engine::LoadTexture(const char *path)
     glCreateTextures(GL_TEXTURE_2D, 1, &texture);
     //GL_INVALID_VALUE is generated if width, height or levels are less than 1.
     glTextureStorage2D(texture, 1, internalFormat, width, height);
-
-    glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
+   
     glTextureSubImage2D(texture, 0, 0, 0, width, height, dataFormat, GL_UNSIGNED_BYTE, data);
 
     stbi_image_free(data);
