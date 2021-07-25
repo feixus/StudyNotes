@@ -115,17 +115,14 @@ void Engine::SetupOpenGlRendering()
     glEnable(GL_DEPTH_TEST);
 
     // TODO: Setup OpenGL code here...
+    stbi_set_flip_vertically_on_load(true);
+
     basicShader = new Shader("src/shaders/basicVertexShader.glsl", "src/shaders/basicFragmentShader.glsl");
 
-    std::cout << glGetError() << " 1 -->>>>" << std::endl;
-    textureID = LoadTexture("D:/Workspace/Codes/githubs/Graphics/StudyNotes/TempTest/src/textures/1.jpg");
-    std::cout << glGetError() << " 2 -->>>>" << std::endl;
-
-    CreateACube();
+    textureID = LoadTexture("src/textures/1.jpg");
 
     std::cout << glGetError() << "  -->>>>" << std::endl;
 
-    glPointSize(50);
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
@@ -163,7 +160,7 @@ void Engine::Draw()
 
         basicShader->setMat4("m_matrix", model);
 
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        DrawCube();
     }
 }
 
@@ -172,93 +169,166 @@ void Engine::ShutDown()
     delete &basicShader;
 }
 
-void Engine::CreateACube()
+void Engine::DrawCube()
 {
-    glGenVertexArrays(1, &VAO);
+    if (VAO == 0)
+    {
+        glGenVertexArrays(1, &VAO);
+        glBindVertexArray(VAO);
+        
+        static const GLfloat vertex_positions[] =
+            {
+                -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
+                -1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
+                1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
+
+                1.0f, -1.0f, -1.0f,  0.0f, 0.0f,
+                1.0f, 1.0f, -1.0f,   0.0f, 1.0f,
+                -1.0f, 1.0f, -1.0f,  1.0f, 1.0f,
+
+                1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
+                1.0f, -1.0f, 1.0f,   0.0f, 0.0f,
+                -1.0f, -1.0f, 1.0f,  1.0f, 0.0f,
+
+                -1.0f, -1.0f, 1.0f,  1.0f, 0.0f,
+                -1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+                1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
+
+                1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
+                1.0f, 1.0f, -1.0f,   0.0f, 0.0f,
+                1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
+
+                1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
+                1.0f, -1.0f, 1.0f,   1.0f, 1.0f,
+                1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
+
+                -1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+                -1.0f, 1.0f, -1.0f,  0.0f, 0.0f,
+                -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
+
+                -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
+                -1.0f, -1.0f, 1.0f,  1.0f, 1.0f,
+                -1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+
+                1.0f, -1.0f,  1.0f,  0.0f, 1.0f,
+                1.0f, -1.0f, -1.0f,  0.0f, 0.0f,
+                -1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
+
+                -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
+                -1.0f, -1.0f, 1.0f,  1.0f, 1.0f,
+                1.0f, -1.0f, 1.0f,   0.0f, 1.0f,
+
+                -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
+                1.0f, 1.0f, -1.0f,   0.0f, 0.0f,
+                1.0f, 1.0f, 1.0f,    1.0f, 0.0f,
+
+                1.0f, 1.0f, 1.0f,    1.0f, 0.0f,
+                -1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+                -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
+
+            };
+
+        
+        glGenBuffers(1, &VBO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
+
+        //为什么attribindex = 0只输入3个顶点,而shader里却定义的vec4,且能正常运行
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)0);
+        glEnableVertexAttribArray(0);
+
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)(sizeof(GL_FLOAT) * 3));
+        glEnableVertexAttribArray(1);
+    }
+
     glBindVertexArray(VAO);
-
-    static const GLfloat vertex_positions[] =
-        {
-            -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
-            -1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
-            1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-
-            1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-            1.0f, 1.0f, -1.0f,   1.0f, 1.0f,
-            -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
-
-            1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
-            1.0f, -1.0f, 1.0f,   0.0f, 0.0f,
-            -1.0f, -1.0f, 1.0f,  1.0f, 0.0f,
-
-            -1.0f, -1.0f, 1.0f,  1.0f, 0.0f,
-            -1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
-
-            1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
-            1.0f, 1.0f, -1.0f,   0.0f, 0.0f,
-            1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-
-            1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-            1.0f, -1.0f, 1.0f,   1.0f, 1.0f,
-            1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
-
-            -1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
-            -1.0f, 1.0f, -1.0f,  0.0f, 0.0f,
-            -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-
-            -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-            -1.0f, -1.0f, 1.0f,  1.0f, 1.0f,
-            -1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
-
-             1.0f, -1.0f,  1.0f,  0.0f, 1.0f,
-             1.0f, -1.0f, -1.0f,  0.0f, 0.0f,
-            -1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-
-            -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-            -1.0f, -1.0f, 1.0f,  1.0f, 1.0f,
-            1.0f, -1.0f, 1.0f,   0.0f, 1.0f,
-
-            -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
-            1.0f, 1.0f, -1.0f,   0.0f, 0.0f,
-            1.0f, 1.0f, 1.0f,    1.0f, 0.0f,
-
-             1.0f, 1.0f, 1.0f,    1.0f, 0.0f,
-            -1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
-            -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
-
-        };
-
-    
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
-
-    //为什么attribindex = 0只输入3个顶点,而shader里却定义的vec4,且能正常运行
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)0);
-    glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)(sizeof(GL_FLOAT) * 3));
-    glEnableVertexAttribArray(1);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
+//version 4.5
 unsigned int Engine::LoadTexture(const char *path)
 {
-    unsigned int textureID;
+    GLuint texture;
 
     int width, height, channel;
     unsigned char *data = stbi_load(path, &width, &height, &channel, 0);
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &textureID);
+    GLenum internalFormat = (channel == 4) ? GL_RGBA8 : GL_RGB8;
+    GLenum dataFormat = (channel == 4) ? GL_RGBA : GL_RGB;
 
-    GLenum internalformat = channel == 4 and GL_RGBA32F or GL_RGB32F;
-    GLenum format = channel == 4 and GL_RGBA or GL_RGB;
-    glTextureStorage2D(textureID, 0, internalformat, width, height);
-    glTextureSubImage2D(textureID, 0, 0, 0, width, height, format, GL_FLOAT, data);
+    glCreateTextures(GL_TEXTURE_2D, 1, &texture);
+    //GL_INVALID_VALUE is generated if width, height or levels are less than 1.
+    glTextureStorage2D(texture, 1, internalFormat, width, height);
 
-    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glTextureSubImage2D(texture, 0, 0, 0, width, height, dataFormat, GL_UNSIGNED_BYTE, data);
 
     stbi_image_free(data);
+    return texture;
+}
 
+unsigned int Engine::LoadTextureOld(char const * path)
+{
+    unsigned int textureID;
+
+    int width, height, nrComponents;
+    unsigned char *data = stbi_load(path, &width, &height, &nrComponents, 0);
+
+    assert(data);
+   
+    GLenum format;
+    if (nrComponents == 1)
+        format = GL_RED;
+    else if (nrComponents == 3)
+        format = GL_RGB;
+    else if (nrComponents == 4)
+        format = GL_RGBA;
+
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    stbi_image_free(data);
     return textureID;
 }
+
+void Engine::DrawQuad() 
+{
+    if (QuadVAO == 0)
+    {
+        static const GLfloat vertex_positions[] = {
+            1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+            -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+            1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+            1.0f, 1.0f, 0.0f, 1.0f, 1.0f
+        };
+
+        glGenVertexArrays(1, &QuadVAO);
+        glBindVertexArray(QuadVAO);
+
+        glGenBuffers(1, &QuadVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, QuadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)0);
+        glEnableVertexAttribArray(0);
+
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)(sizeof(GL_FLOAT) * 3));
+        glEnableVertexAttribArray(1);
+    }
+
+    glBindVertexArray(QuadVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+

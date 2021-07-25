@@ -55,11 +55,13 @@ private:
     void SetupOpenGlRendering();
     
     Shader* basicShader;
-    unsigned int VAO, VBO, textureID;
+    unsigned int VAO = 0, VBO, textureID;
+    unsigned int QuadVAO = 0, QuadVBO;
 
-    void CreateACube();
-
+    void DrawCube();
+    void DrawQuad();
     unsigned int LoadTexture(const char* path);
+    unsigned int LoadTextureOld(const char* path);
 };
 
 #endif

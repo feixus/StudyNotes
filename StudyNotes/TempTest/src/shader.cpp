@@ -37,6 +37,7 @@ bool Shader::setVertexShader(std::string a_pathToShaderSourceFile)
     glShaderSource(this->vertexShaderID, 1, &this->vertexShaderSource, NULL);
     glCompileShader(this->vertexShaderID);
 
+    std::cout << "vertex ID = " << this->vertexShaderID << std::endl;
     if (!this->shaderCompiled(this->vertexShaderID))
         return false;
 
@@ -55,6 +56,7 @@ bool Shader::setFragmentShader(std::string a_pathToShaderSourceFile)
     glShaderSource(this->fragmentShaderID, 1, &this->fragmentShaderSource, NULL);
     glCompileShader(this->fragmentShaderID);
 
+    std::cout << "fragment ID = " << this->fragmentShaderID << std::endl;
     if (!this->shaderCompiled(this->fragmentShaderID))
         return false;
 
@@ -220,7 +222,7 @@ bool Shader::shaderCompiled(unsigned int a_id)
     if (!compiled)
     {
         glGetShaderInfoLog(a_id, 512, NULL, infoLog);
-        std::cerr << "ERROR: Could not compile shader: " << infoLog << std::endl;
+        std::cerr << a_id << " -->>ERROR: Could not compile shader: " << infoLog << std::endl;
 
         return false;
     }
