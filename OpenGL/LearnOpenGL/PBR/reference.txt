@@ -1,0 +1,2 @@
+1. https://github.com/GuylianGilsing/Visual-Studio-Code-OpenGL-Setup
+2. https://learnopengl.com

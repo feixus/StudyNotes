@@ -16,6 +16,7 @@
                     // Include .cpp files here (These are for .h file code)
                     "${workspaceRoot}/src/shader.cpp",
                     "${workspaceRoot}/src/engine.cpp",
+                    "${workspaceRoot}/src/camera.cpp",
                     
                     "-g",
                     "--std=c++17",
@@ -40,6 +41,7 @@
                     // Include .cpp files here (These are for .h file code)
                     "${workspaceRoot}/src/shader.cpp",
                     "${workspaceRoot}/src/engine.cpp",
+                    "${workspaceRoot}/src/camera.cpp",
                     
                     "-g",
                     "--std=c++17",

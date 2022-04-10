@@ -178,11 +178,8 @@ void Shader::use()
 
 std::string Shader::loadShaderSource(std::string a_pathToShaderSourceFile)
 {
-    std::string rootPath = "D:/Workspace/Codes/OpenGL/Example/";
-    rootPath = "";
-
     std::ifstream fileReader;
-    fileReader.open(rootPath + a_pathToShaderSourceFile, std::ios::binary);
+    fileReader.open(a_pathToShaderSourceFile, std::ios::binary);
 
     // Make sure to check that the file is open.
     if (fileReader.is_open())
@@ -233,4 +230,14 @@ bool Shader::shaderCompiled(unsigned int a_id)
 void Shader::setMat4(const std::string &name, const glm::mat4 &mat) const
 {
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, name.c_str()), 1, GL_FALSE, &mat[0][0]);
+}
+
+void Shader::setVec3(const std::string &name, const glm::vec3 &vector) const
+{
+    glUniform3fv(glGetUniformLocation(shaderProgram, name.c_str()), 1, &vector[0]);
+}
+
+void Shader::setFloat(const std::string &name, float variable) const
+{
+    glUniform1f(glGetUniformLocation(shaderProgram, name.c_str()), variable);
 }

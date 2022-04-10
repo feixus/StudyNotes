@@ -26,8 +26,12 @@ int Engine::Initialize()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
+    glfwWindowHint(GLFW_SAMPLES, 4);
+
     // Do this for mac compatability.
-    // glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
 
     // Create Window.
 
@@ -58,13 +62,15 @@ int Engine::Initialize()
     }
 
     // Set the viewport
-
     glViewport(0, 0, this->screenWidth, this->screenHeight);
 
     // Setup callbacks.
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
-    // Binds the 'framebuffer_size_callback' method to the window resize event.
-    glfwSetFramebufferSizeCallback(window, WindowResize);
+    //tell GLFW to capture our mouse
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     this->SetupOpenGlRendering();
 
@@ -73,20 +79,17 @@ int Engine::Initialize()
     {
         // Calculate the elapsed time between the current and previous frame.
         float m_frameTime = (float)glfwGetTime();
-        float m_deltaTime = m_frameTime - this->lastFrameTime;
+        deltaTime = m_frameTime - this->lastFrameTime;
         this->lastFrameTime = m_frameTime;
 
-        glfwPollEvents();
         this->ProcessInput(this->window);
 
-        glClearColor(this->clearColor.x, this->clearColor.y, this->clearColor.z, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
         // Application logic
-        this->Update(m_deltaTime);
+        // this->Update(deltaTime);
         this->Draw();
 
         glfwSwapBuffers(this->window);
+        glfwPollEvents();
     }
 
     glfwTerminate();
@@ -94,40 +97,87 @@ int Engine::Initialize()
     return 1;
 }
 
-void WindowResize(GLFWwindow *a_window, int a_width, int a_height)
+void framebuffer_size_callback(GLFWwindow *a_window, int a_width, int a_height)
 {
     glViewport(0, 0, a_width, a_height);
 
     // TODO: Do your resize logic here...
 }
 
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
+    if(firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = -xpos + lastX;
+    float yoffset = ypos - lastY;
+
+    lastX = xpos;
+    lastY = ypos;
+
+    camera->ProcessMouseMovement(xoffset, yoffset);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    camera->ProcessMouseScroll(static_cast<float>(yoffset));
+}
+
 void Engine::ProcessInput(GLFWwindow *a_window)
 {
-    // TODO: Process your input here...
-
     // If the escape key gets pressed, close the window.
     if (glfwGetKey(a_window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(a_window, true);
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera->ProcessKeyboard(FORWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera->ProcessKeyboard(BACKWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera->ProcessKeyboard(LEFT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        camera->ProcessKeyboard(RIGHT, deltaTime);
 }
 
 void Engine::SetupOpenGlRendering()
 {
     glEnable(GL_DEPTH_TEST);
 
-    // TODO: Setup OpenGL code here...
     stbi_set_flip_vertically_on_load(true);
+
+    camera = new Camera(glm::vec3(0.0f, 0.0f, 23.0f));
 
     basicShader = new Shader("src/shaders/basic_vs.glsl", "src/shaders/basic_fs.glsl");
 
-    textureID = LoadTexture("src/textures/1.png");
+    basicShader->use();
+    basicShader->setVec3("albedo", glm::vec3(0.5, 0.0, 0.0));
+    basicShader->setFloat("ao", 1.0);
 
-    GLuint samplerObject;
-    glCreateSamplers(1, &samplerObject);
-    glSamplerParameteri(samplerObject, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glSamplerParameteri(samplerObject, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    
+     //lights
+    lightPositions[0] = glm::vec3(-10.0f,  10.0f, 10.0f);
+    lightPositions[1] = glm::vec3( 10.0f,  10.0f, 10.0f);
+    lightPositions[2] = glm::vec3(-10.0f, -10.0f, 10.0f);
+    lightPositions[3] = glm::vec3( 10.0f, -10.0f, 10.0f);
 
-    std::cout << glGetError() << "  -->>>>" << std::endl;
+    lightColors[0] = glm::vec3(300.0f, 300.0f, 300.0f);
+    lightColors[1] = glm::vec3(300.0f, 300.0f, 300.0f);
+    lightColors[2] = glm::vec3(300.0f, 300.0f, 300.0f);
+    lightColors[3] = glm::vec3(300.0f, 300.0f, 300.0f);
+
+    glm::mat4 projection = glm::perspective(glm::radians(camera->Zoom), (float)screenWidth / (float)screenHeight, 0.1f, 100.0f);
+    basicShader->use();
+    basicShader->setMat4("projection", projection);
+
+    // textureID = LoadTexture("src/textures/1.png");
+
+    std::cout << "error code = " << glGetError() << "  -->>>>" << std::endl;
 
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
@@ -139,40 +189,148 @@ void Engine::Update(float a_deltaTime)
 
 void Engine::Draw()
 {
-    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 0.0f, 3.0f) + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 perspective = glm::perspective(glm::radians(50.0f), (float)this->screenWidth / (float)this->screenHeight, 0.1f, 1000.0f);
-
-    static const glm::vec4 bgColor(0.2f, 0.4f, 0.5f, 1.0f);
-    glClearBufferfv(GL_COLOR, 0, &bgColor[0]);
-
-    // 每次重新绘制时都需要清空深度缓冲和模板缓冲，否则允许深度测试时看不到渲染目标，为什么？
-    glClearBufferfi(GL_DEPTH_STENCIL, 0, 1.0f, 0.0f);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     basicShader->use();
-    basicShader->setMat4("vp_matrix", perspective * view);
+    glm::mat4 view = camera->GetViewMatrix();
+    basicShader->setMat4("view", view);
+    basicShader->setVec3("camPos", camera->Position);
 
-    glBindTexture(GL_TEXTURE_2D, textureID);
-    glBindSampler(0, samplerObject);
-
-    for (int i = 0; i < 24; i++)
+    glm::mat4 model = glm::mat4(1.0f);
+    for (int row = 0; row < nrRows; ++row)
     {
-        float f = (float)i + (float)glfwGetTime() * (float)M_PI * 0.1f;
+        basicShader->setFloat("metallic", (float)row / (float)nrRows);
+        for (int col = 0; col < nrColumns; ++col)
+        {
+            //clamp the roughness to 0.05-1.0 as perfectly smooth surface 
+            //(roughness 0.0) tend to look a bit off on direct light
+            basicShader->setFloat("roughness", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
 
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, -20.0f));
-        model = glm::translate(model, glm::vec3(sinf(2.1f * f) * 8.0f, cosf(1.7f * f) * 8.0f, sinf(1.3f * f) * cosf(1.5f * f) * 8.0f));
-        model = glm::rotate(model, glm::radians((float)glfwGetTime() * 45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        model = glm::rotate(model, glm::radians((float)glfwGetTime() * 81.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3((col - (nrColumns / 2)) * spacing, (row - (nrRows / 2)) * spacing, 0.0f));
 
-        basicShader->setMat4("m_matrix", model);
+            basicShader->setMat4("model", model);
+            DrawSphere();
+        }
+    }
 
-        DrawCube();
+    for (unsigned int i = 0; i < sizeof(lightPositions) / sizeof(lightPositions[0]); ++i)
+    {
+        glm::vec3 newPos = lightPositions[i] + glm::vec3(sin(glfwGetTime() * 5.0) * 5.0, 0.0, 0.0);
+        newPos = lightPositions[i];
+        basicShader->setVec3("lightPositions[" + std::to_string(i) + "]", newPos);
+        basicShader->setVec3("lightColors[" + std::to_string(i) + "]", lightColors[i]);
+
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, newPos);
+        model = glm::scale(model, glm::vec3(0.5f));
+        basicShader->setMat4("model", model);
+        DrawSphere();
     }
 }
 
 void Engine::ShutDown()
 {
     delete &basicShader;
+}
+
+void Engine::DrawSphere()
+{
+    if (this->SphereVAO == 0)
+    {
+        glGenVertexArrays(1, &this->SphereVAO);
+
+        glGenBuffers(1, &SphereVBO);
+        glGenBuffers(1, &SphereEBO);
+
+        std::vector<glm::vec3> positions;
+        std::vector<glm::vec2> uv;
+        std::vector<glm::vec3> normals;
+        std::vector<unsigned int> indices;
+
+        const unsigned int X_SEGMENTS = 64;
+        const unsigned int Y_SEGMENTS = 64;
+        const float PI = 3.14159265359f;
+        for (unsigned int x = 0; x <= X_SEGMENTS; x++)
+        {
+            for (unsigned int y = 0; y <= Y_SEGMENTS; y++)
+            {
+                float xSegment = (float)x / (float)X_SEGMENTS;
+                float ySegment = (float)y / (float)Y_SEGMENTS;
+                float phi = xSegment * 2.0f * PI;
+                float theta = ySegment * PI;
+                float xPos = cos(phi) * sin(theta);
+                float yPos = cos(theta);
+                float zPos = sin(phi) * sin(theta);
+
+                positions.push_back(glm::vec3(xPos, yPos, zPos));
+                uv.push_back(glm::vec2(xSegment, ySegment));
+                normals.push_back(glm::vec3(xPos, yPos, zPos));
+            }
+        }
+
+        bool oddRow = false;
+        for (unsigned int y = 0; y < Y_SEGMENTS; y++)
+        {
+            if (!oddRow)  // even row: y == 0, y == 2; and so on
+            {
+                for (unsigned int x = 0; x <= X_SEGMENTS; x++)
+                {
+                    indices.push_back(y       * (X_SEGMENTS + 1) + x);
+                    indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
+                }
+            }
+            else 
+            {
+                for (int x = X_SEGMENTS; x >= 0; x--)
+                {
+                    indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
+                    indices.push_back(y       * (X_SEGMENTS + 1) + x);
+                }
+            }
+            oddRow = !oddRow;
+        }
+
+        indexCount = static_cast<unsigned int>(indices.size());
+
+        std::vector<float> data;
+        for (unsigned int i = 0; i < positions.size(); i++)
+        {
+            data.push_back(positions[i].x);
+            data.push_back(positions[i].y);
+            data.push_back(positions[i].z);
+            if (normals.size() > 0)
+            {
+                data.push_back(normals[i].x);
+                data.push_back(normals[i].y);
+                data.push_back(normals[i].z);
+            }
+            if (uv.size() > 0)
+            {
+                data.push_back(uv[i].x);
+                data.push_back(uv[i].y);
+            }
+        }
+
+        glBindVertexArray(SphereVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, SphereVBO);
+        glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), &data[0], GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SphereEBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
+
+        unsigned int stride = (3 + 3 + 2) * sizeof(float);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+    }
+
+    glBindVertexArray(SphereVAO);
+    glDrawElements(GL_TRIANGLE_STRIP, indexCount, GL_UNSIGNED_INT, 0);
 }
 
 void Engine::DrawCube()
@@ -234,7 +392,6 @@ void Engine::DrawCube()
 
             };
 
-        
         glGenBuffers(1, &VBO);
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
