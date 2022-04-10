@@ -157,8 +157,23 @@ void Engine::SetupOpenGlRendering()
     basicShader = new Shader("src/shaders/basic_vs.glsl", "src/shaders/basic_fs.glsl");
 
     basicShader->use();
-    basicShader->setVec3("albedo", glm::vec3(0.5, 0.0, 0.0));
-    basicShader->setFloat("ao", 1.0);
+    basicShader->setInt("albedoMap", 0);
+    basicShader->setInt("normalMap", 1);
+    basicShader->setInt("metallicMap", 2);
+    basicShader->setInt("roughnessMap", 3);
+    basicShader->setInt("aoMap", 4);
+
+    albedo = LoadTexture("src/textures/metal/albedo.png");
+    normal = LoadTexture("src/textures/metal/normal.png");
+    metallic = LoadTexture("src/textures/metal/metallic.png");
+    roughness = LoadTexture("src/textures/metal/roughness.png");
+    ao = LoadTexture("src/textures/metal/ao.png");
+
+    // glBindTextureUnit(0, albedo);
+    // glBindTextureUnit(1, normal);
+    // glBindTextureUnit(2, metallic);
+    // glBindTextureUnit(3, roughness);
+    // glBindTextureUnit(4, ao);
 
      //lights
     lightPositions[0] = glm::vec3(-10.0f,  10.0f, 10.0f);
@@ -175,9 +190,8 @@ void Engine::SetupOpenGlRendering()
     basicShader->use();
     basicShader->setMat4("projection", projection);
 
-    // textureID = LoadTexture("src/textures/1.png");
-
     std::cout << "error code = " << glGetError() << "  -->>>>" << std::endl;
+    std::cout << glGetString ( GL_SHADING_LANGUAGE_VERSION ) << std::endl;
 
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
@@ -197,15 +211,26 @@ void Engine::Draw()
     basicShader->setMat4("view", view);
     basicShader->setVec3("camPos", camera->Position);
 
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, albedo);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, normal);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, metallic);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, roughness);
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, ao);
+
     glm::mat4 model = glm::mat4(1.0f);
     for (int row = 0; row < nrRows; ++row)
     {
-        basicShader->setFloat("metallic", (float)row / (float)nrRows);
+        // basicShader->setFloat("metallic", (float)row / (float)nrRows);
         for (int col = 0; col < nrColumns; ++col)
         {
             //clamp the roughness to 0.05-1.0 as perfectly smooth surface 
             //(roughness 0.0) tend to look a bit off on direct light
-            basicShader->setFloat("roughness", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
+            // basicShader->setFloat("roughness", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
 
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3((col - (nrColumns / 2)) * spacing, (row - (nrRows / 2)) * spacing, 0.0f));

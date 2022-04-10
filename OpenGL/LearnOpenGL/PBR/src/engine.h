@@ -65,7 +65,7 @@ private:
 
     glm::vec3 lightPositions[4];
     glm::vec3 lightColors[4];
-    
+
 public:
     Engine(int a_width, int a_height, const char* a_windowName);
 
@@ -83,7 +83,7 @@ private:
     unsigned int VAO = 0, VBO, textureID;
     unsigned int QuadVAO = 0, QuadVBO;
     unsigned int SphereVAO = 0, SphereVBO, SphereEBO;
-    GLuint samplerObject;
+    unsigned int albedo, normal, metallic, roughness, ao;
 
     void DrawCube();
     void DrawQuad();
