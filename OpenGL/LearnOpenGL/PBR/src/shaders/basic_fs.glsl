@@ -21,6 +21,14 @@ uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
 uniform sampler2D aoMap;
 
+// material parameters
+uniform vec3 albedo;
+uniform float metallic;
+uniform float roughness;
+uniform float ao;
+
+uniform samplerCube irradianceMap;
+
 //lights
 uniform vec3 lightPositions[4];
 uniform vec3 lightColors[4];
@@ -54,6 +62,12 @@ vec3 getNormalFromMap()
 vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
    return F0 + (1 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+//计算ambient light的diffuse时，根本没有micro-surface H(half vector), 导致没有将roughness纳入考虑, 使得漫反射看起来有点亮
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+   return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 //GGX/Trowbridge-Reitz --disney and Epic Games
@@ -94,10 +108,10 @@ float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 
 void main()
 {
-   vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
-   float metallic = texture(metallicMap, fs_in.texCoords).r;
-   float roughness = texture(roughnessMap, fs_in.texCoords).r;
-   float ao = texture(aoMap, fs_in.texCoords).r;
+   // vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
+   // float metallic = texture(metallicMap, fs_in.texCoords).r;
+   // float roughness = texture(roughnessMap, fs_in.texCoords).r;
+   // float ao = texture(aoMap, fs_in.texCoords).r;
 
    vec3 N = normalize(fs_in.normal);
    vec3 V = normalize(camPos - fs_in.worldPos);
@@ -137,7 +151,16 @@ void main()
       Lo += (kD * albedo / PI + specular) * radiance * NdotL;
    }
 
-   vec3 ambient = vec3(0.03) * albedo * ao;
+   // vec3 ambient = vec3(0.03) * albedo * ao;
+   //as the ambient light come from all directions within the hemisphere oriented around the normal N
+   //there's no single halfway vector to determine the Fresnel response
+   // vec3 kS = fresnelSchlick(max(dot(N, V), 0), F0);
+   vec3 kS = fresnelSchlickRoughness(max(dot(N, V), 0), F0, roughness);
+   vec3 kD = 1.0 - kS;
+   vec3 irradiance = texture(irradianceMap, N).rgb;
+   vec3 ambient_diffuse = irradiance * albedo;
+   vec3 ambient = (kD * ambient_diffuse) * ao;
+
    vec3 color = ambient + Lo;
 
    //到目前为止都在假设所有计算都在linear color space中进行

@@ -15,6 +15,7 @@
 
 #include "shader.h"
 #include "camera.h"
+#include "common.h" 
 
 #define M_PI 3.14159
 
@@ -78,18 +79,34 @@ public:
 private:
     // OpenGL
     void SetupOpenGlRendering();
+
+    Common commonLib;
     
     Shader* basicShader;
-    unsigned int VAO = 0, VBO, textureID;
+    unsigned int cubeVAO = 0, cubeVBO, textureID;
     unsigned int QuadVAO = 0, QuadVBO;
     unsigned int SphereVAO = 0, SphereVBO, SphereEBO;
     unsigned int albedo, normal, metallic, roughness, ao;
 
-    void DrawCube();
-    void DrawQuad();
-    void DrawSphere();
+    unsigned int hdrTexture;
+    unsigned int captureFBO, captureRBO;
+    unsigned int envCubemap, irradianceMap;
+
+    glm::mat4 captureProjection;
+    glm::mat4 captureViews[6];
+
+    Shader* equirectangularToCubemapShader;
+    Shader* skyboxShader;
+    Shader* irradianceShader;
+
     unsigned int LoadTexture(const char* path);
     unsigned int LoadTextureOld(const char* path);
+    unsigned int LoadHDRTexture(char const* path);
+
+    unsigned int GenerateACubemap(int width, int height);
+
+    void GenerateRadianceEnvCubemap();
+    void GenerateIrradianceEnvCubemap();
 };
 
 #endif

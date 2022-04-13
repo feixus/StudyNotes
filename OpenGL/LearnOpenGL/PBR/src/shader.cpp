@@ -237,6 +237,11 @@ void Shader::setVec3(const std::string &name, const glm::vec3 &vector) const
     glUniform3fv(glGetUniformLocation(shaderProgram, name.c_str()), 1, &vector[0]);
 }
 
+void Shader::setVec3(const std::string &name, float x, float y, float z) const
+{
+    glUniform3f(glGetUniformLocation(shaderProgram, name.c_str()), x, y, z);
+}
+
 void Shader::setFloat(const std::string &name, float variable) const
 {
     glUniform1f(glGetUniformLocation(shaderProgram, name.c_str()), variable);
@@ -244,5 +249,5 @@ void Shader::setFloat(const std::string &name, float variable) const
 
 void Shader::setInt(const std::string &name, int variable) const
 {
-    glUniform1f(glGetUniformLocation(shaderProgram, name.c_str()), variable);
+    glUniform1i(glGetUniformLocation(shaderProgram, name.c_str()), variable);
 }

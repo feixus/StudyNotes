@@ -17,6 +17,7 @@
                     "${workspaceRoot}/src/shader.cpp",
                     "${workspaceRoot}/src/engine.cpp",
                     "${workspaceRoot}/src/camera.cpp",
+                    "${workspaceRoot}/src/common.cpp",
                     
                     "-g",
                     "--std=c++17",
@@ -42,6 +43,7 @@
                     "${workspaceRoot}/src/shader.cpp",
                     "${workspaceRoot}/src/engine.cpp",
                     "${workspaceRoot}/src/camera.cpp",
+                    "${workspaceRoot}/src/common.cpp",
                     
                     "-g",
                     "--std=c++17",

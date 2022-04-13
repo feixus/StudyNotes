@@ -149,19 +149,21 @@ void Engine::ProcessInput(GLFWwindow *a_window)
 void Engine::SetupOpenGlRendering()
 {
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
 
     stbi_set_flip_vertically_on_load(true);
 
     camera = new Camera(glm::vec3(0.0f, 0.0f, 23.0f));
-
     basicShader = new Shader("src/shaders/basic_vs.glsl", "src/shaders/basic_fs.glsl");
-
     basicShader->use();
     basicShader->setInt("albedoMap", 0);
     basicShader->setInt("normalMap", 1);
     basicShader->setInt("metallicMap", 2);
     basicShader->setInt("roughnessMap", 3);
     basicShader->setInt("aoMap", 4);
+
+    basicShader->setVec3("albedo", 0.5f, 0.0f, 0.0f);
+    basicShader->setFloat("ao", 1.0f);
 
     albedo = LoadTexture("src/textures/metal/albedo.png");
     normal = LoadTexture("src/textures/metal/normal.png");
@@ -189,6 +191,18 @@ void Engine::SetupOpenGlRendering()
     glm::mat4 projection = glm::perspective(glm::radians(camera->Zoom), (float)screenWidth / (float)screenHeight, 0.1f, 100.0f);
     basicShader->use();
     basicShader->setMat4("projection", projection);
+
+    GenerateRadianceEnvCubemap();
+    GenerateIrradianceEnvCubemap();
+
+    skyboxShader = new Shader("src/shaders/skybox_vs.glsl", "src/shaders/skybox_fs.glsl");
+    skyboxShader->use();
+    skyboxShader->setInt("environmentMap", 0);
+    skyboxShader->setMat4("projection", projection);
+
+    int scrWidth, scrHeight;
+    glfwGetFramebufferSize(window, &scrWidth, &scrHeight);
+    glViewport(0, 0, scrWidth, scrHeight);
 
     std::cout << "error code = " << glGetError() << "  -->>>>" << std::endl;
     std::cout << glGetString ( GL_SHADING_LANGUAGE_VERSION ) << std::endl;
@@ -225,18 +239,18 @@ void Engine::Draw()
     glm::mat4 model = glm::mat4(1.0f);
     for (int row = 0; row < nrRows; ++row)
     {
-        // basicShader->setFloat("metallic", (float)row / (float)nrRows);
+        basicShader->setFloat("metallic", (float)row / (float)nrRows);
         for (int col = 0; col < nrColumns; ++col)
         {
             //clamp the roughness to 0.05-1.0 as perfectly smooth surface 
             //(roughness 0.0) tend to look a bit off on direct light
-            // basicShader->setFloat("roughness", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
+            basicShader->setFloat("roughness", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
 
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3((col - (nrColumns / 2)) * spacing, (row - (nrRows / 2)) * spacing, 0.0f));
 
             basicShader->setMat4("model", model);
-            DrawSphere();
+            Common::RenderSphere(SphereVAO, SphereVBO, SphereEBO, indexCount);
         }
     }
 
@@ -251,186 +265,123 @@ void Engine::Draw()
         model = glm::translate(model, newPos);
         model = glm::scale(model, glm::vec3(0.5f));
         basicShader->setMat4("model", model);
-        DrawSphere();
+        Common::RenderSphere(SphereVAO, SphereVBO, SphereEBO, indexCount);
     }
+
+    //render skybox
+    skyboxShader->use();
+    skyboxShader->setMat4("view", view);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+    // glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+    Common::RenderCube(cubeVAO, cubeVBO);
+}
+
+unsigned int Engine::GenerateACubemap(int width, int height)
+{
+    unsigned int cubemap;
+    glGenTextures(1, &cubemap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap);
+    for (unsigned int i = 0; i < 6; i++)
+    {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    return cubemap;
+}
+
+void Engine::GenerateRadianceEnvCubemap()
+{
+    equirectangularToCubemapShader = new Shader("src/shaders/cubemap_vs.glsl", "src/shaders/equirectangular_to_cubemap_fs.glsl");
+
+    //setup framebuffer renderBuffer
+    glGenFramebuffers(1, &captureFBO);
+    glGenRenderbuffers(1, &captureRBO);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
+
+    //load HDR environment map
+    // hdrTexture = LoadHDRTexture("src/textures/Brooklyn_Bridge_Planks_2k.hdr");
+    hdrTexture = LoadHDRTexture("src/textures/HWSign3-Fence_2k.hdr");
+
+    // cubemap
+    envCubemap = GenerateACubemap(512, 512);
+
+    captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+       
+    captureViews[0] = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3( 1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f));
+    captureViews[1] = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f));
+    captureViews[2] = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3( 0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f));
+    captureViews[3] = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3( 0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f));
+    captureViews[4] = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3( 0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f));
+    captureViews[5] = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3( 0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f));
+
+    //convert HDR equirectangular environment map to cubemap equivalent
+    equirectangularToCubemapShader->use();
+    equirectangularToCubemapShader->setInt("equirectangularMap", 0);
+    equirectangularToCubemapShader->setMat4("projection", captureProjection);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, hdrTexture);
+
+    glViewport(0, 0, 512, 512);
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    for (unsigned int i = 0; i < 6; i++)
+    {
+        equirectangularToCubemapShader->setMat4("view", captureViews[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, envCubemap, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        Common::RenderCube(cubeVAO, cubeVBO);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Engine::GenerateIrradianceEnvCubemap()
+{
+    int width = 32, height = 32;
+    irradianceMap = GenerateACubemap(width, height);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+
+    irradianceShader = new Shader("src/shaders/cubemap_vs.glsl", "src/shaders/irradiance_fs.glsl");
+
+    irradianceShader->use();
+    irradianceShader->setInt("environmentMap", 0);
+    irradianceShader->setMat4("projection", captureProjection);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+
+    glViewport(0, 0, width, height);
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    for (unsigned int i = 0; i < 6; i++)
+    {
+        irradianceShader->setMat4("view", captureViews[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, irradianceMap, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        Common::RenderCube(cubeVAO, cubeVBO);    
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
 }
 
 void Engine::ShutDown()
 {
     delete &basicShader;
-}
-
-void Engine::DrawSphere()
-{
-    if (this->SphereVAO == 0)
-    {
-        glGenVertexArrays(1, &this->SphereVAO);
-
-        glGenBuffers(1, &SphereVBO);
-        glGenBuffers(1, &SphereEBO);
-
-        std::vector<glm::vec3> positions;
-        std::vector<glm::vec2> uv;
-        std::vector<glm::vec3> normals;
-        std::vector<unsigned int> indices;
-
-        const unsigned int X_SEGMENTS = 64;
-        const unsigned int Y_SEGMENTS = 64;
-        const float PI = 3.14159265359f;
-        for (unsigned int x = 0; x <= X_SEGMENTS; x++)
-        {
-            for (unsigned int y = 0; y <= Y_SEGMENTS; y++)
-            {
-                float xSegment = (float)x / (float)X_SEGMENTS;
-                float ySegment = (float)y / (float)Y_SEGMENTS;
-                float phi = xSegment * 2.0f * PI;
-                float theta = ySegment * PI;
-                float xPos = cos(phi) * sin(theta);
-                float yPos = cos(theta);
-                float zPos = sin(phi) * sin(theta);
-
-                positions.push_back(glm::vec3(xPos, yPos, zPos));
-                uv.push_back(glm::vec2(xSegment, ySegment));
-                normals.push_back(glm::vec3(xPos, yPos, zPos));
-            }
-        }
-
-        bool oddRow = false;
-        for (unsigned int y = 0; y < Y_SEGMENTS; y++)
-        {
-            if (!oddRow)  // even row: y == 0, y == 2; and so on
-            {
-                for (unsigned int x = 0; x <= X_SEGMENTS; x++)
-                {
-                    indices.push_back(y       * (X_SEGMENTS + 1) + x);
-                    indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
-                }
-            }
-            else 
-            {
-                for (int x = X_SEGMENTS; x >= 0; x--)
-                {
-                    indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
-                    indices.push_back(y       * (X_SEGMENTS + 1) + x);
-                }
-            }
-            oddRow = !oddRow;
-        }
-
-        indexCount = static_cast<unsigned int>(indices.size());
-
-        std::vector<float> data;
-        for (unsigned int i = 0; i < positions.size(); i++)
-        {
-            data.push_back(positions[i].x);
-            data.push_back(positions[i].y);
-            data.push_back(positions[i].z);
-            if (normals.size() > 0)
-            {
-                data.push_back(normals[i].x);
-                data.push_back(normals[i].y);
-                data.push_back(normals[i].z);
-            }
-            if (uv.size() > 0)
-            {
-                data.push_back(uv[i].x);
-                data.push_back(uv[i].y);
-            }
-        }
-
-        glBindVertexArray(SphereVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, SphereVBO);
-        glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), &data[0], GL_STATIC_DRAW);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SphereEBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
-
-        unsigned int stride = (3 + 3 + 2) * sizeof(float);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
-    }
-
-    glBindVertexArray(SphereVAO);
-    glDrawElements(GL_TRIANGLE_STRIP, indexCount, GL_UNSIGNED_INT, 0);
-}
-
-void Engine::DrawCube()
-{
-    if (VAO == 0)
-    {
-        glGenVertexArrays(1, &VAO);
-        glBindVertexArray(VAO);
-
-        static const GLfloat vertex_positions[] =
-            {
-                -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
-                -1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
-                1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-
-                1.0f, -1.0f, -1.0f,  0.0f, 0.0f,
-                1.0f, 1.0f, -1.0f,   0.0f, 1.0f,
-                -1.0f, 1.0f, -1.0f,  1.0f, 1.0f,
-
-                1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
-                1.0f, -1.0f, 1.0f,   0.0f, 0.0f,
-                -1.0f, -1.0f, 1.0f,  1.0f, 0.0f,
-
-                -1.0f, -1.0f, 1.0f,  1.0f, 0.0f,
-                -1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
-                1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
-
-                1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
-                1.0f, 1.0f, -1.0f,   0.0f, 0.0f,
-                1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-
-                1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-                1.0f, -1.0f, 1.0f,   1.0f, 1.0f,
-                1.0f, 1.0f, 1.0f,    0.0f, 1.0f,
-
-                -1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
-                -1.0f, 1.0f, -1.0f,  0.0f, 0.0f,
-                -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-
-                -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-                -1.0f, -1.0f, 1.0f,  1.0f, 1.0f,
-                -1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
-
-                1.0f, -1.0f,  1.0f,  0.0f, 1.0f,
-                1.0f, -1.0f, -1.0f,  0.0f, 0.0f,
-                -1.0f, -1.0f, -1.0f,  1.0f, 0.0f,
-
-                -1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-                -1.0f, -1.0f, 1.0f,  1.0f, 1.0f,
-                1.0f, -1.0f, 1.0f,   0.0f, 1.0f,
-
-                -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
-                1.0f, 1.0f, -1.0f,   0.0f, 0.0f,
-                1.0f, 1.0f, 1.0f,    1.0f, 0.0f,
-
-                1.0f, 1.0f, 1.0f,    1.0f, 0.0f,
-                -1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
-                -1.0f, 1.0f, -1.0f,  0.0f, 1.0f,
-
-            };
-
-        glGenBuffers(1, &VBO);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
-
-        //为什么attribindex = 0只输入3个顶点,而shader里却定义的vec4,且能正常运行
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)0);
-        glEnableVertexAttribArray(0);
-
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)(sizeof(GL_FLOAT) * 3));
-        glEnableVertexAttribArray(1);
-    }
-
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
 //version 4.5
@@ -452,6 +403,34 @@ unsigned int Engine::LoadTexture(const char *path)
 
     stbi_image_free(data);
     return texture;
+}
+
+unsigned int Engine::LoadHDRTexture(char const* path)
+{
+    stbi_set_flip_vertically_on_load(true);
+
+    unsigned int textureId;
+    int width, height, nrComponents;
+    float *data = stbi_loadf(path, &width, &height, &nrComponents, 0);
+    if (data)
+    {
+        glGenTextures(1, &textureId);
+        glBindTexture(GL_TEXTURE_2D, textureId);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, data);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        stbi_image_free(data);
+    }
+    else
+    {
+        std::cout << "Failed to load HDR image." << std::endl;
+    }
+
+    return textureId;
 }
 
 unsigned int Engine::LoadTextureOld(char const * path)
@@ -485,35 +464,4 @@ unsigned int Engine::LoadTextureOld(char const * path)
     return textureID;
 }
 
-void Engine::DrawQuad() 
-{
-    if (QuadVAO == 0)
-    {
-        static const GLfloat vertex_positions[] = {
-            1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-            -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-            1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f, 1.0f, 1.0f
-        };
-
-        glGenVertexArrays(1, &QuadVAO);
-        glBindVertexArray(QuadVAO);
-
-        glGenBuffers(1, &QuadVBO);
-        glBindBuffer(GL_ARRAY_BUFFER, QuadVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)0);
-        glEnableVertexAttribArray(0);
-
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 5, (void *)(sizeof(GL_FLOAT) * 3));
-        glEnableVertexAttribArray(1);
-    }
-
-    glBindVertexArray(QuadVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-}
 
