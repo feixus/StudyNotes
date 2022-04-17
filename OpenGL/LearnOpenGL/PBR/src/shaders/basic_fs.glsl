@@ -9,18 +9,6 @@ in VS_OUT
    vec2 texCoords;
 } fs_in;
 
-// layout (binding = 0) uniform sampler2D albedoMap;
-// layout (binding = 1) uniform sampler2D normalMap;
-// layout (binding = 2) uniform sampler2D metallicMap;
-// layout (binding = 3) uniform sampler2D roughnessMap;
-// layout (binding = 4) uniform sampler2D aoMap;
-
-uniform sampler2D albedoMap;
-uniform sampler2D normalMap;
-uniform sampler2D metallicMap;
-uniform sampler2D roughnessMap;
-uniform sampler2D aoMap;
-
 // material parameters
 uniform vec3 albedo;
 uniform float metallic;
@@ -28,6 +16,8 @@ uniform float roughness;
 uniform float ao;
 
 uniform samplerCube irradianceMap;
+uniform samplerCube prefilterMap;
+uniform sampler2D brdfLUT;
 
 //lights
 uniform vec3 lightPositions[4];
@@ -36,24 +26,6 @@ uniform vec3 lightColors[4];
 uniform vec3 camPos;
 
 const float PI = 3.14159265359;
-
-//http://www.aclockworkberry.com/shader-derivative-functions/
-vec3 getNormalFromMap() 
-{
-   vec3 tangentNormal = texture(normalMap, fs_in.texCoords).xyz * 2.0 - 1.0;
-
-   vec3 Q1 = dFdx(fs_in.worldPos);
-   vec3 Q2 = dFdy(fs_in.worldPos);
-   vec2 st1 = dFdx(fs_in.texCoords);
-   vec2 st2 = dFdy(fs_in.texCoords);
-
-   vec3 N = normalize(fs_in.normal);
-   vec3 T = normalize(Q1 * st2.t - Q2 * st1.t);
-   vec3 B = -normalize(cross(N, T));
-   mat3 TBN = mat3(T, B, N);
-
-   return normalize(TBN * tangentNormal);
-}
 
 //the ratio between specular and diffuse reflection
 //surface reflects light vs refract light
@@ -108,11 +80,6 @@ float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 
 void main()
 {
-   // vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
-   // float metallic = texture(metallicMap, fs_in.texCoords).r;
-   // float roughness = texture(roughnessMap, fs_in.texCoords).r;
-   // float ao = texture(aoMap, fs_in.texCoords).r;
-
    vec3 N = normalize(fs_in.normal);
    vec3 V = normalize(camPos - fs_in.worldPos);
 
@@ -159,7 +126,16 @@ void main()
    vec3 kD = 1.0 - kS;
    vec3 irradiance = texture(irradianceMap, N).rgb;
    vec3 ambient_diffuse = irradiance * albedo;
-   vec3 ambient = (kD * ambient_diffuse) * ao;
+
+   vec3 R = reflect(-V, N);
+
+   const float MAX_REFLECTION_LOD = 4.0;
+   vec3 prefilteredColor = textureLod(prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
+
+   vec2 envBRDF = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+   vec3 ambient_specular = prefilteredColor * (kS * envBRDF.x + envBRDF.y);
+
+   vec3 ambient = (kD * ambient_diffuse + ambient_specular) * ao;
 
    vec3 color = ambient + Lo;
 

@@ -70,7 +70,6 @@ private:
 public:
     Engine(int a_width, int a_height, const char* a_windowName);
 
-    void Update(float a_deltaTime);
     void Draw();
     void ShutDown();
 
@@ -95,18 +94,21 @@ private:
     glm::mat4 captureProjection;
     glm::mat4 captureViews[6];
 
+    //ambient specular 
+    unsigned int prefilterEnvmap;
+    unsigned int brdfLUTexture;
+
     Shader* equirectangularToCubemapShader;
     Shader* skyboxShader;
     Shader* irradianceShader;
+    Shader* prefilterShader;
+    Shader* brdfIntegrationShader;
 
-    unsigned int LoadTexture(const char* path);
-    unsigned int LoadTextureOld(const char* path);
-    unsigned int LoadHDRTexture(char const* path);
-
-    unsigned int GenerateACubemap(int width, int height);
+    unsigned int GenerateACubemap(int width, int height, GLint minificationFilter = GL_LINEAR, bool useMipmap = false);
 
     void GenerateRadianceEnvCubemap();
     void GenerateIrradianceEnvCubemap();
+    void GenerateAmbientSpecular();
 };
 
 #endif

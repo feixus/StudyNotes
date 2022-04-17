@@ -15,9 +15,9 @@ public:
     static void RenderCube(unsigned int& cubeVAO, unsigned int& cubeVBO);
     static void RenderQuad(unsigned int& quadVAO, unsigned int& quadVBO);
 
-    unsigned int LoadTexture(const char* path);
-    unsigned int LoadTextureOld(const char* path);
-    unsigned int LoadHDRTexture(char const* path);
+    static unsigned int LoadTexture(const char* path);
+    static unsigned int LoadTextureOld(const char* path);
+    static unsigned int LoadHDRTexture(char const* path);
     
 
 private:

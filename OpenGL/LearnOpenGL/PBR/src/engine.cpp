@@ -1,11 +1,5 @@
 #include "engine.h"
 
-//You must not #define STB_IMAGE_IMPLEMENTATION in header (.h) files.  
-//Only in one C/C++ file to create the implementation (the stuff that has to be unique and done only once.)
-//https://gamedev.stackexchange.com/questions/158106/why-am-i-getting-these-errors-when-including-stb-image-h
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 Engine::Engine(int a_width, int a_height, const char *a_windowName)
 {
     this->screenWidth = a_width;
@@ -84,8 +78,6 @@ int Engine::Initialize()
 
         this->ProcessInput(this->window);
 
-        // Application logic
-        // this->Update(deltaTime);
         this->Draw();
 
         glfwSwapBuffers(this->window);
@@ -100,8 +92,6 @@ int Engine::Initialize()
 void framebuffer_size_callback(GLFWwindow *a_window, int a_width, int a_height)
 {
     glViewport(0, 0, a_width, a_height);
-
-    // TODO: Do your resize logic here...
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
@@ -151,31 +141,17 @@ void Engine::SetupOpenGlRendering()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-    stbi_set_flip_vertically_on_load(true);
-
     camera = new Camera(glm::vec3(0.0f, 0.0f, 23.0f));
+
     basicShader = new Shader("src/shaders/basic_vs.glsl", "src/shaders/basic_fs.glsl");
     basicShader->use();
-    basicShader->setInt("albedoMap", 0);
-    basicShader->setInt("normalMap", 1);
-    basicShader->setInt("metallicMap", 2);
-    basicShader->setInt("roughnessMap", 3);
-    basicShader->setInt("aoMap", 4);
 
     basicShader->setVec3("albedo", 0.5f, 0.0f, 0.0f);
     basicShader->setFloat("ao", 1.0f);
 
-    albedo = LoadTexture("src/textures/metal/albedo.png");
-    normal = LoadTexture("src/textures/metal/normal.png");
-    metallic = LoadTexture("src/textures/metal/metallic.png");
-    roughness = LoadTexture("src/textures/metal/roughness.png");
-    ao = LoadTexture("src/textures/metal/ao.png");
-
-    // glBindTextureUnit(0, albedo);
-    // glBindTextureUnit(1, normal);
-    // glBindTextureUnit(2, metallic);
-    // glBindTextureUnit(3, roughness);
-    // glBindTextureUnit(4, ao);
+    basicShader->setInt("irradianceMap", 0);
+    basicShader->setInt("prefilterMap", 1);
+    basicShader->setInt("brdfLUT", 2);
 
      //lights
     lightPositions[0] = glm::vec3(-10.0f,  10.0f, 10.0f);
@@ -195,6 +171,8 @@ void Engine::SetupOpenGlRendering()
     GenerateRadianceEnvCubemap();
     GenerateIrradianceEnvCubemap();
 
+    GenerateAmbientSpecular();
+
     skyboxShader = new Shader("src/shaders/skybox_vs.glsl", "src/shaders/skybox_fs.glsl");
     skyboxShader->use();
     skyboxShader->setInt("environmentMap", 0);
@@ -204,15 +182,11 @@ void Engine::SetupOpenGlRendering()
     glfwGetFramebufferSize(window, &scrWidth, &scrHeight);
     glViewport(0, 0, scrWidth, scrHeight);
 
-    std::cout << "error code = " << glGetError() << "  -->>>>" << std::endl;
-    std::cout << glGetString ( GL_SHADING_LANGUAGE_VERSION ) << std::endl;
-
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-}
 
-void Engine::Update(float a_deltaTime)
-{
-    // TODO: Update your logic here...
+    std::cout << std::endl;
+    std::cout << "error code = " << glGetError() << "  -->>>>" << std::endl;
+    std::cout << "opengl version: " << glGetString ( GL_SHADING_LANGUAGE_VERSION ) << std::endl;
 }
 
 void Engine::Draw()
@@ -226,15 +200,13 @@ void Engine::Draw()
     basicShader->setVec3("camPos", camera->Position);
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, albedo);
+    glBindTexture(GL_TEXTURE_2D, irradianceMap);
+
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, normal);
+    glBindTexture(GL_TEXTURE_2D, prefilterEnvmap);
+
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, metallic);
-    glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, roughness);
-    glActiveTexture(GL_TEXTURE4);
-    glBindTexture(GL_TEXTURE_2D, ao);
+    glBindTexture(GL_TEXTURE_2D, brdfLUTexture);
 
     glm::mat4 model = glm::mat4(1.0f);
     for (int row = 0; row < nrRows; ++row)
@@ -268,16 +240,21 @@ void Engine::Draw()
         Common::RenderSphere(SphereVAO, SphereVBO, SphereEBO, indexCount);
     }
 
+    // brdfIntegrationShader->use();
+    // Common::RenderQuad(QuadVAO, QuadVBO);
+
     //render skybox
     skyboxShader->use();
     skyboxShader->setMat4("view", view);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
     // glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+    // glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterEnvmap);
+
     Common::RenderCube(cubeVAO, cubeVBO);
 }
 
-unsigned int Engine::GenerateACubemap(int width, int height)
+unsigned int Engine::GenerateACubemap(int width, int height, GLint minificationFilter, bool useMipmap)
 {
     unsigned int cubemap;
     glGenTextures(1, &cubemap);
@@ -289,8 +266,15 @@ unsigned int Engine::GenerateACubemap(int width, int height)
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, minificationFilter);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    if (useMipmap)
+    {
+        glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+        //mip level的低分辨率，而越是粗糙的表面，其specular lobe范围越是大，导cube faces之间的采样不理想
+        glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+    }
 
     return cubemap;
 }
@@ -311,7 +295,7 @@ void Engine::GenerateRadianceEnvCubemap()
 
     //load HDR environment map
     // hdrTexture = LoadHDRTexture("src/textures/Brooklyn_Bridge_Planks_2k.hdr");
-    hdrTexture = LoadHDRTexture("src/textures/HWSign3-Fence_2k.hdr");
+    hdrTexture = Common::LoadHDRTexture("src/textures/HWSign3-Fence_2k.hdr");
 
     // cubemap
     envCubemap = GenerateACubemap(512, 512);
@@ -375,93 +359,76 @@ void Engine::GenerateIrradianceEnvCubemap()
         Common::RenderCube(cubeVAO, cubeVBO);    
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
+//indirect light: prefilter env cubemap * (brdf integration map)
+void Engine::GenerateAmbientSpecular()
+{
+    //1. prefilter env map 
 
+    //对于大多数reflection，128*128已经够用，但大量光滑的材质(如car reflection)需要提升分辨率
+    prefilterEnvmap = GenerateACubemap(128, 128, GL_LINEAR_MIPMAP_LINEAR, true);
+
+    prefilterShader = new Shader("src/shaders/cubemap_vs.glsl", "src/shaders/prefilter_env_map_fs.glsl");
+    prefilterShader->use();
+    prefilterShader->setInt("environmentMap", 0);
+    prefilterShader->setMat4("projection", captureProjection);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+
+    //prefilter mipmap levels
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    unsigned int maxMipLevels = 5;
+    for (unsigned int mip = 0; mip < maxMipLevels; mip++)
+    {
+        unsigned int mipWidth = 128 * std::pow(0.5, mip);
+        unsigned int mipHeight = 128 * std::pow(0.5, mip);
+        glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mipWidth, mipHeight);
+        glViewport(0, 0, mipWidth, mipHeight);
+
+        float roughness = (float)mip / (float)(maxMipLevels - 1);
+        prefilterShader->setFloat("roughness", roughness);
+        for (unsigned int i = 0; i < 6; i++)
+        {
+            prefilterShader->setMat4("view", captureViews[i]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, prefilterEnvmap, mip);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            Common::RenderCube(cubeVAO, cubeVBO);
+        }
+    }    
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    //2. brdf integration LUT 
+    glGenTextures(1, &brdfLUTexture);
+
+    //pre-allocate enough memory for the LUT texture
+    glBindTexture(GL_TEXTURE_2D, brdfLUTexture);
+    //16-bit precision floating point as recommended by Epic Games
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 512, 512, 0, GL_RG, GL_FLOAT, 0);
+    //GL_CLAMP_TO_EDGE prevent sampling artifacts
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, brdfLUTexture, 0);
+
+    glViewport(0, 0, 512, 512);
+    brdfIntegrationShader = new Shader("src/shaders/brdf_integration_vs.glsl", "src/shaders/brdf_integration_fs.glsl");
+    brdfIntegrationShader->use();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    Common::RenderQuad(QuadVAO, QuadVBO);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void Engine::ShutDown()
 {
     delete &basicShader;
 }
-
-//version 4.5
-unsigned int Engine::LoadTexture(const char *path)
-{
-    GLuint texture;
-
-    int width, height, channel;
-    unsigned char *data = stbi_load(path, &width, &height, &channel, 0);
-
-    GLenum internalFormat = (channel == 4) ? GL_RGBA8 : GL_RGB8;
-    GLenum dataFormat = (channel == 4) ? GL_RGBA : GL_RGB;
-
-    glCreateTextures(GL_TEXTURE_2D, 1, &texture);
-    //GL_INVALID_VALUE is generated if width, height or levels are less than 1.
-    glTextureStorage2D(texture, 1, internalFormat, width, height);
-   
-    glTextureSubImage2D(texture, 0, 0, 0, width, height, dataFormat, GL_UNSIGNED_BYTE, data);
-
-    stbi_image_free(data);
-    return texture;
-}
-
-unsigned int Engine::LoadHDRTexture(char const* path)
-{
-    stbi_set_flip_vertically_on_load(true);
-
-    unsigned int textureId;
-    int width, height, nrComponents;
-    float *data = stbi_loadf(path, &width, &height, &nrComponents, 0);
-    if (data)
-    {
-        glGenTextures(1, &textureId);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, data);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        stbi_image_free(data);
-    }
-    else
-    {
-        std::cout << "Failed to load HDR image." << std::endl;
-    }
-
-    return textureId;
-}
-
-unsigned int Engine::LoadTextureOld(char const * path)
-{
-    unsigned int textureID;
-
-    int width, height, nrComponents;
-    unsigned char *data = stbi_load(path, &width, &height, &nrComponents, 0);
-
-    assert(data);
-   
-    GLenum format;
-    if (nrComponents == 1)
-        format = GL_RED;
-    else if (nrComponents == 3)
-        format = GL_RGB;
-    else if (nrComponents == 4)
-        format = GL_RGBA;
-
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    stbi_image_free(data);
-    return textureID;
-}
-
 
