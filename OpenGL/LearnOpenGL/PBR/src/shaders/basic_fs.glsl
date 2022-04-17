@@ -9,15 +9,25 @@ in VS_OUT
    vec2 texCoords;
 } fs_in;
 
-// material parameters
-uniform vec3 albedo;
-uniform float metallic;
-uniform float roughness;
-uniform float ao;
+uniform int useTextureParameters;
 
+// material parameters
+uniform vec3 albedo_num;
+uniform float metallic_num;
+uniform float roughness_num;
+uniform float ao_num;
+
+//IBL
 uniform samplerCube irradianceMap;
 uniform samplerCube prefilterMap;
 uniform sampler2D brdfLUT;
+
+//texture parameters material 
+uniform sampler2D albedoMap;
+uniform sampler2D aoMap;
+uniform sampler2D metallicMap;
+uniform sampler2D normalMap;
+uniform sampler2D roughnessMap;
 
 //lights
 uniform vec3 lightPositions[4];
@@ -26,6 +36,27 @@ uniform vec3 lightColors[4];
 uniform vec3 camPos;
 
 const float PI = 3.14159265359;
+
+// Easy trick to get tangent-normals to world-space to keep PBR code simplified.
+// Don't worry if you don't get what's going on; you generally want to do normal 
+// mapping the usual way for performance anways; I do plan make a note of this 
+// technique somewhere later in the normal mapping tutorial.
+vec3 getNormalFromMap()
+{
+    vec3 tangentNormal = texture(normalMap, fs_in.texCoords).xyz * 2.0 - 1.0;
+
+    vec3 Q1  = dFdx(fs_in.worldPos);
+    vec3 Q2  = dFdy(fs_in.worldPos);
+    vec2 st1 = dFdx(fs_in.texCoords);
+    vec2 st2 = dFdy(fs_in.texCoords);
+
+    vec3 N   = normalize(fs_in.normal);
+    vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
+    vec3 B  = -normalize(cross(N, T));
+    mat3 TBN = mat3(T, B, N);
+
+    return normalize(TBN * tangentNormal);
+}
 
 //the ratio between specular and diffuse reflection
 //surface reflects light vs refract light
@@ -81,7 +112,31 @@ float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 void main()
 {
    vec3 N = normalize(fs_in.normal);
+
+   vec3 albedo;
+   float metallic;
+   float roughness;
+   float ao;
+
+   // material properties
+   if (useTextureParameters == 1)
+   {
+      albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
+      metallic = texture(metallicMap, fs_in.texCoords).r;
+      roughness = texture(roughnessMap, fs_in.texCoords).r;
+      ao = texture(aoMap, fs_in.texCoords).r;
+      N = getNormalFromMap();
+   }
+   else 
+   {
+      albedo = albedo_num;
+      metallic = metallic_num;
+      roughness = roughness_num;
+      ao = ao_num;
+   }
+
    vec3 V = normalize(camPos - fs_in.worldPos);
+   vec3 R = reflect(-V, N);
 
    vec3 F0 = vec3(0.04);
    F0 = mix(F0, albedo, metallic);
@@ -122,20 +177,26 @@ void main()
    //as the ambient light come from all directions within the hemisphere oriented around the normal N
    //there's no single halfway vector to determine the Fresnel response
    // vec3 kS = fresnelSchlick(max(dot(N, V), 0), F0);
-   vec3 kS = fresnelSchlickRoughness(max(dot(N, V), 0), F0, roughness);
+   vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0), F0, roughness);
+
+   vec3 kS = F;
    vec3 kD = 1.0 - kS;
+   kD *= 1.0 - metallic;
+
    vec3 irradiance = texture(irradianceMap, N).rgb;
    vec3 ambient_diffuse = irradiance * albedo;
-
-   vec3 R = reflect(-V, N);
 
    const float MAX_REFLECTION_LOD = 4.0;
    vec3 prefilteredColor = textureLod(prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
 
-   vec2 envBRDF = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
-   vec3 ambient_specular = prefilteredColor * (kS * envBRDF.x + envBRDF.y);
+   vec2 brdf = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+   vec3 ambient_specular = prefilteredColor * (F * brdf.x + brdf.y);
 
    vec3 ambient = (kD * ambient_diffuse + ambient_specular) * ao;
+   // vec3 ambient = kD * ambient_diffuse * ao;
+   // vec3 ambient = ambient_specular;
+   // vec3 ambient = (kD * ambient_diffuse + prefilteredColor * F) *ao;
+   // vec3 ambient = vec3(brdf, 0.0);
 
    vec3 color = ambient + Lo;
 

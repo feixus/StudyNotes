@@ -67,6 +67,12 @@ private:
     glm::vec3 lightPositions[4];
     glm::vec3 lightColors[4];
 
+    //使用纹理化参数的标记,  切换开关
+    bool useTextureParameters = true;
+
+    unsigned int textureIds[5][5];
+    glm::mat4 textureModels[5];
+
 public:
     Engine(int a_width, int a_height, const char* a_windowName);
 
@@ -103,6 +109,7 @@ private:
     Shader* irradianceShader;
     Shader* prefilterShader;
     Shader* brdfIntegrationShader;
+    Shader* quadShader;
 
     unsigned int GenerateACubemap(int width, int height, GLint minificationFilter = GL_LINEAR, bool useMipmap = false);
 

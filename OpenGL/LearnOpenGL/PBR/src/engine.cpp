@@ -141,17 +141,66 @@ void Engine::SetupOpenGlRendering()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-    camera = new Camera(glm::vec3(0.0f, 0.0f, 23.0f));
+    camera = new Camera(glm::vec3(0.0f, 0.0f, 10.0f));
 
     basicShader = new Shader("src/shaders/basic_vs.glsl", "src/shaders/basic_fs.glsl");
     basicShader->use();
-
-    basicShader->setVec3("albedo", 0.5f, 0.0f, 0.0f);
-    basicShader->setFloat("ao", 1.0f);
+    basicShader->setInt("useTextureParameters", useTextureParameters ? 1 : 0);
 
     basicShader->setInt("irradianceMap", 0);
     basicShader->setInt("prefilterMap", 1);
     basicShader->setInt("brdfLUT", 2);
+
+    if (useTextureParameters)
+    {
+        basicShader->setInt("albedoMap", 3);
+        basicShader->setInt("aoMap", 4);
+        basicShader->setInt("metallicMap", 5);
+        basicShader->setInt("normalMap", 6);
+        basicShader->setInt("roughnessMap", 7);
+
+        textureIds[0][0] = Common::LoadTexture("src/textures/pbr/gold/albedo.png");
+        textureIds[0][1] = Common::LoadTexture("src/textures/pbr/gold/ao.png");
+        textureIds[0][2] = Common::LoadTexture("src/textures/pbr/gold/metallic.png");
+        textureIds[0][3] = Common::LoadTexture("src/textures/pbr/gold/normal.png");
+        textureIds[0][4] = Common::LoadTexture("src/textures/pbr/gold/roughness.png");
+        
+        textureIds[1][0] = Common::LoadTexture("src/textures/pbr/grass/albedo.png");
+        textureIds[1][1] = Common::LoadTexture("src/textures/pbr/grass/ao.png");
+        textureIds[1][2] = Common::LoadTexture("src/textures/pbr/grass/metallic.png");
+        textureIds[1][3] = Common::LoadTexture("src/textures/pbr/grass/normal.png");
+        textureIds[1][4] = Common::LoadTexture("src/textures/pbr/grass/roughness.png");
+
+        textureIds[2][0] = Common::LoadTexture("src/textures/pbr/plastic/albedo.png");
+        textureIds[2][1] = Common::LoadTexture("src/textures/pbr/plastic/ao.png");
+        textureIds[2][2] = Common::LoadTexture("src/textures/pbr/plastic/metallic.png");
+        textureIds[2][3] = Common::LoadTexture("src/textures/pbr/plastic/normal.png");
+        textureIds[2][4] = Common::LoadTexture("src/textures/pbr/plastic/roughness.png");
+
+        textureIds[3][0] = Common::LoadTexture("src/textures/pbr/rusted_iron/albedo.png");
+        textureIds[3][1] = Common::LoadTexture("src/textures/pbr/rusted_iron/ao.png");
+        textureIds[3][2] = Common::LoadTexture("src/textures/pbr/rusted_iron/metallic.png");
+        textureIds[3][3] = Common::LoadTexture("src/textures/pbr/rusted_iron/normal.png");
+        textureIds[3][4] = Common::LoadTexture("src/textures/pbr/rusted_iron/roughness.png");
+        
+        textureIds[4][0] = Common::LoadTexture("src/textures/pbr/wall/albedo.png");
+        textureIds[4][1] = Common::LoadTexture("src/textures/pbr/wall/ao.png");
+        textureIds[4][2] = Common::LoadTexture("src/textures/pbr/wall/metallic.png");
+        textureIds[4][3] = Common::LoadTexture("src/textures/pbr/wall/normal.png");
+        textureIds[4][4] = Common::LoadTexture("src/textures/pbr/wall/roughness.png");
+
+        glm::mat4 model = glm::mat4(1.0f);
+        textureModels[0] = glm::translate(model, glm::vec3(-5.0f, 0.0f, 2.0f));
+        textureModels[1] = glm::translate(model, glm::vec3(-3.0f, 0.0f, 2.0f));
+        textureModels[2] = glm::translate(model, glm::vec3(-1.0f, 0.0f, 2.0f));
+        textureModels[3] = glm::translate(model, glm::vec3( 1.0f, 0.0f, 2.0f));
+        textureModels[4] = glm::translate(model, glm::vec3( 3.0f, 0.0f, 2.0f));
+    }
+    else 
+    {
+        basicShader->setVec3("albedo_num", 0.5f, 0.0f, 0.0f);
+        basicShader->setFloat("ao_num", 1.0f);
+    }
 
      //lights
     lightPositions[0] = glm::vec3(-10.0f,  10.0f, 10.0f);
@@ -178,6 +227,10 @@ void Engine::SetupOpenGlRendering()
     skyboxShader->setInt("environmentMap", 0);
     skyboxShader->setMat4("projection", projection);
 
+    quadShader = new Shader("src/shaders/quad_vs.glsl", "src/shaders/quad_fs.glsl");
+    quadShader->use();
+    quadShader->setInt("baseMap", 0);
+
     int scrWidth, scrHeight;
     glfwGetFramebufferSize(window, &scrWidth, &scrHeight);
     glViewport(0, 0, scrWidth, scrHeight);
@@ -200,28 +253,48 @@ void Engine::Draw()
     basicShader->setVec3("camPos", camera->Position);
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, irradianceMap);
-
+    glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, prefilterEnvmap);
-
+    glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterEnvmap);
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, brdfLUTexture);
 
     glm::mat4 model = glm::mat4(1.0f);
-    for (int row = 0; row < nrRows; ++row)
+    if (!useTextureParameters)
     {
-        basicShader->setFloat("metallic", (float)row / (float)nrRows);
-        for (int col = 0; col < nrColumns; ++col)
+        for (int row = 0; row < nrRows; ++row)
         {
-            //clamp the roughness to 0.05-1.0 as perfectly smooth surface 
-            //(roughness 0.0) tend to look a bit off on direct light
-            basicShader->setFloat("roughness", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
+            basicShader->setFloat("metallic_num", (float)row / (float)nrRows);
+            for (int col = 0; col < nrColumns; ++col)
+            {
+                //clamp the roughness to 0.05-1.0 as perfectly smooth surface 
+                //(roughness 0.0) tend to look a bit off on direct light
+                basicShader->setFloat("roughness_num", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
 
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3((col - (nrColumns / 2)) * spacing, (row - (nrRows / 2)) * spacing, 0.0f));
+                model = glm::mat4(1.0f);
+                model = glm::translate(model, glm::vec3((col - (nrColumns / 2)) * spacing, (row - (nrRows / 2)) * spacing, 0.0f));
 
-            basicShader->setMat4("model", model);
+                basicShader->setMat4("model", model);
+                Common::RenderSphere(SphereVAO, SphereVBO, SphereEBO, indexCount);
+            }
+        }
+    }
+    else 
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            glActiveTexture(GL_TEXTURE3);
+            glBindTexture(GL_TEXTURE_2D, textureIds[i][0]);
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_2D, textureIds[i][1]);
+            glActiveTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_2D, textureIds[i][2]);
+            glActiveTexture(GL_TEXTURE6);
+            glBindTexture(GL_TEXTURE_2D, textureIds[i][3]);
+            glActiveTexture(GL_TEXTURE7);
+            glBindTexture(GL_TEXTURE_2D, textureIds[i][4]);
+
+            basicShader->setMat4("model", textureModels[i]);
             Common::RenderSphere(SphereVAO, SphereVBO, SphereEBO, indexCount);
         }
     }
@@ -242,6 +315,13 @@ void Engine::Draw()
 
     // brdfIntegrationShader->use();
     // Common::RenderQuad(QuadVAO, QuadVBO);
+
+    // quadShader->use();
+    // glActiveTexture(GL_TEXTURE0);
+    // unsigned int albedo = Common::LoadTexture("src/textures/rock/albedo.png");
+    // glBindTexture(GL_TEXTURE_2D, albedo);
+    // glBindTexture(GL_TEXTURE_2D, brdfLUTexture);
+    // Common::RenderQuad(cubeVAO, cubeVBO);
 
     //render skybox
     skyboxShader->use();
@@ -294,8 +374,8 @@ void Engine::GenerateRadianceEnvCubemap()
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
 
     //load HDR environment map
-    // hdrTexture = LoadHDRTexture("src/textures/Brooklyn_Bridge_Planks_2k.hdr");
-    hdrTexture = Common::LoadHDRTexture("src/textures/HWSign3-Fence_2k.hdr");
+    hdrTexture = Common::LoadHDRTexture("src/textures/Brooklyn_Bridge_Planks_2k.hdr");
+    // hdrTexture = Common::LoadHDRTexture("src/textures/HWSign3-Fence_2k.hdr");
 
     // cubemap
     envCubemap = GenerateACubemap(512, 512);

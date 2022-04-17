@@ -6,59 +6,6 @@ in vec2 TexCoords;
 
 const float PI = 3.14159265359;
 
-float RadicalInverse_VdC(uint bits);
-vec2 Hammersley(uint i, uint N);
-vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness);
-float DistributionGGX(vec3 N, vec3 H, float roughness);
-float GeometrySchlickGGX(float NdotV, float roughness);
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
-
-vec2 IntegrateBRDF(float NdotV, float roughness)
-{
-   vec3 V;
-   V.x = sqrt(1.0 - NdotV * NdotV);  //why x and z?
-   V.y = 0.0;
-   V.z = NdotV;
-
-   float A = 0.0;
-   float B = 0.0;
-
-   vec3 N = vec3(0.0, 0.0, 1.0);
-
-   const uint SAMPLE_COUNT = 1024u;
-   for (uint i = 0u; i < SAMPLE_COUNT; i++)
-   {
-      vec2 Xi = Hammersley(i, SAMPLE_COUNT);
-      vec3 H = ImportanceSampleGGX(Xi, N, roughness);
-      vec3 L = normalize(2.0 * dot(V, H) * H - V);
-
-      float NdotL = max(L.z, 0.0);       //why???
-      float NdotH = max(H.z, 0.0);
-      float VdotH = max(dot(V, H), 0.0);
-
-      if (NdotL > 0.0)
-      {
-         float G = GeometrySmith(N, V, L, roughness);
-         float G_Vis = (G * VdotH) / (NdotH * NdotV);
-         float Fc = pow(1.0 - VdotH, 5.0);
-
-         A += (1.0 - Fc) * G_Vis;
-         B += Fc * G_Vis;
-      }
-   }
-   A /= float(SAMPLE_COUNT);
-   B /= float(SAMPLE_COUNT);
-   return vec2(A, B);
-}
-
-void main() 
-{
-   vec2 integratedBRDF = IntegrateBRDF(TexCoords.x, TexCoords.y);
-
-   fragColor = integratedBRDF;
-}
-
-
 float RadicalInverse_VdC(uint bits)
 {
    bits = (bits << 16u | (bits >> 16u));
@@ -98,20 +45,6 @@ vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
    return normalize(sampleVec);
 }
 
-float DistributionGGX(vec3 N, vec3 H, float roughness)
-{
-   float a = roughness * roughness;
-   float a2 = a * a;
-   float NdotH = max(dot(N, H), 0.0);
-   float NdotH2 = NdotH * NdotH;
-
-   float nom = a2;
-   float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-   denom = PI * denom * denom;
-
-   return nom / denom;
-}
-
 float GeometrySchlickGGX(float NdotV, float roughness)
 {
    float a = roughness;  //不确定性？？？
@@ -131,4 +64,50 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
 
    return ggx1 * ggx2;
+}
+
+vec2 IntegrateBRDF(float NdotV, float roughness)
+{
+   vec3 V;
+   V.x = sqrt(1.0 - NdotV * NdotV);  //why x and z?
+   V.y = 0.0;
+   V.z = NdotV;
+
+   float A = 0.0;
+   float B = 0.0;
+
+   vec3 N = vec3(0.0, 0.0, 1.0);
+
+   const uint SAMPLE_COUNT = 1024u;
+   for (uint i = 0u; i < SAMPLE_COUNT; i++)
+   {
+      vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+      vec3 H = ImportanceSampleGGX(Xi, N, roughness);
+      vec3 L = normalize(2.0 * dot(V, H) * H - V);
+
+      float NdotL = max(L.z, 0.0);       //why???
+      float NdotH = max(H.z, 0.0);
+      float VdotH = max(dot(V, H), 0.0);
+
+      if (NdotL > 0.0)
+      {
+         float G = GeometrySmith(N, V, L, roughness);
+         float G_Vis = (G * VdotH) / (NdotH * NdotV);
+         float Fc = pow(1.0 - VdotH, 5.0);
+
+         A += (1.0 - Fc) * G_Vis;
+         B += Fc * G_Vis;
+      }
+   }
+   A /= float(SAMPLE_COUNT);
+   B /= float(SAMPLE_COUNT);
+
+   return vec2(A, B);
+}
+
+void main() 
+{
+   vec2 integratedBRDF = IntegrateBRDF(TexCoords.x, TexCoords.y);
+
+   fragColor = integratedBRDF;
 }
