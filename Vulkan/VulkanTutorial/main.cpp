@@ -143,6 +143,7 @@ private:
 			vkDestroyImageView(device, imageView, nullptr);
 		}
 
+
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
