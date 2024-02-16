@@ -96,6 +96,7 @@ private:
 
 	std::vector<VkImageView> swapChainImageViews;
 
+	VkRenderPass renderPass;
 	VkPipelineLayout pipelineLayout;
 
 	void initWindow() {
@@ -113,6 +114,7 @@ private:
 	* 5. swap chain : surface format(color depth)/ present mode(FIFO|FIFO_RELAX|MAILBOX(triple buffering)|IMMEDIATE) / swap extent(resolution of images in swap chain)
 	* 6. image views
 	* 7. graphic pipeline: vertex/fragment shader(SPIR-V bytecode)
+	* 8. render pass object: render pass -> subpass -> attachmentRef -> attachments, framebuffer attachment / color and depth buffer / samples
 	* */
 
 	void initVulkan() {
@@ -123,6 +125,7 @@ private:
 		createLogicDevice();
 		createSwapChain();
 		createImageViews();
+		createRenderPass();
 		createGraphicsPipeline();
 
 		OutputDetailInfos();
@@ -144,6 +147,7 @@ private:
 		}
 
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+		vkDestroyRenderPass(device, renderPass, nullptr);
 
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
 		vkDestroyDevice(device, nullptr);
@@ -778,12 +782,55 @@ private:
 		}
 
 
-
-
 		vkDestroyShaderModule(device, vertShaderModule, nullptr);
 		vkDestroyShaderModule(device, fragShaderModule, nullptr);
 	}
 
+	void createRenderPass() {
+		VkAttachmentDescription colorAttachment{};
+		colorAttachment.format = swapChainImageFormat;
+		colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+		//image_layout_color_attachment: image used as color attachment
+		// image_layout_present_src: image to be presented in the swap chain
+		// image_layout_transfer_dst: image to be used as destination for a memory copy operation
+
+		//which layout the image will have before the render pass begins
+		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		//the layout to automatically transition to when the render pass finish
+		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+
+		//render pass -> subpasses -> references attachments -> attachments(color buffer or depth buffer...)
+		VkAttachmentReference colorAttachmentRef{};
+		//the index of the attachment in the array id directly reference from the fragment shader with the layout(location=0) out vec4 outColor
+		colorAttachmentRef.attachment = 0;
+		//vulkan will automatically transition the attachment to this layout
+		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+		VkSubpassDescription subpass{};
+		//graphic subpass
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.colorAttachmentCount = 1;
+		//input attachments / resolve attachment / depthandstencil attachment / preserve attachment
+		subpass.pColorAttachments = &colorAttachmentRef;
+
+		VkRenderPassCreateInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.attachmentCount = 1;
+		renderPassInfo.pAttachments = &colorAttachment;
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = &subpass;
+
+		if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create render pass!");
+		}
+
+	}
 	
 
 	void OutputDetailInfos() {
