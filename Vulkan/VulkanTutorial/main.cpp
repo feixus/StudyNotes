@@ -17,8 +17,8 @@
 #include <fstream>
 
 
-const uint32_t WIDTH = 2048;
-const uint32_t HEIGHT = 1024;
+const uint32_t WIDTH = 1024;
+const uint32_t HEIGHT = 512;
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -155,6 +155,8 @@ private:
 
 			drawFrame();
 		}
+
+		vkDeviceWaitIdle(device);
 	}
 
 	//1.1 render a frame in vulkan:
@@ -206,18 +208,28 @@ private:
 		if (vkQueueSubmit(graphicQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
 			throw std::runtime_error("failed to submit draw command buffer!");
 		}
+
+		VkPresentInfoKHR presentInfo{};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = signalSemaphores;
+
+		VkSwapchainKHR swapChains[] = { swapChain };
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = swapChains;
+		presentInfo.pImageIndices = &imageIndex;
+
+		presentInfo.pResults = nullptr;
+		vkQueuePresentKHR(presentQueue, &presentInfo);
 	}
 
 	void cleanup() {
-		if (enableValidationLayers) {
-			DestroyDebugUtilsMessagerEXT(instance, debugMessager, nullptr);
-		}
+		vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+		vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+		vkDestroyFence(device, inFlightFence, nullptr);
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
-
-		for (auto imageView : swapChainImageViews) {
-			vkDestroyImageView(device, imageView, nullptr);
-		}
 
 		for (auto framebuffer : swapChainFrameBuffers) {
 			vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -227,14 +239,19 @@ private:
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyRenderPass(device, renderPass, nullptr);
 
+		for (auto imageView : swapChainImageViews) {
+			vkDestroyImageView(device, imageView, nullptr);
+		}
+
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
 		vkDestroyDevice(device, nullptr);
+
+		if (enableValidationLayers) {
+			DestroyDebugUtilsMessagerEXT(instance, debugMessager, nullptr);
+		}
+
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 		vkDestroyInstance(instance, nullptr);
-
-		vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
-		vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
-		vkDestroyFence(device, inFlightFence, nullptr);
 
 		glfwDestroyWindow(window);
 
@@ -298,19 +315,6 @@ private:
 		if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create instance!");
 		}
-
-		uint32_t extensionCount = 0;
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-		std::vector<VkExtensionProperties> extensionsAll(extensionCount);
-
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionsAll.data());
-
-		std::cout << "\navailable instance extensions properties:\n";
-		for (const auto& extension : extensionsAll)
-		{
-			std::cout << '\t' << extension.extensionName << '\n';
-		}
-		std::cout << '\n';
 	}
 
 	bool checkValidationLayerSupport() {
@@ -319,11 +323,6 @@ private:
 
 		std::vector<VkLayerProperties> availableLayers(layerOut);
 		vkEnumerateInstanceLayerProperties(&layerOut, availableLayers.data());
-
-		std::cout << "\n available instance layer properties : \n";
-		for (const auto& layerProperties : availableLayers) {
-			std::cout << layerProperties.layerName << '\t' << layerProperties.description << '\n';
-		}
 
 		for (const char* layerName : validationLayers) {
 			bool layerFound = false;
@@ -411,32 +410,6 @@ private:
 
 		std::vector<VkPhysicalDevice> devices(deviceCount);
 		vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
-
-		std::cout << "\nPhysical Device: \n";
-		for (const auto& device : devices) {
-			VkPhysicalDeviceProperties deviceProperties;
-			vkGetPhysicalDeviceProperties(device, &deviceProperties);
-
-			VkPhysicalDeviceFeatures deviceFeatures;
-			vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
-			std::cout << " device name= " << deviceProperties.deviceName << "  \n" <<
-				" device type= " << deviceProperties.deviceType << "  \n" <<
-				" device id= " << deviceProperties.deviceID << "  \n" <<
-				" api version= " << deviceProperties.apiVersion << "  \n" <<
-				" vendor id= " << deviceProperties.vendorID << "  \n" <<
-				"  maxImageDimension2D= " << deviceProperties.limits.maxImageDimension2D << " \n" <<
-				"  framebuffer color sample count= " << deviceProperties.limits.framebufferColorSampleCounts << std::endl;
-
-			std::cout << "\n geometryShader= " << deviceFeatures.geometryShader << "\n" <<
-				" tessellationShader= " << deviceFeatures.tessellationShader << "\n" <<
-				" multiViewport= " << deviceFeatures.multiViewport << "\n" <<
-				" shaderFloat64= " << deviceFeatures.shaderFloat64 << "\n" <<
-				" textureCompressionASTC_LDR= " << deviceFeatures.textureCompressionASTC_LDR << "\n" <<
-				" textureCompressionETC2= " << deviceFeatures.textureCompressionETC2 << "\n" <<
-				" textureCompressionBC= " << deviceFeatures.textureCompressionBC << "\n" <<
-				" samplerAnisotropy= " << deviceFeatures.samplerAnisotropy << "\n";
-		}
 
 		for (const auto& device : devices) {
 			if (isDeviceSuitable(device)) {
@@ -941,10 +914,28 @@ private:
 		renderPassInfo.subpassCount = 1;
 		renderPassInfo.pSubpasses = &subpass;
 
+		VkSubpassDependency dependency{};
+		//indices of the dependency | the dependent subpass
+		//VK_SUBPASS_EXTERNAL refers to the implicit subpass before or after the render pass
+		//dstSubpass must always be higher than srcSubpass to prevent cycles in the dependency graph, except VK_SUBPASS_EXTERNAL
+		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+		dependency.dstSubpass = 0;
+
+		//specify the operations to wait on and the stages in which these operations occur.
+		//wait for the swap chain to finish reading from the image before we can access it
+		dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependency.srcAccessMask = 0;
+
+		//prevent the transition from happening until it's actually necessary: when we want to start writing colors to it.
+		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+		renderPassInfo.dependencyCount = 1;
+		renderPassInfo.pDependencies = &dependency;
+
 		if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create render pass!");
 		}
-
 	}
 
 	void createFramebuffers() {
@@ -1062,14 +1053,75 @@ private:
 		// the first appear in signaled state
 		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS &&
-			vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS &&
+		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
+			vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS ||
 			vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create sync objects semaphore or fence!");
 		}
 	}
 
 	void OutputDetailInfos() {
+		
+		std::cout << "\n================= available instance extensions properties =================================\n";
+		uint32_t extensionCount = 0;
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+		std::vector<VkExtensionProperties> extensionsAll(extensionCount);
+
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionsAll.data());
+
+		for (const auto& extension : extensionsAll)
+		{
+			std::cout << '\t' << extension.extensionName << '\n';
+		}
+		std::cout << '\n';
+
+		std::cout << "\n================= available instance layer properties =================================\n";
+		uint32_t layerOut;
+		vkEnumerateInstanceLayerProperties(&layerOut, nullptr);
+
+		std::vector<VkLayerProperties> availableLayers(layerOut);
+		vkEnumerateInstanceLayerProperties(&layerOut, availableLayers.data());
+
+		for (const auto& layerProperties : availableLayers) {
+			std::cout << layerProperties.layerName << '\t' << layerProperties.description << '\n';
+		}
+
+		std::cout << "\n=================physical devices =================================\n";
+
+		uint32_t deviceCount = 0;
+		vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+
+		std::vector<VkPhysicalDevice> devices(deviceCount);
+		vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+		for (const auto& device : devices) {
+			VkPhysicalDeviceProperties deviceProperties;
+			vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+			VkPhysicalDeviceFeatures deviceFeatures;
+			vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+			std::cout << "\n==============device properties==================\n";
+			std::cout << " device name= " << deviceProperties.deviceName << "  \n" <<
+				" device type= " << deviceProperties.deviceType << "  \n" <<
+				" device id= " << deviceProperties.deviceID << "  \n" <<
+				" api version= " << deviceProperties.apiVersion << "  \n" <<
+				" vendor id= " << deviceProperties.vendorID << "  \n" <<
+				"  maxImageDimension2D= " << deviceProperties.limits.maxImageDimension2D << " \n" <<
+				"  framebuffer color sample count= " << deviceProperties.limits.framebufferColorSampleCounts << std::endl;
+
+			std::cout << "\n==============device features==================\n";
+			std::cout << "\n geometryShader= " << deviceFeatures.geometryShader << "\n" <<
+				" tessellationShader= " << deviceFeatures.tessellationShader << "\n" <<
+				" multiViewport= " << deviceFeatures.multiViewport << "\n" <<
+				" shaderFloat64= " << deviceFeatures.shaderFloat64 << "\n" <<
+				" textureCompressionASTC_LDR= " << deviceFeatures.textureCompressionASTC_LDR << "\n" <<
+				" textureCompressionETC2= " << deviceFeatures.textureCompressionETC2 << "\n" <<
+				" textureCompressionBC= " << deviceFeatures.textureCompressionBC << "\n" <<
+				" samplerAnisotropy= " << deviceFeatures.samplerAnisotropy << "\n";
+		}
+
+
 		std::cout << "\n=================Queue Family Properties=================================\n";
 
 		uint32_t queueFamilyCount = 0;

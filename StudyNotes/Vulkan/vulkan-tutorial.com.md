@@ -6,7 +6,7 @@
   - Logic device and queue families
   VkDevice | VkQueue
 
-  - Window surface and swap chain
+  - Window surface and swap chain 
   create a window to present rendered images to.
   render to a window with VkSurfaceKHR | VkSwapchainKHR
   VkSurfaceKHR: vulkan api is completely platform agnostic, so to use the standardized WSI(Window System Interface) extension to interact with the window manager.
@@ -45,6 +45,8 @@
   - validation layers
   do things like running extra checks on function parameters and tracking memory management problems.
 
+
+## drawing
 ### Frame buffers
     在render pass创建期间指定的attachments,通过将其封装进VkFramebuffer对象中来绑定. 一个framebuffer object引用所有表达此attachments的VkImageView objects.
 
@@ -68,6 +70,7 @@
 记录一个command buffer, 用来绘制场景至图片
 提交 recorded command buffer
 present the swap chain image
+
 ##### synchronization
 GPU上的同步执行是显式的。操作的顺序需使用各种synchronization primitives来告知驱动我们想要运行的顺序。因许多Vulkan API的调用在GPU上是异步执行的， 函数的返回早于其操作结束。
 这里需要一些order explicitly, 因在GPU上的异步执行:
@@ -85,4 +88,48 @@ VkSemaphore | vkCreateSemaphore | vkDestroySemaphore
 CPU wait, CPU上的顺序执行，也是用于synchronize execution.
 Fences必须手动重置以回到unsignaled状态.因fences用于控制host的执行，host可以决定何时重置fence.
 fences用于保持CPU和GPU彼此同步.
-VkFence | vkCreateFence | vkDestroyFence
+VkFence | vkCreateFence | vkDestroyFence | vkWaitForFences | vkResetFences
+
+##### flow
+vkWaitForFences | vkResetFences:  create a fence for wait previous frame finish
+vkAcquireNextImageKHR: acquire an image from the swap chain
+vkResetCommandBuffer
+record a command buffer
+vkQueueSubmit
+
+vkDeviceWaitIdle
+
+##### subpass dependencies
+render pass中的subpasses会自动处理image layout transitions.这些转换由subpass dependencies控制，指定内存和subpasses之间的执行依赖。
+有两个内置依赖负责处理render pass开始和结束时的transition.但前一个没有发生在正确的时间。 假定transition发生在pipeline的开始处，但此时还没有acquire the image.
+有两种解决方式,设置waitStages为VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT / VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT 
+
+
+
+##### VkPipelineStageFlagBits
+VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT
+VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+VK_PIPELINE_STAGE_VERTEX_INPUT_BIT
+VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT
+VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT
+VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT
+VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
+VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+VK_PIPELINE_STAGE_TRANSFER_BIT
+VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+VK_PIPELINE_STAGE_HOST_BIT
+VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT
+VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+VK_PIPELINE_STAGE_NONE
+VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT
+VK_PIPELINE_STAGE_CONDITIONAL_RENDERING_BIT_EXT
+VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+VK_PIPELINE_STAGE_FRAGMENT_DENSITY_PROCESS_BIT_EXT
+VK_PIPELINE_STAGE_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR
+VK_PIPELINE_STAGE_COMMAND_PREPROCESS_BIT_NV
+VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT
+VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT
