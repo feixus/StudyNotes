@@ -60,7 +60,7 @@
   记录单个网格元素的数据, 如primitive uniform buffer/index buffer/user data/primitiveId
   
 - FRHIUniformBuffer* PrimitiveUniformBuffer
-  对于从场景数据中手动提取图元数据的vertex factory, 必须为空. 此时使用FPrimitiveSceneProxy::UniformBuffer.(GPUScene)
+  对于从场景数据中手动提取图元数据的vertex factory, 必须为空. 此时使用FPrimitiveSceneProxy::UniformBuffer.
 
 - const TUniformBuffer<FPrimitiveUniformShaderParameters>* PrimitiveUniformBufferResource
   Primitive uniform buffer用于渲染, 当PrimitiveUniformBuffer为空时使用. 允许为尚未初始化的uniform buffer设置一个FMeshBatchElement.
@@ -118,11 +118,15 @@
 <br/>
 
 ##### FMeshBatch
-  网格元素的批次.所有网格元素拥有相同的mesh和vertex buffer
+  网格元素的批次.所有网格元素拥有相同的mesh和vertex buffer.
+
 - TArray<FMeshBatchElement,TInlineAllocator<1> > Elements
   FMeshBatchElements批次. TInlineAllocator<1>表明Elements数组至少有1个元素.
+- const FVertexFactory* VertexFactory
+  渲染所需的vertex factory.
 - const FMaterialRenderProxy* MaterialRenderProxy
   渲染所需的material proxy
+
 - const FLightCacheInterface* LCI
   为特定的mesh缓存光照的接口
 
@@ -153,11 +157,134 @@
 - bCanApplyViewModeOverrides
   view mode重载是否应用到此mesh,如unlit,wireframe.
 - bUseWireframeSelectionColoring
+  是否对待batch为特殊viewmodes的选中,如wireframe. 如FStaticMeshSceneProxy
 - bUseSelectionOutline
+  batch是否接受选中轮廓. proxies which support selection on a per-mesh batch basis.
 - bSelectable
+  是否可通过编辑器选择来选中mesh batch, 即 hit proxies.
 - bDitheredLODTransition
+  
 - bRenderToVirtualTexture
 - RuntimeVirtualTextureMaterialType : RuntimeVirtualTexture::MaterialType_NumBits
-- bOverlayMaterial
-- CastRayTracedShadow
   
+- bOverlayMaterial
+  rendered with overlay material.
+- CastRayTracedShadow
+
+- IsTranslucent/IsDecal/IsDualBlend/UseForHairStrands/IsMasked/QuantizeLODIndex/GetNumPrimitives/HasAnyDrawCalls
+- PreparePrimitiveUniformBuffer
+  若禁止GPU scene,备份使用primitive uniform buffer. mobile上的vertex shader在GPUScene开启时可能仍使用PrimitiveUB
+  
+##### FPrimitiveSceneProxy -> FMeshBatch
+    场景渲染器FSceneRenderer在渲染之初, 执行可见性测试和剔除, 以剔除被遮挡或被隐藏的物体, 在此阶段的末期会调用GatherDynamicMeshElements, 从当前场景所有的FPrimitiveSceneProxy中筛选并构建FMeshBatch, 放置在Collector.
+
+
+FSceneRenderer::Render (DeferredShadingRenderer/MobileShadingRenderer)
+FDeferredShadingSceneRenderer::InitViews
+FSceneRenderer::ComputeViewVisibility
+FSceneRenderer::GatherDynamicMeshElements
+GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector)
+  收集图元的dynamic mesh elements. 仅GetViewRelevance声明了dynamic relevance的才会调用. 针对每组可能被渲染的views的渲染线程调用.
+  游戏线程的状态如UObjects必须将其属性镜像到 primitiveSceneProxy 以避免race conditions. 渲染线程必须禁止解引用UObjects.
+  收集到的mesh elements将会多次使用, 任何内存引用的生命周期必须和Collector一样长(即不应该引用stack memory).
+  此函数不应修改proxy,仅简单收集渲染事物的描述. proxy的更新需要从游戏线程或外部事件推送.
+
+FSkeletalMeshSceneProxy::GetDynamicMeshElements
+FSkeletalMeshSceneProxy::GetMeshElementsConditionallySelectable
+FSkeletalMeshSceneProxy::GetDynamicElementsSection
+  根据当前LODIndex,获取LODData, 针对当前LOD的每个LODSection,通过Collector构建FMeshBatch, 设置MeshBatchElement/vertex factory/material/OverlayMaterial等一系列参数.
+
+FMeshElementCollector::AddMesh(int32 ViewIndex, FMeshBatch& MeshBatch)
+ComputeDynamicMeshRelevance: 计算当前mesh dynamic element的MeshBatch会被哪些MeshPass引用, 加入到每个View的PrimitiveViewRelevanceMap
+
+
+##### FMeshBatch -> FMeshDrawCommand
+
+
+
+##### FMeshElementCollector
+  封装从各个FPrimitiveSceneProxy classes中收集到的meshes.
+
+
+FPrimitiveDrawInterface* GetPDI(int32 ViewIndex)
+  访问PDI以绘制lines/sprites...
+FMeshBatch& AllocateMesh()
+  分配可以被collector安全引用的FMeshBatch(生命周期足够长). 返回的引用不会应进一步的AllocateMesh的调用而失效.
+GetDynamicIndexBuffer/GetDynamicVertexBuffer/GetDynamicReadBuffer: dynamic bufer pools
+GetMeshBatchCount(uint32 ViewIndex): 给定view收集的MeshBatches的数量.
+GetMeshElementCount(uint32 ViewIndex)
+AddMesh(int32 ViewIndex, FMeshBatch& MeshBatch)
+RegisterOneFrameMaterialProxy(FMaterialRenderProxy* Proxy)
+AllocateOneFrameResource
+ShouldUseTasks/AddTask/ProcessTasks
+GetFeatureLevel
+DeleteTemporaryProxies
+SetPrimitive(const FPrimitiveSceneProxy* InPrimitiveSceneProxy, FHitProxyId DefaultHitProxyId)
+ClearViewMeshArrays
+AddViewMeshArrays
+
+TChunkedArray<FMeshBatch> MeshBatchStorage: 使用TChunkedArray,新增元素时从不会重新分配.
+TArray<TArray<FMeshBatchAndRelevance, SceneRenderingAllocator>*, TInlineAllocator<2, SceneRenderingAllocator> > MeshBatches: 用来渲染的meshes.
+TArray<int32, TInlineAllocator<2, SceneRenderingAllocator> > NumMeshBatchElementsPerView
+TArray<FSimpleElementCollector*, TInlineAllocator<2, SceneRenderingAllocator> > SimpleElementCollectors
+TArray<FSceneView*, TInlineAllocator<2, SceneRenderingAllocator>> Views
+TArray<uint16, TInlineAllocator<2, SceneRenderingAllocator>> MeshIdInPrimitivePerView
+TArray<FMaterialRenderProxy*, SceneRenderingAllocator> TemporaryProxies
+FSceneRenderingBulkObjectAllocator& OneFrameResources
+const FPrimitiveSceneProxy* PrimitiveSceneProxy
+FGlobalDynamicIndexBuffer* DynamicIndexBuffer
+FGlobalDynamicVertexBuffer* DynamicVertexBuffer
+FGlobalDynamicReadBuffer* DynamicReadBuffer
+ERHIFeatureLevel::Type FeatureLevel
+const bool bUseAsyncTasks
+TArray<TFunction<void()>, SceneRenderingAllocator> ParallelTasks
+TArray<FGPUScenePrimitiveCollector*, TInlineAllocator<2, SceneRenderingAllocator>> DynamicPrimitiveCollectorPerView
+  追踪动态图元数据,用于为每个view上传到GPU Scene
+
+
+
+##### BlendMode
+materials: Opaque/Masked/Translucent/Additive/Modulate/AlphaComposite/AlphaHoldout
+strata materials: Opaque/Masked/TranslucentGreyTransmittance/TranslucentColoredTransmittance/ColoredTransmittanceOnly/AlphaHoldout
+
+#### MaterialDomain
+Surface: 材质的属性描述3d表面
+DeferredDecal: 材质属性描述延迟贴花,将会映射到贴花的frustum
+LightFunction: 材质属性描述光照的分布
+Volume: 3d volume
+PostProcess: custom post process pass
+UI: UMG或Slate UI
+RuntimeVirtualTexture: runtime virtual texture(deprecated).
+
+##### MeshPass
+DepthPass
+BasePass
+AnisotropyPass
+SkyPass
+SingleLayerWaterPass
+SingleLayerWaterDepthPrepass
+CSMShadowDepth
+VSMShadowDepth
+Distortion
+Velocity
+TranslucentVelocity
+TranslucencyStandard
+TranslucencyAfterDOF
+TranslucencyAfterDOFModulate
+TranslucencyAfterMotionBlur
+TranslucencyAll
+LightmapDensity
+CustomDepth
+MobileBasePassCSM
+VirtualTexture
+LumenCardCapture
+LumenCardNanite
+LumenTranslucencyRadianceCacheMark
+LumenFrontLayerTranslucencyGBuffer
+DitheredLODFadingOutMaskPass
+NaniteMeshPass
+MeshDecal
+HitProxy
+HitProxyOpaqueOnly
+EditorLevelInstance
+EditorSelection
