@@ -109,9 +109,14 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-	{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+	0, 1, 2, 2, 3, 0
 };
 
 class HelloTriangleApplication {
@@ -162,6 +167,8 @@ private:
 
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
 
 	void initWindow() {
 		glfwInit();
@@ -189,7 +196,13 @@ private:
 	* 8. render pass object: render pass -> subpass -> attachmentRef -> attachments, framebuffer attachment / color and depth buffer / samples
 	* 9. framebuffer object : act as a canvas
 	* 10. command pool and command buffers: command buffers will be automatically freed when the command pool is destroyed, dont need explict destroy
-	* */
+	* 11. vertex buffer
+	* 12. staging buffer: memory type used in CPU, such as host-visible/host-coherent, may not the most optimal memory type for the GPU. device local memory is the most optimal memory for GPU.
+	*		and is not accessible by the CPU. so we need staging buffer as a bridge, send vertices in c++ to staging buffer with vkMapMemory, use buffer copy command to send vertexbuffer to device local memory.
+	* 13. index buffer: we should allocate multiple resources like buffers from a single memory allocation, but in fact you can store multiple buffers, like the vertex and index buffers,
+	*		into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers(Vulkan Memory Management). so the data is more cache friendly, because closer together.
+	*		it is even possible to reuse the same chunk of memory for multiple resources if they are not used during the same render operations, known as aliasing.
+	*/
 
 	void initVulkan() {
 		createInstance();
@@ -204,6 +217,7 @@ private:
 		createFramebuffers();
 		createCommandPool();
 		createVertexBuffer();
+		createIndexBuffer();
 		createCommandBuffers();
 		createSyncObjects();
 
@@ -311,6 +325,9 @@ private:
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		
 		vkDestroyRenderPass(device, renderPass, nullptr);
+
+		vkDestroyBuffer(device, indexBuffer, nullptr);
+		vkFreeMemory(device, indexBufferMemory, nullptr);
 
 		vkDestroyBuffer(device, vertexBuffer, nullptr);
 		vkFreeMemory(device, vertexBufferMemory, nullptr);
@@ -1077,41 +1094,19 @@ private:
 	//buffers in Vulkan are regions of memory.
 	//buffers do not automatically allocate memory.
 	void createVertexBuffer() {
-		VkBufferCreateInfo bufferInfo{};
-		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = sizeof(vertices[0]) * vertices.size();
-		bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-		//buffers can owned by a specific queue family or be shared between multiple at the same time.
-		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
-		//flags used to configue sparse buffer memory
-		if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create vertex buffer!");
-		}
-		
-		//allocating memory for the buffer: query memory requirements.
-		//size: the size of the required amount of memory in bytes
-		//alignment: the offset in bytes where the buffer begins in the allocated region of memory, depends on bufferInfo.usage and bufferInfo.flags.
-		//memoryTypeBits: Bit field of the memory types that are suitable for the buffer.
-		VkMemoryRequirements memRequirements;
-		vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
-
-		VkMemoryAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-		if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS) {
-			throw std::runtime_error("failed to allocate vertex buffer memory!");
-		}
-
-		
-		vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		//VK_BUFFER_USAGE_TRANSFER_SRC_BIT£º buffer can be used as source in a memory transfer operation
+		//VK_BUFFER_USAGE_TRANSFER_DST_BIT: buffer can be used as destination in a memory transfer operation.
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer, stagingBufferMemory);
 
 		//mapping the buffer memory into CPU accessible memory
 		// access a region of the specified memory resource defined by an offset and size.
 		void* data;
-		vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+		vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
 		//the driver may not immediately copy the data info the buffer memory, for example because of caching
 		//also write to the buffer are not visible in the mapped memory yet.
 		//so  use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -1119,10 +1114,116 @@ private:
 		//we went for the first approach, which ensures that the mappde memory always matched the contents of the allocated memory. this may lead to slightly worse performance than explicit flushing.
 		// flushing memory ranges or using a coherent memory heap means that the driver will be aware of our writes to the buffer, but not actually visible on the GPU yet. 
 		// the transfer of data to the GPU is an operation that happens in the background and vkQueueSubmit call.
-		memcpy(data, vertices.data(), (size_t)bufferInfo.size);
-		vkUnmapMemory(device, vertexBufferMemory);
+		memcpy(data, vertices.data(), (size_t)bufferSize);
+		vkUnmapMemory(device, stagingBufferMemory);
 
+		// the vertexBuffer now allocated from a memory type that is device local, which is in GPU side, cant use vkMapMemory.
+		// so we can copy data from the staging buffer to the vertexBuffer.
+		// the transfer source flag for the stagingBuffer and the transfer destination flag for the vertexBuffer, along with the vertex buffer usage flag.
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			vertexBuffer, vertexBufferMemory);
 
+		copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+
+	void createIndexBuffer() {
+		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer, stagingBufferMemory);
+
+		void* data;
+		vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+		memcpy(data, indices.data(), (size_t)bufferSize);
+		vkUnmapMemory(device, stagingBufferMemory);
+
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			indexBuffer, indexBufferMemory);
+
+		copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags propertices, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+		VkBufferCreateInfo bufferInfo{};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size = size;
+		bufferInfo.usage = usage;
+		//buffers can owned by a specific queue family or be shared between multiple at the same time.
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		//flags used to configue sparse buffer memory
+		if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create vertex buffer!");
+		}
+
+		//allocating memory for the buffer: query memory requirements.
+		//size: the size of the required amount of memory in bytes
+		//alignment: the offset in bytes where the buffer begins in the allocated region of memory, depends on bufferInfo.usage and bufferInfo.flags.
+		//memoryTypeBits: Bit field of the memory types that are suitable for the buffer.
+		VkMemoryRequirements memRequirements;
+		vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, propertices);
+
+		// the maximum number of simultaneous memory allocations is limited by the maxMemoryAllocationCount physical device limit. (4096 in RTX 4060
+		//allocate memory for a large number of objects at the same time is to create a custom allocator that splits up a single allocation among 
+		//	many different objects by using the offset parameters. such as VulkanMemoryAllocator library.
+		if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+			throw std::runtime_error("failed to allocate vertex buffer memory!");
+		}
+
+		vkBindBufferMemory(device, buffer, bufferMemory, 0);
+	}
+
+	//memory transfer operation are executed using command buffers, just like drawing commands.
+	//allocate a temporary command buffer. create a separate command pool for short-lived buffers, so the implementation may be able to apply memory allocation optimizations.
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+		VkCommandBufferAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandPool = commandPool;
+		allocInfo.commandBufferCount = 1;
+
+		VkCommandBuffer commandBuffer;
+		vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+		VkCommandBufferBeginInfo beginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+		vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+		VkBufferCopy copyRegion{};
+		copyRegion.srcOffset = 0;
+		copyRegion.dstOffset = 0;
+		copyRegion.size = size;
+		vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+		vkEndCommandBuffer(commandBuffer);
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &commandBuffer;
+
+		vkQueueSubmit(graphicQueue, 1, &submitInfo, VK_NULL_HANDLE);
+		//can use a fence and wait with vkWaitForFences
+		// or simply wait for the transfer queue to become idle with vkQueueWaitIdle
+		// a fence can schedule multiple transfers simultaneously and wait for all of them complete, instead of executing one at a time.
+		vkQueueWaitIdle(graphicQueue);
+
+		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 	}
 
 	void createCommandBuffers() {
@@ -1177,6 +1278,8 @@ private:
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
 		//dynamic states
 		VkViewport viewport{};
 		viewport.x = 0.0f;
@@ -1192,7 +1295,8 @@ private:
 		scissor.extent = swapchainExtent;
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-		vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+		/*vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);*/
+		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(commandBuffer);
 		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1298,7 +1402,8 @@ private:
 				" api version= " << deviceProperties.apiVersion << "  \n" <<
 				" vendor id= " << deviceProperties.vendorID << "  \n" <<
 				"  maxImageDimension2D= " << deviceProperties.limits.maxImageDimension2D << " \n" <<
-				"  framebuffer color sample count= " << deviceProperties.limits.framebufferColorSampleCounts << std::endl;
+				"  framebuffer color sample count= " << deviceProperties.limits.framebufferColorSampleCounts << " \n" <<
+				" maxMemoryAllocationCount = " << deviceProperties.limits.maxMemoryAllocationCount << " \n" << std::endl;
 
 			std::cout << "\n==============device features==================\n";
 			std::cout << "\n geometryShader= " << deviceFeatures.geometryShader << "\n" <<
@@ -1308,7 +1413,8 @@ private:
 				" textureCompressionASTC_LDR= " << deviceFeatures.textureCompressionASTC_LDR << "\n" <<
 				" textureCompressionETC2= " << deviceFeatures.textureCompressionETC2 << "\n" <<
 				" textureCompressionBC= " << deviceFeatures.textureCompressionBC << "\n" <<
-				" samplerAnisotropy= " << deviceFeatures.samplerAnisotropy << "\n";
+				" samplerAnisotropy= " << deviceFeatures.samplerAnisotropy << "\n" <<
+				" occlusionQueryPrecise = " << deviceFeatures.occlusionQueryPrecise << std::endl;
 		}
 
 
