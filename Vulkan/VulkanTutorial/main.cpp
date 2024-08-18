@@ -4,7 +4,9 @@
 #define GLFW_EXPLOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <iostream>
 #include <stdexcept>
@@ -18,6 +20,11 @@
 #include <algorithm>
 #include <fstream>
 #include <array>
+#include <chrono>
+
+
+// referenced blog
+//https://vulkanppp.wordpress.com/2017/06/05/week-2-textures-uniform-buffers-descriptor-sets/
 
 
 const uint32_t WIDTH = 1024;
@@ -108,6 +115,12 @@ struct Vertex {
 
 };
 
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
+
 const std::vector<Vertex> vertices = {
 	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
@@ -148,6 +161,7 @@ private:
 	std::vector<VkImageView> swapChainImageViews;
 
 	VkRenderPass renderPass;
+	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 
 	VkPipeline graphicsPipeline;
@@ -169,6 +183,14 @@ private:
 	VkDeviceMemory vertexBufferMemory;
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
+
+	std::vector<VkBuffer> uniformBuffers;
+	std::vector<VkDeviceMemory> uniformBuffersMemory;
+	std::vector<void*> uniformBuffersMapped;
+
+	VkDescriptorPool descriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;
+
 
 	void initWindow() {
 		glfwInit();
@@ -194,14 +216,28 @@ private:
 	* 6. image views
 	* 7. graphic pipeline: vertex/fragment shader(SPIR-V bytecode) / fixed-function configure
 	* 8. render pass object: render pass -> subpass -> attachmentRef -> attachments, framebuffer attachment / color and depth buffer / samples
+	*		subpass system let the driver optimize its resources. it reduces the amount of memory that needs to be allocated with deferred rendering. 
 	* 9. framebuffer object : act as a canvas
 	* 10. command pool and command buffers: command buffers will be automatically freed when the command pool is destroyed, dont need explict destroy
 	* 11. vertex buffer
 	* 12. staging buffer: memory type used in CPU, such as host-visible/host-coherent, may not the most optimal memory type for the GPU. device local memory is the most optimal memory for GPU.
 	*		and is not accessible by the CPU. so we need staging buffer as a bridge, send vertices in c++ to staging buffer with vkMapMemory, use buffer copy command to send vertexbuffer to device local memory.
+	*		using staging buffer for transferring data from host to device memory unless a transfer must be performed every frame.
+	*		mobile architectures generally have memory heaps that are both DEVICE_LOCAL and HOST_VISIBLE/COHERENT.
 	* 13. index buffer: we should allocate multiple resources like buffers from a single memory allocation, but in fact you can store multiple buffers, like the vertex and index buffers,
 	*		into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers(Vulkan Memory Management). so the data is more cache friendly, because closer together.
 	*		it is even possible to reuse the same chunk of memory for multiple resources if they are not used during the same render operations, known as aliasing.
+	* 14. resource descriptors: for shaders to freely access resource like buffers and images.
+	*		specify a descriptor layout during pipeline creation
+	*		allocate a descriptor set from a descriptor pool
+	*		bind the descriptor set during rendering
+	* 
+	*		descriptor layout specifies the types of resources just like a render pass specifies the types of attachments
+	*		a descriptor set specifies the actual buffer or image resources just like a framebuffer specifies the actual image views.
+	* 
+	*	uniform buffer objects(UBO) is one of the descriptors. first create uniformBufferObject struct data in c++ side, then create uniform buffer and memory block,
+	*		then vkMapMemory to connect data and uniform buffer. then create descriptor set by descriptor set layout and descriptor set pool, 
+	*		then config the descriptor set with VkDescriptorBufferInfo , which refer to uniform buffer. last update the descriptor set with vkUpdateDescriptorSets.
 	*/
 
 	void initVulkan() {
@@ -213,11 +249,15 @@ private:
 		createSwapChain();
 		createImageViews();
 		createRenderPass();
+		createDescriptorSetLayout();
 		createGraphicsPipeline();
 		createFramebuffers();
 		createCommandPool();
 		createVertexBuffer();
 		createIndexBuffer();
+		createUniformBuffers();
+		createDescriptorPool();
+		createDescriptorSets();
 		createCommandBuffers();
 		createSyncObjects();
 
@@ -265,6 +305,8 @@ private:
 		}
 
 		vkResetFences(device, 1, &inFlightFences[currentFrame]);
+
+		updateUniformBuffer(currentFrame);
 
 		//record command buffer
 		vkResetCommandBuffer(commandBuffers[currentFrame], 0);
@@ -318,8 +360,34 @@ private:
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FFLIGHT;
 	}
 
+	void updateUniformBuffer(uint32_t currentImage) {
+		static auto startTime = std::chrono::high_resolution_clock::now();
+
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		UniformBufferObject ubo{};
+		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.proj = glm::perspective(glm::radians(45.0f), swapchainExtent.width / (float)swapchainExtent.height, 0.1f, 10.0f);
+		//GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
+		ubo.proj[1][1] *= -1;
+
+		//copy the data in the uniform buffer object to the current uniform buffer. map the uniform buffer once.
+		//pass a small buffer of data to shaders are push constants.
+		memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+	}
+
 	void cleanup() {
 		cleanupSwapChain();
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FFLIGHT; i++) {
+			vkDestroyBuffer(device, uniformBuffers[i], nullptr);
+			vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+		}
+
+		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -787,6 +855,26 @@ private:
 		return shaderModule;
 	}
 
+	void createDescriptorSetLayout() {
+		VkDescriptorSetLayoutBinding uboLayoutBinding{};
+		uboLayoutBinding.binding = 0;
+		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uboLayoutBinding.descriptorCount = 1;
+		//specify in which shader stages the descriptor is going to be referenced.
+		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		//for image sampling related descriptors.
+		uboLayoutBinding.pImmutableSamplers = nullptr;
+
+		VkDescriptorSetLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = 1;
+		layoutInfo.pBindings = &uboLayoutBinding;
+
+		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create descriptor set layout!");
+		}
+	}
+
 	void createGraphicsPipeline() {
 		//1.shader info
 		auto vertShaderCode = readFile("shaders/vert.spv");
@@ -881,7 +969,9 @@ private:
 		rasterizerStateInfo.polygonMode = VK_POLYGON_MODE_FILL;  //fill / line / point
 		rasterizerStateInfo.lineWidth = 1.0f;
 		rasterizerStateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizerStateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		//because of the Y-flip we did in the projection matrix, the vertices are now being drawn in counter-clockwise order.
+		//this causes backface culling to kick in and prevents any geometry from being drawn.
+		rasterizerStateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizerStateInfo.depthBiasEnable = VK_FALSE;
 		rasterizerStateInfo.depthBiasConstantFactor = 0.0f;
 		rasterizerStateInfo.depthBiasClamp = 0.0f;
@@ -929,8 +1019,8 @@ private:
 		//		uniform value eg. transform matrix / texture samplers
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = 0;
-		pipelineLayoutInfo.pSetLayouts = nullptr;
+		pipelineLayoutInfo.setLayoutCount = 1;
+		pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
 		//another way of passing dynamic values to shaders
 		pipelineLayoutInfo.pushConstantRangeCount = 0;
 		pipelineLayoutInfo.pPushConstantRanges = nullptr;
@@ -1151,6 +1241,74 @@ private:
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
 	}
 
+	void createUniformBuffers() {
+		VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+		uniformBuffers.resize(MAX_FRAMES_IN_FFLIGHT);
+		uniformBuffersMemory.resize(MAX_FRAMES_IN_FFLIGHT);
+		uniformBuffersMapped.resize(MAX_FRAMES_IN_FFLIGHT);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FFLIGHT; i++) {
+			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				uniformBuffers[i], uniformBuffersMemory[i]);
+			// persistent mapping
+			vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+		}
+	}
+
+	void createDescriptorPool() {
+		VkDescriptorPoolSize poolSize{};
+		poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FFLIGHT);
+
+		VkDescriptorPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = 1;
+		poolInfo.pPoolSizes = &poolSize;
+		poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FFLIGHT);
+
+		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create descriptor pool!");
+		}
+	}
+
+	void createDescriptorSets() {
+		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FFLIGHT, descriptorSetLayout);
+		VkDescriptorSetAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = descriptorPool;
+		allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FFLIGHT);
+		allocInfo.pSetLayouts = layouts.data();
+
+		descriptorSets.resize(MAX_FRAMES_IN_FFLIGHT);
+		if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+			throw std::runtime_error("failed to allocate descriptor sets!");
+		}
+
+		//descriptors that refer to buffers, like uniform buffer description, are configured with a VkDescriptorBufferInfo struct.
+		for (size_t i = 0; i < MAX_FRAMES_IN_FFLIGHT; i++) {
+			VkDescriptorBufferInfo bufferInfo{};
+			bufferInfo.buffer = uniformBuffers[i];
+			bufferInfo.offset = 0;
+			bufferInfo.range = sizeof(UniformBufferObject);
+
+			//the configuration of descriptors is updated using the vkUpdateDescriptorSets function, which takes an array of vkWriteDescriptorSet structs as parameter.
+			VkWriteDescriptorSet descriptorWrite{};
+			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrite.dstSet = descriptorSets[i];
+			descriptorWrite.dstBinding = 0;
+			descriptorWrite.dstArrayElement = 0;
+			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrite.descriptorCount = 1;
+			descriptorWrite.pBufferInfo = &bufferInfo;
+			descriptorWrite.pImageInfo = nullptr;
+			descriptorWrite.pTexelBufferView = nullptr;
+
+			vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+		}
+	}
+
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags propertices, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
 		VkBufferCreateInfo bufferInfo{};
 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1279,6 +1437,10 @@ private:
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+		//descriptor set for uniform buffer.
+		//descriptor sets are not unique to graphics pipelines, therefore we need to specify that bind descriptor sets to the graphics or compute pipeline.
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
 
 		//dynamic states
 		VkViewport viewport{};
