@@ -27,6 +27,19 @@
 //https://vulkanppp.wordpress.com/2017/06/05/week-2-textures-uniform-buffers-descriptor-sets/
 
 
+//Alignment requirements
+/*
+how exactly the data in the c++ structure should match with the uniform definition in the shader.
+vulkan expects the data in your structure to be aligned in memory in a specific way, for example:
+scalars have to be aligned by N(=4 bytes given 32 bit floats)
+a vec2 must be aligned by 2N(=8 bytes)
+a vec3 or vec4 must be aligned by 4N(=16 bytes)
+a nested structure must be aligned by the base alignment of its members rounded up to a multiple of 16.
+a mat4 matrix must have the same alignment as a vec4.
+
+*/
+
+
 const uint32_t WIDTH = 1024;
 const uint32_t HEIGHT = 512;
 
@@ -116,9 +129,9 @@ struct Vertex {
 };
 
 struct UniformBufferObject {
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 proj;
 };
 
 const std::vector<Vertex> vertices = {
@@ -368,7 +381,7 @@ private:
 
 		UniformBufferObject ubo{};
 		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 1.0f));
 		ubo.proj = glm::perspective(glm::radians(45.0f), swapchainExtent.width / (float)swapchainExtent.height, 0.1f, 10.0f);
 		//GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
 		ubo.proj[1][1] *= -1;
