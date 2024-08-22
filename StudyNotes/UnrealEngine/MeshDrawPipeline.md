@@ -1,3 +1,5 @@
+[TOC]
+
 ### Primary Classes
 - UWorld
 - ULevel
@@ -75,7 +77,7 @@
 - FSkeletalMeshSceneProxy::GetDynamicMeshElements
 - FSkeletalMeshSceneProxy::GetMeshElementsConditionallySelectable
 - FSkeletalMeshSceneProxy::GetDynamicElementsSection
-  根据当前LODIndex,获取LODData, 针对当前LOD的每个LODSection,通过Collector构建FMeshBatch, 设置MeshBatchElement/vertex factory/material/OverlayMaterial等一系列参数.
+  根据当前LODIndex,获取LODData, 遍历当前LOD的每个LODSection,通过Collector构建FMeshBatch, 设置MeshBatchElement/vertex factory/material/OverlayMaterial等一系列参数.
 
 - FMeshElementCollector::AddMesh(int32 ViewIndex, FMeshBatch& MeshBatch)
 - ComputeDynamicMeshRelevance: 计算当前mesh dynamic element的MeshBatch会被哪些MeshPass引用, 加入到每个View的PrimitiveViewRelevanceMap
@@ -202,47 +204,47 @@
   
 
 ###### FMeshElementCollector
-  封装从各个FPrimitiveSceneProxy classes中收集到的meshes. 在收集完成后可以指定需要等待的任务列表,以实现多线程并行处理的同步
+封装从各个FPrimitiveSceneProxy classes中收集到的meshes. 在收集完成后可以指定需要等待的任务列表,以实现多线程并行处理的同步
 
 
-FPrimitiveDrawInterface* GetPDI(int32 ViewIndex)
+- FPrimitiveDrawInterface* GetPDI(int32 ViewIndex)
   访问PDI以绘制lines/sprites...
-FMeshBatch& AllocateMesh()
+- FMeshBatch& AllocateMesh()
   分配可以被collector安全引用的FMeshBatch(生命周期足够长). 返回的引用不会应进一步的AllocateMesh的调用而失效.
-GetDynamicIndexBuffer/GetDynamicVertexBuffer/GetDynamicReadBuffer: dynamic bufer pools
-GetMeshBatchCount(uint32 ViewIndex): 给定view收集的MeshBatches的数量.
-GetMeshElementCount(uint32 ViewIndex)
-AddMesh(int32 ViewIndex, FMeshBatch& MeshBatch)
-RegisterOneFrameMaterialProxy(FMaterialRenderProxy* Proxy)
-AllocateOneFrameResource: 分配临时资源, FMeshBatch可以安全引用, 以便添加到collector.
-ShouldUseTasks/AddTask/ProcessTasks
-GetFeatureLevel
-DeleteTemporaryProxies
-SetPrimitive(const FPrimitiveSceneProxy* InPrimitiveSceneProxy, FHitProxyId DefaultHitProxyId)
-ClearViewMeshArrays
-AddViewMeshArrays
+- GetDynamicIndexBuffer/GetDynamicVertexBuffer/GetDynamicReadBuffer: dynamic bufer pools
+- GetMeshBatchCount(uint32 ViewIndex): 给定view收集的MeshBatches的数量.
+- GetMeshElementCount(uint32 ViewIndex)
+- AddMesh(int32 ViewIndex, FMeshBatch& MeshBatch)
+- RegisterOneFrameMaterialProxy(FMaterialRenderProxy* Proxy)
+- AllocateOneFrameResource: 分配临时资源, FMeshBatch可以安全引用, 以便添加到collector.
+- ShouldUseTasks/AddTask/ProcessTasks
+- GetFeatureLevel
+- DeleteTemporaryProxies
+- SetPrimitive(const FPrimitiveSceneProxy* InPrimitiveSceneProxy,  FHitProxyId DefaultHitProxyId)
+- ClearViewMeshArrays
+- AddViewMeshArrays
 
-TChunkedArray<FMeshBatch> MeshBatchStorage: 使用TChunkedArray,新增元素时从不会重新分配.
-TArray<TArray<FMeshBatchAndRelevance, SceneRenderingAllocator>*, TInlineAllocator<2, SceneRenderingAllocator> > MeshBatches: 用来渲染的meshes.
-TArray<int32, TInlineAllocator<2, SceneRenderingAllocator> > NumMeshBatchElementsPerView
-TArray<FSimpleElementCollector*, TInlineAllocator<2, SceneRenderingAllocator> > SimpleElementCollectors: point/line/triangle/sprite等简单元素的收集器.
-TArray<FSceneView*, TInlineAllocator<2, SceneRenderingAllocator>> Views
-TArray<uint16, TInlineAllocator<2, SceneRenderingAllocator>> MeshIdInPrimitivePerView
-TArray<FMaterialRenderProxy*, SceneRenderingAllocator> TemporaryProxies: 添加materi render proxy, 在析构FMeshElementCollector时自动销毁
-FSceneRenderingBulkObjectAllocator& OneFrameResources
-const FPrimitiveSceneProxy* PrimitiveSceneProxy
-FGlobalDynamicIndexBuffer* DynamicIndexBuffer
-FGlobalDynamicVertexBuffer* DynamicVertexBuffer
-FGlobalDynamicReadBuffer* DynamicReadBuffer
-ERHIFeatureLevel::Type FeatureLevel
-const bool bUseAsyncTasks
-TArray<TFunction<void()>, SceneRenderingAllocator> ParallelTasks
-TArray<FGPUScenePrimitiveCollector*, TInlineAllocator<2, SceneRenderingAllocator>> DynamicPrimitiveCollectorPerView
+- TChunkedArray<FMeshBatch> MeshBatchStorage: 使用TChunkedArray,新增元素时从不会重新分配.
+- TArray<TArray<FMeshBatchAndRelevance, SceneRenderingAllocator>*, TInlineAllocator<2, SceneRenderingAllocator> > MeshBatches: 用来渲染的meshes.
+- TArray<int32, TInlineAllocator<2, SceneRenderingAllocator> > NumMeshBatchElementsPerView
+- TArray<FSimpleElementCollector*, TInlineAllocator<2, SceneRenderingAllocator> > SimpleElementCollectors: point/line/triangle/sprite等简单元素的收集器.
+- TArray<FSceneView*, TInlineAllocator<2, SceneRenderingAllocator>> Views
+- TArray<uint16, TInlineAllocator<2, SceneRenderingAllocator>> MeshIdInPrimitivePerView
+- TArray<FMaterialRenderProxy*, SceneRenderingAllocator> TemporaryProxies: 添加materi render proxy, 在析构FMeshElementCollector时自动销毁
+- FSceneRenderingBulkObjectAllocator& OneFrameResources
+- const FPrimitiveSceneProxy* PrimitiveSceneProxy
+- FGlobalDynamicIndexBuffer* DynamicIndexBuffer
+- FGlobalDynamicVertexBuffer* DynamicVertexBuffer
+- FGlobalDynamicReadBuffer* DynamicReadBuffer
+- ERHIFeatureLevel::Type FeatureLevel
+- const bool bUseAsyncTasks
+- TArray<TFunction<void()>, SceneRenderingAllocator> ParallelTasks
+- TArray<FGPUScenePrimitiveCollector*, TInlineAllocator<2, SceneRenderingAllocator>> DynamicPrimitiveCollectorPerView
   追踪动态图元数据,用于为每个view上传到GPU Scene
 
 
 #### 2. FMeshBatch -> FMeshDrawCommand
-      
+
 
 - FSceneRenderer::SetupMeshPass
   遍历所有的MeshPass类型
@@ -256,7 +258,7 @@ TArray<FGPUScenePrimitiveCollector*, TInlineAllocator<2, SceneRenderingAllocator
   设置FMeshDrawCommandPassSetupTaskContext的数据.
   包括 基础属性, translucency sort key, 交换内存命令列表(MeshDrawCommands/DynamicMeshCommandBuildRequests/MobileBasePassCSMMeshDrawCommands)
   基于最大绘制数量在渲染线程预分配资源(PrimitiveIdBufferData/MeshDrawCommands/TempVisibleMeshDrawCommands)
-  若可以并行执行, 若允许按需shaderCreation(IsOnDemandShaderCreationEnabled), 直接添加任务(FMeshDrawCommandPassSetupTask)至TaskGraphic系统. 否则将任务(FMeshDrawCommandPassSetupTask)作为前置, 添加到另一个任务(FMeshDrawCommandInitResourcesTask)中.
+  若可以并行执行, 若允许按需shaderCreation(IsOnDemandShaderCreationEnabled), 直接添加任务(FMeshDrawCommandPassSetupTask)至TaskGraph系统. 否则将任务(FMeshDrawCommandPassSetupTask)作为前置, 添加到另一个任务(FMeshDrawCommandInitResourcesTask)中.
   若不可以并行执行, 则直接执行FMeshDrawCommandPassSetupTask任务, 若不允许按需shaderCreation,则再执行FMeshDrawCommandInitResourcesTask任务.
 
 
@@ -264,19 +266,45 @@ TArray<FGPUScenePrimitiveCollector*, TInlineAllocator<2, SceneRenderingAllocator
   并行设置mesh draw commands的任务. 包含生成dynamic mesh draw command,sorting,merging...
 
 - FMeshPassProcessor::AddMeshBatch
-在创建一系列的任务后, 当TaskGraphicSystem并行执行到每个任务时,依据不同的mesh pass processor来转换FMeshBatch为FMeshDrawCommand.
+在创建一系列的任务后, 当TaskGraphSystem并行执行到每个任务时,依据不同的mesh pass processor来转换FMeshBatch为FMeshDrawCommand.
 
 > 如 FBasePassMeshProcessor::AddMeshBatch
   若标记了bUseForMaterial, 查询materialRenderProxy中可以使用的material.
 FBasePassMeshProcessor::TryAddMeshBatch: 仅绘制opaque materials. 
     渲染volumetric translucent self-shadowing/point indirect lighting及self shadowing/directional light self shadowing translucency.
+    或者根据不同的光照贴图和质量等级,调用Process处理
 FBasePassMeshProcessor::Process
-    获取base pass shaders(vertexShader/pixelShader)
+    根据不同的LightMapPolicyType获取base pass shaders(vertexShader/pixelShader)
     设置render state: blendState/depthStencil/viewUniformBuffer/InstancedViewUniformBuffer/PassUniformer/NaniteUniformBuffer/StencilRef
     设置排序参数: basePass(VertexShaderHash|PixelShaderHash|Masked), Translucent(MeshIdInPrimitive|Distance|Priority), Generic(VertexShaderHash|PixelShaderHash)
 
+> such as FDepthPassMeshProcessor::AddMeshBatch
+    需标记MeshBatch.bUseForDepthPass.
+    默认Mobile rendering不使用depth prepass.
+      但r.Mobile.EarlyZPassOnlyMaterialMasking可以开启仅maskedMaterial使用EarlyZPass.
+      r.Mobile.EarlyZPass 
+      MobileAmbientOcclusion
+      distance field shadow to render shadow mask texture on mobile deferred, normal shadows need to rendered separately because of handling lighting channels.
+      with clustered lighting and shadow of local light endabled(movable spot light shadow), shadows will render to shadow mask texture on mobile forward, lighting channels are handled in base pass shader.
+      这些情况下也会允许all opaque(full prepass, every object must be draw and every pixel must match the base pass depth)
+    通过occluder flags 和其他设置来过滤pass.(occluder/static objects或者moveable/dynamic mesh command by screen size)
+    使用DDM_AllOpaqueNoVelocity会在此跳过绘制, 将会在velocity pass 写入depth+velocity.
+    若bDraw为真,则查询mesh可使用的material,调用TryAddMeshBatch.
+
+FDepthPassMeshProcessor::TryAddMeshBatch
+    仅允许opaque或者masked blend mode, 必须支持render in depth pass
+    判别是否使用默认材质.
+    重载设置MeshFillMode/MeshCullMode
+    根据PositionOnly/PositionAndNormal for vertex factory, 调用Process
+    
+FDepthPassMeshProcessor::Process
+    获取vertexShader/pixelShader for depthPassShaders.(TDepthOnlyVS<bPositionOnly>/FDepthOnlyPS)
+    设置pipeline state: blendState/DepthStencilState/StencilRef/
+    计算排序参数: 若开启r.EarlyZSortMasked,设置SortKey.BasePass, 否则设置SortKey.Generic
+    调用BuildMeshDrawCommands
+
 - FMeshPassProcessor::BuildMeshDrawCommands
-    传入参数: MeshBatch,BatchElementMask,PrimitiveSceneProxy,MaterialRenderProxy,MaterialResource,DrawRenderState,PassShaders,MeshFillMode,MeshCullMode,SortKey,MeshPassFeatures,ShaderElementData.
+    传入参数: MeshBatch,BatchElementMask,PrimitiveSceneProxy,MaterialRenderProxy,MaterialResource,DrawRenderState,PassShaders,MeshFillMode,MeshCullMode,SortKey,MeshPassFeatures,ShaderElementData. 
     
     构造FMeshDrawCommand
       设置StencilRef,PrimitiveType
@@ -297,12 +325,21 @@ FBasePassMeshProcessor::Process
         获取MeshDrawCommandPrimitiveIdInfo, 根据element的PrimitiveIdMode(PrimID_FromPrimitiveSceneInfo/PrimID_DynamicPrimitiveShaderData). PrimID_FromPrimitiveSceneInfo模式下,是static primitive,从PrimitiveSceneInfo获取drawPrimitiveId和InstanceSceneDataOffset.  PrimID_DynamicPrimitiveShaderData模式下是dynamic primitive, 从element自身获取.    
         调用FMeshPassDrawListContext::FinalizeCommand
 
-- 如FCachedPassMeshDrawListContextImmediate::FinalizeCommand   
-    设置MeshDrawCommand的draw command parameters, PSO
-    若bUseGPUScene为真,将FMeshDrawCommand加入到Scene.CachedMeshDrawCommandStateBuckets.
-    否则加入到Scene.CachedDrawLists, 一个pass中每个FStaticMesh仅支持一个FMeshDrawCommand. 在lowest free index处分配, 'r.DoLazyStaticMeshUpdate' 可以更有效率的收缩TSparseArray.
+- FMeshPassDrawListContext::FinalizeCommand
+  - FCachedPassMeshDrawListContext 
+    FCachedPassMeshDrawListContextImmediate::FinalizeCommand   
+      设置MeshDrawCommand的draw command parameters, PSO
+      若bUseGPUScene为真,将FMeshDrawCommand加入到Scene.CachedMeshDrawCommandStateBuckets.
+      否则加入到Scene.CachedDrawLists, 一个pass中每个FStaticMesh仅支持一个FMeshDrawCommand. 在lowest free index处分配, 'r.DoLazyStaticMeshUpdate' 可以更有效率的收缩TSparseArray.
 
-FCachedPassMeshDrawListContextDeferred::FinalizeCommand
+    FCachedPassMeshDrawListContextDeferred::FinalizeCommand
+
+  - FDynamicPassMeshDrawListContext: context used when building FMeshDrawCommand for one frame only
+      FinalizeCommand
+        FMeshDrawCommand::SetDrawParametersAndFinalize: 设置参数IndexBuffer/FirstIndex/NumPrimitives/NumInstances/VertexParams(IndirectArgs)
+        设置新的FVisibleMeshDrawCommand,填充MeshDrawCommand等参数, 加入到DrawList列表
+
+
 
 ###### FMeshDrawCommand
     完整的描述了一个mesh pass draw call
@@ -319,7 +356,8 @@ CachedPipelineId: 为快速比较,唯一表达FGraphicsMinimalPipelineStateIniti
 FirstIndex
 NumPrimitives
 NumInstances
-VertexParams/IndirectArgs
+
+VertexParams(BaseVertexIndex,NumVertices)/IndirectArgs(Buffer,Offset)
 PrimitiveIdStreamIndex
 
 //Non-pipeline state
@@ -351,12 +389,16 @@ SubmitDraw
     MergeMobileBasePassMeshDrawCommands: 先合并MeshDrawCommands, 为了选择恰当的shader,基于CSM visibility合并附带BasePassCSM的mobile basePass. 即以MeshCommandsCSM替代MeshCommands.
     GenerateMobileBasePassDynamicMeshDrawCommands: 然后依然基于CSM visibility,使用normal base pass processor或CSM base pass processor来生成mesh draw commands.
     遍历所有的FMeshBatch, 采用MobilePassCSMPassMeshProcessor或者PassMeshProcessor来生成mesh draw commands. 同理处理DynamicMeshCommandBuildRequests.
-  若不是mobileShadingBasePass:  为指定的mesh pass type将每个FMeshBatch转换为一组FMeshDrawCommands.
+  若不是mobileShadingBasePass:  
+    调用GenerateDynamicMeshDrawCommands
+    构建FDynamicPassMeshDrawListContext实例,以传递PassMeshProcessor生成的绘制命令
+    遍历处理所有的DynamicMeshBatches和StaticMeshBatches, 调用不同mesh pass type的FMeshPassProcessor::AddMeshBatch.
 
   若生成了MeshDrawCommands, 还有一些后续处理.
     ApplyViewOverridesToMeshDrawCommands: 为已存在的mesh draw commands应用view overrides.(eg. reverse culling mode for rendering planar reflections)
-    mobile base pass的mesh commands排序:
+    计算mobile base pass的mesh sort keys:
       r.Mobile.MeshSortingMethod: 0-按状态排序, 大致front to back(默认) 1-严格front to back排序
+      maskBlendMode/bBackground primitives/pipelineId/stateBucketId/primitiveDistance/pipelineDistance/stateBucketDistance
     translucent mesh排序: 
         SortByDistance: 基于相机中心点到边界球体的中心点距离(3d)
         SortByProjectedZ: 基于post-projection Z
@@ -366,7 +408,7 @@ SubmitDraw
         为所有的网格分配间接参数slots,以使用instancing, 增加填充间接调用和index&id buffers的命令,隐藏所有共享相同state bucket ID的命令.
 
 ###### FMeshDrawCommandInitResourcesTask
-shader initialization task. 在commands生成之后,在渲染线程运行. 延迟加载CachedPixelShader/CachedGeometryShader/CachedVertexShader
+shader initialization task. commands生成之后将会在渲染线程运行. 初始化CachedPixelShader/CachedGeometryShader/CachedVertexShader
 
 ###### FMeshDrawCommandPassSetupTaskContext: parallel mesh draw command pass setup task context
 View
@@ -430,6 +472,19 @@ InstanceCullingResult
     存储确定可视的mesh draw command的信息, 以进行进一步的visibility processing. 
     此数据仅为initViews操作(visibility, sorting)存储数据, FMeshDrawCommand存储draw submission的数据.
 
+MeshDrawCommand: 单独存储meshDrawCommand,以避免在排序期间提取其数据.
+SortKey: sort key for non state based sorting(e.g. sort translucent draws by depth).
+PrimitiveIdInfo: DrawPrimitiveId/ScenePrimitiveId/InstanceSceneDataOffset/bIsDynamicPrimitive
+PrimitiveIdBufferOffset: 为此pass构建的primitiveIds buffer的偏移
+StateBucketId: dynamic instancing state bucket ID. 拥有相同StateBucketId的任意commands可以合并到one draw call with instancing. 若值为-1,则此绘制不在state bucket中,应该通过其他因素来排序.
+
+RunArray: passing sub-selection of instances through to the culling.
+NumRuns
+
+MeshFillMode: for view overrides
+MeshCullMode
+
+Flags: EFVisibleMeshDrawCommandFlags
 
 ###### FParallelMeshDrawCommandPass
   并行mesh draw command处理和渲染. 封装两个并行任务 mesh command setup task和drawing task.
@@ -442,31 +497,62 @@ InstanceCullingResult
 ###### FMeshPassProcessor
 mesh processor的基类, 从scene proxy实现接收的FMeshBatch绘制描述变换到FMeshDrawCommand, 以便为RHI command list准备.
 
-EMeshPass::Type MeshPassType
-const FScene* RESTRICT Scene
-ERHIFeatureLevel::Type FeatureLevel
-const FSceneView* ViewIfDynamicMeshCommand
-FMeshPassDrawListContext* DrawListContext
+- EMeshPass::Type MeshPassType
+- const FScene* RESTRICT Scene
+- ERHIFeatureLevel::Type FeatureLevel
+- const FSceneView* ViewIfDynamicMeshCommand
+- FMeshPassDrawListContext* DrawListContext
 
-AddMeshBatch
-CollectPSOInitializers
-ComputeMeshOverrideSettings
-ComputeMeshFillMode
-ComputeMeshCullMode
+- AddMeshBatch: 由子类实现, 每个子类通常对应EMeshPass的一个通道.
+  FDepthPassMeshProcessor::AddMeshBatch
+  FBasePassMeshProcessor::AddMeshBatch
+  FAnisotropyMeshProcessor::AddMeshBatch
+  FSkyPassMeshProcessor::AddMeshBatch
+  FSingleLayerWaterPassMeshProcessor::AddMeshBatch
+  FSingleLayerWaterDepthPrepassMeshProcessor::AddMeshBatch
+  FShadowDepthPassMeshProcessor::AddMeshBatch
+  FCustomDepthPassMeshProcessor::AddMeshBatch
+  FTranslucencyDepthPassMeshProcessor::AddMeshBatch
+  FLightmapDensityMeshProcessor::AddMeshBatch
+  FMeshDecalMeshProcessor::AddMeshBatch
 
-BuildMeshDrawCommands
-AddGraphicsPipelineStateInitializer
+  FLightmapGBufferMeshProcessor::AddMeshBatch
+  FVLMVoxelizationMeshProcessor::AddMeshBatch
+  FUVLightCardPassProcessor::AddMeshBatch
+  FRenderTraceMeshProcessor::AddMeshBatch
+  FLandscapeGrassWeightMeshProcessor::AddMeshBatch
+  FLandscapePhysicalMaterialMeshProcessor::AddMeshBatch
+  FDebugViewModeMeshProcessor::AddMeshBatch
+  FDistortionMeshProcessor::AddMeshBatch
+  FEditorPrimitivesBasePassMeshProcessor::AddMeshBatch
+  FHairRasterMeshProcessor::AddMeshBatch
+  FHairMaterialProcessor::AddMeshBatch
+  FLumenFrontLayerTranslucencyGBufferMeshProcessor::AddMeshBatch
+  FLumenCardMeshProcessor::AddMeshBatch
+  FLumenTranslucencyRadianceCacheMarkMeshProcessor::AddMeshBatch
+  FNaniteMeshProcessor::AddMeshBatch
+  FHitProxyMeshProcessor::AddMeshBatch
+  FEditorSelectionMeshProcessor::AddMeshBatch
+  FEditorLevelInstanceMeshProcessor::AddMeshBatch
+  FOpaqueVelocityMeshProcessor::AddMeshBatch
+  FVolumetricCloudRenderViewMeshProcessor::AddMeshBatch
+  FVolumetricCloudRenderShadowMeshProcessor::AddMeshBatch
+  FVoxelizeVolumeMeshProcessor::AddMeshBatch
+  FRuntimeVirtualTextureMeshProcessor::AddMeshBatch
 
 
-###### FBasePassMeshProcessor: FMeshPassProcessor
 
-AddMeshBatch
-CollectPSOInitializers
+- CollectPSOInitializers
+- ComputeMeshOverrideSettings
+- ComputeMeshFillMode
+- ComputeMeshCullMode
 
-ShouldDraw
-TryAddMeshBatch
+- BuildMeshDrawCommands
+- AddGraphicsPipelineStateInitializer
 
-Process
+
+###### FRayTracingMeshProcessor
+
 
 
 ### Other Codes
