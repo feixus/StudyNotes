@@ -1,6 +1,32 @@
-[TOC]
+- [Primary Classes](#primary-classes)
+- [Mesh Draw Pipeline](#mesh-draw-pipeline)
+    - [1. FPrimitiveSceneProxy -\> FMeshBatch](#1-fprimitivesceneproxy---fmeshbatch)
+        - [FMeshBatchElement](#fmeshbatchelement)
+        - [FMeshBatch](#fmeshbatch)
+        - [FMeshElementCollector](#fmeshelementcollector)
+    - [2. FMeshBatch -\> FMeshDrawCommand](#2-fmeshbatch---fmeshdrawcommand)
+        - [FMeshDrawCommand](#fmeshdrawcommand)
+        - [FMeshDrawCommandPassSetupTask](#fmeshdrawcommandpasssetuptask)
+        - [FMeshDrawCommandInitResourcesTask](#fmeshdrawcommandinitresourcestask)
+        - [FMeshDrawCommandPassSetupTaskContext](#fmeshdrawcommandpasssetuptaskcontext)
+        - [FVisibleMeshDrawCommand](#fvisiblemeshdrawcommand)
+        - [FParallelMeshDrawCommandPass](#fparallelmeshdrawcommandpass)
+        - [FMeshPassProcessor](#fmeshpassprocessor)
+        - [FRayTracingMeshProcessor](#fraytracingmeshprocessor)
+    - [3. FMeshDrawCommand -\> RHICommandList](#3-fmeshdrawcommand---rhicommandlist)
+        - [FDeferredShadingSceneRenderer::RenderPrePass](#fdeferredshadingscenerendererrenderprepass)
+    - [Other Codes](#other-codes)
+        - [EVertexFactoryFlags](#evertexfactoryflags)
+        - [EFVisibleMeshDrawCommandFlags](#efvisiblemeshdrawcommandflags)
+        - [BlendMode](#blendmode)
+        - [MaterialShadingModel](#materialshadingmodel)
+        - [MaterialDomain](#materialdomain)
+        - [MeshPass](#meshpass)
+        - [Debug Infos](#debug-infos)
 
-### Primary Classes
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
+# Primary Classes
 - UWorld
 - ULevel
 - USceneComponent
@@ -56,10 +82,9 @@
 
 <br/>
 
-### Mesh Draw Pipeline
+# Mesh Draw Pipeline
 
-
-#### 1. FPrimitiveSceneProxy -> FMeshBatch
+### 1. FPrimitiveSceneProxy -> FMeshBatch
 场景渲染器FSceneRenderer在渲染之初, 执行可见性测试和剔除, 以剔除被遮挡或被隐藏的物体, 在此阶段的末期会调用GatherDynamicMeshElements, 从当前场景所有的FPrimitiveSceneProxy中筛选并构建FMeshBatch, 放置在Collector.
 
 <br/>
@@ -83,7 +108,7 @@
 - ComputeDynamicMeshRelevance: 计算当前mesh dynamic element的MeshBatch会被哪些MeshPass引用, 加入到每个View的PrimitiveViewRelevanceMap
 
 
-###### FMeshBatchElement
+##### FMeshBatchElement
   记录单个网格元素的数据, 如primitive uniform buffer/index buffer/user data/primitiveId
   
 - FRHIUniformBuffer* PrimitiveUniformBuffer
@@ -144,7 +169,7 @@
 
 <br/>
 
-###### FMeshBatch
+##### FMeshBatch
   网格元素的批次.所有网格元素拥有相同的mesh和vertex buffer.
 
 - TArray<FMeshBatchElement,TInlineAllocator<1> > Elements
@@ -203,7 +228,7 @@
   若禁止GPU scene,备份使用primitive uniform buffer. mobile上的vertex shader在GPUScene开启时可能仍使用PrimitiveUB
   
 
-###### FMeshElementCollector
+##### FMeshElementCollector
 封装从各个FPrimitiveSceneProxy classes中收集到的meshes. 在收集完成后可以指定需要等待的任务列表,以实现多线程并行处理的同步
 
 
@@ -243,7 +268,7 @@
   追踪动态图元数据,用于为每个view上传到GPU Scene
 
 
-#### 2. FMeshBatch -> FMeshDrawCommand
+### 2. FMeshBatch -> FMeshDrawCommand
 
 
 - FSceneRenderer::SetupMeshPass
@@ -341,7 +366,7 @@ FDepthPassMeshProcessor::Process
 
 
 
-###### FMeshDrawCommand
+##### FMeshDrawCommand
     完整的描述了一个mesh pass draw call
 
 //resource bindings
@@ -381,7 +406,7 @@ SubmitDrawIndirectBegin
 SubmitDrawIndirectEnd
 SubmitDraw
 
-###### FMeshDrawCommandPassSetupTask
+##### FMeshDrawCommandPassSetupTask
   判别是否为mobile base pass. 
   mobile base pass 其最终列表是基于CSM可视性从两个mesh passes中创建出来的.
   
@@ -407,10 +432,12 @@ SubmitDraw
     若bUseGPUScene为真, 执行FInstanceCullingContext::SetupDrawCommands. 
         为所有的网格分配间接参数slots,以使用instancing, 增加填充间接调用和index&id buffers的命令,隐藏所有共享相同state bucket ID的命令.
 
-###### FMeshDrawCommandInitResourcesTask
+##### FMeshDrawCommandInitResourcesTask
 shader initialization task. commands生成之后将会在渲染线程运行. 初始化CachedPixelShader/CachedGeometryShader/CachedVertexShader
 
-###### FMeshDrawCommandPassSetupTaskContext: parallel mesh draw command pass setup task context
+##### FMeshDrawCommandPassSetupTaskContext
+parallel mesh draw command pass setup task context
+
 View
 Scene
 ShadingPath
@@ -468,7 +495,7 @@ InstanceCullingContext
 InstanceCullingResult
 
 
-###### FVisibleMeshDrawCommand
+##### FVisibleMeshDrawCommand
     存储确定可视的mesh draw command的信息, 以进行进一步的visibility processing. 
     此数据仅为initViews操作(visibility, sorting)存储数据, FMeshDrawCommand存储draw submission的数据.
 
@@ -486,7 +513,7 @@ MeshCullMode
 
 Flags: EFVisibleMeshDrawCommandFlags
 
-###### FParallelMeshDrawCommandPass
+##### FParallelMeshDrawCommandPass
   并行mesh draw command处理和渲染. 封装两个并行任务 mesh command setup task和drawing task.
 
 ::IsOnDemandShaderCreationEnabled
@@ -494,7 +521,7 @@ Flags: EFVisibleMeshDrawCommandFlags
     FRHICommandListExecutor::UseParallelAlgorithms若为真, 则允许on demand shader creation
   r.MeshDrawCommands.AllowOnDemandShaderCreation: 0-总是在渲染线程创建RHI shaders, 在执行其他MDC任务之前. 1-若RHI支持多线程着色器创建,则在提交绘制时,按需在task threads创建.
 
-###### FMeshPassProcessor
+##### FMeshPassProcessor
 mesh processor的基类, 从scene proxy实现接收的FMeshBatch绘制描述变换到FMeshDrawCommand, 以便为RHI command list准备.
 
 - EMeshPass::Type MeshPassType
@@ -551,13 +578,19 @@ mesh processor的基类, 从scene proxy实现接收的FMeshBatch绘制描述变�
 - AddGraphicsPipelineStateInitializer
 
 
-###### FRayTracingMeshProcessor
+##### FRayTracingMeshProcessor
+
+
+### 3. FMeshDrawCommand -> RHICommandList
+每个Pass都对应一个FMeshPassProcessor, 每个FMeshPassProcessor保存了该Pass需要绘制的所有FMeshDrawCommand, 以便渲染器在恰当的顺序触发并渲染.
+
+##### FDeferredShadingSceneRenderer::RenderPrePass
 
 
 
 ### Other Codes
 
-###### EVertexFactoryFlags
+##### EVertexFactoryFlags
   UsedWithMaterials
   SupportsStaticLighting
   SupportsDynamicLighting
@@ -646,7 +679,7 @@ EditorLevelInstance
 EditorSelection
 
 
-
+##### Debug Infos
 
 r.MeshDrawCommands.LogDynamicInstancingStats = "1"
 LogRenderer: Instancing stats for ShadowDepth WholeScene split0
