@@ -10,11 +10,15 @@
         - [FMeshDrawCommandInitResourcesTask](#fmeshdrawcommandinitresourcestask)
         - [FMeshDrawCommandPassSetupTaskContext](#fmeshdrawcommandpasssetuptaskcontext)
         - [FVisibleMeshDrawCommand](#fvisiblemeshdrawcommand)
-        - [FParallelMeshDrawCommandPass](#fparallelmeshdrawcommandpass)
         - [FMeshPassProcessor](#fmeshpassprocessor)
         - [FRayTracingMeshProcessor](#fraytracingmeshprocessor)
     - [3. FMeshDrawCommand -\> RHICommandList](#3-fmeshdrawcommand---rhicommandlist)
         - [FDeferredShadingSceneRenderer::RenderPrePass](#fdeferredshadingscenerendererrenderprepass)
+        - [FParallelCommandListBindings](#fparallelcommandlistbindings)
+        - [FParallelMeshDrawCommandPass!!!](#fparallelmeshdrawcommandpass)
+        - [FRDGParallelCommandListSet: FParallelCommandListSet](#frdgparallelcommandlistset-fparallelcommandlistset)
+        - [FInstanceCullingContext](#finstancecullingcontext)
+        - [EDepthDrawingMode](#edepthdrawingmode)
     - [Other Codes](#other-codes)
         - [EVertexFactoryFlags](#evertexfactoryflags)
         - [EFVisibleMeshDrawCommandFlags](#efvisiblemeshdrawcommandflags)
@@ -273,9 +277,12 @@
 
 - FSceneRenderer::SetupMeshPass
   遍历所有的MeshPass类型
+  根据ShadingPath和PassType获取EMeshPassFlags, 仅执行EMeshPassFlags::MainView, 过滤EMeshPassFlags::CachedMeshCommands
+  Mobile下BasePass或者MobileBasePassCSM需要在shadow pass之后进行合并和排序.
   根据着色路径(Mobile/Deferred)和Pass类型来创建对应的FMeshPassProcessor
-  获取指定Pass的FParallelMeshDrawCommandPass对象, 根据(r.MeshDrawCommands.LogDynamicInstancingStats)可以打印下一帧MeshDrawCommand实例的统计信息
-  并行处理MeshDrawCommand.
+  获取指定Pass的FParallelMeshDrawCommandPass对象, 调用DispatchPassSetup.
+  根据(r.MeshDrawCommands.LogDynamicInstancingStats)可以打印下一帧MeshDrawCommand实例的统计信息
+
 
 - FParallelMeshDrawCommandPass::DispatchPassSetup
   调度可见mesh draw command处理任务,为绘制准备此pass. 包括生成dynamic mesh draw commands, draw sorting, draw merging.
@@ -283,7 +290,10 @@
   设置FMeshDrawCommandPassSetupTaskContext的数据.
   包括 基础属性, translucency sort key, 交换内存命令列表(MeshDrawCommands/DynamicMeshCommandBuildRequests/MobileBasePassCSMMeshDrawCommands)
   基于最大绘制数量在渲染线程预分配资源(PrimitiveIdBufferData/MeshDrawCommands/TempVisibleMeshDrawCommands)
-  若可以并行执行, 若允许按需shaderCreation(IsOnDemandShaderCreationEnabled), 直接添加任务(FMeshDrawCommandPassSetupTask)至TaskGraph系统. 否则将任务(FMeshDrawCommandPassSetupTask)作为前置, 添加到另一个任务(FMeshDrawCommandInitResourcesTask)中.
+  若可以并行执行:
+    若允许按需shaderCreation(IsOnDemandShaderCreationEnabled), 直接添加任务(FMeshDrawCommandPassSetupTask)至TaskGraph系统. 
+    否则将任务(FMeshDrawCommandPassSetupTask)作为前置, 添加到另一个任务(FMeshDrawCommandInitResourcesTask)中. 
+    此时缓存任务至TaskEventRef, 以便在执行drawing task之前,确保setup task已完成.
   若不可以并行执行, 则直接执行FMeshDrawCommandPassSetupTask任务, 若不允许按需shaderCreation,则再执行FMeshDrawCommandInitResourcesTask任务.
 
 
@@ -513,13 +523,6 @@ MeshCullMode
 
 Flags: EFVisibleMeshDrawCommandFlags
 
-##### FParallelMeshDrawCommandPass
-  并行mesh draw command处理和渲染. 封装两个并行任务 mesh command setup task和drawing task.
-
-::IsOnDemandShaderCreationEnabled
-    GL rhi 不支持多线程shaderCreation, 但引擎可以配置为除了RT外不能运行mesh drawing tasks.
-    FRHICommandListExecutor::UseParallelAlgorithms若为真, 则允许on demand shader creation
-  r.MeshDrawCommands.AllowOnDemandShaderCreation: 0-总是在渲染线程创建RHI shaders, 在执行其他MDC任务之前. 1-若RHI支持多线程着色器创建,则在提交绘制时,按需在task threads创建.
 
 ##### FMeshPassProcessor
 mesh processor的基类, 从scene proxy实现接收的FMeshBatch绘制描述变换到FMeshDrawCommand, 以便为RHI command list准备.
@@ -583,9 +586,82 @@ mesh processor的基类, 从scene proxy实现接收的FMeshBatch绘制描述变�
 
 ### 3. FMeshDrawCommand -> RHICommandList
 每个Pass都对应一个FMeshPassProcessor, 每个FMeshPassProcessor保存了该Pass需要绘制的所有FMeshDrawCommand, 以便渲染器在恰当的顺序触发并渲染.
+此处指定PrePass.
 
 ##### FDeferredShadingSceneRenderer::RenderPrePass
+draw a depth pass to avoid overdraw in the other passes.
 
+- FDeferredShadingSceneRenderer::RenderPrePassHMD: 头戴设备
+- 若允许RasterStencilDither, 调用AddDitheredStencilFillPass, 为每个view执行FPixelShaderUtils::AddFullscreenPass
+- 若并行DepthPass(r.ParallelPrePass)为真, 遍历Views:
+  - 构造FMeshPassProcessorRenderState, 设置BlendState/DepthStencilState(禁止color writes, 允许depth tests和writes).
+  - 获取FDepthPassParameters, 获取DepthPass对应的ParallelMeshDrawCommandPass, 调用FParallelMeshDrawCommandPass::BuildRenderingCommands
+  - 调用GraphBuilder.AddPass, 等待执行: 构造FRDGParallelCommandListSet,  调用FParallelMeshDrawCommandPass::DispatchDraw
+  - 调用RenderPrePassEditorPrimitives
+- 若没有并行DepthPass, 同上处理, 仅在调用FParallelMeshDrawCommandPass::DispatchDraw时, 直接提交所有的meshDrawCommands
+- 若DepthPass.bDitheredLODTransitionsUseStencil为真, dithered transition stencil mask clear for all active viewports. 调用GraphBuilder.AddPass, 等待执行的pass: 计算所有views的视口尺寸,调用DrawClearQuad.
+
+
+
+##### FParallelCommandListBindings
+marshal data from RDG pass into the parallel command list set. 从pass parameters struct中获取renderPassInfo和staticUniformBuffers.
+
+- SetOnCommandList
+    RHICmdList.BeginRenderPass
+    RHICmdList.SetStaticUniformBuffers
+
+- FRHIRenderPassInfo RenderPassInfo
+- FUniformBufferStaticBindings StaticUniformBuffers
+
+
+##### FParallelMeshDrawCommandPass!!!
+Parallel mesh draw command processing and rendering. 封装两个并行任务---mesh command setup task and drawing task.
+
+
+- DispatchPassSetup: dispatch visible mesh draw command process task, 为渲染准备此pass. 包含生成dynamic mesh draw commands, draw sorting and draw merging.
+
+- BuildRenderingCommands: 
+sync with setup task, run post-instance culling job to create commands and instance ID lists and optionally vertex instance data. 需要在DispatchPassSetup之后,DispatchDraw之前执行, 但不需要在global instance culling 之前执行.
+  - 若允许TaskContext.InstanceCullingContext才会执行接下来的逻辑.
+  - 调用WaitForMeshPassSetupTask
+  - 调用TaskContext.InstanceCullingContext.BuildRenderingCommands
+  - 调用TaskContext.InstanceCullingResult.GetDrawParameters
+
+- WaitForSetupTask: sync with setup task
+- DispatchDraw: dispatch visible mesh draw command draw task.
+- WaitForTasksAndEmpty
+- SetDumpInstancingStats
+- HasAnyDraw
+- InitCreateSnapshot
+- FreeCreateSnapshot
+- IsOnDemandShaderCreationEnabled
+GL rhi 不支持多线程shaderCreation, 但引擎可以配置为除了RT外不能运行mesh drawing tasks.
+FRHICommandListExecutor::UseParallelAlgorithms若为真, 则允许on demand shader creation
+r.MeshDrawCommands.AllowOnDemandShaderCreation: 0-总是在渲染线程创建RHI shaders, 在执行其他MDC任务之前. 1-若RHI支持多线程着色器创建,则在提交绘制时,按需在task threads创建.
+
+- FMeshDrawCommandPassSetupTaskContext TaskContext
+- FGraphEventRef TaskEventRef
+- FString PassNameForStats
+- bool bHasInstanceCullingDrawParameters
+- int32 MaxNumDraws: maximum number of draws for this pass. 用于在渲染线程预分配资源. 确保若没有任何绘制, 则MaxNumDraws=0.
+
+- DumpInstancingStats
+- WaitForMeshPassSetupTask
+
+
+##### FRDGParallelCommandListSet: FParallelCommandListSet
+
+
+##### FInstanceCullingContext
+
+
+##### EDepthDrawingMode
+DDM_None: teted at a higher level.
+DDM_NonMaskOnly: opaque materials only.
+DDM_AllOccluders: opaque and masked materials, 且允许bUseAsOccluder.
+DDM_AllOpaque: full prepass, every object must be drawn and every pixel must match the base pass depth.
+DDM_MaskedOnly: masked materials only
+DDM_AllOpaqueNoVelocity: full prepass, 但dynamic geometry将会在Velocity pass渲染
 
 
 ### Other Codes
