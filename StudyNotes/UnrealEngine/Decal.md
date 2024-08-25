@@ -22,19 +22,22 @@
 - RenderMeshDecals( FRDGBuilder& GraphBuilder, const FViewInfo& View, const FDeferredDecalPassTextures& DecalPassTextures, EDecalRenderStage DecalRenderStage)
     - 依据DecalRenderStage,采用不同的DecalRenderTargetMode.
     - 调用 DrawDecalMeshCommands
+        获取PassParameters, 经由GraphBuilder.AllocParameters分配的FDeferredDecalPassParameters, 并初始化.
     - 调用 AddDrawDynamicMeshPass
-      - 设置前置任务GraphBuilder.AddSetupTask: 构造FMeshDecalMeshProcessor, 遍历View.MeshDecalBatches, 将FMeshBatch转换为FMeshDrawCommand.
-            - FMeshDecalMeshProcessor::AddMeshBatch
-            - FMeshDecalMeshProcessor::TryAddMeshBatch
-            - FMeshDecalMeshProcessor::Process: 根据EDecalRenderStage选择适当的PS类型, 获取VertexShader/PixelShader; 设置SorKey.BasePass
-            - FMeshPassProcessor::BuildMeshDrawCommands
+      - 设置前置任务GraphBuilder.AddSetupTask: 
+        - 构造FDynamicPassMeshDrawListContext(DynamicMeshDrawCommandStorage/VisibleMeshDrawCommands/GraphicsMinimalPipelineStateSet/NeedsShaderInitialisation).
+        - 构造FMeshDecalMeshProcessor, 遍历View.MeshDecalBatches, 将FMeshBatch转换为FMeshDrawCommand.
+          - FMeshDecalMeshProcessor::AddMeshBatch
+          - FMeshDecalMeshProcessor::TryAddMeshBatch
+          - FMeshDecalMeshProcessor::Process: 根据EDecalRenderStage选择适当的PS类型, 获取VertexShader/PixelShader; 设置SorKey.BasePass
+          - FMeshPassProcessor::BuildMeshDrawCommands
       - 添加可执行的Pass:GraphBuilder.AddPass
             设置Viewport
             调用DrawDynamicMeshPassPrivate
                 - 调用ApplyViewOverridesToMeshDrawCommands
                     若 View.bReverseCulling或者View.bRenderSceneTwoSided为真时,需遍历VisibleMeshDrawCommand,修改CullMode,最终重载VisiblemeshDrawCommand.
                 - 调用SortAndMergeDynamicPassMeshDrawCommands
-                    根据SortKey或StateBucketId排序VisibleMeshDrawCommand, 若bUseGPUScene为真, 此路径下默认bDynamicInstancing为假. 从GPrimitiveIdVertexBufferPool分配一个容量为最大图元数*VisibleMeshDrawCommands数量的PrimitiveIdVertexBuffer, 并RHICmdList.LockBuffer.  遍历meshDrawCommands, 构建PrimitiveIdBuffer.
+                    根据SortKey或StateBucketId排序VisibleMeshDrawCommand, 若bUseGPUScene为真, 此路径下默认bDynamicInstancing为假. 从GPrimitiveIdVertexBufferPool分配一个容量为最大图元数*PrimitiveIdBufferStride的PrimitiveIdVertexBuffer, 并RHICmdList.LockBuffer.  遍历meshDrawCommands, 构建PrimitiveIdBuffer.
                 - 调用SubmitMeshDrawCommandsRange
                     再次确认 bDynamicInstancing为假,遍历VisibleMeshDrawCommands, 调用FMeshDrawCommand::SubmitDraw
                 - 调用 FMeshDrawCommand::SubmitDraw
