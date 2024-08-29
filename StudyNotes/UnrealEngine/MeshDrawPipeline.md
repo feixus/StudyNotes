@@ -16,9 +16,11 @@
         - [FDeferredShadingSceneRenderer::RenderPrePass](#fdeferredshadingscenerendererrenderprepass)
         - [FParallelCommandListBindings](#fparallelcommandlistbindings)
         - [FParallelMeshDrawCommandPass!!!](#fparallelmeshdrawcommandpass)
+        - [FDrawVisibleMeshCommandsAnyThreadTask](#fdrawvisiblemeshcommandsanythreadtask)
         - [FRDGParallelCommandListSet: FParallelCommandListSet](#frdgparallelcommandlistset-fparallelcommandlistset)
         - [FInstanceCullingContext](#finstancecullingcontext)
         - [EDepthDrawingMode](#edepthdrawingmode)
+    - [Optimal](#optimal)
     - [Other Codes](#other-codes)
         - [EVertexFactoryFlags](#evertexfactoryflags)
         - [EFVisibleMeshDrawCommandFlags](#efvisiblemeshdrawcommandflags)
@@ -379,15 +381,15 @@ FDepthPassMeshProcessor::Process
 ##### FMeshDrawCommand
     完整的描述了一个mesh pass draw call
 
-//resource bindings
+- resource bindings
 ShaderBindings: 封装单个mesh draw command的shader bindings
 VertexStreams: 内联分配vertex input bindings的数量. FLocalVertexFactory bindings符合inline storage.
 IndexBuffer
 
-//PSO
+- PSO
 CachedPipelineId: 为快速比较,唯一表达FGraphicsMinimalPipelineStateInitializer
 
-//draw command parameters
+- draw command parameters
 FirstIndex
 NumPrimitives
 NumInstances
@@ -395,26 +397,34 @@ NumInstances
 VertexParams(BaseVertexIndex,NumVertices)/IndirectArgs(Buffer,Offset)
 PrimitiveIdStreamIndex
 
-//Non-pipeline state
+- Non-pipeline state
 StencilRef
 
 PrimitiveType: access for dynamic instancing on GPU
 
-MatchesForDynamicInstancing: 动态实例的匹配规则. 
+- MatchesForDynamicInstancing: 动态实例的匹配规则. 
   CachedPipelineId/StencilRef/ShaderBindings/VertexStreams/PrimitiveIdStreamIndex/IndexBuffer/FirstIndex/NumPrimitives/NumInstances
   ShaderBindings比较ShaderFrequencyBits/ShaderLayouts(looseData|sampler|srv|uniformbuffer)
   有图元数量时比较VertexParams, 否则比较IndirectArgs
+
+
+- SubmitDrawBegin
+设置和缓存PSO: RHICmdList.SetGraphicsPipelineState(PipelineState也会缓存在PipelineStateCache)
+设置和缓存Stencil: RHICmdList.SetStencilRef
+设置和缓存顶点数据: RHICmdList.SetStreamSource from MeshDrawCommand.VertexStreams(InstanceBuffer or VertexBuffer)
+设置和缓存ShaderBinding: 遍历ShaderLayouts, 分别设置Vertex/Pixel/Geometry, UniformBuffer/Sampler/BindlessParameters/SRV/Texture/other shader parameters.
+
+- SubmitDrawEnd
+RHICmdList.DrawIndexedPrimitive/RHICmdList.DrawIndexedPrimitiveIndirect/RHICmdList.DrawPrimitive/RHICmdList.DrawPrimitiveIndirect
+
+SubmitDrawIndirectBegin
+SubmitDrawIndirectEnd
+SubmitDraw
 
 GetDynamicInstancingHash
 InitializeShaderBindings
 SetStencilRef
 SetDrawParametersAndFinalize
-
-SubmitDrawBegin
-SubmitDrawEnd
-SubmitDrawIndirectBegin
-SubmitDrawIndirectEnd
-SubmitDraw
 
 ##### FMeshDrawCommandPassSetupTask
   判别是否为mobile base pass. 
@@ -595,8 +605,11 @@ draw a depth pass to avoid overdraw in the other passes.
 - 若允许RasterStencilDither, 调用AddDitheredStencilFillPass, 为每个view执行FPixelShaderUtils::AddFullscreenPass
 - 若并行DepthPass(r.ParallelPrePass)为真, 遍历Views:
   - 构造FMeshPassProcessorRenderState, 设置BlendState/DepthStencilState(禁止color writes, 允许depth tests和writes).
-  - 获取FDepthPassParameters, 获取DepthPass对应的ParallelMeshDrawCommandPass, 调用FParallelMeshDrawCommandPass::BuildRenderingCommands
-  - 调用GraphBuilder.AddPass, 等待执行: 构造FRDGParallelCommandListSet,  调用FParallelMeshDrawCommandPass::DispatchDraw
+  - GraphBuilder.AllocParameters 分配FDepthPassParameters, 设置ViewUniforBuffer及render target for depth/stencil texture
+  - 获取DepthPass对应的ParallelMeshDrawCommandPass, 调用FParallelMeshDrawCommandPass::BuildRenderingCommands, 设置PassParameters.InstanceCullingDrawParams
+  - 调用GraphBuilder.AddPass, 延迟执行(DepthPassParallel):
+    - 构造FRDGParallelCommandListSet, 将PassParameters转换为FParallelCommandListBindings(renderPassInfo和StaticUniformBuffer).设置高优先级.
+    - 调用FParallelMeshDrawCommandPass::DispatchDraw
   - 调用RenderPrePassEditorPrimitives
 - 若没有并行DepthPass, 同上处理, 仅在调用FParallelMeshDrawCommandPass::DispatchDraw时, 直接提交所有的meshDrawCommands
 - 若DepthPass.bDitheredLODTransitionsUseStencil为真, dithered transition stencil mask clear for all active viewports. 调用GraphBuilder.AddPass, 等待执行的pass: 计算所有views的视口尺寸,调用DrawClearQuad.
@@ -629,6 +642,19 @@ sync with setup task, run post-instance culling job to create commands and insta
 
 - WaitForSetupTask: sync with setup task
 - DispatchDraw: dispatch visible mesh draw command draw task.
+  - 若存在InstanceCullingDrawParams,则构造FMeshDrawCommandOverrideArgs.
+  - 若并行执行(ParallelCommandListSet)
+    - 收集前置条件(FGraphEventArray): 来自TaskEventRef和ParallelCommandListSet
+    - 根据线程数和最大绘制数量/每个CommandList的最小绘制数(64),取最小任务数量以及计算每个任务的绘制数量.
+    - 遍历每个任务
+      - 分配新的FRHICommandList, 默认设置 graphics pipeline. 设置BeginRenderPass/SetStaticUniformBuffers/SetViewport
+      - 新建TGraphTask<FDrawVisibleMeshCommandsAnyThreadTask>.
+      - 调用ParallelCommandListSet->AddParallelCommandList: command list加入QueuedCommandLists,以便追踪并行绘制是否完成.
+  - 若没有并行执行
+    - WaitForMeshPassSetupTask 等待MeshDrawCommands完成构建.
+    - 若TaskContext.bUseGPUScene为真, 调用TaskContext.InstanceCullingContext.SubmitDrawCommands, 否则调用SubmitMeshDrawCommandsRange. 都会遍历MeshDrawCommands, 调用FMeshDrawCommand::SubmitDraw, 通用的传入MeshDrawCommand/PipelineStateSet/RHICmdList, 而GPUScene会重载参数(FMeshDrawCommandOverrideArgs).
+
+
 - WaitForTasksAndEmpty
 - SetDumpInstancingStats
 - HasAnyDraw
@@ -648,12 +674,28 @@ r.MeshDrawCommands.AllowOnDemandShaderCreation: 0-总是在渲染线程创建RHI
 - DumpInstancingStats
 - WaitForMeshPassSetupTask
 
+##### FDrawVisibleMeshCommandsAnyThreadTask
+- RHICmdList
+- InstanceCullingContext
+- VisibleMeshDrawCommands
+- GraphicsMinimalPipelineStateSet
+- OverrideArgs
+- InstanceFactor
+- TaskIndex
+- TaskNum
+
+- DoTask: 调用FInstanceCullingContext::SubmitDrawCommands
 
 ##### FRDGParallelCommandListSet: FParallelCommandListSet
 
 
 ##### FInstanceCullingContext
-
+- SubmitDrawCommands
+传入参数VisibleMeshDrawCommands/PipelineStateSet/OverrideArgs/StartIndex/NumMeshDrawCommands/InstanceFactor/RHICmdList
+若并行执行CommandListSet, StartIndex/NumMeshDrawCommands这两个参数便是每个Task的起始索引及处理的数量, 否则便是一次性处理所有MeshDrawCommands.
+根据StartIndex/NumMeshDrawCommands遍历MeshDrawCommands:
+  根据OverrideArgs设置IndirectArgsByteOffset/IndirectArgsBuffer或者InstanceBuffer/InstanceFactor/InstanceDataByteOffset
+  调用FMeshDrawCommand::SubmitDraw, 调用SubmitDrawBegin/SubmitDrawEnd
 
 ##### EDepthDrawingMode
 DDM_None: teted at a higher level.
@@ -662,6 +704,14 @@ DDM_AllOccluders: opaque and masked materials, 且允许bUseAsOccluder.
 DDM_AllOpaque: full prepass, every object must be drawn and every pixel must match the base pass depth.
 DDM_MaskedOnly: masked materials only
 DDM_AllOpaqueNoVelocity: full prepass, 但dynamic geometry将会在Velocity pass渲染
+
+
+### Optimal
+- Indirect Draw
+- TChunkArray
+
+
+
 
 
 ### Other Codes
