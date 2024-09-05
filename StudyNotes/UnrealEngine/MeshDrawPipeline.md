@@ -20,6 +20,7 @@
         - [FRDGParallelCommandListSet: FParallelCommandListSet](#frdgparallelcommandlistset-fparallelcommandlistset)
         - [FInstanceCullingContext](#finstancecullingcontext)
         - [EDepthDrawingMode](#edepthdrawingmode)
+    - [Static Mesh](#static-mesh)
     - [Optimal](#optimal)
     - [Other Codes](#other-codes)
         - [EVertexFactoryFlags](#evertexfactoryflags)
@@ -707,8 +708,54 @@ DDM_MaskedOnly: masked materials only
 DDM_AllOpaqueNoVelocity: full prepass, 但dynamic geometry将会在Velocity pass渲染
 
 
+### Static Mesh
+
+- FPrimitiveSceneInfo::AddToScene
+- FPrimitiveSceneInfo::AddStaticMeshes
+并行执行所有SceneInfos(ParallelForTemplate), 针对每个primitiveSceneInfo, 构造FBatchingSPDI, 调用Proxy->DrawStaticElements.
+
+  - FStaticMeshSceneProxy::DrawStaticElements
+  构造FMeshBatch, 若存在RuntimeVirtualTextureMaterialTypes,构造runtime virtual texture mesh elements, shadow-only mesh或者用于deferred renderer的depth pass也会构造一份FMeshBatch, 若OverlayMaterial不为空,也会构造MeshBatch.
+
+  - FBatchingSPDI->DrawMesh
+  构造FStaticMeshBatch, 放置在PrimitiveSceneInfo->StaticMeshes. 若未开启GPUScene或者mobile会设置PrimitiveUniformBuffer(来自PrimitiveSceneProxy), 否则为空. bSupportsCachingMeshDrawCommands依赖于FMeshBatch仅有一个FMeshBatchElement和VertexFactory支持缓存网格绘制命令. 特殊情况如Volumetric self shadow mesh commands(cast volumetric translucent shadow), 外部纹理映射到immutable samplers都会禁止缓存. 
+  构造FStaticMeshBatchRelevance, 放置在PrimitiveSceneInfo->StaticMeshRelevances
+
+- FPrimitiveSceneInfo::CacheMeshDrawCommands 
+计算出并行数量NumBatches, 构造相同数量的FCachedPassMeshDrawListContextDeferred, 并行执行SceneInfos.
+
+遍历每个SceneInfo, 设置StaticMeshCommandInfos, 记录SceneInfo中的每个staticMesh在SceneInfos的索引和在StaticMeshes中的索引,构造为FMeshInfoAndIndex. 但需满足非volumetric self shadow mesh command和支持缓存网格绘制命令.
+遍历每个meshPass, 获取各个pass对应的PassMessProcessor, 将FMeshBatch转换为FMeshDrawCommands, 最终放置在Scene.CachedMeshDrawCommandStateBuckets(bUseGPUScene)或者Scene.CachedDrawLists. 同时更新对应的SceneInfo->StaticMeshRelevances.
+
 ### Optimal
-- Indirect Draw
+- Indirect Draw (GPU-Driven Rendering for DX11/DX12/Vulkan/Metal/OpenGL(4.6?))
+  - 渲染大型场景的常见方法是遍历每个模型,在每次绘制调用前绑定其资源(vertex buffers,index buffers,descriptors...).每次绑定资源在command buffer generation(如调用vkCmdBindVertexBuffer) 和 rendering(如绑定资源)中都会有负载.
+  而使用GPU rendering和indirect call可以从GPU buffer查询commands(vkCmdDrawIndexIndirect). 
+  Draw calls can be generated from the GPU.
+  an array of draw calls can be called at once, reducing command buffer overhead.
+  间接命令的信息由结构体VkDrawIndexedIndirectCommand提供.
+  此结构体包含绘制信息vertices/indices.既然结构体允许vertex/index buffers的偏移(fistIndex/vertexOffset),来自场景的多个模型可以放置到单个index buffer/vertex buffer,并仅绑定一次, 且index buffer的每个部分都是零索引.因此对单个绘制调用来说,类型uint16_t的index buffer在vertices数量超过2^16时依然可以使用.
+  [vulkan ref](https://docs.vulkan.org/samples/latest/samples/performance/multi_draw_indirect/README.html)
+  
+  <br>
+
+  - argument buffers, resource heaps, indirect command buffers. move the command list creation to the GPU.
+   ![alt text](images/argumentBuffer.png)
+   ![alt text](images/resourcesHeap.png)
+   ![alt text](images/arrayargbuffer.png)
+   ![alt text](images/indirectCommandBuffers.png)
+   ![alt text](images/indirectCommandBuffers1.png)
+   ![alt text](images/parallelexecute.png)
+
+  [metal ref](https://www.kodeco.com/books/metal-by-tutorials/v2.0/chapters/15-gpu-driven-rendering)
+
+  <br>
+
+  ![alt text](images/openglBuffer.png)
+  [openGL ref](https://ktstephano.github.io/rendering/opengl/mdi)
+
+  <br>
+
 - TChunkArray: 在新的元素增加时不会重新分配内存(todo mem stack) 
 - TInlineAllocator: 针对频繁访问的小数据容器, 在容器内事先分配好内存,而无需添加时再heap allocation,仅在超出NumInlineElements时,再采用SecondaryAllocator
 template <uint32 NumInlineElements, typename SecondaryAllocator = FDefaultAllocator>
@@ -742,7 +789,7 @@ TArray<FSceneView*, TInlineAllocator<2, SceneRenderingAllocator>> Views: 默认�
 
 <br>
 
-为促进处理每一阶段发出的数据,最终为下一阶段产生load balanced tasks, visibility pipeline利用command pipes, 即在阶段间运行的serial quues,以为下一阶段启动任务.
+为促进处理每一阶段发出的数据,最终为下一阶段产生load balanced tasks, visibility pipeline利用command pipes, 即在阶段间运行的serial queues,以为下一阶段启动任务.
 每个视图有两个pipes: OcclusionCull和Relevance. OcclusionCull也可以处理occlusion tasks,或在occlusion禁止时扮演relevance pipe. relevance pipe仅启动relevance tasks.
 渲染线程执行GDME阶段,此阶段同步所有视图的compute relevance阶段. 一旦所有GDME任务完成后,setup mesh passes将会运行.
 当渲染器仅有一个视图时,GDME利用command pipe尽可能快的处理来自关联性的请求,实现一些关联性的重叠,减少关键路径.
