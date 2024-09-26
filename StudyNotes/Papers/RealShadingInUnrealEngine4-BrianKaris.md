@@ -246,20 +246,20 @@
 ## Material Model
 限制参数的数量对于optimizing G-Buffer space, reducing texture storage and access, and minimizing the cost of blending material layers in the pixel shader都十分重要.
 
-base material model:
-BaseColor
-Metallic
-Roughness
-Cavity: small-scale shadowing
+base material model:<br>
+BaseColor<br>
+Metallic<br>
+Roughness<br>
+Cavity: small-scale shadowing<br>
 
-Cavity用于指定远小于运行时shadowing system所能处理的几何的阴影. 经常是由于此几何仅在法线贴图上出现. 如地板之间的裂缝或衣服的接缝.
-Specular 默认值是0.5(对应于4% reflectance). 有效使用Specular的情况几乎都在small scale shadowing. index of refraction(IOR)对于nonmetals十分不重要,因此最近将Specular替代为更容易理解的Cavity参数. 非金属的$F_0$是常量值0.04.  (但目前UE5.1,依然有Specular. 用于non-metallic surfaces, Cavity不存在?)
+Cavity用于指定远小于运行时shadowing system所能处理的几何的阴影. 经常是由于此几何仅在法线贴图上出现. 如地板之间的裂缝或衣服的接缝.<br>
+Specular 默认值是0.5(对应于4% reflectance). 有效使用Specular的情况几乎都在small scale shadowing. index of refraction(IOR)对于nonmetals十分不重要,因此最近将Specular替代为更容易理解的Cavity参数. 非金属的$F_0$是常量值0.04.  (但目前UE5.1,依然有Specular. 用于non-metallic surfaces, Cavity不存在?)<br>
 
-special cases:
-Subsurface: 以不同方式对shadow maps采样
-Anisotropy: 需要许多IBL采样
-Clearcoat: 需要两个IBL采样
-Sheen
+special cases:<br>
+Subsurface: 以不同方式对shadow maps采样<br>
+Anisotropy: 需要许多IBL采样<br>
+Clearcoat: 需要两个IBL采样<br>
+Sheen<br>
 
 当前采用的延迟着色中,使用存储在G-Buffer中的shader model id的动态分支来处理不同的着色模型 (在UE5.1中, Anisotropy已经是基础材质球参数, sheen不存在于shading model)
 
@@ -286,25 +286,25 @@ $$falloff = \frac{saturate(1 - (distance / lightRadius)^4)^2}{diatance^2 + 1} \q
 
 ## Area Lights
 在离线渲染中,常见的解决方案是从光源表面的许多点发光--uniform sampling或者importance sampling.但对实时渲染是不切实际的.
-一个近似的算法需满足一下的需求:
-  材质外观的连续性: diffuse BRDF和Specular BRDF的能量计算量不能显著不同.
-  在solid angle接近零时,需接近point light model
-  执行足够快
+一个近似的算法需满足一下的需求:<br>
+  材质外观的连续性: diffuse BRDF和Specular BRDF的能量计算量不能显著不同.<br>
+  在solid angle接近零时,需接近point light model<br>
+  执行足够快<br>
 
-- Billboard Reflections
+- Billboard Reflections<br>
   Billboard reflections是IBL的一种形式,可用于discrete light sources. 可以存储emitted light的2D图片,映射到3D空间的一个矩形上.
   类似于environment map prefiltering, 此图片为不同尺寸的specular distribution cones进行pre-filtered.
   从图片上计算specular shading可以认为是cone tracing的一种形式, 每个cone近似specular NDF. 圆锥体中心的射线与billboard的平面相交.在图像空间的相交点可用做纹理坐标,在相交处圆锥体的半径可用于推导一个近似的pre-filtered mip level. 
   虽然图像可以以直接方式来表达十分复杂的area light sources, 但billboard reflections有多个原因不能满足第二个需求. 图像在平面上进行pre-filtered, 因此在图像空间中能够表示的solid angle是有限的. 当射线不和平面相交时便没有数据. light vector是未知的或者假设为reflection vector.
   <br>
  
-- Cone Intersection
+- Cone Intersection<br>
   cone tracing 不需要pre-fitering, 可以解析的完成. 
   intersected the cone with a disk facing the shading point by Drobot. A polynomial approximating the NDF is then piece-wise integrated over the intersecting area.
   但使用cone,specular distribution必须是radially symmetric. 这会排除stretched highlights, 这是微面元镜面反射模型的十分重要的特征. 此外类似于billboard reflections,没有定义着色模型需要的light vector.
   <br>
   
-- Specular D Modification
+- Specular D Modification<br>
   基于光源的solid angle来修改specular distribution. 背后的理论是,对于相应的cone angle,将光源的分布视为和D(h)一样. 一个分布和另一个的卷积可以近似为将两个cone angle相加以推导出一个新的cone.因此将来自等式3的$\alpha$转换为有效的cone angle, 加上光源的角度. 得到一下近似:
 
   $$\alpha' = saturate(\alpha + \frac{sourceRadius}{3*distance}) \qquad (10)  $$
@@ -315,7 +315,7 @@ $$falloff = \frac{saturate(1 - (distance / lightRadius)^4)^2}{diatance^2 + 1} \q
 
   <br>
 
-- Representative Point
+- Representative Point<br>
   如果对于一个特定的着色点, 我们可以将来自area light的所有光视为来自光源表面的一个representative point,便可以直接使用着色模型. 一个合理的选择是largest distribution point.
   但能量守恒一直没有处理. 通过移动发射光的原始点,可以有效增加光源的solid angle,但并没有补偿额外的能量. 校正比dividing by solid angle稍微复杂一些,因为能量差异取决于specular distribution. 例如为rough material改变入射光朝向将会导致非常小的能量变化,但对于glossy material,此能量变化会非常巨大.
 
@@ -323,7 +323,7 @@ $$falloff = \frac{saturate(1 - (distance / lightRadius)^4)^2}{diatance^2 + 1} \q
   ![alt text](images/sphereLights.png)
   <br>
 
-- Sphere Lights
+- Sphere Lights<br>
   若球体位于地平线之上,sphere light的Irradiance等价于一个point light. 虽然反直觉,但如果我们接受球体位于地平线之下的不精确性,便可以仅解决specular lighting.
   我们通过找到距ray最短距离的点来近似找到与reflection ray最小角度的点.
 
@@ -350,15 +350,15 @@ $$falloff = \frac{saturate(1 - (distance / lightRadius)^4)^2}{diatance^2 + 1} \q
   $I_sphere$显然不是标准化,取决于power p, 积分结果会非常大.
   <br>
 
-  为了近似能量的增加, 应用specular D modification所描述的相同缘由, 基于光的立体角(solid angle)来扩大分布. 为wider distribution使用normalization factor,替换原有的normalization factor. 对于GGX,此normalization factor是$\frac{1}{\pi\alpha^2}$. 为the representative point操作推导出近似的normalization, 将新的加长normalization factor除以原来的:
+  为了近似能量的增加, 应用specular D modification所描述的相同缘由, 基于光的立体角(solid angle)来扩大分布. 为wider distribution使用normalization factor,替换原有的normalization factor. 对于GGX,此normalization factor是 $\frac{1}{\pi\alpha^2}$. 为the representative point操作推导出近似的normalization, 将新的加长normalization factor除以原来的:
 
-  $$ SphereNormalization = (\frac{\alpha}{\alpha'})^2 \qquad  (14) $$
+  $$SphereNormalization = (\frac{\alpha}{\alpha'})^2 \qquad  (14) $$
 
   representative point方法的结果符合所有需求. 通过校正修复能量守恒,无论光源的尺寸大小,materials行为一样. glossy materials仍产生sharp-edged specular highlights, 因此仅修改BRDF的输入即可, 着色模型不受影响.
   
   <br>
 
-- Tube Lights
+- Tube Lights<br>
   sphere lights可用于表达light bulbs, tube lights(capsules)可用于表达florescent lights.
   求解具有长度但半径为零的tube lights, 即linear lights. line segment的Irradiance可以解析积分,只要线段位于地平线之上:
 
@@ -377,17 +377,17 @@ $$falloff = \frac{saturate(1 - (distance / lightRadius)^4)^2}{diatance^2 + 1} \q
 
   Picott寻找到到达r最小角度的t:
   
-  $$ t = \frac{(L_0 \cdot L_d)(r \cdot L_0) - (L_0 \cdot L_0)(r \cdot L_d)} {(L_0 \cdot L_d)(r \cdot L_d) - (L_d \cdot L_d)(r \cdot L_0)}   \qquad (18) $$
+  $$t = \frac{(L_0 \cdot L_d)(r \cdot L_0) - (L_0 \cdot L_0)(r \cdot L_d)} {(L_0 \cdot L_d)(r \cdot L_d) - (L_d \cdot L_d)(r \cdot L_0)}   \qquad (18) $$
 
   类似sphere事例, 可以近似最小角, 替代为最短距离:
 
-  $$ t = \frac{(r \cdot L_0)(r \cdot L_d) - (L_0 \cdot L_d)}{|L_d|^2 - (r \cdot L_d)^2}   \qquad (19) $$
+  $$t = \frac{(r \cdot L_0)(r \cdot L_d) - (L_0 \cdot L_d)}{|L_d|^2 - (r \cdot L_d)^2}   \qquad (19) $$
 
   edge cases没有恰当的处理,因此并不总是能找到最近点. 但此近似计算廉价且产生的效果相比等式18也看的过去.
 
   方程式18和19将r视为线段,而不是射线, 这两种解决方案都不能恰当的处理远离线段的射线.这会引发从一个端点到另一个的突兀变化,即使是完美的平面也会如此. 这会发生在当reflection rays从指向光到远离光的过渡.可以通过在计算点和每个端点之间选择来修复,但过于昂贵.可以简单接受此瑕疵.
   
-  为了能量守恒,可以应用球体光的相同概念. specular distribution通过光的对角来扩大,但这次是一维的,因此可以使用GGX的anisotropic版本. anisotropic GGX的normalization factor是$\frac{1}{\pi\alpha_x\alpha_y}$,当$\alpha_x=\alpha_y=\alpha$时便是isotropic
+  为了能量守恒,可以应用球体光的相同概念. specular distribution通过光的对角来扩大,但这次是一维的,因此可以使用GGX的anisotropic版本. anisotropic GGX的normalization factor是 $\frac{1}{\pi\alpha_x\alpha_y}$,当 $\alpha_x=\alpha_y=\alpha $时便是isotropic
 
   $$LineNormalization = \frac{\alpha}{\alpha'}  \qquad (20) $$
 
