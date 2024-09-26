@@ -1,4 +1,4 @@
-[UE4 PBR -- Brian Karis](https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf)
+[UE4 PBR -- Brian Karis -- 2013](https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf)
 
 # Real Shading in UE4
 
@@ -14,7 +14,7 @@
 
   <br/>
 
-- Shading Model
+## Shading Model
   - Diffuse BRDF
 
     评估Burley的diffuse model, 相较于Lambertian diffuse(1), 仅有较小的差异. 此外,任何更复杂的diffuse model都很难更有效率的用于image-base或spherical harmonic lighting.
@@ -53,7 +53,7 @@
     $$G(l,v,h) = G_1(l)G_1(v)  \qquad  (4) $$
 
     <br/>
-    
+
     ![alt text](images/schlickToSmith.png)
 
     <br/>
@@ -76,6 +76,8 @@
     (import sampling 体现在只有视角方向正好是入射光方向的反射方向,才会通过采样. 根据GGX分布方程式,使用球面坐标来生成需要的法线H)<br>
     通过使用mip maps可以显著减少采样数. 但采样数仍需要大于16以确保质量.但ue为了local reflections,混合了许多environment maps,因此实际仅每一个单个采样.
     <br/>
+
+    [Hammersley Knowleges](../Math/low-discrepancySequence.md)
 
     ```c++
     float3 ImportanceSampleGGX( float2 Xi, float Roughness, float3 N )
@@ -239,96 +241,162 @@
     }
 
     ```
+<br>
 
-# low-discrepancy sequence(quasi-random sequence)
+## Material Model
+限制参数的数量对于optimizing G-Buffer space, reducing texture storage and access, and minimizing the cost of blending material layers in the pixel shader都十分重要.
 
-https://www.youtube.com/watch?v=N6xZvrLusPI <br>
-http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html <br>
-https://en.wikipedia.org/wiki/Low-discrepancy_sequence <br>
+base material model:
+BaseColor
+Metallic
+Roughness
+Cavity: small-scale shadowing
+
+Cavity用于指定远小于运行时shadowing system所能处理的几何的阴影. 经常是由于此几何仅在法线贴图上出现. 如地板之间的裂缝或衣服的接缝.
+Specular 默认值是0.5(对应于4% reflectance). 有效使用Specular的情况几乎都在small scale shadowing. index of refraction(IOR)对于nonmetals十分不重要,因此最近将Specular替代为更容易理解的Cavity参数. 非金属的$F_0$是常量值0.04.  (但目前UE5.1,依然有Specular. 用于non-metallic surfaces, Cavity不存在?)
+
+special cases:
+Subsurface: 以不同方式对shadow maps采样
+Anisotropy: 需要许多IBL采样
+Clearcoat: 需要两个IBL采样
+Sheen
+
+当前采用的延迟着色中,使用存储在G-Buffer中的shader model id的动态分支来处理不同的着色模型 (在UE5.1中, Anisotropy已经是基础材质球参数, sheen不存在于shading model)
+
+## Material Layering
+https://dev.epicgames.com/documentation/en-us/unreal-engine/using-material-layers-in-unreal-engine
+
+material attributes holds all of the materials output data. can be passed in and out of material functions as single pin, passed along wires, and outputted directly.
+艺术家通过将mesh分离为多个sections来解决in-shader layering限制,导致更多的draw calls.
+使用dynamic branching来减少layer已经100%覆盖区域的着色器消耗还未调研.
+we wish to improve the artist interface to the library of material layers by making it easier to find and preview layers. we also intend to investigate an offline compositing/baking system in addition to out current run-time system, to support a larger number of layers and offer better scalability.
+
+## Lighting Model
+和着色一样,希望通过更加基于物理的制作来改进光照模型. 有两个关注的领域--light falloff 和 non-punctual sources of emission(area lights).
+light falloff: 采用物理精确的inverse-square falloff 并切换到the photometric brightness unit of lumens( the unit of luminous flux). 一个小问题是此衰减函数没有达到零的距离(即无限趋近于零). 但出于实时和离线计算的效率, 也需要人为的限制光照的影响范围. 我们以这样一种方式对平方反比函数做窗口处理,使得大部分光的衰减保持相对不受影响,仍提供到零的柔和过渡.
+
+$$falloff = \frac{saturate(1 - (distance / lightRadius)^4)^2}{diatance^2 + 1} \qquad (9)  $$
+
+分母上的+1是为了阻止函数靠近光源处爆炸.
+
+![alt text](images/lightFalloff.png)
 
 <br>
 
-in sampling, random sampling can result in noise, regular grid can result in aliasing with high frequencies inputs.
 
-finding the characteristic function of a probability density function
-finding the derivative function of a deterministic function with a small amount of noise.
+## Area Lights
+在离线渲染中,常见的解决方案是从光源表面的许多点发光--uniform sampling或者importance sampling.但对实时渲染是不切实际的.
+一个近似的算法需满足一下的需求:
+  材质外观的连续性: diffuse BRDF和Specular BRDF的能量计算量不能显著不同.
+  在solid angle接近零时,需接近point light model
+  执行足够快
 
+- Billboard Reflections
+  Billboard reflections是IBL的一种形式,可用于discrete light sources. 可以存储emitted light的2D图片,映射到3D空间的一个矩形上.
+  类似于environment map prefiltering, 此图片为不同尺寸的specular distribution cones进行pre-filtered.
+  从图片上计算specular shading可以认为是cone tracing的一种形式, 每个cone近似specular NDF. 圆锥体中心的射线与billboard的平面相交.在图像空间的相交点可用做纹理坐标,在相交处圆锥体的半径可用于推导一个近似的pre-filtered mip level. 
+  虽然图像可以以直接方式来表达十分复杂的area light sources, 但billboard reflections有多个原因不能满足第二个需求. 图像在平面上进行pre-filtered, 因此在图像空间中能够表示的solid angle是有限的. 当射线不和平面相交时便没有数据. light vector是未知的或者假设为reflection vector.
+  <br>
+ 
+- Cone Intersection
+  cone tracing 不需要pre-fitering, 可以解析的完成. 
+  intersected the cone with a disk facing the shading point by Drobot. A polynomial approximating the NDF is then piece-wise integrated over the intersecting area.
+  但使用cone,specular distribution必须是radially symmetric. 这会排除stretched highlights, 这是微面元镜面反射模型的十分重要的特征. 此外类似于billboard reflections,没有定义着色模型需要的light vector.
+  <br>
+  
+- Specular D Modification
+  基于光源的solid angle来修改specular distribution. 背后的理论是,对于相应的cone angle,将光源的分布视为和D(h)一样. 一个分布和另一个的卷积可以近似为将两个cone angle相加以推导出一个新的cone.因此将来自等式3的$\alpha$转换为有效的cone angle, 加上光源的角度. 得到一下近似:
 
-- Halton Sequence
+  $$\alpha' = saturate(\alpha + \frac{sourceRadius}{3*distance}) \qquad (10)  $$
 
-  $$h_{Halton}(n) = (h_2(n) \quad h_3(n) \quad h_5(n) \quad h_7(n) \quad ... \quad h_b(n)) $$
+  效率足够了,但不满足第一个需求.因为非常glossy materials在large area lights照射时会显得十分粗糙. 但很适合如Blinn-Phone这样的specualr NDF.
 
-  $h_b(n)$ is computed by radical inverse function, mirroring the numerical value of n(to the prime base b) at the decimal point.
-
-  |Index n| Numerical value(Base 2) | Mirrored | $h_2(n)$ |
-  |--- | --- | --- | --- |
-  | 1 | 1 |0.1 = 1/2| 1/2 |
-  | 2 | 10 |0.01 = 0/2 + 1/4| 1/4 |
-  | 3 | 11 |0.11 = 1/2 + 1/4| 3/4 |
-  | 4 | 100 |0.001 = 0/2 + 0/4 + 1/8| 1/8 |
-  | 5 | 101 |0.101 = 1/2 + 0/4 + 1/8| 5/8 |
-  | 6 | 110 |0.011 = 0/2 + 1/4 + 1/8| 3/8 |
-  | 7 | 111 |0.111 = 1/2 + 1/4 + 1/8| 7/8 |
+  ![alt text](images/specularDModification.png)
 
   <br>
 
-  |Index n| Numerical value(Base 3) | Mirrored | $h_3(n)$ |
-  |--- | --- | --- | --- |
-  | 1 | 1 |0.1 = 1/3| 1/3 |
-  | 2 | 2 |0.2 = 2/3| 2/3 |
-  | 3 | 10 |0.01 = 0/3 + 1/9| 1/9 |
-  | 4 | 11 |0.11 = 1/3 + 1/9| 4/9 |
-  | 5 | 12 |0.21 = 2/3 + 1/9| 7/9 |
-  | 6 | 20 |0.02 = 0/3 + 2/9| 2/9 |
-  | 7 | 21 |0.12 = 1/3 + 2/9| 3/9 |
-  | 7 | 22 |0.22 = 2/3 + 2/9| 8/9 |
+- Representative Point
+  如果对于一个特定的着色点, 我们可以将来自area light的所有光视为来自光源表面的一个representative point,便可以直接使用着色模型. 一个合理的选择是largest distribution point.
+  但能量守恒一直没有处理. 通过移动发射光的原始点,可以有效增加光源的solid angle,但并没有补偿额外的能量. 校正比dividing by solid angle稍微复杂一些,因为能量差异取决于specular distribution. 例如为rough material改变入射光朝向将会导致非常小的能量变化,但对于glossy material,此能量变化会非常巨大.
+
+  <br>
+  ![alt text](images/sphereLights.png)
+  <br>
+
+- Sphere Lights
+  若球体位于地平线之上,sphere light的Irradiance等价于一个point light. 虽然反直觉,但如果我们接受球体位于地平线之下的不精确性,便可以仅解决specular lighting.
+  我们通过找到距ray最短距离的点来近似找到与reflection ray最小角度的点.
+
+  $$centerToRay = L - (L \dot r)r$$
+  $$closestPoint = L + centerToRay * saturate(\frac{sourceRadius}{|centerToRay|})  \qquad  (11)$$
+  $$l = ||closestPoint||$$
+
+  L是着色点到光源中心的向量, sourceRadius是光源球体的半径, r是reflection vector.
+  当射线和球体相交时,计算的点将会是射线到球体中心最近的点,一旦归一化便唯一.
+
+  通过移动发射光的原点到球体的表面,通过球体的对角可以有效扩大specular distribution.尽管不是microfacet distribution,使用normalized Phong distribution可以更好的解释.
+
+  $$I_{point} = \frac{p + 2}{2\pi} cos^p \phi_r \qquad (12) $$
+
+  $$\begin{equation*} I_{sphere} = \begin{cases}
+        \frac{p + 2}{2\pi} & if \  \phi_r < \phi_s \\
+        \frac{p + 2}{2\pi} cos^p(\phi_r - \phi_s) & if \ \phi_r \ge \phi_s
+      \end{cases}
+    \end{equation*}  \qquad (13)
+  $$
+
+  $\phi_r$是r和L的夹角, $\phi_s$是sphere对角的一半.
+  $I_{point}$是归一化, 意味着在半球体上的积分结果是1.
+  $I_sphere$显然不是标准化,取决于power p, 积分结果会非常大.
+  <br>
+
+  为了近似能量的增加, 应用specular D modification所描述的相同缘由, 基于光的立体角(solid angle)来扩大分布. 为wider distribution使用normalization factor,替换原有的normalization factor. 对于GGX,此normalization factor是$\frac{1}{\pi\alpha^2}$. 为the representative point操作推导出近似的normalization, 将新的加长normalization factor除以原来的:
+
+  $$ SphereNormalization = (\frac{\alpha}{\alpha'})^2 \qquad  (14) $$
+
+  representative point方法的结果符合所有需求. 通过校正修复能量守恒,无论光源的尺寸大小,materials行为一样. glossy materials仍产生sharp-edged specular highlights, 因此仅修改BRDF的输入即可, 着色模型不受影响.
+  
+  <br>
+
+- Tube Lights
+  sphere lights可用于表达light bulbs, tube lights(capsules)可用于表达florescent lights.
+  求解具有长度但半径为零的tube lights, 即linear lights. line segment的Irradiance可以解析积分,只要线段位于地平线之上:
+
+  $$\int_{L_0}^{L_1} \frac{n \cdot L}{|L|^3} dL = \frac{ \frac{n \cdot L_0}{|L_0|} + \frac{n \cdot L_1}{|L_1|} }{|L_0||L_1| + (L_0 \cdot L_1)} \qquad (15) $$
+
+  $L_0$和$L_1$是着色点到线段两端的向量.
+
+  修改方程式以阻止负irradiance,除0,当长度为零时匹配point light falloff:
+  
+  $$irradiance = \frac{ 2 * saturate(\frac{n \cdot L_0}{2|L_0|} + \frac{n \cdot L_1}{2|L_1|}) }{|L_0||L_1| + (L_0 \cdot L_1) + 2} \qquad (16)$$
+
+  对于linear light specular,需求解方程式中的t:
+  $$L_d = L_1 - L_0 \\
+  l = || L_0 + saturate(t)L_d ||          \qquad (17)
+  $$
+
+  Picott寻找到到达r最小角度的t:
+  
+  $$ t = \frac{(L_0 \cdot L_d)(r \cdot L_0) - (L_0 \cdot L_0)(r \cdot L_d)} {(L_0 \cdot L_d)(r \cdot L_d) - (L_d \cdot L_d)(r \cdot L_0)}   \qquad (18) $$
+
+  类似sphere事例, 可以近似最小角, 替代为最短距离:
+
+  $$ t = \frac{(r \cdot L_0)(r \cdot L_d) - (L_0 \cdot L_d)}{|L_d|^2 - (r \cdot L_d)^2}   \qquad (19) $$
+
+  edge cases没有恰当的处理,因此并不总是能找到最近点. 但此近似计算廉价且产生的效果相比等式18也看的过去.
+
+  方程式18和19将r视为线段,而不是射线, 这两种解决方案都不能恰当的处理远离线段的射线.这会引发从一个端点到另一个的突兀变化,即使是完美的平面也会如此. 这会发生在当reflection rays从指向光到远离光的过渡.可以通过在计算点和每个端点之间选择来修复,但过于昂贵.可以简单接受此瑕疵.
+  
+  为了能量守恒,可以应用球体光的相同概念. specular distribution通过光的对角来扩大,但这次是一维的,因此可以使用GGX的anisotropic版本. anisotropic GGX的normalization factor是$\frac{1}{\pi\alpha_x\alpha_y}$,当$\alpha_x=\alpha_y=\alpha$时便是isotropic
+
+  $$LineNormalization = \frac{\alpha}{\alpha'}  \qquad (20) $$
+
+  因为仅改变光的原点和应用了能量守恒,这些操作是可以累加的. line segment和sphere这样做,近似于形状的卷积,很好的模拟了tube light的行为.
+
+  ![alt text](images/tubeLights.png)
 
   <br>
 
-  ```GLSL
-  float halton(uint base, uint index) {
-    float result = 0.0;
-    float digitWeight = 1.0;
-    while(index > 0) {
-      digitWeight = digitWeight / float(base);
-      uint nominator = index % base;
-      result += float(nominator) * digitWeight;
-      index = index / base;
-    }
-    return result;
-  }
-  ```
-  $$O(n) = log_b(n) + 1$$
+  附带能量守恒的representative point方法可以有效的用于简单形状.未来可应用于spheres和tubes外的其他形状.特别是应用于textured quads以表达更复杂和多颜色的光源.
 
-
-- Hammersley Sequence
-
-  $$h_{Hammersley}(n) = ( \frac{n}{N} \quad h_2(n) \quad h_3(n) \quad h_5(n) \quad h_7(n) \quad ... \quad h_b(n)) $$
-
-  ```GLSL
-    // for prime base 2 only
-    float radicalInverse_VdC(uint bits) {
-        bits = (bits << 16u) | (bits >> 16u);
-        bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-        bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-        bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-        bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-        return float(bits) * 2.3283064365386963e-10; // / 0x100000000
-    }
-
-    vec2 hammersley2d(uint i, uint N) {
-      return vec2(float(i)/float(N), radicalInverse_VdC(i));
-  }
-
-  ```
-
-- Sobel Sequence
-
-- low-discrepancy sequences in numerical integration
-  e.g. [0,1], as the average of the function evaluated at a set $\{x_1, x_2, ..., x_N \}$ in that interval:
-
-  $$\int_{0}^{1} f(u)du \approx \frac{1}{N} \sum_{i = 1}^{N} f(x_i) $$
-
-  if the points are chosen as $x_i= \frac{i}{N}$, this is rectangle rule.<br>
-  if the points are chosen to be randomly(or pseudo-randomly) distributed, this is the Monte Carlo method.<br>
-  if the points are chosen as elements of a low-discrepancy sequence, this is the quasi-Monte Carlo method.<br>
+  <br>
