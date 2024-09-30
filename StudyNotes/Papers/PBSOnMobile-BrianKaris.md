@@ -21,10 +21,10 @@ https://cdn2.unrealengine.com/Resources/files/GDC2014_Next_Generation_Mobile_Ren
 - for mobile, only one environment map is fetched per pixel.
 
 
-- Environment BRDF
+- Environment BRDF<br>
   Environment BRDF which for high end is precomputed with Monte Carlo integration and stored in a 2D LUT.
   Dependent texture fetches are really expensive on some mobile hardward but even worse is the extremely limiting 8 sampler limit of OpenGL ES2(now most device is OpenGL3/Vulkan/Metal).
-  an approximate anylytic version based on [Dimitar Lazarov's work](http://blog.selfshadow.com/publications/s2013-shading-course/lazarov/s2013_pbs_black_ops_2_notes.pdf):<br>
+  an approximate analytic version based on [Dimitar Lazarov's work](http://blog.selfshadow.com/publications/s2013-shading-course/lazarov/s2013_pbs_black_ops_2_notes.pdf):<br>
 
 
   ```HLSL
@@ -66,19 +66,19 @@ https://cdn2.unrealengine.com/Resources/files/GDC2014_Next_Generation_Mobile_Ren
   we only use the flag on select objects that really need the extra performance.
 
 
-- Directional Light
+- Directional Light<br>
   just calculated a portion of it in an approximate preintegrated form with the EnvBRDF though. the reflection vector which was used to sample the environment map.
   the idea is to analytically evaluate the radially symmetric lobe that is used to prefilter the environment map and then multiply the result with EnvBRDF just like we do for IBL. think of this as anylytically integrating the lobe against the incoming light direction instead of numerically integrating like we do with the environment map.
 
   first, replace the GGX NDF with Blinn. Blinn is then approximated with a radially symmetric Phong lobe.
 
-  $$ \newcommand{\nv}{\mathbf{n}} \newcommand{\lv}{\mathbf{l}} \newcommand{\vv}{\mathbf{v}} \newcommand{\hv}{\mathbf{h}} \newcommand{\mv}{\mathbf{m}} \newcommand{\rv}{\mathbf{r}} \newcommand{\ndotl}{\nv\cdot\lv} \newcommand{\ndotv}{\nv\cdot\vv} \newcommand{\ndoth}{\nv\cdot\hv} \newcommand{\ndotm}{\nv\cdot\mv} \newcommand{\vdoth}{\vv\cdot\hv} D_{Blinn}(\hv) = \frac{1}{ \pi \alpha^2 } (\ndoth)^{ \left( \frac{2}{ \alpha^2 } - 2 \right) } \approx \frac{1}{ \pi \alpha^2 } (\rv\cdot\lv)^{ \left( \frac{1}{ 2 \alpha^2 } - \frac{1}{2} \right) } $$
+  $$D_{Blinn}(h) = \frac{1}{ \pi \alpha^2 } (n\cdot h)^{ \left( \frac{2}{ \alpha^2 } - 2 \right) } \approx \frac{1}{ \pi \alpha^2 } (r\cdot l)^{ \left( \frac{1}{ 2 \alpha^2 } - \frac{1}{2} \right) } $$
 
   Where $r$ is the reflection direction $r = 2(n \cdot v)n - v$
 
   Phong is further [approximated with a Spherical Gaussian](http://seblagarde.wordpress.com/2012/06/03/spherical-gaussien-approximation-for-blinn-phong-phong-and-fresnel/):
 
-  $$ x^n \approx e^{ (n + 0.775) (x - 1) } $$
+  $$x^n \approx e^{ (n + 0.775) (x - 1) } $$
 
     ```HLSL
     half D_Approx( half Roughness, half RoL )
