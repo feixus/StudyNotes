@@ -1,3 +1,6 @@
+https://www.cnblogs.com/timlly/p/14732412.html
+
+
 # ShaderPrint
 
 # ShadingEnergyConservation
@@ -8,12 +11,46 @@
 - VirtualShadowCacheManagers 
     删除primitives,更新Instances或Transform, addpass to VirtualSmInvalidateInstancePagesCS in compute shader(VirtualShadowMapCacheManagement.usf).
 - RemovePrimitiveSceneInfos
-    循环处理待删除的primitives, 将每个primitive移动到各个数组的末端, 并执行删除. 对每个primitive的关联进行解绑操作,如从场景中移除, InvalidateCachedShadow, 从ShadowMapData.StaticShadowSubjectMap中删除等
+    循环处理待删除的primitives, 配合TypeOffsetTable和PrimitiveSceneProxies, 将每个primitive交换移动到各个数组的末端, 并执行删除. 
+    VelocityData.RemoveFromScene
+    UnlinkAttachmentGroup
+    UnlinkLODParentComponent
+    FlushRuntimeVirtualTexture
+    Remove from scene
+    FreeGPUSceneInstances
+    GPUScene.AddPrimitiveToUpdate(EPrimitiveDirtyState::Removed)
+    CachedShadowMapData.InvalidateCachedShadow
+    DistanceFieldSceneData.RemovePrimitive
+    LumenRemovePrimitive
+    PersistentPrimitiveIdAllocator.Free
+    ShadowMapData.StaticShadowSubjectMap
+
+    ``` c++
+    // 删除图元示意图：会依次将被删除的元素交换到相同类型的末尾，直到列表末尾
+    // PrimitiveSceneProxies[0,0,0,6,X,6,6,6,2,2,2,2,1,1,1,7,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,X,2,2,2,1,1,1,7,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,X,1,1,1,7,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,1,1,1,X,7,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,1,1,1,7,X,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,1,1,1,7,4,X,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,1,1,1,7,4,8,X]
+    ```
+
 - AddPrimitiveSceneInfos
     扩展数组大小, 循环处理待添加的primitives.
     从后往前处理,合并处理TypeHash相同的primitive, 为各个数组(Primitives/PrimitiveTransform/PrimitiveBounds...)添加primitive数据, 为PrimitiveSceneInfo分配PackedIndex和PersistentIndex, 添加入PrimitivesToUpdate, 等待在GPUScene中更新
     从TypeOffsetTable中寻找ProxyHash匹配类型, 若遭遇新类型,添加进去.TypeOffsetTable中的每个元素表示ProxyHash相同的primitive数量.
-    根据TypeOffsetTable,为每个primitive定位相同proxyHash的最后一位索引,进行数组元素交换.以构成相同ProxyHash的primitive排列在一起的数组.
+    根据TypeOffsetTable,为每个primitive定位相同proxyHash的最后一位索引+1,进行数组元素交换. 遍历直至恢复之前排序,以构成相同ProxyHash的primitive排列在一起的数组.
+
+    ``` c++
+    // 增加图元示意图：先将被增加的元素放置列表末尾，然后依次和相同类型的末尾交换。
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,2,1,1,1,7,4,8,6]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,1,1,1,7,4,8,2]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,2,1,1,7,4,8,1]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,2,1,1,1,4,8,7]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,2,1,1,1,7,8,4]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,2,1,1,1,7,4,8]
+    ```
     加入LightingAttachmentRoot.
     AllocateGPUSceneInstances: 支持the GPUScene instance data buffer, InstanceStaticMesh/NaniteResources/SkeletalMesh/LandscapeComponentSceneProxy
     FPrimitiveSceneInfo::AddToScene: 
@@ -45,6 +82,6 @@
     若instance数量有增加或减少(cmdBuffer), 重新分配GPUSceneInstance, 重新加入DistanceFieldSceneData/Lumen scene data. 否则仅AddPrimitiveToUpdate/distance field scene data update/lumen scene data update.
     final re-add the primitive to the scene with new transform.  
 
-- UpdatedAttachmentRoots/UpdatedCustomPrimitiveParams/DistanceFieldSceneDataUpdates/UpdatedOcclusionBoundsSlacks
+- UpdatedAttachmentRoots/UpdatedCustomPrimitiveParams/      DistanceFieldSceneDataUpdates/UpdatedOcclusionBoundsSlacks
 
 - DeletePrimitiveSceneInfo
