@@ -82,7 +82,7 @@ https://www.cnblogs.com/timlly/p/14732412.html
     若instance数量有增加或减少(cmdBuffer), 重新分配GPUSceneInstance, 重新加入DistanceFieldSceneData/Lumen scene data. 否则仅AddPrimitiveToUpdate/distance field scene data update/lumen scene data update.
     final re-add the primitive to the scene with new transform.  
 
-- UpdatedAttachmentRoots/UpdatedCustomPrimitiveParams/      DistanceFieldSceneDataUpdates/UpdatedOcclusionBoundsSlacks
+- UpdatedAttachmentRoots/UpdatedCustomPrimitiveParams/DistanceFieldSceneDataUpdates/UpdatedOcclusionBoundsSlacks
 
 - DeletePrimitiveSceneInfo
 
@@ -104,7 +104,7 @@ https://www.cnblogs.com/timlly/p/14732412.html
 - 抽出仅需要更新primitive id的instances, 即在PrimitiveDirtyState对应元素标记为EPrimitiveDirtyState::ChangedId. 添加一个pass. (FGPUSceneSetInstancePrimitiveIdCS)
 - 重置PrimitivesToUpdate,PrimitiveDirtyState
 - UploadGeneral (此处针对FUploadDataSourceAdapterScenePrimitives)
-    - 分配对象TaskContext(FTaskContext), 构造PrimitiveUploadInfos/PrimitiveUploader/InstancePayloadUploader/InstanceSceneUploader/InstanceBVHUploader/LightmapUploader/NaniteMaterialUploaders等.
+    - 分配对象TaskContext(FTaskContext), 构造PrimitiveUploadInfos/PrimitiveUploader/InstancePayloadUploader/InstanceSceneUploader/InstanceBVHUploader/LightmapUploader/NaniteMaterialUploaders, 每个元素都是FRDGScatterUploader结构.
     - 构建Task(TaskLambda), lock buffer.
         构造InstanceUpdates(FInstanceBatcher), 遍历PrimitiveData, 计算Batches及BatchItems(ItemIndex/FirstInstance/NumInstances)
         更新primitives, 并行执行TaskContext.NumPrimitiveDataUploads次, 将primitive scene data填充至TaskContext.PrimitiveUploader.
@@ -113,3 +113,6 @@ https://www.cnblogs.com/timlly/p/14732412.html
         更新lightmap, 仅scene primitives,即静态图元才有light cache data.
     - AddCommandListSetupTask: Task加入ParallelSetupEvents,等待执行.
     - PrimitiveUploadBuffer/InstancePayloadUploadBuffer/InstanceSceneUploadBuffer/InstanceBVHUploadBuffer/LightmapUploadBuffer/NaniteMaterialUploaders 各自运行一个scatter upload pass(FRDGScatterCopyCS).
+    - FRDGAsyncScatterUploadBuffer 构造FRDGScatterUploader
+        FRDGAsyncScatterUploadBuffer::Begin: 设置ScatterBytes/UploadBytes, 经由rdg buffer desc为ScatterBuffer/UploadBuffer分配rdg buffer.
+        FRDGAsyncScatterUploadBuffer::End: 构造FRDGScatterCopyCS::FParameters, 根据不同资源类型(ByteBuffer/StructedBuffer/Buffer/Texture),设置不同数据成员. 获取FRDGScatterCopyCS, 根据ComputeConfig.NumLoop, 执行多次scatter upload pass.
