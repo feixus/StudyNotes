@@ -14,11 +14,11 @@
         - [FRayTracingMeshProcessor](#fraytracingmeshprocessor)
     - [3. FMeshDrawCommand -\> RHICommandList](#3-fmeshdrawcommand---rhicommandlist)
         - [FDeferredShadingSceneRenderer::RenderPrePass](#fdeferredshadingscenerendererrenderprepass)
-        - [FParallelCommandListBindings](#fparallelcommandlistbindings)
         - [FParallelMeshDrawCommandPass!!!](#fparallelmeshdrawcommandpass)
+        - [FInstanceCullingContext](#finstancecullingcontext)
+        - [FParallelCommandListBindings](#fparallelcommandlistbindings)
         - [FDrawVisibleMeshCommandsAnyThreadTask](#fdrawvisiblemeshcommandsanythreadtask)
         - [FRDGParallelCommandListSet: FParallelCommandListSet](#frdgparallelcommandlistset-fparallelcommandlistset)
-        - [FInstanceCullingContext](#finstancecullingcontext)
         - [EDepthDrawingMode](#edepthdrawingmode)
     - [Static Mesh](#static-mesh)
     - [Other Codes](#other-codes)
@@ -635,17 +635,6 @@ draw a depth pass to avoid overdraw in the other passes.
 
 
 
-##### FParallelCommandListBindings
-marshal data from RDG pass into the parallel command list set. 从pass parameters struct中获取renderPassInfo和staticUniformBuffers.  
-
-- SetOnCommandList  
-    RHICmdList.BeginRenderPass  
-    RHICmdList.SetStaticUniformBuffers  
-
-- FRHIRenderPassInfo RenderPassInfo  
-- FUniformBufferStaticBindings StaticUniformBuffers  
-
-
 ##### FParallelMeshDrawCommandPass!!!
 Parallel mesh draw command processing and rendering. 封装两个并行任务---mesh command setup task and drawing task.  
 
@@ -653,7 +642,7 @@ Parallel mesh draw command processing and rendering. 封装两个并行任务---
 - DispatchPassSetup: dispatch visible mesh draw command process task, 为渲染准备此pass. 包含生成dynamic mesh draw commands, draw sorting and draw merging.  
 
 - BuildRenderingCommands:  
-sync with setup task, run post-instance culling job to create commands and instance ID lists and optionally vertex instance data. 需要在DispatchPassSetup之后,DispatchDraw之前执行, 但不需要在global instance culling 之前执行.  
+sync with setup task, run post-instance culling job to create commands and instance ID lists and optionally vertex instance data. 需要在DispatchPassSetup之后,DispatchDraw之前执行, 但不能在global instance culling 之前执行.  
   - 若允许TaskContext.InstanceCullingContext才会执行接下来的逻辑.  
   - 调用WaitForMeshPassSetupTask  
   - 调用TaskContext.InstanceCullingContext.BuildRenderingCommands  
@@ -667,7 +656,7 @@ sync with setup task, run post-instance culling job to create commands and insta
     - 根据线程数和最大绘制数量/每个CommandList的最小绘制数(64),取最小任务数量以及计算每个任务的绘制数量.  
     - 遍历每个任务  
       - 分配新的FRHICommandList, 默认设置 graphics pipeline. 设置BeginRenderPass/SetStaticUniformBuffers/SetViewport  
-      - 新建TGraphTask<FDrawVisibleMeshCommandsAnyThreadTask>. 在执行此任务的末期会调用RHICmdList.EndRenderPass/RHICmdList.FinishRecording  
+      - 新建TGraphTask(FDrawVisibleMeshCommandsAnyThreadTask). 在执行此任务的末期会调用RHICmdList.EndRenderPass/RHICmdList.FinishRecording  
       - 调用ParallelCommandListSet->AddParallelCommandList: command list加入QueuedCommandLists,以便追踪并行绘制是否完成.  
   - 若没有并行执行  
     - WaitForMeshPassSetupTask 等待MeshDrawCommands完成构建.  
@@ -693,6 +682,27 @@ r.MeshDrawCommands.AllowOnDemandShaderCreation: 0-总是在渲染线程创建RHI
 - DumpInstancingStats  
 - WaitForMeshPassSetupTask  
 
+##### FInstanceCullingContext
+- SubmitDrawCommands
+传入参数VisibleMeshDrawCommands/PipelineStateSet/OverrideArgs/StartIndex/NumMeshDrawCommands/InstanceFactor/RHICmdList  
+若并行执行CommandListSet, StartIndex/NumMeshDrawCommands这两个参数便是每个Task的起始索引及处理的数量, 否则便是一次性处理所有MeshDrawCommands.  
+根据StartIndex/NumMeshDrawCommands遍历MeshDrawCommands:  
+  根据OverrideArgs(FMeshDrawCommandOverrideArgs), 若bUseIndirect, 设置IndirectArgsByteOffset/IndirectArgsBuffer, 否则设置InstanceFactor.
+  设置InstanceDataByteOffset
+  调用FMeshDrawCommand::SubmitDraw, 调用SubmitDrawBegin/SubmitDrawEnd. [to this](#fmeshdrawcommand)
+
+
+##### FParallelCommandListBindings
+marshal data from RDG pass into the parallel command list set. 从pass parameters struct中获取renderPassInfo和staticUniformBuffers.  
+
+- SetOnCommandList  
+    RHICmdList.BeginRenderPass  
+    RHICmdList.SetStaticUniformBuffers  
+
+- FRHIRenderPassInfo RenderPassInfo  
+- FUniformBufferStaticBindings StaticUniformBuffers  
+
+
 ##### FDrawVisibleMeshCommandsAnyThreadTask
 - RHICmdList  
 - InstanceCullingContext  
@@ -707,14 +717,6 @@ r.MeshDrawCommands.AllowOnDemandShaderCreation: 0-总是在渲染线程创建RHI
 
 ##### FRDGParallelCommandListSet: FParallelCommandListSet
 
-
-##### FInstanceCullingContext
-- SubmitDrawCommands
-传入参数VisibleMeshDrawCommands/PipelineStateSet/OverrideArgs/StartIndex/NumMeshDrawCommands/InstanceFactor/RHICmdList  
-若并行执行CommandListSet, StartIndex/NumMeshDrawCommands这两个参数便是每个Task的起始索引及处理的数量, 否则便是一次性处理所有MeshDrawCommands.  
-根据StartIndex/NumMeshDrawCommands遍历MeshDrawCommands:  
-  根据OverrideArgs设置IndirectArgsByteOffset/IndirectArgsBuffer或者InstanceBuffer/InstanceFactor/InstanceDataByteOffset  
-  调用FMeshDrawCommand::SubmitDraw, 调用SubmitDrawBegin/SubmitDrawEnd  
 
 ##### EDepthDrawingMode
 DDM_None: teted at a higher level.  
@@ -884,11 +886,11 @@ using TInlineAllocator = TSizedInlineAllocator<NumInlineElements, 32, SecondaryA
 template <uint32 NumInlineElements, typename SecondaryAllocator = FDefaultAllocator64>  
 using TInlineAllocator64 = TSizedInlineAllocator<NumInlineElements, 64, SecondaryAllocator>  
 
-
-- FMeshElementCollector& Collector 从各个FPrimitiveSceneProxy classes中收集meshses.  
+FMeshElementCollector& Collector 从各个FPrimitiveSceneProxy classes中收集meshses.  
 TChunkedArray<FMeshBatch> MeshBatchStorage  
 TArray<FSceneView*, TInlineAllocator<2, SceneRenderingAllocator>> Views: 默认在容器内分配两个View的空间  
 
+- FGraphicsPipelineCache  
 
 - FVisibilityTaskData(UE5.4)  
  此类管理特定的scene renderer相关的所有视图的visibility computation相关的所有状态.  
