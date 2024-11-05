@@ -1,5 +1,6 @@
 [延迟渲染管线](https://www.cnblogs.com/timlly/p/14732412.html)
 
+<br>
 
 - [ShaderPrint](#shaderprint)
 - [ShadingEnergyConservation](#shadingenergyconservation)
@@ -19,38 +20,50 @@
 - VirtualShadowCacheManagers  
     删除primitives,更新Instances或Transform, addpass to VirtualSmInvalidateInstancePagesCS in compute shader(VirtualShadowMapCacheManagement.usf).
 - RemovePrimitiveSceneInfos  
-    循环处理待删除的primitives, 配合TypeOffsetTable和PrimitiveSceneProxies, 将每个primitive交换移动到各个数组的末端, 并执行删除.  
-    VelocityData.RemoveFromScene  
-    UnlinkAttachmentGroup  
-    UnlinkLODParentComponent  
-    FlushRuntimeVirtualTexture  
-    Remove from scene  
-    FreeGPUSceneInstances  
-    GPUScene.AddPrimitiveToUpdate(EPrimitiveDirtyState::Removed)  
-    CachedShadowMapData.InvalidateCachedShadow  
-    DistanceFieldSceneData.RemovePrimitive  
-    LumenRemovePrimitive  
-    PersistentPrimitiveIdAllocator.Free  
-    ShadowMapData.StaticShadowSubjectMap  
+    - 循环处理待删除的primitives, 配合TypeOffsetTable和PrimitiveSceneProxies, 将每个primitive交换移动到各个数组的末端, 并执行删除.  
+    - VelocityData.RemoveFromScene  
+    - UnlinkAttachmentGroup  
+    - UnlinkLODParentComponent  
+    - FlushRuntimeVirtualTexture  
+    - Remove from scene:  
+        - delete the list of lights affecting this primitives.  
+        - remove the primitive from the octree.  
+        - 若允许GPUScene, 根据lightmapDataOffset和NumLightmapDataEntries,从场景的lightmap data buffer中删除.  
+        - remove from potential capsule shadow casters (DynamicIndirectCasterPrimitives).  
+        - mark indirect lighting cache buffer dirty, if movable object.  
+        - 若bUpdateStaticDrawLists,  不再需要stati mesh update, deallocate potential OIT dynamic index buffer, remove from staticMeshes/staticMeshRelevances/CachedMeshDrawCommands/CachedNaniteDrawCommands.  
+    - FreeGPUSceneInstances  
+    - <span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::Removed</span>
+    - CachedShadowMapData.InvalidateCachedShadow  
+    - DistanceFieldSceneData.RemovePrimitive  
+    - LumenRemovePrimitive  
+    - PersistentPrimitiveIdAllocator.Free  
+    - ShadowMapData.StaticShadowSubjectMap  
 
 
     ``` c++
     // 删除图元示意图：会依次将被删除的元素交换到相同类型的末尾，直到列表末尾
     // PrimitiveSceneProxies[0,0,0,6,X,6,6,6,2,2,2,2,1,1,1,7,4,8]
-    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,X,2,2,2,1,1,1,7,4,8]
-    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,X,1,1,1,7,4,8]
-    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,1,1,1,X,7,4,8]
-    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,1,1,1,7,X,4,8]
-    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,1,1,1,7,4,X,8]
-    // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,1,1,1,7,4,8,X]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,X,2,2,2,2,1,1,1,7,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,2,2,2,2,X,1,1,1,7,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,2,2,2,2,1,1,1,X,7,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,2,2,2,2,1,1,1,7,X,4,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,2,2,2,2,1,1,1,7,4,X,8]
+    // PrimitiveSceneProxies[0,0,0,6,6,6,6,2,2,2,2,1,1,1,7,4,8,X]
     ```
 
-- AddPrimitiveSceneInfos  
-    扩展数组大小, 循环处理待添加的primitives.  
-    从后往前处理,合并处理TypeHash相同的primitive, 为各个数组(Primitives/PrimitiveTransform/PrimitiveBounds...)添加primitive数据, 为PrimitiveSceneInfo分配PackedIndex和PersistentIndex, 添加入PrimitivesToUpdate, 等待在GPUScene中更新  
-    从TypeOffsetTable中寻找ProxyHash匹配类型, 若遭遇新类型,添加进去.TypeOffsetTable中的每个元素表示ProxyHash相同的primitive数量.  
-    根据TypeOffsetTable,为每个primitive定位相同proxyHash的最后一位索引+1,进行数组元素交换. 遍历直至恢复之前排序,以构成相同ProxyHash的primitive排列在一起的数组.  
+- AddPrimitiveSceneInfos   
+    PersistentPrimitiveIdAllocator(FSpanAllocator)执行合并.
+    扩展各个数组大小(Primitives/PrimitiveTransforms/PrimitiveSceneProxies/PrimitiveBounds...)  
+    循环处理待添加的primitives
+    从后往前处理,合并处理TypeHash相同的primitive, 各个PrimitiveSceneProxy的派生类的TypeHash相同(采用静态变量的地址).  
+    为各个数组(Primitives/PrimitiveTransform/PrimitiveBounds...)添加primitive数据.  
+    为PrimitiveSceneInfo分配PackedIndex(PrimitiveSceneProxies的索引)和PersistentIndex(由PersistentPrimitiveIdAllocator分配). PersistentPrimitiveIdToIndexMap记录PersistentIndex到PackedIndex的映射.  
+    <span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::AddedMask</span>  
 
+    从TypeOffsetTable中寻找Proxy的TypeHash匹配类型, 若遭遇新类型,添加进去.TypeOffsetTable中的每个元素表示TypeHash相同的primitive数量.  
+    根据TypeOffsetTable,为每个新添加的primitive在各个数组中排序. 每次和相同类型的末尾交换,以构成相同TypeHash的primitive排列在一起的数组.  
+    <span style="color: green;">对于primitiveIds(packedIndex)交换位置的,需要通知GPUScene, 添加入PrimitivesToUpdate, 且交换PrimitiveDirtyState.</span>  
 
     ``` c++
     // 增加图元示意图：先将被增加的元素放置列表末尾，然后依次和相同类型的末尾交换。
@@ -80,7 +93,10 @@
 - UpdatePrimitiveTransform  
     WorldBounds/LocalBounds/LocalToWorld/AttachmentRootPosition  
     RemoveFromScene: remove the primitive from the scene at its old location. 若是update static draw list, 才会需要删除对应的cache mesh draw command.  
-    GPUScene.AddPrimitiveToUpdate  
+    veloityData updateTransform  
+    update primitive transform  
+    mark indirect lighting cache buffer dirty  
+    <span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::ChangedTransform</span>  
     DistanceFieldSceneData/lumen update primitive  
     AddToScene: Re-add the primitive to the scene with the new transform  
 

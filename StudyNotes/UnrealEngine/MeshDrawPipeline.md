@@ -29,7 +29,7 @@
         - [MaterialDomain](#materialdomain)
         - [MeshPass](#meshpass)
 - [Optimal](#optimal)
-        - [Debug Infos](#debug-infos)
+- [Debug Infos](#debug-infos)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
@@ -144,7 +144,7 @@
 - const FIndexBuffer* IndexBuffer  
 
 - FMeshBatchElementDynamicIndexBuffer DynamicIndexBuffer  
-  针对特定view, 用于动态排序三角形的对象.(如 per-object order-independent-transparency).  
+  针对特定view, 用于动态排序三角形的对象.(如 per-object order-independent-transparency). can used for OITSceneData, sortedTriangles or sortedPixels.
 
 - uint32* InstanceRuns/FSplineMeshSceneProxy* SplineMeshSceneProxy  
   当没有SplineProxy, Instance runs, 由NumInstances指定数量. Run structure是[StartInstanceIndex, EndInstanceIndex]  
@@ -922,7 +922,7 @@ TArray<FSceneView*, TInlineAllocator<2, SceneRenderingAllocator>> Views: 默认�
 
 
 
-##### Debug Infos
+# Debug Infos
 
 r.MeshDrawCommands.LogDynamicInstancingStats = "1"  
 LogRenderer: Instancing stats for ShadowDepth WholeScene split0  
@@ -967,35 +967,36 @@ LogRenderer:    Largest 1
 LogRenderer:    1.0 Dynamic Instancing draw call reduction factor  
 
 
+<br>
 
 
-Cmd: r.MeshDrawCommands.LogMeshDrawCommandMemoryStats 1
-r.MeshDrawCommands.LogMeshDrawCommandMemoryStats = "1"
-LogRenderer: DepthPass: 548.3Kb for 1674 CachedMeshDrawCommands
-LogRenderer:      avg 4.0 bytes PSO
-LogRenderer:      avg 120.0 bytes ShaderBindingInline
-LogRenderer:      avg 7.4 bytes ShaderBindingHeap
-LogRenderer:      avg 64.0 bytes VertexStreamsInline
-LogRenderer:      avg 96.0 bytes DebugData
-LogRenderer:      avg 28.0 bytes DrawCommandParameters
-LogRenderer:      avg 16.0 bytes Other
-LogRenderer: BasePass: 561.8Kb for 1707 CachedMeshDrawCommands
-LogRenderer:      avg 4.0 bytes PSO
-LogRenderer:      avg 120.0 bytes ShaderBindingInline
-LogRenderer:      avg 9.0 bytes ShaderBindingHeap
-LogRenderer:      avg 64.0 bytes VertexStreamsInline
-LogRenderer:      avg 96.0 bytes DebugData
-LogRenderer:      avg 28.0 bytes DrawCommandParameters
-LogRenderer:      avg 16.0 bytes Other
-LogRenderer: CSMShadowDepth: 547.2Kb for 1668 CachedMeshDrawCommands
-LogRenderer: Velocity: 1.3Kb for 4 CachedMeshDrawCommands
-LogRenderer: VirtualTexture: 853.3Kb for 2664 CachedMeshDrawCommands
-LogRenderer: LumenCardCapture: 562.8Kb for 1710 CachedMeshDrawCommands
-LogRenderer: HitProxy: 730.8Kb for 2220 CachedMeshDrawCommands
-LogRenderer: HitProxyOpaqueOnly: 730.8Kb for 2220 CachedMeshDrawCommands
-LogRenderer: sizeof(FMeshDrawCommand) 328
-LogRenderer: Total cached MeshDrawCommands 6.073Mb
-LogRenderer: Primitive StaticMeshCommandInfos 727.0Kb
-LogRenderer: GPUScene CPU structures 0.0Kb
-LogRenderer: PSO persistent Id table 90.0Kb 453 elements
-LogRenderer: PSO one frame Id 15.7Kb
+Cmd: r.MeshDrawCommands.LogMeshDrawCommandMemoryStats 1  
+r.MeshDrawCommands.LogMeshDrawCommandMemoryStats = "1"  
+LogRenderer: DepthPass: 548.3Kb for 1674 CachedMeshDrawCommands  
+LogRenderer:      avg 4.0 bytes PSO  
+LogRenderer:      avg 120.0 bytes ShaderBindingInline  
+LogRenderer:      avg 7.4 bytes ShaderBindingHeap  
+LogRenderer:      avg 64.0 bytes VertexStreamsInline  
+LogRenderer:      avg 96.0 bytes DebugData  
+LogRenderer:      avg 28.0 bytes DrawCommandParameters  
+LogRenderer:      avg 16.0 bytes Other  
+LogRenderer: BasePass: 561.8Kb for 1707 CachedMeshDrawCommands  
+LogRenderer:      avg 4.0 bytes PSO  
+LogRenderer:      avg 120.0 bytes ShaderBindingInline  
+LogRenderer:      avg 9.0 bytes ShaderBindingHeap  
+LogRenderer:      avg 64.0 bytes VertexStreamsInline  
+LogRenderer:      avg 96.0 bytes DebugData  
+LogRenderer:      avg 28.0 bytes DrawCommandParameters  
+LogRenderer:      avg 16.0 bytes Other  
+LogRenderer: CSMShadowDepth: 547.2Kb for 1668 CachedMeshDrawCommands  
+LogRenderer: Velocity: 1.3Kb for 4 CachedMeshDrawCommands  
+LogRenderer: VirtualTexture: 853.3Kb for 2664 CachedMeshDrawCommands  
+LogRenderer: LumenCardCapture: 562.8Kb for 1710 CachedMeshDrawCommands  
+LogRenderer: HitProxy: 730.8Kb for 2220 CachedMeshDrawCommands  
+LogRenderer: HitProxyOpaqueOnly: 730.8Kb for 2220 CachedMeshDrawCommands  
+LogRenderer: sizeof(FMeshDrawCommand) 328  
+LogRenderer: Total cached MeshDrawCommands 6.073Mb  
+LogRenderer: Primitive StaticMeshCommandInfos 727.0Kb  
+LogRenderer: GPUScene CPU structures 0.0Kb  
+LogRenderer: PSO persistent Id table 90.0Kb 453 elements  
+LogRenderer: PSO one frame Id 15.7Kb  
