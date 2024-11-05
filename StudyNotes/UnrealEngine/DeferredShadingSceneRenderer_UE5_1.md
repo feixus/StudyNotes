@@ -106,10 +106,10 @@
     FStaticMeshSceneProxy(static mesh)/FSceneProxy(nanite resources)/FNaniteGeometryCollectionSceneProxy: static elements总是使用proxy primitive uninform buffer, 而不是static draw lists.  
     更新proxy data.  
     标记IndirectLightingCacheBuffer Dirty  
-    若instance数量有增加或减少(cmdBuffer), 重新分配GPUSceneInstance, 重新加入DistanceFieldSceneData/Lumen scene data. 否则仅AddPrimitiveToUpdate/distance field scene data update/lumen scene data update.  
-    final re-add the primitive to the scene with new transform.  
+    若instance数量有增加或减少(cmdBuffer), 重新分配GPUSceneInstance, 重新加入DistanceFieldSceneData/Lumen scene data. 否则仅更新distance field scene data/lumen scene data, 以及<span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::ChangedAll</span>.  
+    final re-add the primitive to the scene with new transform. update static draw list或者CmdBuffer有增减的需要经历FPrimitiveSceneInfo::AddStaticMeshes(DrawStaticElements/StaticMesh/CacheMeshDrawCommands).  
 
-- UpdatedAttachmentRoots/UpdatedCustomPrimitiveParams/DistanceFieldSceneDataUpdates/UpdatedOcclusionBoundsSlacks  
+- UpdatedAttachmentRoots/UpdatedCustomPrimitiveParams/DistanceFieldSceneDataUpdates/UpdatedPrimitiveOcclusionBounds.  
 
 - DeletePrimitiveSceneInfo  
 
@@ -138,7 +138,7 @@
         更新instances, 并行执行InstanceUpdates.UpdateBatches次, 构建每个primitive的每个instance(FInstanceSceneShaderData),添加入TaskContext.  InstanceSceneUploader. 若存在PayloadData(InstancePayloadDataStride), 经由InstanceFlags和PayloadPosition, 为TaskContext.InstancePayloadUploader按序添加数据(HIERARCHY_OFFSET/LOCAL_BOUNDS/EDITOR_DATA/LIGHTSHADOW_UV_BIAS/CUSTOM_DATA).  
         更新instance BVH(FBVHNode)  
         更新lightmap, 仅scene primitives,即静态图元才有light cache data.  
-    - AddCommandListSetupTask: Task加入ParallelSetupEvents,等待执行.  
+    - AddCommandListSetupTask: Task加入ParallelSetupEvents,异步执行.  
     - PrimitiveUploadBuffer/InstancePayloadUploadBuffer/InstanceSceneUploadBuffer/InstanceBVHUploadBuffer/LightmapUploadBuffer/NaniteMaterialUploaders 各自运行一个scatter upload pass(FRDGScatterCopyCS).  
     - FRDGAsyncScatterUploadBuffer 构造FRDGScatterUploader  
         FRDGAsyncScatterUploadBuffer::Begin: 设置ScatterBytes/UploadBytes, 经由rdg buffer desc为ScatterBuffer/UploadBuffer分配rdg buffer.  
