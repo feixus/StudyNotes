@@ -86,7 +86,9 @@
     Global uniform buffer  
 
     <br>
-    ![alt text](images/rdg-depend.png)  
+    
+    ![alt text](images/rdg-depend.png)
+  
     <br>
 
 
