@@ -115,31 +115,53 @@
 
 
 # UpdateGPUScene  
-- 若GGPUSceneUploadEveryFrame(用于调试)或者bUpdateAllPrimitives(shift scene data), 需要更新所有primitives.  
-- 过滤PrimitivesToUpdate中已删除的primitive.  
-- 为primitivesToUpdate/PrimitiveDirtyState 使用rdg builder 分配对象(FUploadDataSourceAdapterScenePrimitives), 兼容scene primitves和dynamic primitives, 用于上传primitive data 的 UploadGeneral function. dynamic primitives是在initViews期间收集的.  
-- UpdateBufferState(GPU-Scene使用的Buffers)  
-  设置BufferState:  
-    PrimitiveBuffer: 匹配FPrimitiveUniformShaderParameters, FPrimitiveSceneData(SceneData.ush)  
-    InstanceSceneDataBuffer: 匹配FInstanceSceneShaderData, FInstanceSceneData(sceneData.ush), (struct of arrays).  
-    InstancePayloadDataBuffer: 匹配FVector4f.  
-    InstanceBVHBuffer: 匹配FBVHNode.  
-    LightmapDataBuffer: 匹配FLightmapSceneShaderData, FPrecomputedLightingUniformParameters  
-  设置ShaderParameters(FGPUSceneResourceParameters), 通过rdg builder为各个buffer创建SRV descriptor  
+- FGPUScene::Update  主要更新场景中的primitives.  
+  - 若GGPUSceneUploadEveryFrame(用于调试)或者bUpdateAllPrimitives(shift scene data), 需要更新所有primitives.  
+  - 过滤PrimitivesToUpdate中已删除的primitive.  
+  - 为primitivesToUpdate/PrimitiveDirtyState 使用rdg builder 分配对象(FUploadDataSourceAdapterScenePrimitives), 兼容scene primitves和dynamic primitives(存储方式不同), 用于上传primitive data 的 UploadGeneral function. scene primitves包含如static mesh/skeletal mesh/particle...  
+  - UpdateBufferState(GPU-Scene使用的Buffers)  
+    设置BufferState:  
+      PrimitiveBuffer: 匹配FPrimitiveUniformShaderParameters, FPrimitiveSceneData(SceneData.ush)  
+      InstanceSceneDataBuffer: 匹配FInstanceSceneShaderData, FInstanceSceneData(sceneData.ush), (struct of arrays).  
+      InstancePayloadDataBuffer: 匹配FVector4f.  
+      InstanceBVHBuffer: 匹配FBVHNode.  
+      LightmapDataBuffer: 匹配FLightmapSceneShaderData, FPrecomputedLightingUniformParameters  
+    设置ShaderParameters(FGPUSceneResourceParameters), 通过rdg builder为各个buffer创建SRV descriptor  
 
-- run a pass that clears any instances(sets ID to invalid) that need it. (FGPUSceneSetInstancePrimitiveIdCS). 即将InstanceRangesToClear范围内的数据primitive id 设置为无效的  
-- 抽出仅需要更新primitive id的instances, 即在PrimitiveDirtyState对应元素标记为EPrimitiveDirtyState::ChangedId. 添加一个pass. (FGPUSceneSetInstancePrimitiveIdCS)  
-- 重置PrimitivesToUpdate,PrimitiveDirtyState  
-- UploadGeneral (此处针对FUploadDataSourceAdapterScenePrimitives)  
-    - 分配对象TaskContext(FTaskContext), 构造PrimitiveUploadInfos/PrimitiveUploader/InstancePayloadUploader/InstanceSceneUploader/InstanceBVHUploader/LightmapUploader/NaniteMaterialUploaders, 每个元素都是FRDGScatterUploader结构.  
-    - 构建Task(TaskLambda), lock buffer.  
-        构造InstanceUpdates(FInstanceBatcher), 遍历PrimitiveData, 计算Batches及BatchItems(ItemIndex/FirstInstance/NumInstances)  
-        更新primitives, 并行执行TaskContext.NumPrimitiveDataUploads次, 将primitive scene data填充至TaskContext.PrimitiveUploader.  
-        更新instances, 并行执行InstanceUpdates.UpdateBatches次, 构建每个primitive的每个instance(FInstanceSceneShaderData),添加入TaskContext.  InstanceSceneUploader. 若存在PayloadData(InstancePayloadDataStride), 经由InstanceFlags和PayloadPosition, 为TaskContext.InstancePayloadUploader按序添加数据(HIERARCHY_OFFSET/LOCAL_BOUNDS/EDITOR_DATA/LIGHTSHADOW_UV_BIAS/CUSTOM_DATA).  
-        更新instance BVH(FBVHNode)  
-        更新lightmap, 仅scene primitives,即静态图元才有light cache data.  
-    - AddCommandListSetupTask: Task加入ParallelSetupEvents,异步执行.  
-    - PrimitiveUploadBuffer/InstancePayloadUploadBuffer/InstanceSceneUploadBuffer/InstanceBVHUploadBuffer/LightmapUploadBuffer/NaniteMaterialUploaders 各自运行一个scatter upload pass(FRDGScatterCopyCS).  
-    - FRDGAsyncScatterUploadBuffer 构造FRDGScatterUploader  
-        FRDGAsyncScatterUploadBuffer::Begin: 设置ScatterBytes/UploadBytes, 经由rdg buffer desc为ScatterBuffer/UploadBuffer分配rdg buffer.  
-        FRDGAsyncScatterUploadBuffer::End: 构造FRDGScatterCopyCS::FParameters, 根据不同资源类型(ByteBuffer/StructedBuffer/Buffer/Texture),设置不同数据成员. 获取FRDGScatterCopyCS, 根据ComputeConfig.NumLoop, 执行多次scatter upload pass.
+  - run a pass that clears any instances(sets ID to invalid) that need it. (FGPUSceneSetInstancePrimitiveIdCS). 即将InstanceRangesToClear范围内的数据primitive id 设置为无效的  
+  - 抽出仅需要更新primitive id的instances, 即在PrimitiveDirtyState对应元素标记为EPrimitiveDirtyState::ChangedId. 添加一个pass. (FGPUSceneSetInstancePrimitiveIdCS)  
+  - 重置PrimitivesToUpdate,PrimitiveDirtyState  
+  - UploadGeneral (此处针对FUploadDataSourceAdapterScenePrimitives)  
+      - 分配对象TaskContext(FTaskContext), 构造PrimitiveUploadInfos/PrimitiveUploader/InstancePayloadUploader/InstanceSceneUploader/InstanceBVHUploader/LightmapUploader/NaniteMaterialUploaders, 每个元素都是FRDGScatterUploader结构.启动FRDGAsyncScatterUploadBuffer::Begin.  
+      - 构建Task(TaskLambda), lock buffer.  
+          构造InstanceUpdates(FInstanceBatcher), 遍历PrimitiveData, 计算Batches及BatchItems(ItemIndex/FirstInstance/NumInstances)  
+          更新primitives, 并行执行TaskContext.NumPrimitiveDataUploads次, 将primitive scene data填充至TaskContext.PrimitiveUploader.  
+          更新instances, 并行执行InstanceUpdates.UpdateBatches次, 构建每个primitive的每个instance(FInstanceSceneShaderData),添加入TaskContext.  InstanceSceneUploader. 若存在PayloadData(InstancePayloadDataStride), 经由InstanceFlags和PayloadPosition, 为TaskContext.InstancePayloadUploader按序添加数据(HIERARCHY_OFFSET/LOCAL_BOUNDS/EDITOR_DATA/LIGHTSHADOW_UV_BIAS/CUSTOM_DATA).  
+          更新instance BVH(FBVHNode)  
+          更新lightmap, 仅scene primitives,即静态图元才有light cache data.  
+      - FRDGBuilder::AddCommandListSetupTask: Task加入ParallelSetupEvents,异步执行.    
+      - 启动FRDGAsyncScatterUploadBuffer::End(PrimitiveUploadBuffer/InstancePayloadUploader/InstanceBVHUploader/LightmapUploader/NaniteMaterialUploaders), PrimitiveUploadBuffer/InstancePayloadUploadBuffer/InstanceSceneUploadBuffer/InstanceBVHUploadBuffer/LightmapUploadBuffer/NaniteMaterialUploaders 各自运行一个scatter upload pass(FRDGScatterCopyCS, ByteBuffer.usf:ScatterCopyCS).  
+      - FRDGAsyncScatterUploadBuffer 构造FRDGScatterUploader  
+          FRDGAsyncScatterUploadBuffer::Begin: 设置ScatterBytes/UploadBytes, 经由rdg buffer desc为ScatterBuffer/UploadBuffer分配rdg buffer.  
+          FRDGAsyncScatterUploadBuffer::End: 构造FRDGScatterCopyCS::FParameters, 根据不同资源类型(ByteBuffer/StructedBuffer/Buffer/Texture),设置不同数据成员. 获取FRDGScatterCopyCS, 根据ComputeConfig.NumLoop, 执行多次scatter upload pass.  
+
+  - 将InstanceSceneDataBuffer/InstancePayloadDataBuffer/PrimitiveBuffer/LightmapDataBuffer/InstanceBVHBuffer 添加入 ExternalAccessQueue(FRDGExternalAccessQueue), 等待提交到RDG, 以作为外部可访问资源.  
+
+- FGPUScene::UploadDynamicPrimitiveShaderDataForView  上传来自view.DynamicPrimitiveCollector的primitives  
+    - 获取View.DynamicPrimitiveCollector(FGPUScenePrimitiveCollector).  
+    - FGPUScenePrimitiveCollector::Commit: GPUScene分配的范围,为上传入队数据.此方法调用后,不再允许添加新的,仅在FGPUScene::Begin/EndRender block内允许. 赋值于 FGPUScenePrimitiveCollector::PrimitiveIdRange, 这便是GPUScene专门为dynamic primitives分配的范围.  
+    - 获取FGPUScenePrimitiveCollector::UploadData, 一次性上传.  
+        构造FUploadDataSourceAdapterDynamicPrimitives  
+        更新BufferState  
+        FGPUScene::UseInternalAccessMode, 此BufferState内的所有数据通知GraphBuilder,设置为InternalAccessMode.  
+        run a pass that clears (Sets ID to invalid) any instances that need it.  
+        UploadGeneral: 针对(FUploadDataSourceAdapterDynamicPrimitives)  
+
+    - update view uniform buffer(FViewUniformShaderParameters): primitiveSceneData,LightmapSceneData,InstancePayloadData, InstanceSceneData, InstanceSceeDataSOAStride.  
+    - 执行任意instance data GPU writer回调. 若存在FUploadData::GPUWritePrimitives, 遍历每个PrimitiveIndex,判别任意GPU writers是即刻执行,还是延迟到稍后的GPU write pass. 将此BufferState数据设置为ExternalAccessMode,若ExternalAccessQueue已存在此buffer会忽略.  
+
+- FGPUScene::DebugRender 
+    启动r.GPUScene.DebugMode. 根据FInstanceSceneData的LocalBoundsCenter和LocalBoundsExtent绘制 scene primitives的范围盒, 可以将选中的scene primitives打印在屏幕上(primitiveId,instanceId,shadow,velocity,customData,DynamicData,name).  
+    
+
+

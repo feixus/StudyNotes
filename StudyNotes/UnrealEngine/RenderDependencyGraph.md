@@ -1,14 +1,14 @@
 
 
-[RDG 101 A Crash Course](https://epicgames.ent.box.com/s/ul1h44ozs0t2850ug0hrohlzm53kxwrz)
-[github staticJPL RDG](https://github.com/staticJPL/Render-Dependency-Graph-Documentation/blob/main/Render%20Dependency%20Graph%20(RDG).md)
-[Frame Graph](https://www.slideshare.net/DICEStudio/framegraph-extensible-rendering-architecture-in-frostbite)
-[Rendering Passes](https://unrealartoptimization.github.io/book/profiling/passes/)
-[Frame Graph](https://zhuanlan.zhihu.com/p/639001043)
-[RDG UE5.4](https://dev.epicgames.com/documentation/en-us/unreal-engine/render-dependency-graph-in-unreal-engine)
-[RDG 0-0](https://www.cnblogs.com/timlly/p/15217090.html)
-[CUDA](https://developer.nvidia.com/blog/cooperative-groups)
-[SIMT](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#simt-architecture)
+[RDG 101 A Crash Course](https://epicgames.ent.box.com/s/ul1h44ozs0t2850ug0hrohlzm53kxwrz)  
+[github staticJPL RDG](https://github.com/staticJPL/Render-Dependency-Graph-Documentation/blob/main/Render%20Dependency%20Graph%20(RDG).md)  
+[Frame Graph](https://www.slideshare.net/DICEStudio/framegraph-extensible-rendering-architecture-in-frostbite)  
+[Rendering Passes](https://unrealartoptimization.github.io/book/profiling/passes/)  
+[Frame Graph](https://zhuanlan.zhihu.com/p/639001043)  
+[RDG UE5.4](https://dev.epicgames.com/documentation/en-us/unreal-engine/render-dependency-graph-in-unreal-engine)  
+[RDG 0-0](https://www.cnblogs.com/timlly/p/15217090.html)  
+[CUDA](https://developer.nvidia.com/blog/cooperative-groups)  
+[SIMT](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#simt-architecture)  
 
 <br>
 
@@ -27,7 +27,7 @@
     - [FRDGBuilder](#frdgbuilder)
     - [RDG 机制](#rdg-机制)
 
-<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>  
 
 
 <br>
@@ -86,7 +86,9 @@
     Global uniform buffer  
 
     <br>
+
     ![alt text](images/rdg-depend.png)  
+
     <br>
 
 
@@ -588,8 +590,8 @@ latency hiding: warps可以通过调度,当某个warp在等待内存访问时,�
   - ConvertToExternalTexture: 对于graph创建的资源, 强制即刻分配底层的pooled resource, 快速提升此资源为external resource. 此举会增加内存压力, 但允许使用GetPooled{Texture, Buffer}查询pooled resource. 主要用于帮助将代码移植到RDG.
   - GetPooledTexture/GetPooledBuffer: 为底层的pooled resource执行即刻查询. 仅允许external或extracted resources.
   - SetTextureAccessFinal/SetBufferAccessFinal: 仅external/extracted, 设置EpilogueAccess, 在图的结尾处执行.
-  - UseExternalAccessMode: 为所有接下来的passes配置资源为external access模式, 或直到UseInternalAccessMode被调用. 仅允许read-only access状态. 当处于external access mode, 在随后的RDG passes中直接访问底层的RHI resource是安全的. 此方法仅允许注册或外部转换资源. 此方法确保RDG可将资源转换为所有随后的passes想要的state, 只要此资源保持externally accessible.
-  - UseInternalAccessMode
+  - UseExternalAccessMode: 为所有接下来的passes的external access配置资源, 或直到UseInternalAccessMode被调用. 仅允许read-only access状态. 当处于external access mode, 在随后的RDG passes中直接访问底层的RHI resource是安全的. 此方法仅允许注册或外部转换资源. 此方法确保RDG可将资源转换(transition)为所有随后的passes想要的state, 只要此资源保持externally accessible.
+  - UseInternalAccessMode: 在调用UseExternalAccessMode之后,还原追踪的资源为InternalAccessMode. 可安全的调用此方法,即使external access mode被禁止(no-op). 在调用此方法后,任何添加的pass访问底层的RHI resource都是无效的.  
   - RemoveUnusedTextureWarning/RemoveUnusedBufferWarning: 对于pass生产的资源从不使用或提取,标记不发出unused警告.
   
   - Execute: 执行queued passes, 管理render targets(RHI RenderPasses)的设置, resource transition和queued texture extraction
@@ -619,7 +621,8 @@ latency hiding: warps可以通过调度,当某个warp在等待内存访问时,�
   - ParallelExecuteEvents: 所有激活的并行执行任务的数组
   - ParallelSetupEvents: 所有用户请求的任务事件.
   - EpilogueResourceAccesses: 追踪用于资源的final access以为了调用SetTrackedAccess.
-  - AccessModeQueue/ExternalAccessResources
+  - AccessModeQueue: 收集externalAccessMode/internalAccessMode的resources, 等待FlushAccessModeQueue.  
+  - ExternalAccessResources: 收集EAccessMode::External的resources. 在FRDGBuilder::Execute执行时, 会转换为UseInternalAccessMode().  
   - ScratchTextureState: 用于中间操作的纹理状态. 这里持有以避免re-allocating.
   - AsyncComputeBudgetScope/AsyncComputeBudgetState
   - RHICmdListBufferUploads

@@ -4,6 +4,7 @@
         - [FMeshBatchElement](#fmeshbatchelement)
         - [FMeshBatch](#fmeshbatch)
         - [FMeshElementCollector](#fmeshelementcollector)
+        - [FGPUScenePrimitiveCollector](#fgpusceneprimitivecollector)
     - [2. FMeshBatch -\> FMeshDrawCommand](#2-fmeshbatch---fmeshdrawcommand)
         - [FMeshDrawCommand](#fmeshdrawcommand)
         - [FMeshDrawCommandPassSetupTask](#fmeshdrawcommandpasssetuptask)
@@ -290,6 +291,9 @@
 - TArray<TFunction<void()>, SceneRenderingAllocator> ParallelTasks  
 - TArray<FGPUScenePrimitiveCollector*, TInlineAllocator<2, SceneRenderingAllocator>> DynamicPrimitiveCollectorPerView  
   追踪动态图元数据,用于为每个view上传到GPU Scene  
+
+##### FGPUScenePrimitiveCollector
+用于管理指定view的dynamic primitives, 数据在InitViews期间收集,然后提交到GPU-Scene.一旦提交,the range of indices便有效,可用于计算PrimitiveIds.  
 
 
 ### 2. FMeshBatch -> FMeshDrawCommand
