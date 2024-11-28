@@ -5,7 +5,9 @@
 - [ShaderPrint](#shaderprint)
 - [ShadingEnergyConservation](#shadingenergyconservation)
 - [FScene::UpdateAllPrimitiveSceneInfos](#fsceneupdateallprimitivesceneinfos)
+- [FDeferredShadingSceneRenderer::InitViews](#fdeferredshadingscenerendererinitviews)
 - [UpdateGPUScene](#updategpuscene)
+        - [FInstanceCullingManager](#finstancecullingmanager)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
@@ -103,7 +105,8 @@
 - UpdatePrimitiveInstances  
     PrimitiveSceneProxy/CmdBuffer/WorldBounds/LocalBounds/StaticMeshBounds  
     需更新StaticDrawLists的(mesh draw command 存储在FScene::CachedMeshDrawCommandStateBuckets/CachedDrawLists)或者instance count有增加或减少(CmdBuffer), cached mesh draw commands才需要更新. 即RemoveFromScene(true). 更新意味着cached mesh draw command需要删除再添加. 其他的是RemoveFromScene(false).  
-    FStaticMeshSceneProxy(static mesh)/FSceneProxy(nanite resources)/FNaniteGeometryCollectionSceneProxy: static elements总是使用proxy primitive uninform buffer, 而不是static draw lists.  
+    FStaticMeshSceneProxy(static mesh)/FLandscapeComponentSceneProxy等static elements存储在static draw lists.  
+
     更新proxy data.  
     标记IndirectLightingCacheBuffer Dirty  
     若instance数量有增加或减少(cmdBuffer), 重新分配GPUSceneInstance, 重新加入DistanceFieldSceneData/Lumen scene data. 否则仅更新distance field scene data/lumen scene data, 以及<span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::ChangedAll</span>.  
@@ -114,11 +117,16 @@
 - DeletePrimitiveSceneInfo  
 
 
+# FDeferredShadingSceneRenderer::InitViews
+
+
+
+
 # UpdateGPUScene  
 - FGPUScene::Update  主要更新场景中的primitives.  
   - 若GGPUSceneUploadEveryFrame(用于调试)或者bUpdateAllPrimitives(shift scene data), 需要更新所有primitives.  
   - 过滤PrimitivesToUpdate中已删除的primitive.  
-  - 为primitivesToUpdate/PrimitiveDirtyState 使用rdg builder 分配对象(FUploadDataSourceAdapterScenePrimitives), 兼容scene primitves和dynamic primitives(存储方式不同), 用于上传primitive data 的 UploadGeneral function. scene primitves包含如static mesh/skeletal mesh/particle...  
+  - 为primitivesToUpdate/PrimitiveDirtyState 使用rdg builder 分配对象(FUploadDataSourceAdapterScenePrimitives), 兼容scene primitves和dynamic primitives of view(存储方式不同), 用于上传primitive data 的 UploadGeneral function. scene primitves包含如static mesh/skeletal mesh/particle...  
   - UpdateBufferState(GPU-Scene使用的Buffers)  
     设置BufferState:  
       PrimitiveBuffer: 匹配FPrimitiveUniformShaderParameters, FPrimitiveSceneData(SceneData.ush)  
@@ -136,10 +144,10 @@
       - 构建Task(TaskLambda), lock buffer.  
           构造InstanceUpdates(FInstanceBatcher), 遍历PrimitiveData, 计算Batches及BatchItems(ItemIndex/FirstInstance/NumInstances)  
           更新primitives, 并行执行TaskContext.NumPrimitiveDataUploads次, 将primitive scene data填充至TaskContext.PrimitiveUploader.  
-          更新instances, 并行执行InstanceUpdates.UpdateBatches次, 构建每个primitive的每个instance(FInstanceSceneShaderData),添加入TaskContext.  InstanceSceneUploader. 若存在PayloadData(InstancePayloadDataStride), 经由InstanceFlags和PayloadPosition, 为TaskContext.InstancePayloadUploader按序添加数据(HIERARCHY_OFFSET/LOCAL_BOUNDS/EDITOR_DATA/LIGHTSHADOW_UV_BIAS/CUSTOM_DATA).  
+          更新instances, 并行执行InstanceUpdates.UpdateBatches次, 构建每个primitive的每个instance(FInstanceSceneShaderData),添加入TaskContext.InstanceSceneUploader. 若存在PayloadData(InstancePayloadDataStride), 经由InstanceFlags和PayloadPosition, 为TaskContext.InstancePayloadUploader按序添加数据(HIERARCHY_OFFSET/LOCAL_BOUNDS/EDITOR_DATA/LIGHTSHADOW_UV_BIAS/CUSTOM_DATA).  
           更新instance BVH(FBVHNode)  
           更新lightmap, 仅scene primitives,即静态图元才有light cache data.  
-      - FRDGBuilder::AddCommandListSetupTask: Task加入ParallelSetupEvents,异步执行.    
+      - FRDGBuilder::AddCommandListSetupTask: Task加入ParallelSetupEvents待执行.    
       - 启动FRDGAsyncScatterUploadBuffer::End(PrimitiveUploadBuffer/InstancePayloadUploader/InstanceBVHUploader/LightmapUploader/NaniteMaterialUploaders), PrimitiveUploadBuffer/InstancePayloadUploadBuffer/InstanceSceneUploadBuffer/InstanceBVHUploadBuffer/LightmapUploadBuffer/NaniteMaterialUploaders 各自运行一个scatter upload pass(FRDGScatterCopyCS, ByteBuffer.usf:ScatterCopyCS).  
       - FRDGAsyncScatterUploadBuffer 构造FRDGScatterUploader  
           FRDGAsyncScatterUploadBuffer::Begin: 设置ScatterBytes/UploadBytes, 经由rdg buffer desc为ScatterBuffer/UploadBuffer分配rdg buffer.  
@@ -162,6 +170,17 @@
 
 - FGPUScene::DebugRender 
     启动r.GPUScene.DebugMode. 根据FInstanceSceneData的LocalBoundsCenter和LocalBoundsExtent绘制 scene primitives的范围盒, 可以将选中的scene primitives打印在屏幕上(primitiveId,instanceId,shadow,velocity,customData,DynamicData,name).  
-    
+
+- FInstanceCullingManager::BeginDeferredCulling    
+
+- FScene::UpdatePhysicsField (Physics Field)
+
+##### FInstanceCullingManager
+  为所有instanced draws管理indirect arguments和culling jobs的分配(使用GPU Scene culling).  
+
+- BeginDeferredCulling  
+    添加一个deferred, batched, gpu culling pass. 每个batch表达来自一个mesh pass的BuildRenderingCommands调用. 当完成main render setup及调用BuildRenderingCommands时收集的Batches, 会在RDG执行或Drain被调用时处理.  
+    build rendering commands中的views referenced需要在BeginDeferredCulling之前注册. 调用FlushRegisteredViews来上传registered views至GPU.  
+
 
 
