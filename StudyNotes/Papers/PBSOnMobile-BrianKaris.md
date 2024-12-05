@@ -56,11 +56,11 @@ https://cdn2.unrealengine.com/Resources/files/GDC2014_Next_Generation_Mobile_Ren
 
   some games optimize for no specular but that isn't energy conserving. we instead have a "Full rough" flag which sets Roughness=1 and optimizes out constant factors:
 
-  EnvBRDFApprox( SpecularColor, 1, 1) == SpecularColor * 0.4524 - 0.0024
+  EnvBRDFApprox( SpecularColor, 1, 1) = SpecularColor * 0.4524 - 0.0024
 
   from there i make the simplification:
 
-  DiffuseColor += SpecularColor * 0.45
+  DiffuseColor += SpecularColor * 0.45  
   SpecularColor = 0
 
   we only use the flag on select objects that really need the extra performance.

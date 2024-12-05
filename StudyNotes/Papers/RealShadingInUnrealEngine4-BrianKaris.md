@@ -1,4 +1,5 @@
 [UE4 PBR -- Brian Karis -- 2013](https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf)
+<!-- http://blog.selfshadow.com/publications/s2013-shading-course/ -->
 
 # Real Shading in UE4
 
@@ -34,11 +35,11 @@
 
   - Specular D
   
-    normal distribution function(NDF)采用Disney选择的 GGX/Trowbridge-Reitz, 与Blinn-Phong相比, 额外费用相当小. 外观有很长的拖尾(tail). 也采纳Disnery的重新参数化 ${\alpha} = {Roughness^2} $.
+    normal distribution function(NDF)采用Disney选择的 GGX/Trowbridge-Reitz, 与Blinn-Phong相比, 额外费用相当小. 外观有很长的拖尾(tail). 也采纳Disney的重新参数化 ${\alpha} = {Roughness^2} $.
 
     $$D(h) = \frac{\alpha^2}{\pi((n\cdot h)^2(\alpha^2 - 1) + 1)^2} \qquad (3) $$
     <br>
-
+ 
   - Specular G
   
     specular geometric attenuation选择了Schlick model. 但 $k = \alpha / 2$,以更好的适应GGX的Smith model. 在此修改下, Schlick model可在 $\alpha = 1$ 时精确匹配Smith, 并在[0,1]范围内相当接近.
@@ -319,7 +320,6 @@ $$falloff = \frac{saturate(1 - (distance / lightRadius)^4)^2}{diatance^2 + 1} \q
   如果对于一个特定的着色点, 我们可以将来自area light的所有光视为来自光源表面的一个representative point,便可以直接使用着色模型. 一个合理的选择是largest distribution point.
   但能量守恒一直没有处理. 通过移动发射光的原始点,可以有效增加光源的solid angle,但并没有补偿额外的能量. 校正比dividing by solid angle稍微复杂一些,因为能量差异取决于specular distribution. 例如为rough material改变入射光朝向将会导致非常小的能量变化,但对于glossy material,此能量变化会非常巨大.
 
-  <br>
   ![alt text](images/sphereLights.png)
   <br>
 
@@ -327,7 +327,7 @@ $$falloff = \frac{saturate(1 - (distance / lightRadius)^4)^2}{diatance^2 + 1} \q
   若球体位于地平线之上,sphere light的Irradiance等价于一个point light. 虽然反直觉,但如果我们接受球体位于地平线之下的不精确性,便可以仅解决specular lighting.
   我们通过找到距ray最短距离的点来近似找到与reflection ray最小角度的点.
 
-  $$centerToRay = L - (L \dot r)r$$
+  $$centerToRay = L - (L \cdot r)r$$
   $$closestPoint = L + centerToRay * saturate(\frac{sourceRadius}{|centerToRay|})  \qquad  (11)$$
   $$l = ||closestPoint||$$
 

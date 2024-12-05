@@ -118,6 +118,59 @@
 
 
 # FDeferredShadingSceneRenderer::InitViews
+initialize scene's views. Check visibility, build visible mesh commands, etc.  
+
+- prior to visibility  
+  - r.StencilForLODDither: Optional stencil dithering optimization during prepasses  
+      是否在prepass中使用stencil tests及在base pass中使用depth-equal tests以实现 LOD dithering.  
+      若禁止,LOD dithering将会在prepass和base pass中通过clip() instructions使用. 此时会禁止EarlyZ.  
+      若允许, 强制一个full prepass.  
+
+  - r.DoLazyStaticMeshUpdate  
+      若允许, 可以不将meshes添加到static mesh draw lists, 直到这些meshes是可视的.  
+
+  - Hair Strands(strands/cards/meshes)  
+    EHairStrandsBookmark::ProcessLODSelection  
+    EHairStrandsBookmark::ProcessGuideInterpolation 不支持mobile  
+
+  - FX System (FNiagaraGpuComputeDispatch/FFXSystemSet)  
+
+  - Draw lines to lights affecting this mesh if its selected in editor  
+
+  - setup motion blur parameters, TAA/TSR(TemporalAASampleIndex, TemporalAASamples, TemporalJitterPixels)...  
+
+- Compute View Visibility  
+  - ComputeLightVisibility(异步执行)  
+   为每个视图view构造数组VisibleLightInfos(FVisibleLightViewInfo)  
+   遍历场景中的每个光源, view frustum cull and distance cull lights in each view. directional light默认无剔除, 并设置MobileLightShaft. draw shapes for reflection capture of non-directional static lighting.  
+   initialized the fog constants for each view(exponential fog components).  
+
+  - UpdateReflectionSceneData  
+    pack visible reflection captures into the uniform buffer, each with an index to its cubemap array entry.  
+    GPUScene primitive data stores closest reflection capture as index into this buffer, so this index which must be invalidate every time outSortData contents change.  
+    若SortedCaptures有变更,在forward renderer情形下,所有场景图元需要更新, 是因为将index存储进sorted reflection capture uniform buffer.  
+    若有新注册的reflection capture或者注册的reflection capture有transform变更,则标记所有primitives以进行reflection proxy update. mobile则需要重新缓存所有mesh commands.  
+
+  - ConditionalUpdateStaticMeshes  
+    场景中收集的不需要visibility check的static meshes. 重新缓存meshDrawCommands/NaniteDrawCommands  
+
+  - scene renderer views  
+    遍历每个视图view, 重置view的PrimitiveVisibilityMap/StaticMeshVisibilityMap等数组结构.  
+    对于visibility child views/views with frozen visibility, 更新view的PrimitiveVisibilityMap. 这些视图不需要frustum culling.  
+    大多数视图是需要标准frustum culling.   
+    update HLOD transition/visibility states to allow use during distance culling.  
+    PrimitiveCull  
+    UpdatePrimitiveFading  
+    OcclusionCull  
+    再次conditional update static meshes in primitiveVisibilityMap  
+    ComputeAndMarkRelevanceForViewParallel  
+    GatherDynamicMeshElements  
+    SetupMeshPass  
+    等待ComputeLightVisibilityTask  
+    
+
+
+    
 
 
 
