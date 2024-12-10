@@ -155,19 +155,35 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
     场景中收集的不需要visibility check的static meshes. 重新缓存meshDrawCommands/NaniteDrawCommands  
 
   - scene renderer views  
-    遍历每个视图view, 重置view的PrimitiveVisibilityMap/StaticMeshVisibilityMap等数组结构.  
-    对于visibility child views/views with frozen visibility, 更新view的PrimitiveVisibilityMap. 这些视图不需要frustum culling.  
-    大多数视图是需要标准frustum culling.   
-    update HLOD transition/visibility states to allow use during distance culling.  
-    PrimitiveCull  
-    UpdatePrimitiveFading  
-    OcclusionCull  
-    再次conditional update static meshes in primitiveVisibilityMap  
-    ComputeAndMarkRelevanceForViewParallel  
-    GatherDynamicMeshElements  
-    SetupMeshPass  
-    等待ComputeLightVisibilityTask  
-    
+    - 遍历每个视图view, 重置view的PrimitiveVisibilityMap/StaticMeshVisibilityMap等数组结构.  
+    - 对于visibility child views/views with frozen visibility, 更新view的PrimitiveVisibilityMap. 这些视图不需要frustum culling.  
+    - 大多数视图是需要标准frustum culling.   
+    - update HLOD transition/visibility states to allow use during distance culling.  
+
+    - PrimitiveCull  
+      - 设置FPrimitiveCullingFlags (ShouldVisibilityCull/UserCustomCulling/AlsoUseSphereTest/UseFastIntersect/UseVisibilityOctree/NaniteAlwaysVisible/HasHiddenPrimitives/HasShowOnlyPrimitives).  
+      - 若使用VisibilityOctree, cull octree, 获取visible nodes.  
+      - 并行执行(ParallelFor) PrimitiveVisibilityMap, frustum cull and distance cull.  
+
+    - UpdatePrimitiveFading  
+      对于相机移动很大的距离或者一会内不会渲染某个view的帧,最好禁用fading,以便看不到无预期的object transitions. PrimitiveFadeUniformBuffers/PrimitiveFadeUniformBufferMap  
+
+    - OcclusionCull  
+      在OpenGL平台禁止HZB, 以避免rendering artifacts.  
+      r.HZBOcclusion 选择occlusion system: 0-hardware occlusion queries  1-HZB occlusion system(default, less GPU and CPU cost, 更保守的结果) 2-force HZB occlusion system(覆盖渲染平台的偏好设置)  
+      precomputed visibility data, 根据场景的PrimitiveVisibilityIds(FPrimitiveVisibilityId)来设置. r.VisualizeOccludedPrimitives可绘制被遮挡图元为box.  
+      Map HZB Results(WaitingForGPUQuery)  
+      执行 round-robin occlusion queries, 对于stereo views,偶数帧right eye执行occlusion querying, 奇数帧left eye执行occlusion querying. recycle old queries.  
+      并行执行(ParallelFor)FetchVisibilityForPrimitives, 收集QueriesToRelease/HZBBoundsToAdd/QueriesToAdd/SubIsOccluded/PrimitiveOcclusionHistory.  
+      add/release query ops use stored PrimitiveHistory pointers.  
+      HZB Unmap Results  
+
+    - 再次conditional update static meshes in primitiveVisibilityMap | PrimitivesNeedingStaticMeshUpdate  
+    - ComputeAndMarkRelevanceForViewParallel  
+    - GatherDynamicMeshElements  
+    - SetupMeshPass  
+    - 等待ComputeLightVisibilityTask  
+
 
 
     
