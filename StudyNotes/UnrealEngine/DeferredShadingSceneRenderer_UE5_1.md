@@ -8,6 +8,7 @@
 - [FDeferredShadingSceneRenderer::InitViews](#fdeferredshadingscenerendererinitviews)
 - [UpdateGPUScene](#updategpuscene)
         - [FInstanceCullingManager](#finstancecullingmanager)
+        - [FRelevancePacket](#frelevancepacket)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
@@ -179,11 +180,27 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
       HZB Unmap Results  
 
     - 再次conditional update static meshes in primitiveVisibilityMap | PrimitivesNeedingStaticMeshUpdate  
+  
     - ComputeAndMarkRelevanceForViewParallel  
-    - GatherDynamicMeshElements  
-    - SetupMeshPass  
-    - 等待ComputeLightVisibilityTask  
+      - 构造FMarkRelevantStaticMeshesForViewData, 设置ViewOrigin/ForcedLODLevel/LODScale(r.StaticMeshLODDistanceScale)/MinScreenRadiusForCSMDepthSquared/MinScreenRadiusForDepthPrepassSquared/bFullEarlyZPass(mobile必须满足场景的EarlyZPassMode为DDM_AllOpaque).  
+      - 根据View.StaticMeshVisibilityMap的数量分配MarkMasks, 额外增加31, some padding to simplify the high speed transpose(?), 并全部置为0.  
+      - 设置Packets, 每个Packet容纳127个primitive.  
+      - 并行执行所有的Packets(ParallelFor), 每个Packet(FRelevancePacket), 执行AnyThreadTask, 在此进行ComputeRelevance和MarkRelevant.  
+      - 遍历Packets, 每个Packet执行RenderThreadFinalize.  
+      - TransposeMeshBit  
 
+    - GatherDynamicMeshElements: gather FMeshBatches from scene proxies  
+    - DumpPrimitives 控制台命令可将所有scene primitives打印到csv file  
+    - SetupMeshPass: FMeshBatches to FMeshDrawCommands for dynamic primitives  
+    - 等待ComputeLightVisibilityTask  
+  
+- updateSkyIrradianceGpuBuffer  
+- init skyAtmosphere/view resources before the view global uniform buffer is built  
+- postVisibilityFrameSetup  
+- initViewsBeforePrePass  
+- initRHIResources  
+- start render  
+- RHICmdList.ImmediateFlush for EImmediateFlushType::DispatchToRHIThread  
 
 
     
@@ -252,4 +269,39 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
     build rendering commands中的views referenced需要在BeginDeferredCulling之前注册. 调用FlushRegisteredViews来上传registered views至GPU.  
 
 
+##### FRelevancePacket
+
+- ComputeRelevance  
+  - 遍历此Packet收集的Primitives, 从各个FPrimitiveSceneProxy收集StaticRelevance/DrawRelevance/DynamicRelevance/ShadowRelevance/EditorRelevance/EditorVisualizeLevelInstanceRelevance/EditorSelectionRelevance/TranslucentRelevance.  
+  - 根据不同的Relevance类型, 将每个primitive划分到不同的集合.  
+  
+- MarkRelevant  仅执行static relevance primitives  
+  - 遍历RelevantStaticPrimitives中缓存的static primitives, 计算每个primitive的LOD, HLODFading/HLODFadingOut/LODDithered等  
+    - 遍历每个primitive的static mesh relevances  
+      - overlay mesh拥有自己的cull distance, 短于primitive cull distance, 执行distance culled.  
+      - 根据HLODFading/HLODFadingOut/LODDithered计算出HLOD是否替换以隐藏mesh LOD levels.  
+      - 参与primitive distance cull fading(View.PrimitiveFadeUniformBufferMap)或者MeshDitheringLOD的不能缓存mesh command.  
+      - 增加visible mesh draw command(FVisibleMeshDrawCommand), 针对缓存mesh command(static mesh)的primitives, 根据图元的FMeshDrawCommand及StaticMeshCommandInfos来构造VisibleMeshDrawCommand, 针对dynamic mesh, 仅收集  
+        - Velocity/TranslucentVelocity/DepthPass/DitheredLODFadingOutMaskPass  
+        - mobile: BasePass/MobileBasePassCSM 或者 SkyPass, 其他平台: BasePass/SkyPass/SingleLayerWaterPass/SingleLayerWaterDepthPrepass  
+        - AnisotropyPass/CustomDepth/LightmapDensity  
+        - Editor: DebugViewMode/HitProxy/HitProxyOpaqueOnly  
+        - TranslucencyStandard/TranslucencyAfterDOF/TranslucencyAfterDOFModulate/TranslucencyAfterMotionBlur 或者 TranslucencyAll  
+        - LumenTranslucencyRadianceCacheMark/LumenFrontLayerTranslucencyGBuffer  
+        - Distortion  
+        - EditorLevelInstance/EditorSelection  
+      - 具备VolumeMaterialDomain, 收集到VolumetricMeshBatches  
+      - 具备UsesSkyMaterial, 收集到SkyMeshBatches  
+      - translucency relevance且material支持sorted triangles, 收集到SortedTrianglesMeshBatches. 在渲染translucent material时, 允许dynamic triangle重新排序可以移除/减少排序问题(order-independent-transparency).  
+      - mesh decal 收集到MeshDecalBatches  
+  
+- RenderThreadFinalize 将计算标记的primitives数据写入View  
+  - 针对NotDrawRelevant, 设置对应的view.PrimitiveVisibilityMap  
+  - add hit proxies from EditorVisualizeLevelInstancePrimitives/EditorSelectedPrimitives  
+  - 设置属性: ShadingModelMask/GlobalDistanceField/LightingChannel/TranslucentSurfaceLighting/SceneDepth/SkyMaterial/SingleLayerWterMaterial/TranslucencySeparateModulation/VisibleDynamicPrimitives/DistortionPrimitives/CustomDepthPrimitives/CustomDepth/CustomStencil  
+  - 设置数组: VisibleDynamicPrimitivesWithSimpleLights/TranslucentPrimCount/CustomDepthStencil/DirtyIndirectLightCacheBufferPrimitives/MeshDecalBatches/VolumetricMeshBatches/SkyMeshBatches/SortedTrianglesMeshBatches  
+  - 对于ReflectionCapturePrimitives/LazyUpdatePrimitives, 更新每个图元的uniform shader parameters, 加入GPUScene.AddPrimitiveToUpdate  
+  - View.PrimitivesLODMask
+  - 遍历EMeshPass, 填充View.MeshCommands/DynamicMeshCommandBuildRequests  
+  - translucent self shadow uniform buffers. translucency shadow projection uniform buffer containing data needed for Fourier opacity maps(simulate volumetric effects).  
 
