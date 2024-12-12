@@ -172,7 +172,7 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
     - OcclusionCull  
       在OpenGL平台禁止HZB, 以避免rendering artifacts.  
       r.HZBOcclusion 选择occlusion system: 0-hardware occlusion queries  1-HZB occlusion system(default, less GPU and CPU cost, 更保守的结果) 2-force HZB occlusion system(覆盖渲染平台的偏好设置)  
-      precomputed visibility data, 根据场景的PrimitiveVisibilityIds(FPrimitiveVisibilityId)来设置. r.VisualizeOccludedPrimitives可绘制被遮挡图元为box.  
+      precomputed visibility data, 根据场景的PrimitiveVisibilityIds(FPrimitiveVisibilityId)来设置. <span style="color: yellow;">r.VisualizeOccludedPrimitives</span>可绘制被遮挡图元为box.  
       Map HZB Results(WaitingForGPUQuery)  
       执行 round-robin occlusion queries, 对于stereo views,偶数帧right eye执行occlusion querying, 奇数帧left eye执行occlusion querying. recycle old queries.  
       并行执行(ParallelFor)FetchVisibilityForPrimitives, 收集QueriesToRelease/HZBBoundsToAdd/QueriesToAdd/SubIsOccluded/PrimitiveOcclusionHistory.  
@@ -190,13 +190,29 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
       - TransposeMeshBit  
 
     - GatherDynamicMeshElements: gather FMeshBatches from scene proxies  
-    - DumpPrimitives 控制台命令可将所有scene primitives打印到csv file  
+    - <span style="color: yellow;">DumpPrimitives</span> 控制台命令可将所有scene primitives(如InstancedStaticMeshComponent/LandscapeComponent/StaticMeshComponent...)打印到csv file  
     - SetupMeshPass: FMeshBatches to FMeshDrawCommands for dynamic primitives  
     - 等待ComputeLightVisibilityTask  
   
 - updateSkyIrradianceGpuBuffer  
+  skylights with static lighting已经将diffuse contribution烘培到lightmaps, 不需要再上传Irradiance  
+  若允许RealTimeCapture, the buffer将会在GPU直接设置  
+  GRenderGraphResourcePool分配FRDGPooledBuffer至SkyIrradianceEnvironmentMap  
+  RHICmdList.Transition, 设置先前的状态为ERHIAccess::Unknown,新状态为ERHIAccess::SRVMask(SRVCompute | SRVGraphics)  
+  对于不上传Irradiance的,需确保sku irradiance SH buffer包含合理的初始值(即0)  
+  对于上传Irradiance的, 上传数据为8个FVector4f, 从SkyLight->IrradianceEnvironmentMap提取3阶Spherical Harmonics(SH) coefficients, 共27个系数. 最后一个FVector4f填充SkyLight->AverageBrightness.  
+  
 - init skyAtmosphere/view resources before the view global uniform buffer is built  
+  利用GRenderTargetPool创建IPooledRenderTarget: SkyAtmosphere.TransmittanceLut | SkyAtmosphere.MultiScatteredLuminanceLut | SkyAtmosphere.DistantSkyLightLut  
+  r.SkyAtmosphere.TransmittanceLUT 可以配置采样数(10),LUT低质量图片格式R8G8B8A8,LUT的尺寸(256*64)  
+  r.SkyAtmosphere.MultiScatteringLUT 可以配置采样数(15), LUT高质量(64采样), LUT尺寸(32*32)  
+  r.SkyAtmosphere.DistantSkyLightLUT: sky ambient lighting, 可以设置海拔(Altitude-6km), 采集天空样本的高度以集成到sky lighting.  
+  
 - postVisibilityFrameSetup  
+  排序View.MeshDecalBatches, 裁剪上一帧的light shafts的Temporal AA result  
+  gather reflection capture light mesh elements  
+  
+
 - initViewsBeforePrePass  
 - initRHIResources  
 - start render  
@@ -255,7 +271,7 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
     - 执行任意instance data GPU writer回调. 若存在FUploadData::GPUWritePrimitives, 遍历每个PrimitiveIndex,判别任意GPU writers是即刻执行,还是延迟到稍后的GPU write pass. 将此BufferState数据设置为ExternalAccessMode,若ExternalAccessQueue已存在此buffer会忽略.  
 
 - FGPUScene::DebugRender 
-    启动r.GPUScene.DebugMode. 根据FInstanceSceneData的LocalBoundsCenter和LocalBoundsExtent绘制 scene primitives的范围盒, 可以将选中的scene primitives打印在屏幕上(primitiveId,instanceId,shadow,velocity,customData,DynamicData,name).  
+    启动<span style="color: yellow;">r.GPUScene.DebugMode</span>. 根据FInstanceSceneData的LocalBoundsCenter和LocalBoundsExtent绘制 scene primitives的范围盒, 可以将选中的scene primitives打印在屏幕上(primitiveId,instanceId,shadow,velocity,customData,DynamicData,name).  
 
 - FInstanceCullingManager::BeginDeferredCulling    
 
