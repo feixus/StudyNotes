@@ -27,4 +27,14 @@
    https://medium.com/@msuhail153/importance-sampling-9d115e43923  
    https://medium.com/@liuec.jessica2000/importance-sampling-explained-end-to-end-a53334cb330b  
 
+6. Visibility Octree  
+
+7. round-robin occlusion queries  
+   
+8. Distance Field  
+  
+9. Stupid Spherical Harmonics (SH) Tricks  
+   
+   
+
 

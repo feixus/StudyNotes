@@ -7,8 +7,11 @@
 - [FScene::UpdateAllPrimitiveSceneInfos](#fsceneupdateallprimitivesceneinfos)
 - [FDeferredShadingSceneRenderer::InitViews](#fdeferredshadingscenerendererinitviews)
 - [UpdateGPUScene](#updategpuscene)
+- [Detail Code](#detail-code)
         - [FInstanceCullingManager](#finstancecullingmanager)
         - [FRelevancePacket](#frelevancepacket)
+        - [FPerViewPipelineState](#fperviewpipelinestate)
+        - [TPipelineState](#tpipelinestate)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
@@ -199,7 +202,7 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
   若允许RealTimeCapture, the buffer将会在GPU直接设置  
   GRenderGraphResourcePool分配FRDGPooledBuffer至SkyIrradianceEnvironmentMap  
   RHICmdList.Transition, 设置先前的状态为ERHIAccess::Unknown,新状态为ERHIAccess::SRVMask(SRVCompute | SRVGraphics)  
-  对于不上传Irradiance的,需确保sku irradiance SH buffer包含合理的初始值(即0)  
+  对于不上传Irradiance的,需确保sky irradiance SH buffer包含合理的初始值(即0)  
   对于上传Irradiance的, 上传数据为8个FVector4f, 从SkyLight->IrradianceEnvironmentMap提取3阶Spherical Harmonics(SH) coefficients, 共27个系数. 最后一个FVector4f填充SkyLight->AverageBrightness.  
   
 - init skyAtmosphere/view resources before the view global uniform buffer is built  
@@ -211,11 +214,25 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
 - postVisibilityFrameSetup  
   排序View.MeshDecalBatches, 裁剪上一帧的light shafts的Temporal AA result  
   gather reflection capture light mesh elements  
+  start a task to update the indirect lighting cache  
+  indirect lighting cache(interpolates and caches indirect lighting for dynamic objects) primitive update: (r.IndirectLightingCache | r.AllowStaticLighting | precomputed light volumes)  
+  precomputedLightVolumes used for interpolating dynamic object lighting, typically one per streaming level, store volume lighting samples computed by lightmass.  
   
-
 - initViewsBeforePrePass  
+  shadow culling tasks(r.EarlyInitDynamicShadows)  and DynamicShadows flag(ViewFamily.EngineShowFlags.DynamicShadows)  
+  point light shadow不支持mobile, mobile可以配置movable spot light shadow(r.Mobile.EnableMovableSpotlightsShadow), movable directional light(r.Mobile.AllowMovableDirectionalLights)  
+  为受单个光源影响的所有primitives创建一个projected shadow, 可以缓存ShadowMap, 可以使用VirtualShadowMap.  
+  hair strands可以cast shadow(non-directional light)  
+  允许movable和stationary lights创建CSM, 或者 static lights that are unbuilt. mobile renderer: light仅可为dynamic objects创建CSM.  
+  creatint per-object shadow, including opaque and translucent shadows, for a given light source and primitive interaction.  
+  gathers the list of primitives used to draw various shadow types.  
+  
 - initRHIResources  
+  updatePreExposure/UpdateHairResources/initialize per-view uniform buffer  
+  
 - start render  
+  初始化GVisualizeTexture, 可通过<span style="color: yellow;">VisualizeTexture/Vis</span> <RDGResourceName> 查看RDG资源  
+  
 - RHICmdList.ImmediateFlush for EImmediateFlushType::DispatchToRHIThread  
 
 
@@ -248,7 +265,7 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
           更新primitives, 并行执行TaskContext.NumPrimitiveDataUploads次, 将primitive scene data填充至TaskContext.PrimitiveUploader.  
           更新instances, 并行执行InstanceUpdates.UpdateBatches次, 构建每个primitive的每个instance(FInstanceSceneShaderData),添加入TaskContext.InstanceSceneUploader. 若存在PayloadData(InstancePayloadDataStride), 经由InstanceFlags和PayloadPosition, 为TaskContext.InstancePayloadUploader按序添加数据(HIERARCHY_OFFSET/LOCAL_BOUNDS/EDITOR_DATA/LIGHTSHADOW_UV_BIAS/CUSTOM_DATA).  
           更新instance BVH(FBVHNode)  
-          更新lightmap, 仅scene primitives,即静态图元才有light cache data.  
+          更新lightmap, 仅scene primitives中的static primitives才有light cache data.  
       - FRDGBuilder::AddCommandListSetupTask: Task加入ParallelSetupEvents待执行.    
       - 启动FRDGAsyncScatterUploadBuffer::End(PrimitiveUploadBuffer/InstancePayloadUploader/InstanceBVHUploader/LightmapUploader/NaniteMaterialUploaders), PrimitiveUploadBuffer/InstancePayloadUploadBuffer/InstanceSceneUploadBuffer/InstanceBVHUploadBuffer/LightmapUploadBuffer/NaniteMaterialUploaders 各自运行一个scatter upload pass(FRDGScatterCopyCS, ByteBuffer.usf:ScatterCopyCS).  
       - FRDGAsyncScatterUploadBuffer 构造FRDGScatterUploader  
@@ -277,6 +294,9 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
 
 - FScene::UpdatePhysicsField (Physics Field)
 
+
+# Detail Code
+
 ##### FInstanceCullingManager
   为所有instanced draws管理indirect arguments和culling jobs的分配(使用GPU Scene culling).  
 
@@ -297,7 +317,7 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
       - overlay mesh拥有自己的cull distance, 短于primitive cull distance, 执行distance culled.  
       - 根据HLODFading/HLODFadingOut/LODDithered计算出HLOD是否替换以隐藏mesh LOD levels.  
       - 参与primitive distance cull fading(View.PrimitiveFadeUniformBufferMap)或者MeshDitheringLOD的不能缓存mesh command.  
-      - 增加visible mesh draw command(FVisibleMeshDrawCommand), 针对缓存mesh command(static mesh)的primitives, 根据图元的FMeshDrawCommand及StaticMeshCommandInfos来构造VisibleMeshDrawCommand, 针对dynamic mesh, 仅收集  
+      - 增加visible mesh draw command(FVisibleMeshDrawCommand), 针对缓存mesh command(static mesh)的primitives, 根据图元的FMeshDrawCommand及StaticMeshCommandInfos来构造VisibleMeshDrawCommand, 针对dynamic mesh, 仅收集信息    
         - Velocity/TranslucentVelocity/DepthPass/DitheredLODFadingOutMaskPass  
         - mobile: BasePass/MobileBasePassCSM 或者 SkyPass, 其他平台: BasePass/SkyPass/SingleLayerWaterPass/SingleLayerWaterDepthPrepass  
         - AnisotropyPass/CustomDepth/LightmapDensity  
@@ -320,4 +340,18 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
   - View.PrimitivesLODMask
   - 遍历EMeshPass, 填充View.MeshCommands/DynamicMeshCommandBuildRequests  
   - translucent self shadow uniform buffers. translucency shadow projection uniform buffer containing data needed for Fourier opacity maps(simulate volumetric effects).  
+  
+  
+##### FPerViewPipelineState
+structure that contains the final state of deferred shading pipeline for a FViewInfo  
+  
+- diffuse indirect method: Disabled/SSGI/RTGI/Lumen/Plugin  
+- ScreenSpaceDenoiserMode for diffuse indirect  
+- ambient occlusion method: Disabled/SSAO/SSGI/RTAO  
+- reflection method: Disables/SSR/RTR/Lumen  
+- whether there is planar reflection to compose to the reflection  
+- whether need to generate HZB from the depth buffer  
+    
 
+##### TPipelineState  
+封装处理大量维度的渲染器的pipeline state. 通过结构体内的内存偏移的排序来确保维度内没有循环引用.  
