@@ -814,7 +814,7 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t currentImage) {
 	glm::vec3 up = glm::vec3(0.0f, 0.0f, 1.0f);
 
 	UniformBufferObject ubo{};
-	ubo.model = modelMatrix;// glm::rotate(glm::mat4(1.0f), time * glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	ubo.view = glm::lookAt(eye, center, up);
 
 	viewDir = center - eye;
