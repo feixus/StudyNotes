@@ -4,7 +4,7 @@
 
 #include <xcb/xcb.h>
 
-init main(void)
+int main(void)
 {
     xcb_connection_t *pConn;
     xcb_screen_t *pScreen;
@@ -23,7 +23,7 @@ init main(void)
     pConn = xcb_connect(0, 0);
 
     // get the first screen
-    pscreen = xcb_setup_roots_iterator(xcb_get_setup(pConn)).data;
+    pScreen = xcb_setup_roots_iterator(xcb_get_setup(pConn)).data;
 
     // get the root widow
     window = pScreen->root;
