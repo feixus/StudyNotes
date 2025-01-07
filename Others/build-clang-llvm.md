@@ -93,4 +93,4 @@ AttributeError: 'NoneType' object has no attribute 'use_lit_shell'
   
 ## 寻找Dockerfiles for Clang and LLVM, 如 docker pull silkeh/clang:19  
   
-## 进入带有clang的docker容器, 如 sudo docker run =it --rm -v $(pwd):/home/user/project silkeh/clang:19
+## 进入带有clang的docker容器, 如 sudo docker run -it --rm -v $(pwd):/home/user/project silkeh/clang:19

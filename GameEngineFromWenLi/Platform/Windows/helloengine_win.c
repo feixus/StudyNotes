@@ -71,6 +71,17 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
     //sort through and find what code to run for the message given
     switch(message)
     {
+        case WM_PAINT:
+        {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hWnd, &ps);
+            RECT rec = {20, 20, 60, 80};
+            HBRUSH brush = (HBRUSH) GetStockObject(BLACK_BRUSH);
+
+            FillRect(hdc, &rec, brush);
+
+            EndPaint(hWnd, &ps);
+        } break;
         //this message is read when the window is closed
         case WM_DESTROY:
         {
@@ -85,4 +96,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 }
 
 
-//compile with clang: clang -l user32.lib -o helloengine_win.exe helloengine_win.c
+//compile with clang(game engine-08): clang -l user32.lib -o helloengine_win.exe helloengine_win.c
+
+//compile with cl(game engine-09): cl user32.lib gdi32.lib helloengine_win.c
