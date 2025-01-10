@@ -3,5 +3,10 @@
 .vs
 
 *.obj
+*.ilk
+*.pdb
+
+*.vso
+*.pso
 
 build*/
