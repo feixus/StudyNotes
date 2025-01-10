@@ -106,6 +106,7 @@ int main(void)
     glXCreateContextAttribsARBProc glXCreateContextAttribsARB;
     const char *glxExts;
 
+    // get a matching FB config
     static int visual_attribs[] =
     {
         GLX_X_RENDERABLE    , True,
@@ -131,6 +132,24 @@ int main(void)
     if (!display)
     {
         fprintf(stderr, "can't open display\n");
+        return -1;
+    }
+
+    // FBConfigs were added in GLX version 1.3
+    if (!glXQueryVersion(display, &glx_major, &glx_minor) ||
+        ((glx_major == 1) && (glx_minor < 3)) || (glx_major < 1))
+    {
+        fprintf(stderr, "invalid GLX version\n");
+        return -1;
+    }
+
+    default_screen = DefaultScreen(display);
+
+    /* query framebuffer configurations */
+    fb_configs = glXChooseFBConfig(display, default_screen, visual_attribs, &num_fb_configs);
+    if (!fb_configs || num_fb_configs == 0)
+    {
+        fprintf(stderr, "glXGetFBConfigs failed\n");
         return -1;
     }
 
