@@ -8,5 +8,6 @@
 
 *.vso
 *.pso
+*.exe
 
 build*/

@@ -12,7 +12,7 @@
 
 #define GLX_CONTEXT_MAJOR_VERSION_ARB   0x2091
 #define GLX_CONTEXT_MINOR_VERSION_ARB   0x2092
-typedef GLXContext (*glXCreateContextAttributesARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
+typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
 static bool isExtensionSupported(const char *extList, const char *extension)
 {
@@ -28,13 +28,14 @@ static bool isExtensionSupported(const char *extList, const char *extension)
     for (start = extList;;)
     {
         where = strstr(start, extension);
+        // printf(" isExtensionSupported: start = %s\n", start);
 
         if (!where)
             break;
 
         terminator = where + strlen(extension);
 
-        if (where == start || *(where - 1) == '\0')
+        if (where == start || *(where - 1) == ' ')
             if (*terminator == ' ' || *terminator == '\0')
                 return true;
         
@@ -166,8 +167,7 @@ int main(void)
                 glXGetFBConfigAttrib(display, fb_configs[i], GLX_SAMPLE_BUFFERS, &samp_buf);
                 glXGetFBConfigAttrib(display, fb_configs[i], GLX_SAMPLES, &samples);
 
-                printf ("matching fbconfig %d, visual ID 0x%lx: SAMPLE_BUFFERS = %d",
-                        " SAMPLES = %d\n",
+                printf ("matching fbconfig %d, visual ID 0x%lx: SAMPLE_BUFFERS = %d, SAMPLES = %d\n",
                         i, vi->visualid, samp_buf, samples);
 
                 if (best_fbc < 0 || (samp_buf && samples > best_num_samp))
@@ -276,7 +276,7 @@ int main(void)
         };
 
         printf("creating context\n");
-        context = glXCreateContextAttributesARB(display, fb_config, 0, True, context_attribs);
+        context = glXCreateContextAttribsARB(display, fb_config, 0, True, context_attribs);
 
         XSync(display, False);
         if (!ctxErrorOccurred && context)
@@ -292,7 +292,7 @@ int main(void)
 
             printf("failed to create GL 3.0 context ... using old-style GLX context\n");
 
-            context = glXCreateContextAttributesARB(display, fb_config, 0, True, context_attribs);
+            context = glXCreateContextAttribsARB(display, fb_config, 0, True, context_attribs);
         }
     }
 
@@ -346,7 +346,7 @@ int main(void)
         {
             case XCB_EXPOSE:
                 {
-                    DrawQuad();
+                    DrawAQuad();
                     glXSwapBuffers(display, drawable);
                 }
                 break;
@@ -361,3 +361,7 @@ int main(void)
 
     return 0;
 }
+
+/* linux cmd:  
+clang -g -lxcb -lX11 -lX11-xcb -lGL -lGLU -o helloengine_opengl helloengine_opengl.cpp  
+*/
