@@ -4,8 +4,8 @@
 #include <tchar.h>
 #include <stdint.h>
 
-#include <d3d12.h>
 #include "directx/d3dx12.h"
+#include <d3d12.h>
 #include <dxgi1_6.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -171,7 +171,7 @@ void InitPipeline()
 
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
-    ThrowIfFailed(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1_1, &signature, &error));
+    ThrowIfFailed(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
     ThrowIfFailed(g_pDev->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&g_pRootSignature)));
 
     // load the shaders
@@ -411,32 +411,63 @@ void PopulateCommandList()
     // apps should use fences to determine GPU execution progress
     ThrowIfFailed(g_pCommandAllocator->Reset());   
 
+    // when ExecuteCommandList() is called on a particular command list, that command list can then be reset at any time and must be before re-recording
+    ThrowIfFailed(g_pCommandList->Reset(g_pCommandAllocator.Get(), g_pPipelineState.Get()));
+
+    // set necessary state
+    g_pCommandList->SetGraphicsRootSignature(g_pRootSignature.Get());
+    g_pCommandList->RSSetViewports(1, &g_ViewPort);
+    g_pCommandList->RSSetScissorRects(1, &g_ScissorRect);
+
+    // indicate that the back buffer will be used as a render target. 
+    g_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+                g_pRenderTargets[g_nFrameIndex].Get(),
+                D3D12_RESOURCE_STATE_PRESENT,
+                D3D12_RESOURCE_STATE_RENDER_TARGET));
+    
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(g_pRtvHeap->GetCPUDescriptorHandleForHeapStart(), g_nFrameIndex, g_nRtvDescriptorSize);
+    g_pCommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+
+    // clear the back buffer to a deep blue
+    const FLOAT clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
+    g_pCommandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+    // do 3D rendering on the back buffer here 
+    {
+        // select which vertex buffer to display
+        g_pCommandList->IASetVertexBuffers(0, 1, &g_VertexBufferView);
+
+        // select which primitive type we are using
+        g_pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        // draw the vertex buffer to the back buffer
+        g_pCommandList->DrawInstanced(3, 1, 0, 0);
+    }
+
+    // indicate that the back buffer will now be used to present
+    g_pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+                g_pRenderTargets[g_nFrameIndex].Get(),
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_PRESENT));
+
+    ThrowIfFailed(g_pCommandList->Close());
 }
 
 
 // render a single frame
 void RenderFrame()
 {
-    //clear the back buffer to a deep blue
-    const FLOAT clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
-    g_pDevcon->ClearRenderTargetView(g_pRTView, clearColor);
+    // record all the commands we need to render the scene into the command list
+    PopulateCommandList();
 
-    // do 3D rendering on the back buffer
-    {
-        // select which vertex buffer to display
-        UINT stride = sizeof(VERTEX);
-        UINT offset = 0;
-        g_pDevcon->IASetVertexBuffers(0, 1, &g_pVBuffer, &stride, &offset);
-
-        // select which primitive type
-        g_pDevcon->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        // draw the vertex buffer to the back buffer
-        g_pDevcon->Draw(3, 0);
-    }
+    // execute the command list
+    ID3D12CommandList * ppCommandLists[] = { g_pCommandList.Get() };
+    g_pCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
     // swap the back buffer and the front buffer
-    g_pSwapchain->Present(0, 0);
+    ThrowIfFailed(g_pSwapChain->Present(1, 0));
+
+    WaitForPreviousFrame();
 }
 
 // the WindowProc function prototype
@@ -448,6 +479,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstances, LPTSTR lpCmdLi
     HWND hWnd;
     //holds informatins for the window class
     WNDCLASSEX wc;
+
+    WCHAR assetsPath[512];
+    GetAssetsPath(assetsPath, _countof(assetsPath));
+    g_AssetsPath = assetsPath;
 
     //clear out the window class for use
     ZeroMemory(&wc, sizeof(WNDCLASSEX));
@@ -471,8 +506,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstances, LPTSTR lpCmdLi
         WS_OVERLAPPEDWINDOW, //window style
         100, //x-position of the window
         100, //y-position of the window
-        SCREEN_WITH, //width of the window
-        SCREEN_HEIGHT, //height of the window
+        nScreenWidth, //width of the window
+        nScreenHeight, //height of the window
         NULL, //we have no parent window, nullptr
         NULL, //we aren't using menus, nullptr
         hInstance, //application handle
@@ -514,18 +549,20 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             break;
 
         case WM_PAINT:
-            result = CreateGraphicsResources(hWnd);
+            CreateGraphicsResources(hWnd);
             RenderFrame();
             wasHandled = true;
             break;
         
-        case WM_SIZE:
-            if (g_pSwapchain)
-            {
-                DiscardGraphicsResources();
-            }
-            wasHandled = true;
-            break;
+        // 屏幕拉伸会崩溃的原因
+        // case WM_SIZE:
+        //     if (g_pSwapChain)
+        //     {
+        //         DiscardGraphicsResources();
+        //         g_pSwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+        //     }
+        //     wasHandled = true;
+        //     break;
 
         case WM_DESTROY:
             DiscardGraphicsResources();
@@ -567,15 +604,8 @@ the macro helps convert a pointer to a GUID(interface identifier) into the corre
 */
 
 
-/* x64 Native Tools Command Prompt for VS 2022
+/* Developer Command Prompt for VS 2022
 
-   fxc /T vs_5_0 /Zi /Fo copy.vso copy.vs
-   fxc /T ps_5_0 /Zi /Fo copy.pso copy.ps
+cl /EHsc helloengine_d3d12.cpp user32.lib d3d12.lib dxgi.lib d3dcompiler.lib
 
-debug:
-1. clang-cl -c -Z7 -o helloengine_d3d.obj helloengine_d3d.cpp
-2. link -debug user32.lib d3d11.lib d3dcompiler.lib helloengine_d3d.obj
-
-release:
-clang -l user32.lib -l d3d11.lib -l d3dcompiler.lib -o helloengine_d3d.exe helloengine_d3d.cpp
 */
