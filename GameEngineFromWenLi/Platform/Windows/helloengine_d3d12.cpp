@@ -608,4 +608,6 @@ the macro helps convert a pointer to a GUID(interface identifier) into the corre
 
 cl /EHsc helloengine_d3d12.cpp user32.lib d3d12.lib dxgi.lib d3dcompiler.lib
 
+devenv /debug helloengine_d3d12.exe
+
 */
