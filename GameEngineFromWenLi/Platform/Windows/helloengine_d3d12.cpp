@@ -59,7 +59,7 @@ const uint32_t nFrameCount = 2;
 
 
 //global declarations
-D3D12_VIEWPORT g_ViewPort = {0.0f, 0.0f, static_cast<float>(nScreenWidth), static_cast<float>(nScreenHeight)};
+D3D12_VIEWPORT g_ViewPort = {0.0f, 0.0f, static_cast<float>(nScreenWidth), static_cast<float>(nScreenHeight), 0.0f, 1.0f};
 D3D12_RECT     g_ScissorRect = {0, 0, nScreenWidth, nScreenHeight};
 
 ComPtr<IDXGISwapChain4>        g_pSwapChain = nullptr;
@@ -125,7 +125,7 @@ struct SimpleMeshVertex
 {
     XMFLOAT3 m_position;
     XMFLOAT3 m_normal;
-    XMFLOAT3 m_tangent;
+    XMFLOAT4 m_tangent;     // w represent bitangent direction, +1: right-handed tangent space, -1: left-handed tangent space
     XMFLOAT2 m_uv;
 };
 
@@ -140,7 +140,7 @@ void InitConstants()
 {
     const XMVECTOR lightPositionX = XMVectorSet(-1.5f, 4.0f, 9.0f, 1.0f);
     const XMVECTOR lightTargetX = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-    const XMVECTOR lightUpX = XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
+    const XMVECTOR lightUpX = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
     const float g_depthNear = 1.0f;
     const float g_depthFar = 100.0f;
@@ -149,7 +149,7 @@ void InitConstants()
 
     const XMVECTOR eyePos = XMVectorSet(0.0f, 0.0f, 2.5f, 1.0f);
     const XMVECTOR lookAtPos = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-    const XMVECTOR upVec = XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
+    const XMVECTOR upVec = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     g_mViewMatrix = XMMatrixLookAtRH(eyePos, lookAtPos, upVec);
 }
 
@@ -203,7 +203,7 @@ void BuildTorusMesh(
 
             v = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
             v = XMVector4Transform(v, localToWorld);
-            XMStoreFloat3(&outV->m_tangent, v);
+            XMStoreFloat4(&outV->m_tangent, v);
 
             outV->m_uv.x = o * textureScale.x;
             outV->m_uv.y = i * textureScale.y;
@@ -860,7 +860,7 @@ void PopulateCommandList()
 // update the contants
 void Update()
 {
-    const float rotationSpeed = 0;// XM_PI * 2.0 / 360;
+    const float rotationSpeed = XM_PI * 2.0 / 360;
     static float rotationAngle = 0.0f;
 
     rotationAngle += rotationSpeed;
