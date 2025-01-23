@@ -1033,13 +1033,96 @@ this helper provides a simple manager for the GPU memory heap of resource descri
 2. IID_PPV_ARGS 
     a macro that simplifies the process of querying interfaces from COM(Component Object Model) objects.
 the macro helps convert a pointer to a GUID(interface identifier) into the correct interface pointer type for use in function calls. 
+
+
+3. 
+ID3D12Debug
+
+IDXGIFactory
+IDXGIAdapter
+IDXGISwapChain
+
+ID3D12Device
+	ID3D12CommandQueue
+	ID3D12DescriptorHeap (render target view/depth stencil view/shader resource view/sampler/...)
+	ID3D12CommandAllocator
+	ID3D12Resource(render target view)
+	ID3D12RootSignature(SRV/Sampler/CBV)
+	ID3D12PipelineState(InputLayout/RootSignature/VS/PS/RasterizeState/BlendState/DepthStencilState
+				/SampleMask/PrimitiveTopologyType/NumRenderTargets/RTVFormats/DSVFormats/SampleDesc
+	ID3D12GraphicsCommandList
+	
+	ID3D12Resource(vertex buffer, 
+		first create a resource of staging data with D3D12_HEAP_TYPE_UPLOAD and D3D12_RESOURCE_STATE_GENERIC_READ,
+		a resource of vertex buffer with D3D12_HEAP_TYPE_DEFAULT and D3D12_RESOURCE_STATE_COPY_DEST,
+		then copy data from CPU to GPU,
+		then set ResourceBarrier with Transition from D3D12_RESOURCE_STATE_COPY_DEST to D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		last set vertex buffer view)
+	
+    D3D12_VERTEX_BUFFER_VIEW
+
+	ID3D12Resource(index buffer,
+		the same with vertex buffer, but ResourceBarrier with Transition from D3D12_RESOURCE_STATE_COPY_DEST to D3D12_RESOURCE_STATE_INDEX_BUFFER)
+		
+    D3D12_INDEX_BUFFER_VIEW
+
+	ID3D12Resource(texture, from D3D12_RESOURCE_STATE_COPY_DEST to D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+	
+	CreateSampler
+	CreateShadeResourceView
+	
+	ID3D12Resource(depthStencilBuffer, just create with D3D12_HEAP_TYPE_DEFAULT and D3D12_RESOURCE_STATE_DEPTH_WRITE, write in data in GPU rendering)
+	CreateDepthStencilView
+	
+	ID3D12Resource(costantBuffer use UploadHeaps, unlike vertex/index/texture, 
+		it create only a resource with D3D12_HEAP_TYPE_UPLOAD and D3D12_RESOURCE_STATE_GENERIC_READ,
+		then Map the constant buffer, keep it persistently mapped for CPU writes,
+		update the constant buffer, can just use memcpy for every frame,
+		
+	CreateConstantBufferView, and then bind to pipeline for shader access
+	
+Draw a frame:
+	CommandAllocator reset
+	CommandList reset with commandAllocator and pipelineState
+	
+	SetGraphicsRootSignature
+	SetDescriptorHeaps (Cbv, Sampler)
+	SetGraphicsRootDescriptorTable(cbv, sampler)
+
+	RSSetViewports
+	RSSetScissorRects
+	
+	IASetPrimitiveTopology	
+	IASetVertexBuffers
+	IASetIndexBuffer
+	
+	ResourceBarrier with Transition from D3D12_RESOURCE_STATE_PRESENT to D3D12_RESOURCE_STATE_RENDER_TARGET
+	
+	OMSetRenderTargets
+	SetGraphicsRootDescriptorTable(Srv)
+	
+	ClearRenderTargetView
+	ClearDepthStencilView
+	
+	DrawIndexedInstanced
+	
+	ResourceBarrier with Transition from D3D12_RESOURCE_STATE_RENDER_TARGET to D3D12_RESOURCE_STATE_PRESENT
+	
+	commandList close
+	
+	ExecuteCommandLists
+	
+	Present
+	
+	WaitForPreviousFrame
 */
 
 
 /* Developer Command Prompt for VS 2022
 
-cl /EHsc /Debug /Zi /D_DEBUG_SHADER helloengine_d3d12.cpp user32.lib d3d12.lib d3dcompiler.lib dxgi.lib dxguid.lib
+cl /EHsc /Debug /Zi /D_DEBUG /D_DEBUG_SHADER helloengine_d3d12.cpp user32.lib d3d12.lib d3dcompiler.lib dxgi.lib dxguid.lib
 
+cl /EHsc helloengine_d3d12.cpp user32.lib d3d12.lib d3dcompiler.lib dxgi.lib dxguid.lib
 
 devenv /debug helloengine_d3d12.exe
 
