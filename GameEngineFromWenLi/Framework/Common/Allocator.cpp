@@ -8,8 +8,15 @@
 
 using namespace My;
 
+My::Allocator::Allocator()
+        : m_pPageList(nullptr), m_pFreeList(nullptr),
+        m_szDataSize(0), m_szPageSize(0), m_szAlignmentSize(0),
+        m_szBlockSize(0), m_nBlockPerPage(0)
+{
+}
+
 My::Allocator::Allocator(size_t data_size, size_t page_size, size_t alignment)
-        : m_pPageList(nullptr), m_pFreeList(nullptr)
+    : m_pPageList(nullptr), m_pFreeList(nullptr)
 {
     Reset(data_size, page_size, alignment);
 }

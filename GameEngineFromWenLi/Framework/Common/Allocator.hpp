@@ -20,6 +20,7 @@ namespace My
             static const uint8_t PATTERN_ALLOC = 0XFD;
             static const uint8_t PATTERN_FREE = 0XFE;
 
+            Allocator();
             Allocator(size_t data_size, size_t page_size, size_t alignment);
             ~Allocator();
 

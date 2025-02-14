@@ -7,7 +7,7 @@
 #include <fstream>
 #include <iostream>
 
-#include "math.h"
+#include "vectormath.h"
 
 using namespace std;
 

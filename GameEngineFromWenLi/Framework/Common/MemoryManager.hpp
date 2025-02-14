@@ -18,7 +18,7 @@ namespace My
         template<typename T>
         void Delete(T *p)
         {
-            reinterpret_cast<T*>(p)->~T();
+            p->~T();
             Free(p, sizeof(T));
         }
 
@@ -30,7 +30,7 @@ namespace My
         virtual void Tick();
 
         void* Allocate(size_t size);
-        void* Free(void* p, size_t size);
+        void Free(void* p, size_t size);
 
     private:
         static size_t*      m_pBlockSizeLookup;
@@ -40,3 +40,14 @@ namespace My
         static Allocator* LookupAllocator(size_t size);
     };
 }
+
+
+/*
+
+https://en.m.wikipedia.org/wiki/Memory_management
+https://jamesgolick.com/2013/5/19/how-tcmalloc-works.html
+
+tcmalloc: most modern allocators is page-oriented, to reduce fragmentation and increse locality, a page as 8192 bytes.  
+    thread caches and central cache. 
+
+*/

@@ -9,7 +9,7 @@
 #include <set>
 #include <string>
 
-#include "math.h"
+#include "vectormath.h"
 
 #include <vulkan/vulkan.hpp>
 // #include <vulkan/vulkan_win32.h>
