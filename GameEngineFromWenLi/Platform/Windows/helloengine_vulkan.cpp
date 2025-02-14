@@ -9,7 +9,7 @@
 #include <set>
 #include <string>
 
-#include "math.h"
+#include "vectormath.h"
 
 #include <glm/gtx/hash.hpp>
 #include <vulkan/vulkan.hpp>
