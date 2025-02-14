@@ -11,6 +11,7 @@
 
 #include "math.h"
 
+#include <glm/gtx/hash.hpp>
 #include <vulkan/vulkan.hpp>
 // #include <vulkan/vulkan_win32.h>
 
@@ -135,6 +136,62 @@ static vk::DebugUtilsMessengerCreateInfoEXT getDebugUtilsMessengerCreateInfo() {
         debugCallback,
     };
 }
+
+struct Vertex {
+	glm::vec3 pos;
+	glm::vec3 color;
+	glm::vec2 texCoord;
+
+	bool operator==(const Vertex& other) const
+    {
+        return pos == other.pos && color == other.color && texCoord == other.texCoord;
+    }
+
+	static vk::VertexInputBindingDescription getBindingDescription()
+    {
+        vk::VertexInputBindingDescription bindingDescription{
+            0,
+            sizeof(Vertex),
+            vk::VertexInputRate::eVertex
+        };
+  
+	    return bindingDescription;
+    }
+
+	static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions()
+    {
+        std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions{};
+
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = vk::Format::eR32G32B32Sfloat;
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = vk::Format::eR32G32B32Sfloat;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+        attributeDescriptions[2].binding = 0;
+        attributeDescriptions[2].location = 2;
+        attributeDescriptions[2].format = vk::Format::eR32G32Sfloat;
+        attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
+        return attributeDescriptions;
+    }
+
+};
+
+namespace std {
+	template<> struct hash<Vertex> {
+		size_t operator()(Vertex const& vertex) const {
+			return ((hash<glm::vec3>()(vertex.pos) ^
+				(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+				(hash<glm::vec2>()(vertex.texCoord) << 1);
+		}
+	};
+}
+
 
 void createInstance()
 {
@@ -567,7 +624,7 @@ void createDescriptorSetLayout()
     }
 }
 
-std::vector<char> readFile(const std::string& filename) {
+std::vector<uint32_t> readFile(const std::string& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open()) {
@@ -575,13 +632,29 @@ std::vector<char> readFile(const std::string& filename) {
 	}
 
 	size_t fileSize = (size_t)file.tellg();
-	std::vector<char> buffer(fileSize);
+	std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
 
 	file.seekg(0);
-	file.read(buffer.data(), fileSize);
+	file.read(reinterpret_cast<char*>(buffer.data()), fileSize);
 
 	file.close();
 	return buffer;
+}
+
+vk::ShaderModule createShaderModule(std::vector<uint32_t>& code)
+{
+    vk::ShaderModuleCreateInfo createInfo(
+        {},
+        code,
+        nullptr
+    );
+
+    vk::ShaderModule shaderModule = g_vkDevice.createShaderModule(createInfo);
+    if (!shaderModule) {
+        throw std::runtime_error("failed to create shader module!");
+    }
+
+    return shaderModule;
 }
 
 void createGraphicsPipeline()
@@ -590,36 +663,38 @@ void createGraphicsPipeline()
 	auto vertShaderCode = readFile("shaders/vert.spv");
 	auto fragShaderCode = readFile("shaders/frag.spv");
 
-	VkShaderModule vertShaderModule = createShaderModule(device, vertShaderCode);
-	VkShaderModule fragShaderModule = createShaderModule(device, fragShaderCode);
+	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
 
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = vertShaderModule;
-	vertShaderStageInfo.pName = "main";
+    vk::PipelineShaderStageCreateInfo vertShaderStageInfo {
+        {},
+        vk::ShaderStageFlagBits::eVertex,
+        vertShaderModule,
+        "main"
+    };
 
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fragShaderStageInfo.module = fragShaderModule;
-	fragShaderStageInfo.pName = "main";
+    vk::PipelineShaderStageCreateInfo fragShaderStageInfo {
+        {},
+        vk::ShaderStageFlagBits::eFragment,
+        fragShaderModule,
+        "main"
+    };
 
-	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+	vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 	//2.fixed functions
 
 	//2.1 dynamic state: changes without recreating the pipeline state at draw time
 	//eg. the size of viewport / line width / blend constants / depth test / front face ......
-	std::vector<VkDynamicState> dynamicStates = {
+	std::vector<vk::DynamicState> dynamicStates = {
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR
 	};
 
-	VkPipelineDynamicStateCreateInfo dynamicState{};
-	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-	dynamicState.pDynamicStates = dynamicStates.data();
+	vk::PipelineDynamicStateCreateInfo dynamicState{
+        {},
+        dynamicStates
+    };
 
 	//2.2 vertex input : 
 	// bindings -> spacing between data / per-vertex or per-instance
@@ -627,119 +702,105 @@ void createGraphicsPipeline()
 	//for vertex buffer to do
 	auto bindingDescription = Vertex::getBindingDescription();
 	auto attributeDescriptions = Vertex::getAttributeDescriptions();
-
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+	vk::PipelineVertexInputStateCreateInfo vertexInputInfo(
+        {},
+        bindingDescription,
+        attributeDescriptions
+    );
 
 	//2.3 input assembly:
 	//		which kind of geometry will be drawn from the vertices
 	//		if primitive restart should be enabled -> possible to break up lines and triangles in the _strip topology modes by index of 0xFFFF or 0xFFFFFFFF
-	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
-	inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+	vk::PipelineInputAssemblyStateCreateInfo inputAssemblyInfo{
+        {},
+        vk::PrimitiveTopology::eTriangleList
+    };
 
 	//2.4 viewport and scissors:
 	//		viewport is the region of the framebuffer, generally (0,0) to (width, height)
 	//the size of swap chain and its images may differ from the width and height of the window
-	VkViewport viewport{};
-	viewport.x = 0;
-	viewport.y = 0;
-	viewport.width = (float)swapchainExtent.width;
-	viewport.height = (float)swapchainExtent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
+	vk::Viewport viewport{
+        0, 0,
+        (float)swapchainExtent.width, (float)swapchainExtent.height,
+        0.0f, 1.0f
+    };
 
 	//viewport define the transform from the image to the framebuffer, scissor rectangles define in which region pixels will stored
-	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
-	scissor.extent = swapchainExtent;
+	vk::Rect2D scissor{ { 0, 0 }, swapchainExtent};
 
 	// viewports and scissor rectangles can either as the static part of pipeline or as dynamic state set in the command buffer
 
-	VkPipelineViewportStateCreateInfo viewportState{};
-	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = &viewport;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = &scissor;
-
+	vk::PipelineViewportStateCreateInfo viewportState(
+        {},
+        viewport,
+        scissor
+    );
 
 	//2.5 rasterizer
 	//		take the geometry and turn it into fragments
 	//		perform depth testing / scissor test / face culling / wireframe rendering
-	VkPipelineRasterizationStateCreateInfo rasterizerStateInfo{};
-	rasterizerStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizerStateInfo.depthClampEnable = VK_FALSE;
-	rasterizerStateInfo.rasterizerDiscardEnable = VK_FALSE;
-	rasterizerStateInfo.polygonMode = VK_POLYGON_MODE_FILL;  //fill / line / point
-	rasterizerStateInfo.lineWidth = 1.0f;
-	rasterizerStateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-	//because of the Y-flip we did in the projection matrix, the vertices are now being drawn in counter-clockwise order.
-	//this causes backface culling to kick in and prevents any geometry from being drawn.
-	rasterizerStateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-	rasterizerStateInfo.depthBiasEnable = VK_FALSE;
-	rasterizerStateInfo.depthBiasConstantFactor = 0.0f;
-	rasterizerStateInfo.depthBiasClamp = 0.0f;
-	rasterizerStateInfo.depthBiasSlopeFactor = 0.0f;
+	vk::PipelineRasterizationStateCreateInfo rasterizerStateInfo{
+        {},
+        VK_FALSE,
+        VK_FALSE,
+        vk::PolygonMode::eFill,
+        vk::CullModeFlags::eBack,
+        vk::FrontFace::eCounterClockwise,
+        VK_FALSE,
+        0.0f,
+        0.0f,
+        0.0f,
+        1.0f
+    };
 
 	//2.6 multisampling
-	VkPipelineMultisampleStateCreateInfo multisamplingStateInfo{};
-	multisamplingStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisamplingStateInfo.sampleShadingEnable = VK_FALSE;
-	multisamplingStateInfo.rasterizationSamples = msaaSamples;
-	multisamplingStateInfo.minSampleShading = 1.0f;
-	multisamplingStateInfo.pSampleMask = nullptr;
-	multisamplingStateInfo.alphaToCoverageEnable = VK_FALSE;
-	multisamplingStateInfo.alphaToOneEnable = VK_FALSE;
+	vk::PipelineMultisampleStateCreateInfo multisamplingStateInfo{
+        {},
+        msaaSamples,
+        VK_FALSE,
+        1.0f,
+    };
+	
 
 	//2.7 depth and stencil test
-	VkPipelineDepthStencilStateCreateInfo depthStencil{};
-	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-	//keep fragments that fall within the specified depth range
-	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.minDepthBounds = 0.0f;
-	depthStencil.maxDepthBounds = 1.0f;
-	//stencil buffer operation
-	depthStencil.stencilTestEnable = VK_FALSE;
-	depthStencil.front = {};
-	depthStencil.back = {};
+	vk::PipelineDepthStencilStateCreateInfo depthStencil{
+        {},
+        VK_TRUE,
+        VK_TRUE,
+        vk::CompareOp::eLess，
+        VK_FALSE,
+        VK_FALSE,
+        {},
+        {},
+    };
 
 	//2.8 color blending
 	//		mix the old and new one to product a final color / combine the old and new one using a bitwise operation
 	//		VkPipelineColorBlendAttachmentState(per attached framebuffer) and VkPipelineColorBlendStateCreateInfo to config color blending
-	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	//alpha blending
-	colorBlendAttachment.blendEnable = VK_TRUE;
-	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+	vk::PipelineColorBlendAttachmentState colorBlendAttachment{
+        VK_TRUE,
+        vk::BlendFactor::eSrcAlpha,
+        vk::BlendFactor::eOneMinusSrc1Alpha,
+        vk::BlendOp::eAdd,
+        vk::BlendFactor::eOne,
+        vk::BlendFactor::eZero,
+        vk::BlendOp::eAdd,
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
+    };
 
-	VkPipelineColorBlendStateCreateInfo colorBlendStateInfo{};
-	colorBlendStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlendStateInfo.logicOpEnable = VK_FALSE;  //the switch for bitwise combination
-	colorBlendStateInfo.logicOp = VK_LOGIC_OP_COPY;
-	colorBlendStateInfo.attachmentCount = 1;
-	colorBlendStateInfo.pAttachments = &colorBlendAttachment;
-	colorBlendStateInfo.blendConstants[0] = 0.0f;
-	colorBlendStateInfo.blendConstants[1] = 0.0f;
-	colorBlendStateInfo.blendConstants[2] = 0.0f;
-	colorBlendStateInfo.blendConstants[3] = 0.0f;
+	vk::PipelineColorBlendStateCreateInfo colorBlendStateInfo(
+        {},
+        VK_FALSE,
+        vk::LogicOp::eCopy,
+        &colorBlendAttachment,
+        {0.0f, 0.0f, 0.0f, 0.0f}
+    );
 
 	//2.9 pipeline layout
 	//		uniform value eg. transform matrix / texture samplers
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	vk::PipelineLayoutCreateInfo pipelineLayoutInfo(
+        
+    );
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
 	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
