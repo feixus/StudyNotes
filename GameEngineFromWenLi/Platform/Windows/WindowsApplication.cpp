@@ -3,13 +3,6 @@
 
 using namespace My;
 
-namespace My
-{
-    GfxConfiguration config(8, 8, 8, 8, 32, 0, 0, 960, 540, L"GameEngine(Windows)");
-    WindowsApplication g_App(config);
-    IApplication* g_pApp = &g_App;
-}
-
 int My::WindowsApplication::Initialize()
 {
     int result;
@@ -46,6 +39,8 @@ int My::WindowsApplication::Initialize()
                             NULL);
 
     ShowWindow(hWnd, SW_SHOW);
+
+    m_hWnd = hWnd;
 
     return result;                            
 }

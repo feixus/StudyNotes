@@ -304,6 +304,7 @@ void WaitForPreviousFrame()
     g_nFrameIndex = g_pSwapChain->GetCurrentBackBufferIndex();
 }
 
+// gpu memory structure that stores descriptors, which is metadata that describe resources like textures, buffers or samplers 
 void CreateDescriptorHeaps()
 {
     // describe and create a render target view(RTV) descriptor heap
@@ -359,7 +360,7 @@ void InitPipeline()
 {
     ComPtr<ID3DBlob> error;
 
-    // create the root signature
+    // create the root signature, tells the GPU how shaders will access resources like CBV/SRV/UAV/Descriptor Tables/Samplers...
     {
         D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 
@@ -392,6 +393,7 @@ void InitPipeline()
         rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
 
         ComPtr<ID3DBlob> signature;
+        // serialize the root signature into a version 1.1 blob
         ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
         ThrowIfFailed(g_pDev->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&g_pRootSignature)));
     }

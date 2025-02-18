@@ -19,6 +19,8 @@ namespace My
 
         virtual bool IsQuit();
 
+        inline GfxConfiguration& GetConfiguration() { return m_Config; }
+
     protected:
         // Flag if the program is quit
         static bool m_bQuit;

@@ -1,14 +1,11 @@
 #pragma once
-
-#include "IRuntimeModule.hpp"
+#include "GraphicsManager.hpp"
 
 namespace My
 {
-    class GraphicsManager : public IRuntimeModule
+    class OpenGLGraphicsManager : public GraphicsManager
     {
     public:
-        virtual ~GraphicsManager() {}
-
         virtual int Initialize();
         virtual void Finalize();
 
