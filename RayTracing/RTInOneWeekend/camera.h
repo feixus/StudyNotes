@@ -2,6 +2,7 @@
 
 #include "hittable.h"
 #include "color.h"
+#include "material.h"
 
 namespace My {
     class camera {
@@ -85,10 +86,12 @@ namespace My {
 
                 // 0.001 for shadow acne, because of floating point rounding errors
                 if (world.hit(r, interval(0.001, infinity), rec)) {
-                    // lambertian reflection compare to uniform random reflection
-                    // vec3 direction = random_in_hemisphere(rec.normal);
-                    vec3 direction = rec.normal + random_unit_vector();
-                    return 0.5 * ray_color(ray(rec.p, direction), depth - 1, world);
+                    ray scattered;
+                    color attenuation;
+                    if (rec.mat->scatter(r, rec, attenuation, scattered))
+                        return attenuation * ray_color(scattered, depth - 1, world);
+                    
+                    return color(0, 0, 0);
                 }
 
                 vec3 unit_direction = unit_vector(r.direction());
