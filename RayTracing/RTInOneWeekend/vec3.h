@@ -50,6 +50,10 @@ namespace My {
                 return (std::fabs(e[0]) < s) && (std::fabs(e[1]) < s) && (std::fabs(e[2]) < s);
             }
 
+            static vec3 random() {
+                return vec3(random_double(), random_double(), random_double());
+            }
+
             static vec3 random(double min, double max) {
                 return vec3(random_double(min, max), random_double(min, max), random_double(min, max));
             }
@@ -128,6 +132,14 @@ namespace My {
         vec3 r_out_perp = etai_over_etat * (uv + cost_theta * n);   // ray perpendicular to the n'
         vec3 r_out_parallel = -std::sqrt(std::fabs(1.0 - r_out_perp.length_squared())) * n;  // ray parallel to the n'
         return r_out_perp + r_out_parallel;
+    }
+
+    inline vec3 random_in_uint_disk() {
+        while(true) {
+            auto p = vec3(random_double(-1, 1), random_double(-1, 1), 0);
+            if (p.length_squared() < 1)
+                return p;
+        }
     }
 }
 
