@@ -22,6 +22,9 @@ namespace My
         inline GfxConfiguration& GetConfiguration() { return m_Config; }
 
     protected:
+        virtual void OnDraw() {};
+
+    protected:
         // Flag if the program is quit
         static bool m_bQuit;
 

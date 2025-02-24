@@ -319,12 +319,12 @@ int main(void)
     /* create GLX window */
     glxwindow = glXCreateWindow(display, fb_config, window, 0);
 
-    if (!window)
+    if (!glxwindow)
     {
         xcb_destroy_window(pConn, window);
         glXDestroyContext(display, context);
 
-        fprintf(stderr, "glXDestroyContext failed\n");
+        fprintf(stderr, "glXCreateContext failed\n");
         return -1;
     }
 

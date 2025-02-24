@@ -33,8 +33,8 @@ namespace My
         void Free(void* p, size_t size);
 
     private:
-        static size_t*      m_pBlockSizeLookup;
-        static Allocator*   m_pAllocators;
+        inline static size_t*      m_pBlockSizeLookup;
+        inline static Allocator*   m_pAllocators;
 
     private:
         static Allocator* LookupAllocator(size_t size);
