@@ -48,6 +48,13 @@ static bool isExtensionSupported(const char *extList, const char *extension)
     return false;
 }
 
+static bool ctxErrorOccurred = false;
+static int ctxErrorHandler(Display *dpy, XErrorEvent *ev)
+{
+  ctxErrorOccurred = true;
+  return 0;
+}
+
 int My::OpenGLApplication::Initialize()
 {
     int result;
@@ -105,12 +112,12 @@ int My::OpenGLApplication::Initialize()
 
         for (int i = 0; i < num_fb_configs; ++i)
         {
-            XVisualInfo *vi = glXGetVisualFromFBConfig(display, fb_configs[i]);
+            XVisualInfo *vi = glXGetVisualFromFBConfig(m_pDisplay, fb_configs[i]);
             if (vi)
             {
                 int samp_buf, samples;
-                glXGetFBConfigAttrib(display, fb_configs[i], GLX_SAMPLE_BUFFERS, &samp_buf);
-                glXGetFBConfigAttrib(display, fb_configs[i], GLX_SAMPLES, &samples);
+                glXGetFBConfigAttrib(m_pDisplay, fb_configs[i], GLX_SAMPLE_BUFFERS, &samp_buf);
+                glXGetFBConfigAttrib(m_pDisplay, fb_configs[i], GLX_SAMPLES, &samples);
 
                 printf ("matching fbconfig %d, visual ID 0x%lx: SAMPLE_BUFFERS = %d, SAMPLES = %d\n",
                         i, vi->visualid, samp_buf, samples);
@@ -127,7 +134,7 @@ int My::OpenGLApplication::Initialize()
         fb_config = fb_configs[best_fbc];
     }
 
-    vi = glXGetVisualFromFBConfig(display, fb_config);
+    vi = glXGetVisualFromFBConfig(m_pDisplay, fb_config);
     printf("chosen visual ID = 0x%lx\n", vi->visualid);
 
     /* establish connection to X server */
@@ -140,7 +147,7 @@ int My::OpenGLApplication::Initialize()
     }
 
     /* acquire event queue ownership */
-    XSetEventQueueOwner(display, XCBOwnsEventQueue);
+    XSetEventQueueOwner(m_pDisplay, XCBOwnsEventQueue);
 
     /* find XCB screen */
     xcb_screen_iterator_t screen_iter = xcb_setup_roots_iterator(xcb_get_setup(m_pConn));
@@ -184,8 +191,8 @@ int My::OpenGLApplication::Initialize()
          printf("creating context\n");
          m_Context = glXCreateContextAttribsARB(m_pDisplay, fb_config, 0, True, context_attribs);
  
-         XSync(display, False);
-         if (!ctxErrorOccurred && context)
+         XSync(m_pDisplay, False);
+         if (!ctxErrorOccurred && m_Context)
              printf("created GL 3.0 context\n");
          else
          {

@@ -77,7 +77,7 @@ void My::XcbApplication::Tick()
     {
         case XCB_EXPOSE:
             {
-                OnDraw():
+                OnDraw();
             }
             break;
         case XCB_KEY_PRESS:
