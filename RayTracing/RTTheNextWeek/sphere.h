@@ -26,6 +26,11 @@ namespace My {
             }
 
             bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+                // ray-sphere intersection 
+                //P(t) = origin + t * direction | x^2 + y^2 + z^2 = radius^2
+                // (origin + t * direction - center)^2 = radius^2
+                // t^2 * direction^2 + 2t * direction * (origin - center) + (origin - center)^2 - radius^2 = 0
+                // at^2 + bt + c = 0
                 point3 current_center = center.at(r.time());
                 vec3 oc = current_center - r.origin();
                 auto a = dot(r.direction(), r.direction());
@@ -49,12 +54,26 @@ namespace My {
                 rec.p = r.at(rec.t);
                 vec3 outward_normal = (rec.p - current_center) / radius;
                 rec.set_face_normal(r, outward_normal);
+                get_sphere_uv(outward_normal, rec.u, rec.v);
                 rec.mat = mat;
 
                 return true;
             }
 
             aabb bounding_box() const override { return bbox; }
+
+        private:
+            static void get_sphere_uv(const point3& p, double& u, double& v) {
+                // p: a given point on the sphere of radius one, centered at the origin
+                // u: returned value [0, 1] of angle around the Y axis from x = -1
+                // v: returned value [0, 1] of angle from y = -1 to y = 1
+
+                auto theta = std::acos(-p.y());
+                auto phi = std::atan2(-p.z(), p.x()) + pi;
+
+                u = phi / (2 * pi);
+                v = theta / pi;
+            }
 
         private:
             ray center;

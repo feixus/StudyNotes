@@ -33,6 +33,7 @@ namespace My {
             const point3& ray_orig = r.origin();
             const vec3& ray_dir = r.direction();
 
+            // P(t) = origin + t * direction => t = (P - origin) / direction
             for (int axis = 0; axis < 3; axis++) {
                 const interval& ax = axis_interval(axis);
                 const double adinv = 1.0 / ray_dir[axis];
