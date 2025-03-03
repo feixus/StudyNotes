@@ -11,6 +11,7 @@ namespace My {
             int image_width = 100;
             int samples_per_pixel = 10;     // count of random samples for each pixel
             int max_depth = 10;             // maximum number of ray bounces into scene
+            color background = color(0, 0, 0);
 
             double vfov = 90;
             // camera space
@@ -116,18 +117,19 @@ namespace My {
                 hit_record rec;
 
                 // 0.001 for shadow acne, because of floating point rounding errors
-                if (world.hit(r, interval(0.001, infinity), rec)) {
-                    ray scattered;
-                    color attenuation;
-                    if (rec.mat->scatter(r, rec, attenuation, scattered))
-                        return attenuation * ray_color(scattered, depth - 1, world);
-                    
-                    return color(0, 0, 0);
-                }
+                if (!world.hit(r, interval(0.001, infinity), rec))
+                    return background;
 
-                vec3 unit_direction = unit_vector(r.direction());
-                auto t = 0.5 * (unit_direction.y() + 1.0);
-                return (1.0 - t) * color(1.0, 1.0, 1.0) + t * color(0.5, 0.7, 1.0);
+                ray scattered;
+                color attenuation;
+                color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
+
+                if (!rec.mat->scatter(r, rec, attenuation, scattered))
+                    return color_from_emission;
+
+                color color_from_scatter = attenuation * ray_color(scattered, depth - 1, world);
+
+                return color_from_emission + color_from_scatter;
             }
     };
 }
