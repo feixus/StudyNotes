@@ -1,0 +1,10 @@
+1. size_t: platform-dependent size, used for sizes and counts.(e.g. sizeof)  
+2. 2^n: alignment & (alignment - 1)  
+3. align function for x: ((x) + ((alignment) - 1)) & ~((alignment) - 1)  
+4. placement new which constructs an object on a pre-allocated buffer.  
+5. polymorphic_allocator in c++17, which runtime-selected memory allocation for standard containers.  
+6. virtual memory | virtual address space | memory layout(code segement/data segement/BSS segement/heap/memory mapping segement/stack/command list args,Env vars) | memory mapping(brk,sbrk,mmap)
+7. memory allocator | cache locality  
+8. std::align_val_t in c++17: aligned memory allocation, to replace the platform-specific functions(posix_memalign(POSIX), _aligned_malloc(Windows)...)  
+9. memory alignment, aligned means the data's memory address is a multiple of the data size.  on a 64-bit system, the CPU fetched data from memory is 8 bytes at once.  
+
