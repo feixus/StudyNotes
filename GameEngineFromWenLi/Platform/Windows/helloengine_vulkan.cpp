@@ -18,6 +18,8 @@
 #include <vulkan/vulkan_win32.h>
 #include <vulkan/vulkan_funcs.hpp>
 
+#include "../../Framework/Common/vectormath.h"
+
 
 using namespace std;
 
@@ -57,6 +59,43 @@ struct SwapChainSupportDetails {
 	std::vector<vk::SurfaceFormatKHR> formats;
 	std::vector<vk::PresentModeKHR> presentModes;
 };
+
+typedef struct Vertex
+{
+    VectorType position;
+    VectorType color;
+
+    static vk::VertexInputBindingDescription getBindingDescription()
+    {
+        vk::VertexInputBindingDescription bindingDescription{};
+        bindingDescription.setBinding(0)
+                          .setStride(sizeof(Vertex))
+                          .setInputRate(vk::VertexInputRate::eVertex);
+        return bindingDescription;
+    }
+
+    static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        return std::array<vk::VertexInputAttributeDescription, 2>{
+            vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, position)},
+            vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color)}
+        };
+    }
+
+} Vertex;
+
+
+const std::vector<Vertex> vertices = {
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
+};
+
 
 vk::Instance m_instance;
 vk::DebugUtilsMessengerEXT m_debugUtilsMessenger;
@@ -103,9 +142,6 @@ vk::DeviceMemory textureImageMemory;
 vk::ImageView textureImageView;
 vk::Sampler textureSampler;
 
-// std::vector<Vertex> vertices;
-// std::vector<uint32_t> indices;
-
 std::vector<vk::Buffer> uniformBuffers;
 std::vector<vk::DeviceMemory> uniformBuffersMemory;
 std::vector<void*> uniformBuffersMapped;
@@ -139,6 +175,11 @@ void createImage(uint32_t, uint32_t ,
         vk::ImageUsageFlags, vk::MemoryPropertyFlags,
         vk::Image&, vk::DeviceMemory&);
 void transitionImageLayout(vk::Image, vk::Format, vk::ImageLayout, vk::ImageLayout, uint32_t);
+uint32_t findMemoryType(uint32_t, vk::MemoryPropertyFlags);
+void createBuffer(vk::DeviceSize, vk::BufferUsageFlags, vk::MemoryPropertyFlags, vk::Buffer&, vk::DeviceMemory&);
+void copyBuffer(vk::Buffer, vk::Buffer, vk::DeviceSize);
+vk::CommandBuffer beginSingleTimeCommands();
+void endSingleTimeCommands(vk::CommandBuffer);
 
 static vk::DebugUtilsMessengerCreateInfoEXT getDebugUtilsMessengerCreateInfo();
 
@@ -244,6 +285,7 @@ void pickPhysicalDevice()
         std::cout << "  device ID: " << m_physicalDevice.getProperties().deviceID << std::endl;
         std::cout << "  device name: " << m_physicalDevice.getProperties().deviceName << std::endl;
         std::cout << "  pipeline cache UUID: " << m_physicalDevice.getProperties().pipelineCacheUUID << std::endl;
+        std::cout << "  max memory allocation count: " << m_physicalDevice.getProperties().limits.maxMemoryAllocationCount << std::endl;
     }
 }
 
@@ -503,16 +545,14 @@ void createGraphicsPipeline()
 	// bindings -> spacing between data / per-vertex or per-instance
 	// attribute descriptions : binding to load them from and at which offset
 	//for vertex buffer to do
-	// auto bindingDescription = Vertex::getBindingDescription();
-	// auto attributeDescriptions = Vertex::getAttributeDescriptions();
-	// vk::PipelineVertexInputStateCreateInfo vertexInputInfo(
-    //     {},
-    //     bindingDescription,
-    //     attributeDescriptions
-    // );
+	auto bindingDescription = Vertex::getBindingDescription();
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
 	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.setVertexBindingDescriptionCount(0)
-                   .setVertexAttributeDescriptionCount(0);
+    vertexInputInfo.setVertexBindingDescriptionCount(1)
+                   .setPVertexBindingDescriptions(&bindingDescription)
+                   .setVertexAttributeDescriptionCount(static_cast<uint32_t>(attributeDescriptions.size()))
+                   .setPVertexAttributeDescriptions(attributeDescriptions.data());
 
 	//2.3 input assembly:
 	//		which kind of geometry will be drawn from the vertices
@@ -729,6 +769,61 @@ void createCommandPool()
     }
 }
 
+void createVertexBuffer()
+{
+    vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+    vk::Buffer stagingBuffer;
+    vk::DeviceMemory stagingBufferMemory;
+    createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, 
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, 
+        stagingBuffer, stagingBufferMemory);
+
+    void* data;
+    vk::Result result = m_device.mapMemory(stagingBufferMemory, 0, bufferSize, {}, &data);
+    if (result != vk::Result::eSuccess) {
+        throw std::runtime_error("failed to map vertex buffer memory!");
+    }
+
+    memcpy(data, vertices.data(), (size_t)bufferSize);
+    m_device.unmapMemory(stagingBufferMemory);
+
+    createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, 
+        vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer, vertexBufferMemory);
+
+    copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+    m_device.destroyBuffer(stagingBuffer, nullptr);
+    m_device.freeMemory(stagingBufferMemory, nullptr);
+}
+
+void createIndexBuffer()
+{
+    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+    vk::Buffer stagingBuffer;
+    vk::DeviceMemory stagingBufferMemory;
+    createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, 
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, 
+        stagingBuffer, stagingBufferMemory);
+
+    void* data;
+    vk::Result result = m_device.mapMemory(stagingBufferMemory, 0, bufferSize, {}, &data);
+    if (result != vk::Result::eSuccess) {
+        throw std::runtime_error("failed to map index buffer memory!");
+    }
+    memcpy(data, indices.data(), (size_t)bufferSize);
+    m_device.unmapMemory(stagingBufferMemory);
+
+    createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, 
+        vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer, indexBufferMemory);
+
+    copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+
+    m_device.destroyBuffer(stagingBuffer, nullptr);
+    m_device.freeMemory(stagingBufferMemory, nullptr);
+}
+
 void createCommandBuffers()
 {
     m_commandBuffers.resize(MAX_FRAMES_IN_FFLIGHT);
@@ -795,7 +890,13 @@ void recordCommandBuffer(vk::CommandBuffer commandBuffer, uint32_t imageIndex)
 
         commandBuffer.setScissor(0, scissor);
 
-        commandBuffer.draw(3, 1, 0, 0);
+        vk::Buffer vertexBuffers[] = {vertexBuffer};
+        vk::DeviceSize offsets[] = {0};
+        commandBuffer.bindVertexBuffers(0, 1, vertexBuffers, offsets);
+
+        commandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint16);
+
+        commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
     commandBuffer.endRenderPass();
 
@@ -827,6 +928,46 @@ void createSyncObjects()
             throw std::runtime_error("failed to create synchronization objects for a frame!");
         }
     }
+}
+
+void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size)
+{
+    vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
+
+    vk::BufferCopy copyRegion{};
+    copyRegion.setSrcOffset(0)
+              .setDstOffset(0)
+              .setSize(size);
+
+    commandBuffer.copyBuffer(srcBuffer, dstBuffer, 1, &copyRegion);
+    
+    endSingleTimeCommands(commandBuffer);
+}
+
+void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::Buffer& buffer, vk::DeviceMemory& bufferMemory)
+{
+    vk::BufferCreateInfo bufferInfo{};
+    bufferInfo.setSize(size)
+              .setUsage(usage)
+              .setSharingMode(vk::SharingMode::eExclusive);
+
+    buffer = m_device.createBuffer(bufferInfo);
+    if (!buffer) {
+        throw std::runtime_error("failed to create buffer!");
+    }
+
+    vk::MemoryRequirements memRequirements = m_device.getBufferMemoryRequirements(buffer);
+
+    vk::MemoryAllocateInfo allocInfo{};
+    allocInfo.setAllocationSize(memRequirements.size)
+             .setMemoryTypeIndex(findMemoryType(memRequirements.memoryTypeBits, properties));
+
+    bufferMemory = m_device.allocateMemory(allocInfo);
+    if (!bufferMemory) {
+        throw std::runtime_error("failed to allocate buffer memory!");
+    }
+
+    m_device.bindBufferMemory(buffer, bufferMemory, 0);
 }
 
 vk::CommandBuffer beginSingleTimeCommands()
@@ -865,7 +1006,7 @@ void endSingleTimeCommands(vk::CommandBuffer commandBuffer)
         throw std::runtime_error("failed to submit single time command buffer!");
     }
 
-    // a fence can schedule multiple command buffers for execution and wait for all of them to finish
+    // a fence can schedule multiple transfer simultaneously and wait for all of them complete, instead of executing one at a time.
     m_graphicQueue.waitIdle();
 
     m_device.freeCommandBuffers(m_commandPool, 1, &commandBuffer);
@@ -1311,36 +1452,6 @@ vk::Format findDepthFormat()
 //     }
 // }
 
-// void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::Buffer& buffer, vk::DeviceMemory& bufferMemory)
-// {
-//     vk::BufferCreateInfo bufferInfo{
-//         .size = size,
-//         .usage = usage,
-//         .sharingMode = vk::SharingMode::eExclusive,
-//     };
-
-//     buffer = m_device.createBuffer(bufferInfo);
-//     if (!buffer) {
-//         throw std::runtime_error("failed to create buffer!");
-//     }
-
-//     vk::MemoryRequirements memRequirements = m_device.getBufferMemoryRequirements(buffer);
-
-//     vk::MemoryAllocateInfo allocInfo{
-//         .allocationSize = memRequirements.size,
-//         .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties),
-//     };
-
-//     bufferMemory = m_device.allocateMemory(allocInfo);
-//     if (!bufferMemory) {
-//         throw std::runtime_error("failed to allocate buffer memory!");
-//     }
-
-//     m_device.bindBufferMemory(buffer, bufferMemory, 0);
-// }
-
-
-
 // void createTextureImage(const char* filename)
 // {
 //     int texWidth, texHeight, texChannels;
@@ -1407,54 +1518,6 @@ vk::Format findDepthFormat()
 //     if (!textureSampler) {
 //         throw std::runtime_error("failed to create texture sampler!");
 //     }
-// }
-
-// void createVertexBuffer()
-// {
-//     vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-
-//     vk::Buffer stagingBuffer;
-//     vk::DeviceMemory stagingBufferMemory;
-//     createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, 
-//         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, 
-//         stagingBuffer, stagingBufferMemory);
-
-//     void* data;
-//     m_device.mapMemory(stagingBufferMemory, 0, bufferSize, {}, &data);
-//     memcpy(data, vertices.data(), (size_t)bufferSize);
-//     m_device.unmapMemory(stagingBufferMemory);
-
-//     createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, 
-//         vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer, vertexBufferMemory);
-
-//     copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
-
-//     m_device.destroyBuffer(stagingBuffer, nullptr);
-//     m_device.freeMemory(stagingBufferMemory, nullptr);
-// }
-
-// void createIndexBuffer()
-// {
-//     vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-//     vk::Buffer stagingBuffer;
-//     vk::DeviceMemory stagingBufferMemory;
-//     createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, 
-//         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, 
-//         stagingBuffer, stagingBufferMemory);
-
-//     void* data;
-//     m_device.mapMemory(stagingBufferMemory, 0, bufferSize, {}, &data);
-//     memcpy(data, indices.data(), (size_t)bufferSize);
-//     m_device.unmapMemory(stagingBufferMemory);
-
-//     createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, 
-//         vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer, indexBufferMemory);
-
-//     copyBuffer(stagingBuffer, indexBuffer, bufferSize);
-
-//     m_device.destroyBuffer(stagingBuffer, nullptr);
-//     m_device.freeMemory(stagingBufferMemory, nullptr);
 // }
 
 // void createUniformBuffers()
@@ -1563,9 +1626,11 @@ void InitVulkan(HWND hwnd)
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
+    createFramebuffers();
     createCommandPool();
     // createDepthResources();
-    createFramebuffers();
+    createVertexBuffer();
+    createIndexBuffer();
 	createCommandBuffers();
 
 	createSyncObjects();
@@ -1576,8 +1641,6 @@ void InitVulkan(HWND hwnd)
 	// createTextureImageView();
 	// createTextureSampler();
     // loadModel(MODEL_PATH.c_str(), vertices, indices);
-    // createVertexBuffer();
-    // createIndexBuffer();
     // createUniformBuffers();
 	// createDescriptorPool();
 	// createDescriptorSets();
@@ -1696,6 +1759,12 @@ void FinalizeVulkan(HWND hwnd)
     m_device.destroyPipelineLayout(m_pipelineLayout);
     m_device.destroyRenderPass(m_renderPass);
 
+    m_device.destroyBuffer(vertexBuffer);
+    m_device.freeMemory(vertexBufferMemory);
+
+    m_device.destroyBuffer(indexBuffer);
+    m_device.freeMemory(indexBufferMemory);
+
     m_device.destroy();
 
     if (enableValidationLayers) {
@@ -1765,6 +1834,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstances, LPTSTR lpCmdLi
         DispatchMessage(&msg);
     }
 
+    m_device.waitIdle();
+
     FinalizeVulkan(hWnd);
    
    //return this part of the WM_QUIT message to Windows
@@ -1805,13 +1876,13 @@ developer command prompt for vs 2022:
     debug: devenv /debug helloengine_vulkan.exe
 
 cmd:
-    clang -std=c++20 -I"%VULKAN_SDK%/Include" -L"%VULKAN_SDK%/Lib" -fuse-ld=lld -o helloengine_vulkan helloengine_vulkan.cpp -luser32 -lgdi32  -lvulkan-1
-
-    clang-cl /EHsc -o helloengine_vulkan helloengine_vulkan.cpp user32.lib gdi32.lib opengl32.lib
+    clang -std=c++20 -g -D_DEBUG -I"%VULKAN_SDK%/Include" -L"%VULKAN_SDK%/Lib" -fuse-ld=lld -o helloengine_vulkan.exe helloengine_vulkan.cpp -luser32 -lgdi32  -lvulkan-1 -lmsvcrtd
 
 
     normal error can be solved by validation layers, but when the program runs without any problems, 
     but there is no drawing, you can use RenderDoc to debug, check the parameters of each resource.
+
+    vkAlloateMemory: to allocate memory for a large number of objects at the same time is to create a custom allocator or use VulkanMemoryAllocator library.
 
 */
 
