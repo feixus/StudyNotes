@@ -12,6 +12,7 @@
         - [FRelevancePacket](#frelevancepacket)
         - [FPerViewPipelineState](#fperviewpipelinestate)
         - [TPipelineState](#tpipelinestate)
+- [Debug Switch](#debug-switch)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
@@ -343,10 +344,10 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
   
   
 ##### FPerViewPipelineState
-structure that contains the final state of deferred shading pipeline for a FViewInfo  
+FViewInfo在延迟着色管线中包含最终状态的结构体
   
 - diffuse indirect method: Disabled/SSGI/RTGI/Lumen/Plugin  
-- ScreenSpaceDenoiserMode for diffuse indirect  
+- ScreenSpaceDenoiserMode for diffuse indirect: Disable/DefaultDenoiser/ThirdPartyDenoiser  
 - ambient occlusion method: Disabled/SSAO/SSGI/RTAO  
 - reflection method: Disables/SSR/RTR/Lumen  
 - whether there is planar reflection to compose to the reflection  
@@ -355,3 +356,13 @@ structure that contains the final state of deferred shading pipeline for a FView
 
 ##### TPipelineState  
 封装处理大量维度的渲染器的pipeline state. 通过结构体内的内存偏移的排序来确保维度内没有循环引用.  
+如 FPerViewPipelineState/FFamilyPipelineState  
+  
+  
+# Debug Switch  
+- r.MeshDrawCommands.LogDynamicInstancingStats: 在下一帧打印dynamic instance stats  
+- DumpPrimitives: 将场景内所有primitive names写入到CSV file  
+- DumpDetailedPrimitives: 将场景内所有primitive details写入到CSV file  
+- r.SkinCache.Visualize overview/memory/off: 可视化GPU skin cache 数据  (仅可在编辑器下可视)  
+  list skincacheusage 可打印出每个骨骼网格的skincache使用类型  
+  

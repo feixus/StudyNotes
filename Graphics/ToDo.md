@@ -19,6 +19,9 @@
 	https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile  
 
 5. PDF(Probability Density Function)/CDF(Cumulative distribution function)/Importance Sampling  
+	a continuous function that specify the probability of the continuous random variable falling with a particular range of values.  such as normal distribution.  
+	https://stats.libretexts.org/Courses/Saint_Mary's_College_Notre_Dame/MATH_345__-_Probability_(Kuter)  
+  
    https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-20-gpu-based-importance-sampling  
    https://www.tobias-franke.eu/log/2014/03/30/notes_on_importance_sampling.html  
    https://github.com/google/filament/blob/main/libs/ibl/src/CubemapIBL.cpp  
@@ -33,7 +36,9 @@
    
 8. Distance Field  
   
-9. Stupid Spherical Harmonics (SH) Tricks  
+9.  Stupid Spherical Harmonics (SH) Tricks  
+
+10. randomized algorithms: Monte Carlo(eg. Monte Carlo integration) and Las Vegas(eg. quickSort)
    
    
 

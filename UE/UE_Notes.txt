@@ -85,8 +85,11 @@ __attribute__((visibility("default"))) in apple or linux
 		ios包进入场景时经常闪退: MetalCommandQueue/HeterogeneousVolumes(Fence/Heap???)
 		android 草过多会崩溃: UnifiedBuffer(ScatterBytes/UploadBufferSize)
 		同时创建多个UI时, 有的UI无法删除: GameViewportSubsystem
-		android打包时间过长: r.XGEShaderCompile=0
-		
+		android打包时间过长: r.XGEShaderCompile=0  
+
+  
+35. 一些UE-C++语法:
+	~SIZE_T(0) 作为标记来条件判别. 如在TPipelineState中用于标记是否将pipeline state提交到最终的immutable value.  
 		
 		
 		
