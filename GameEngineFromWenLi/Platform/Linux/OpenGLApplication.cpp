@@ -9,7 +9,7 @@
 using namespace My;
 
 namespace My {
-    GfxConfiguration config(8, 8, 8, 8, 32, 0, 0, 960, 540, "GameEngine(Linux)");
+    GfxConfiguration config(8, 8, 8, 8, 32, 0, 0, 960, 540, L"GameEngine(Linux)");
     IApplication* g_pApp                = static_cast<IApplication*>(new OpenGLApplication(config));
     GraphicsManager* g_pGraphicsManager = static_cast<GraphicsManager*>(new OpenGLGraphicsManager);
     MemoryManager* g_pMemoryManager     = static_cast<MemoryManager*>(new MemoryManager);

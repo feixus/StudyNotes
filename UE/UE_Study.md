@@ -26,7 +26,9 @@
 8. Forward+ Rendering(Tiles Forward Rendering)/Cluster Forward Rendering/Volume Tiled Forward Rendering  
 9. GPU Skin Cache  
     在GPU侧缓存skeletal vertices. 每个world/scene默认配置的最大缓存为128M. 可选每帧更新tangent. 将bone transform在compute shader计算并缓存  
-10. ispc(https://github.com/ispc/ispc) 
+10. ispc(https://github.com/ispc/ispc)
+    编译基于C的SPMD(single program, multiple data)编程语言以便运行于CPU和GPU的SIMD units.  在4-wide SSE或者8-wide AVX的架构上提供加速. 支持跨多核的并行化. 
+    支持windows/macOS/linux/android/ios/ps4/ps5,支持x86(SSE2,SSE4,AVX,AVX2,AVX512), Arm(NEON), Intel GPU(Gen9,Xe family).  
   
 
   
