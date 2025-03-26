@@ -1,47 +1,32 @@
-# cmake -G "Unix Makefiles" .. and make for clang/clang++ GNU-like command-line in build folder:
-#   1.  安装make
-#   2. 在make时, set (CMAKE_C_FLAGS_DEBUG "-g") 和 set(CMAKE_CXX_FLAGS_DEBUG "-g") 为何built target Empty报错(windows platform)
-        #lld-link: error: <root>: undefined symbol: mainCRTStartup
-        #lld-link: error: undefined symbol: void __cdecl operator delete(void *, unsigned __int64)
-        #>>> referenced by F:\StudyNotes\Graphics\GameEngineFromWenLi\Framework\Common\BaseApplication.hpp:7
-        #>>>               CMakeFiles/Empty.dir/EmptyApplication.cpp.obj:(public: virtual void * __cdecl My::BaseApplication::`scalar deleting dtor'(unsigned int))
-        #
-        #lld-link: error: undefined symbol: const type_info::`vftable'
-        #>>> referenced by CMakeFiles/Empty.dir/EmptyApplication.cpp.obj:(class My::BaseApplication `RTTI Type Descriptor')
-        #>>> referenced by CMakeFiles/Empty.dir/EmptyApplication.cpp.obj:(class My::IApplication `RTTI Type Descriptor')
-        #>>> referenced by CMakeFiles/Empty.dir/EmptyApplication.cpp.obj:(class My::IRuntimeModule `RTTI Type Descriptor')
-        #
-        #lld-link: error: undefined symbol: _purecall
-        #>>> referenced by CMakeFiles/Empty.dir/EmptyApplication.cpp.obj:(const My::IApplication::`vftable')
-        #>>> referenced by CMakeFiles/Empty.dir/EmptyApplication.cpp.obj:(const My::IApplication::`vftable')
-        #>>> referenced by CMakeFiles/Empty.dir/EmptyApplication.cpp.obj:(const My::IApplication::`vftable')
-        #>>> referenced 4 more times
-        #clang++: error: linker command failed with exit code 1 (use -v to see invocation)
-
-
-# cmake -G "Unix Makefiles" .. and make for MSVC-like command line
 cmake_minimum_required(VERSION 3.10)
 IF(${UNIX})
-        set (CMAKE_C_COMPILER                "clang")
-        #set (CMAKE_C_FLAGS_DEBUG            "-g")
+        set (CMAKE_C_COMPILER               "clang")
+        set (CMAKE_C_FLAGS_DEBUG            "-g")
         set (CMAKE_C_FLAGS_RELWITHDEBINFO   "-O2 -g")
         set (CMAKE_CXX_COMPILER             "clang++")
         set (CMAKE_CXX_FLAGS                "-Wall")
-        #set(CMAKE_CXX_FLAGS_DEBUG           "-g")
+        set (CMAKE_CXX_FLAGS_DEBUG          "-g")
         set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
         set (CMAKE_CXX_STANDARD 20)
 ELSEIF(${WIN32})
-        set (CMAKE_C_COMPILER               "clang-cl")
-        # set (CMAKE_C_FLAGS_DEBUG            "/Debug /Zi")
+        # only x64
+        if(${CMAKE_GENERATOR} MATCHES "Unix Makefiles")
+                set (CMAKE_C_COMPILER               "clang-cl")
+                set (CMAKE_CXX_COMPILER             "clang-cl")
+                set (CMAKE_C_FLAGS                  "-Wall --target=x86_64-pc-windows-msvc")
+                set (CMAKE_CXX_FLAGS                "-Wall -std=c++20 --target=x86_64-pc-windows-msvc")
+                set (CMAKE_MODULE_LINKER_FLAGS      "/MACHINE:X64")
+                set (CMAKE_STATIC_LINKER_FLAGS      "/MACHINE:X64")
+                set (CMAKE_EXE_LINKER_FLAGS         "/MACHINE:X64")
+        else()
+                set (CMAKE_C_FLAGS                  "/W4 /wd4514")
+                set (CMAKE_CXX_FLAGS                "/W4 /wd4514 /EHsc /std:c++20")
+        endif(${CMAKE_GENERATOR} MATCHES "Unix Makefiles")
+        set (CMAKE_C_FLAGS_DEBUG            "/Debug /Zi")
         set (CMAKE_C_FLAGS_RELWITHDEBINFO   "-O2 /Debug")
-        set (CMAKE_CXX_COMPILER             "clang-cl")
-        set (CMAKE_CXX_FLAGS                "-Wall")
-        # set (CMAKE_CXX_FLAGS_DEBUG          "/Debug /Zi")
-        set (CMAKE_CXX_FLAGS_RELEASE        "-O4 -DNDEBUG")
+        set (CMAKE_CXX_FLAGS_DEBUG          "/Debug /Zi")
         set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 /Debug")
-        set (CMAKE_CXX_STANDARD 20)
-ENDIF(${UNIX})
-        set (CMAKE_C_FLAGS                  "-Wall")
+ENDIF()
         set (CMAKE_C_FLAGS_MINSIZEREL       "-Os -DNDEBUG")
         set (CMAKE_C_FLAGS_RELEASE          "-O4 -DNDEBUG")
         set (CMAKE_C_STANDARD 11)
@@ -137,7 +122,11 @@ MESSAGE( STATUS "BORLAND: " ${BORLAND} )
 # Microsoft compiler 
 MESSAGE( STATUS "MSVC: " ${MSVC} )
 MESSAGE( STATUS "MSVC_IDE: " ${MSVC_IDE} )
-MESSAGE( STATUS "MSVC_VERSION : " ${MSVC_VERSION} )
+MESSAGE( STATUS "MSVC60: " ${MSVC60} )
+MESSAGE( STATUS "MSVC70: " ${MSVC70} )
+MESSAGE( STATUS "MSVC71: " ${MSVC71} )
+MESSAGE( STATUS "MSVC80: " ${MSVC80} )
+MESSAGE( STATUS "MSVC_COMPILER_2005 : " ${CMAKE_COMPILER_2005} )
 
 
 # set this to true if you don't want to rebuild the object files if the rules have changed, 
@@ -206,6 +195,7 @@ IF(${UNIX})
 ELSEIF(${WIN32})
         include_directories("${PROJECT_SOURCE_DIR}/Platform/Windows")
 ENDIF(${UNIX})
+include(CTest)
 add_subdirectory(Framework)
 add_subdirectory(Platform)
 add_subdirectory(RHI)

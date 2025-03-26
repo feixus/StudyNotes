@@ -63,9 +63,9 @@ namespace My
 			swizzle<Vector2Type<T>, 1, 0> yx;
 		};
 
-		Vector2Type<T>() { std::cout << "Vector2Type<T>() -->" << std::endl; };
-		Vector2Type<T>(const T& _v) : x(_v), y(_v) { std::cout << "Vector2Type<T>(const T& _v) -->" << std::endl; };
-		Vector2Type<T>(const T& _x, const T& _y) : x(_x), y(_y) { std::cout << "Vector2Type<T>(const T& _x, const T& _y) -->" << std::endl; };
+		Vector2Type<T>() { };
+		Vector2Type<T>(const T& _v) : x(_v), y(_v) { };
+		Vector2Type<T>(const T& _x, const T& _y) : x(_x), y(_y) { };
 
 		operator T*() { return data; }
 		operator const T*() const { return static_cast<const T*>(data); }
