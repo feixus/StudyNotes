@@ -2,11 +2,10 @@ extern void MulByElement(uniform const float a[], uniform const float b[], unifo
 
 export void DotProduct(uniform const float a[], uniform const float b[], uniform float* uniform result, uniform const int count)
 {
-    *result = 0;
-    uniform float* uniform r = uniform new uniform float[count];
-    MulByElement(a, b, r, count);
-    foreach_active(i) {
-        *result += r[i];
+    // 每次执行的结果都不一致: 移除 dynamic memory allocation, foreach替换foreach_active, reduction operation: reduce_add
+    foreach (index = 0 ... count) {
+        float _a = a[index];
+        float _b = b[index];
+        *result = reduce_add(_a * _b);
     }
-    delete[] r;
 }

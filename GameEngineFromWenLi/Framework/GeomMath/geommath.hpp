@@ -270,7 +270,7 @@ namespace My
 	}
 
 	template <typename T, int ROWS, int COLS>
-	Matrix<T, ROWS, COLS> MatrixMultiply(const Matrix<T, ROWS, COLS>& matrix1, const Matrix<T, ROWS, COLS>& matrix2)
+	Matrix<T, ROWS, COLS> operator*(const Matrix<T, ROWS, COLS>& matrix1, const Matrix<T, ROWS, COLS>& matrix2)
 	{
 		Matrix<T, ROWS, COLS> result;
 		MatrixMultiply(result, matrix1, matrix2);
@@ -378,7 +378,8 @@ namespace My
 		Matrix4X4f perspective = {{{
 			{ 1.0f / (screenAspect * tan(fieldOfView * 0.5f)), 0.0f, 0.0f, 0.0f },
 			{ 0.0f, 1.0f / tan(fieldOfView * 0.5f), 0.0f, 0.0f },
-			{ 0.0f, 0.0f, screenDepth / (screenDepth - screenNear), 0.0f }
+			{ 0.0f, 0.0f, screenDepth / (screenDepth - screenNear), 0.0f },
+			{0.0f, 0.0f, (-screenNear * screenDepth) / (screenDepth - screenNear), 0.0f}
 		}}};
 
 		matrix = perspective;
@@ -432,7 +433,7 @@ namespace My
             { 1.0f, 0.0f, 0.0f, 0.0f},
             { 0.0f, 1.0f, 0.0f, 0.0f},
             { 0.0f, 0.0f, 1.0f, 0.0f},
-            { x, y, z, 1.0f}
+            {    x,    y,    z, 1.0f}
         }}};
 
         matrix = translation;
