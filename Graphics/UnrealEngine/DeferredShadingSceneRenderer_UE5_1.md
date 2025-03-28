@@ -2,26 +2,48 @@
 
 <br>
 
-- [ShaderPrint](#shaderprint)
-- [ShadingEnergyConservation](#shadingenergyconservation)
-- [FScene::UpdateAllPrimitiveSceneInfos](#fsceneupdateallprimitivesceneinfos)
-- [FDeferredShadingSceneRenderer::InitViews](#fdeferredshadingscenerendererinitviews)
-- [UpdateGPUScene](#updategpuscene)
-- [Detail Code](#detail-code)
+- [FDeferredShadingSceneRenderer::Render](#fdeferredshadingscenerendererrender)
+  - [FSceneRenderer::OnRenderBegin](#fscenerendereronrenderbegin)
+  - [ShaderPrint](#shaderprint)
+  - [ShadingEnergyConservation](#shadingenergyconservation)
+  - [FScene::UpdateAllPrimitiveSceneInfos](#fsceneupdateallprimitivesceneinfos)
+  - [FDeferredShadingSceneRenderer::InitViews](#fdeferredshadingscenerendererinitviews)
+  - [UpdateGPUScene](#updategpuscene)
+  - [Detail Code](#detail-code)
         - [FInstanceCullingManager](#finstancecullingmanager)
         - [FRelevancePacket](#frelevancepacket)
         - [FPerViewPipelineState](#fperviewpipelinestate)
+        - [FFamilyPipelineState](#ffamilypipelinestate)
         - [TPipelineState](#tpipelinestate)
-- [Debug Switch](#debug-switch)
+  - [Debug Switch](#debug-switch)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
+# FDeferredShadingSceneRenderer::Render
 
-# ShaderPrint
+## FSceneRenderer::OnRenderBegin  
+- 在scene update之前清空virtual texture system的回调信息, 以避免和mesh draw command caching tasking产生竞争情况  
+- OIT::OnRenderBegin 在scene update之前清空OITSceneData  
+- FScene::Update  
+	- 构建FScene::FUpdateParameters  
+		- 收集UpdateAllPrimitiveSceneInfos的异步操作集:  
+			异步创建light和primitive的交互(r.AsyncCreateLightPrimitiveInteractions)    
+			异步缓存MeshDrawCommands(r.AsyncCacheMeshDrawCommands)  
+			异步缓存MaterialUniformExpressions(r.AsyncCacheMaterialUniformExpressions 且 非移动平台)    
+		- GPUSceneUpdateTaskPrerequisites  
+		- Callbacks.PostStaticMeshUpdate  
+	- 若允许GPUSkinCache, 添加GPUSkinCacheTask(异步并行执行FGPUSkinCache::DoDispatch)  
+	- add interface to render graph builder blackboard to receive scene updates from compute, submit updates to modify GPU-scene  
+	- FComputeGraphTaskWorker::SubmitWork: submit enqueued compute graph work for ComputeTaskExecutionGroup of EndOfFrameUpdate  
+	- WaitForCleanUpTasks/WaitForAsyncExecuteTask: 等待前一帧的scene render结束及 async RDG execution tasks  
+	- FMaterialRenderProxy::UpdateDeferredCachedUniformExpressions
 
-# ShadingEnergyConservation
+  
+## ShaderPrint
 
-# FScene::UpdateAllPrimitiveSceneInfos
+## ShadingEnergyConservation
+
+## FScene::UpdateAllPrimitiveSceneInfos
 - FSceneRenderer::WaitForCleanUpTasks  
 等待渲染线程的所有任务执行完毕,如WaitOutstandingTasks, 所有EMeshPass及ShadowDepthPass的mesh command setup task, 并删除SceneRenderer.
 - VirtualShadowCacheManagers  
@@ -122,7 +144,7 @@
 - DeletePrimitiveSceneInfo  
 
 
-# FDeferredShadingSceneRenderer::InitViews
+## FDeferredShadingSceneRenderer::InitViews
 initialize scene's views. Check visibility, build visible mesh commands, etc.  
 
 - prior to visibility  
@@ -175,7 +197,6 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
 
     - OcclusionCull  
       在OpenGL平台禁止HZB, 以避免rendering artifacts.  
-      r.HZBOcclusion 选择occlusion system: 0-hardware occlusion queries  1-HZB occlusion system(default, less GPU and CPU cost, 更保守的结果) 2-force HZB occlusion system(覆盖渲染平台的偏好设置)  
       precomputed visibility data, 根据场景的PrimitiveVisibilityIds(FPrimitiveVisibilityId)来设置. <span style="color: yellow;">r.VisualizeOccludedPrimitives</span>可绘制被遮挡图元为box.  
       Map HZB Results(WaitingForGPUQuery)  
       执行 round-robin occlusion queries, 对于stereo views,偶数帧right eye执行occlusion querying, 奇数帧left eye执行occlusion querying. recycle old queries.  
@@ -242,7 +263,7 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
 
 
 
-# UpdateGPUScene  
+## UpdateGPUScene  
 - FGPUScene::Update  主要更新场景中的primitives.  
   - 若GGPUSceneUploadEveryFrame(用于调试)或者bUpdateAllPrimitives(shift scene data), 需要更新所有primitives.  
   - 过滤PrimitivesToUpdate中已删除的primitive.  
@@ -296,7 +317,7 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
 - FScene::UpdatePhysicsField (Physics Field)
 
 
-# Detail Code
+## Detail Code
 
 ##### FInstanceCullingManager
   为所有instanced draws管理indirect arguments和culling jobs的分配(使用GPU Scene culling).  
@@ -346,23 +367,28 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
 ##### FPerViewPipelineState
 FViewInfo在延迟着色管线中包含最终状态的结构体
   
-- diffuse indirect method: Disabled/SSGI/RTGI/Lumen/Plugin  
+- diffuse indirect method: Disabled/SSGI/Lumen/Plugin  
 - ScreenSpaceDenoiserMode for diffuse indirect: Disable/DefaultDenoiser/ThirdPartyDenoiser  
 - ambient occlusion method: Disabled/SSAO/SSGI/RTAO  
-- reflection method: Disables/SSR/RTR/Lumen  
+- reflection method: Disables/SSR/Lumen  
+- reflection on water: Disables/SSR/Lumen  
 - whether there is planar reflection to compose to the reflection  
 - whether need to generate HZB from the depth buffer  
+RTGI and RTR is already deprecated in UE5.5  
     
-
+##### FFamilyPipelineState
+FSceneViewFamily  
+whether bNanite or bHZBOcclusion is enables  
+  
 ##### TPipelineState  
 封装处理大量维度的渲染器的pipeline state. 通过结构体内的内存偏移的排序来确保维度内没有循环引用.  
 如 FPerViewPipelineState/FFamilyPipelineState  
   
   
-# Debug Switch  
+## Debug Switch  
 - r.MeshDrawCommands.LogDynamicInstancingStats: 在下一帧打印dynamic instance stats  
 - DumpPrimitives: 将场景内所有primitive names写入到CSV file  
 - DumpDetailedPrimitives: 将场景内所有primitive details写入到CSV file  
 - r.SkinCache.Visualize overview/memory/off: 可视化GPU skin cache 数据  (仅可在编辑器下可视)  
   list skincacheusage 可打印出每个骨骼网格的skincache使用类型  
-  
+- r.HZBOcclusion 选择occlusion system: 0-hardware occlusion queries, 1-HZB occlusion system(default, less GPU and CPU cost, 更保守的结果) 2-force HZB occlusion system(覆盖渲染平台的偏好设置)  

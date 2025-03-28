@@ -91,5 +91,21 @@ __attribute__((visibility("default"))) in apple or linux
 35. 一些UE-C++语法:
 	~SIZE_T(0) 作为标记来条件判别. 如在TPipelineState中用于标记是否将pipeline state提交到最终的immutable value.  
 		
-		
+36. UE5.1 to UE5.5
+	- ETSDK1064|Package System.Data.DataSetExtensions, version 4.5.0 was not found (https://forums.unrealengine.com/t/system-data-datasetextensions-not-restored/2077175)  
+	- ActionRPGEditor modifies the values of properties: [ bStrictConformanceMode: False != True ]. This is not allowed, as ActionRPGEditor has build products in common with UnrealEditor.  
+		ActionRPGEditorTarget.cs: update BuildSettingsVersion  
+	- UIParticle why at Engine/Plugins/Marketplace  
+	- upgrade unlua
+		https://github.com/Tencent/UnLua/issues/741	
+		https://github.com/Lanaoti/Tencent-UnLua/tree/06a8caa0a84cce26bcea7a8877b8e132e1dd23c7  
+	- 类似如此的头文件 #include "MediaAssets/Public/MediaSource.h", ue自动处理#include "MediaSource.h"  
+	- error C4702: unreachable code, 函数返回后不可达的代码  
+	- engine api upgrade  
+	- adjust include head files
+	
+
+
+	
+	
 		

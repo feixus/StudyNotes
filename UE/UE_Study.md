@@ -27,10 +27,19 @@
 9. GPU Skin Cache  
     在GPU侧缓存skeletal vertices. 每个world/scene默认配置的最大缓存为128M. 可选每帧更新tangent. 将bone transform在compute shader计算并缓存  
 10. ispc(https://github.com/ispc/ispc)
+    https://ispc.github.io/ispc.html  
     编译基于C的SPMD(single program, multiple data)编程语言以便运行于CPU和GPU的SIMD units.  在4-wide SSE或者8-wide AVX的架构上提供加速. 支持跨多核的并行化. 
-    支持windows/macOS/linux/android/ios/ps4/ps5,支持x86(SSE2,SSE4,AVX,AVX2,AVX512), Arm(NEON), Intel GPU(Gen9,Xe family).  
-  
+    支持windows/macOS/linux/android/ios/ps4/ps5,支持x86(SSE2,SSE4,AVX,AVX2,AVX512,AVX10), Arm(NEON), Intel GPU(Gen9,Xe family).  
 
+11. how to collision detection between convex shapes -> separating axis theorem  
+
+12. why deferred shading dont support transparent rendering -> trditional transparency need alpha blending and sort from back to front  -> forwardRendering/OIT/Dithering + Temproal AA  
+  
+13. DFAO
+    
+14. Panini Projection  
+   https://dev.epicgames.com/documentation/en-us/unreal-engine/panini-projection-in-unreal-engine  
+   
   
 
 
