@@ -39,6 +39,10 @@
     
 14. Panini Projection  
    https://dev.epicgames.com/documentation/en-us/unreal-engine/panini-projection-in-unreal-engine  
+
+15. Volumetric Lightmaps  
+	replace the indirect lighting cache and volume lighting samples  
+	https://dev.epicgames.com/documentation/en-us/unreal-engine/volumetric-lightmaps-in-unreal-engine
    
   
 

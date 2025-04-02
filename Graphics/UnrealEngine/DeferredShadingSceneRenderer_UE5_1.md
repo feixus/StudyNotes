@@ -36,39 +36,40 @@
 	- add interface to render graph builder blackboard to receive scene updates from compute, submit updates to modify GPU-scene  
 	- FComputeGraphTaskWorker::SubmitWork: submit enqueued compute graph work for ComputeTaskExecutionGroup of EndOfFrameUpdate  
 	- WaitForCleanUpTasks/WaitForAsyncExecuteTask: 等待前一帧的scene render结束及 async RDG execution tasks  
-	- FMaterialRenderProxy::UpdateDeferredCachedUniformExpressions
-
+	- FMaterialRenderProxy::UpdateDeferredCachedUniformExpressions  
+	- UpdateAllLightSceneInfos  
+	- UpdateAllPrimitiveSceneInfos  
   
-## ShaderPrint
+  
 
-## ShadingEnergyConservation
-
-## FScene::UpdateAllPrimitiveSceneInfos
-- FSceneRenderer::WaitForCleanUpTasks  
-等待渲染线程的所有任务执行完毕,如WaitOutstandingTasks, 所有EMeshPass及ShadowDepthPass的mesh command setup task, 并删除SceneRenderer.
-- VirtualShadowCacheManagers  
-    删除primitives,更新Instances或Transform, addpass to VirtualSmInvalidateInstancePagesCS in compute shader(VirtualShadowMapCacheManagement.usf).
+### UpdateAllPrimitiveSceneInfos  
+- 使用RDG builder 分配对象FSceneUpdateChangeSetStorage, 此对象则拥有render graph lifetime, 可以被RDG tasks安全引用.  
+- FSceneUpdateChangeSetStorage对象持有Added/Removed/Updated(Transforms/Instances) primitive scene infos.  
+- 在scene update之前的操作:  
+	- 填充PrimitivesToUpdate/PrimitiveDirtyState in GPUScene  
+	- 创建并填充SceneUniformBuffer in GPUScene  
+	- 重新创建FSceneCulling, 处理所有的removed primitives  
+	- RDG builder 分配对象FSceneExtensionsUpdaters, 调用其PreSceneUpdate  
 - RemovePrimitiveSceneInfos  
-    - 循环处理待删除的primitives, 配合TypeOffsetTable和PrimitiveSceneProxies, 将每个primitive交换移动到各个数组的末端, 并执行删除.  
-    - VelocityData.RemoveFromScene  
-    - UnlinkAttachmentGroup  
-    - UnlinkLODParentComponent  
-    - FlushRuntimeVirtualTexture  
-    - Remove from scene:  
+	- FLODSceneTree 清除掉待删除的primitives  
+	- 循环处理待删除的primitives, 配合TypeOffsetTable和PrimitiveSceneProxies, 将每个primitive交换移动到各个数组的末端, 并执行删除.  
+     - VelocityData.RemoveFromScene  
+     - UnlinkAttachmentGroup  
+     - UnlinkLODParentComponent  
+     - FlushRuntimeVirtualTexture  
+     - Remove from scene:  
         - delete the list of lights affecting this primitives.  
         - remove the primitive from the octree.  
         - 若允许GPUScene, 根据lightmapDataOffset和NumLightmapDataEntries,从场景的lightmap data buffer中删除.  
         - remove from potential capsule shadow casters (DynamicIndirectCasterPrimitives).  
         - mark indirect lighting cache buffer dirty, if movable object.  
-        - 若bUpdateStaticDrawLists,  不再需要stati mesh update, deallocate potential OIT dynamic index buffer, remove from staticMeshes/staticMeshRelevances/CachedMeshDrawCommands/CachedNaniteDrawCommands.  
-    - FreeGPUSceneInstances  
-    - <span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::Removed</span>
-    - CachedShadowMapData.InvalidateCachedShadow  
-    - DistanceFieldSceneData.RemovePrimitive  
-    - LumenRemovePrimitive  
-    - PersistentPrimitiveIdAllocator.Free  
-    - ShadowMapData.StaticShadowSubjectMap  
-
+        - 若bUpdateStaticDrawLists,  不再需要static mesh update, deallocate potential OIT dynamic index buffer, remove from staticMeshes/staticMeshRelevances/CachedMeshDrawCommands/CachedNaniteDrawCommands.  
+		- 若注册到virtual texture system, 需销毁  
+		- remove from level update notification  
+     - FreeGPUSceneInstances  
+     - DistanceFieldSceneData.RemovePrimitive  
+     - LumenRemovePrimitive  
+     - PersistentPrimitiveIdAllocator.Free  
 
     ``` c++
     // 删除图元示意图：会依次将被删除的元素交换到相同类型的末尾，直到列表末尾
@@ -79,22 +80,28 @@
     // PrimitiveSceneProxies[0,0,0,6,6,6,6,2,2,2,2,1,1,1,7,X,4,8]
     // PrimitiveSceneProxies[0,0,0,6,6,6,6,2,2,2,2,1,1,1,7,4,X,8]
     // PrimitiveSceneProxies[0,0,0,6,6,6,6,2,2,2,2,1,1,1,7,4,8,X]
-    ```
-
-- AddPrimitiveSceneInfos   
-    PersistentPrimitiveIdAllocator(FSpanAllocator)执行合并.
-    扩展各个数组大小(Primitives/PrimitiveTransforms/PrimitiveSceneProxies/PrimitiveBounds...)  
-    循环处理待添加的primitives
-    从后往前处理,合并处理TypeHash相同的primitive, 各个PrimitiveSceneProxy的派生类的TypeHash相同(采用静态变量的地址).  
-    为各个数组(Primitives/PrimitiveTransform/PrimitiveBounds...)添加primitive数据.  
-    为PrimitiveSceneInfo分配PackedIndex(PrimitiveSceneProxies的索引)和PersistentIndex(由PersistentPrimitiveIdAllocator分配). PersistentPrimitiveIdToIndexMap记录PersistentIndex到PackedIndex的映射.  
-    <span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::AddedMask</span>  
-
-    从TypeOffsetTable中寻找Proxy的TypeHash匹配类型, 若遭遇新类型,添加进去.TypeOffsetTable中的每个元素表示TypeHash相同的primitive数量.  
-    根据TypeOffsetTable,为每个新添加的primitive在各个数组中排序. 每次和相同类型的末尾交换,以构成相同TypeHash的primitive排列在一起的数组.  
-    <span style="color: green;">对于primitiveIds(packedIndex)交换位置的,需要通知GPUScene, 添加入PrimitivesToUpdate, 且交换PrimitiveDirtyState.</span>  
-
-    ``` c++
+    ```  
+    
+- RDG builder分配对象SceneInfosWithAddToScene/SceneInfosWithStaticDrawListUpdate. 收集待分配InstanceId的primitives(added/updateInstances)  
+- allocator consolidation for FSpanAllocator(InstanceSceneData/InstancePayloadData/LightmapData/PersistentPrimitiveId)  
+- AddPrimitiveSceneInfos  
+	- 扩展各个数组大小(Primitives/PrimitiveTransforms/PrimitiveSceneProxies/PrimitiveBounds...)  
+    - 循环处理待添加的primitives  
+	 - 从后往前处理,合并处理TypeHash相同的primitive, 各个PrimitiveSceneProxy的派生类的TypeHash相同(采用静态变量的地址). 
+	 - 为各个数组(Primitives/PrimitiveTransform/PrimitiveBounds...)添加primitive scene info关联数据.  
+     - 为每个PrimitiveSceneInfo分配PackedIndex(PrimitiveSceneProxies的索引)和PersistentIndex(由PersistentPrimitiveIdAllocator分配). PersistentPrimitiveIdToIndexMap记录PersistentIndex到PackedIndex的映射.  
+	 - 从TypeOffsetTable中寻找Proxy的TypeHash匹配类型, 若遭遇新类型,添加进去.TypeOffsetTable中的每个元素表示TypeHash相同的primitive数量.  
+     - 根据TypeOffsetTable,为每个新添加的primitive在各个数组中排序. 每次和相同类型的末尾交换,以构成相同TypeHash的primitive排列在一起的数组.  
+	 - 加入LightingAttachmentRoot. 
+	 - 对于未采用GPUScene的primitive创建uniform buffer for vector factories(FPrimitiveUniformShaderParameters -> FPrimitiveSceneData)  
+	 - 对于moveable的对象, 若支持velocity rendering(mobile需支持desktop Gen4 TAA), 更新localtoworld for velocityData.  
+	 - 加入DistanceFieldSceneData  
+	 - 加入LumenSceneData  
+	 - pending flush virtual texture  
+	 - pending add to scene  
+	 - pending add static meshes  
+	
+	``` c++
     // 增加图元示意图：先将被增加的元素放置列表末尾，然后依次和相同类型的末尾交换。
     // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,2,2,2,2,1,1,1,7,4,8,6]
     // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,1,1,1,7,4,8,2]
@@ -102,46 +109,59 @@
     // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,2,1,1,1,4,8,7]
     // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,2,1,1,1,7,8,4]
     // PrimitiveSceneProxies[0,0,0,6,6,6,6,6,6,2,2,2,2,1,1,1,7,4,8]
-    ```
-
-    加入LightingAttachmentRoot.  
-    AllocateGPUSceneInstances: 支持the GPUScene instance data buffer, InstanceStaticMesh/NaniteResources/SkeletalMesh/LandscapeComponentSceneProxy  
-    FPrimitiveSceneInfo::AddToScene:  
-        IndirectLightingCacheUniformBuffers(point/volume),  
-        IndirectLightingCacheAllocation(track a primitive allocation in the volume texture atlas that stores indirect lighting),  
-        LightmapDataOffset,  
-        ReflectionCaptures(mobile/forwardShading, reflectionCapture/planarReflection),  
-        AddStaticMeshes(DrawStaticElements, UpdateSceneArrays, CacheMeshDrawCommands/CacheNaniteDrawCommands/CacheRayTracingPrimitives),  
-        AddToPrimitiveOctree,  
-        UpdateBounds,  
-        UpdateVirtualTexture,  
-        find lights that affect the primitives in the light octree(local light/non-local(directional) shadow-casting lights),  
-        levelNotifyPrimitives.  
-    velocityData/DistanceFieldSceneData/LumenSceneData/flush runtime virtual texture/link LOD parent component/update scene LOD tree.  
-
-- UpdatePrimitiveTransform  
-    WorldBounds/LocalBounds/LocalToWorld/AttachmentRootPosition  
-    RemoveFromScene: remove the primitive from the scene at its old location. 若是update static draw list, 才会需要删除对应的cache mesh draw command.  
-    veloityData updateTransform  
-    update primitive transform  
-    mark indirect lighting cache buffer dirty  
-    <span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::ChangedTransform</span>  
-    DistanceFieldSceneData/lumen update primitive  
-    AddToScene: Re-add the primitive to the scene with the new transform  
-
+    ```  
+  	
+- UpdatePrimitiveTransforms  
+	- pending add to scene
+	- 若允许updateStaticDrawLists, 则 pending add static meshes  
+	- RemoveFromScene: remove the primitive from the scene at its old location. 若是update static draw list, 才会需要删除对应的cache mesh draw command.  
+	- pending flush virtual texture  
+	- 若支持velocity rendering, 更新localtoworld to VelocityData  
+	- update primitive transform(WorldBounds/LocalBounds/LocalToWorld/AttachmentRootPosition)  
+	- 若不支持VolumeTexture(mobile device) 并且 movable object 则 mark indirect lighting cache buffer dirty  
+	- DistanceFieldSceneData/lumen update primitive  
+	- overrides the primitive previous localToWorld matrix for this frame only in VelocityData  
+  
 - UpdatePrimitiveInstances  
-    PrimitiveSceneProxy/CmdBuffer/WorldBounds/LocalBounds/StaticMeshBounds  
-    需更新StaticDrawLists的(mesh draw command 存储在FScene::CachedMeshDrawCommandStateBuckets/CachedDrawLists)或者instance count有增加或减少(CmdBuffer), cached mesh draw commands才需要更新. 即RemoveFromScene(true). 更新意味着cached mesh draw command需要删除再添加. 其他的是RemoveFromScene(false).  
-    FStaticMeshSceneProxy(static mesh)/FLandscapeComponentSceneProxy等static elements存储在static draw lists.  
-
-    更新proxy data.  
-    标记IndirectLightingCacheBuffer Dirty  
-    若instance数量有增加或减少(cmdBuffer), 重新分配GPUSceneInstance, 重新加入DistanceFieldSceneData/Lumen scene data. 否则仅更新distance field scene data/lumen scene data, 以及<span style="color: green;">GPUScene.AddPrimitiveToUpdate->EPrimitiveDirtyState::ChangedAll</span>.  
-    final re-add the primitive to the scene with new transform. update static draw list或者CmdBuffer有增减的需要经历FPrimitiveSceneInfo::AddStaticMeshes(DrawStaticElements/StaticMesh/CacheMeshDrawCommands).  
-
-- UpdatedAttachmentRoots/UpdatedCustomPrimitiveParams/DistanceFieldSceneDataUpdates/UpdatedPrimitiveOcclusionBounds.  
-
-- DeletePrimitiveSceneInfo  
+	- pending flush virtual texture  
+	- pending add to scene  
+	- remove from scene, remove static meshes for update static draw list  
+	- pending add static meshes for update static draw list  
+	- update instances in render thread(WorldBounds/LocalBounds)  
+	- 若不支持VolumeTexture(mobile device) 并且 movable object 则 mark indirect lighting cache buffer dirty  
+	- 若允许GPUScene且Instance scene data buffer offset发生变化, 则 DistanceFieldSceneData/LumenSceneData需要先删除再重新添加
+	否则DistanceFieldSceneData/LumenSceneData直接更新当前数据, 更新PrimitivesToUpdate/PrimitiveDirtyState in GPU Scene  
+  
+- allocate all GPUScene instances slots(added + updateInstances) in FPrimitiveSceneInfo::AllocateGPUSceneInstances.  
+- real add to scene(FPrimitiveSceneInfo::AddToScene)  
+	- IndirectLightingCacheUniformBuffers(point/volume),  
+	- IndirectLightingCacheAllocation(track a primitive allocation in the volume texture atlas that stores indirect lighting),  
+	- LightmapDataOffset,  
+	- ReflectionCaptures(mobile/forwardShading, reflectionCapture/planarReflection),  
+	- AddStaticMeshes(DrawStaticElements, UpdateSceneArrays, CacheMeshDrawCommands/CacheNaniteDrawCommands/CacheRayTracingPrimitives),  
+	- AddToPrimitiveOctree,  
+	- UpdateBounds,  
+	- UpdateVirtualTexture,  
+	- find lights that affect the primitives in the light octree(local light/non-local(directional) shadow-casting lights),  
+	- levelNotifyPrimitives.  
+- level commands  
+	- add command, 查找对应level关联的所有primitives, pending add static meshes | remove static meshes | 对于NaniteMesh, add PrimitivesToUpdate/PrimitiveDirtyState for GPUScene.    
+	- remove command, 查找对应level关联的所有primitives, 对于NaniteMesh, add PrimitivesToUpdate/PrimitiveDirtyState for GPUScene.    
+- 对应新增的primitives和待删除的primitives    
+	- FSceneCulling::FUpdater::OnPostSceneUpdate  
+	- FGPUScene::OnPostSceneUpdate  
+	- FScene::UpdateCachedShadowState  
+	- FShadowScene::PostSceneUpdate  
+	- SceneExtensionsUpdaters.PostSceneUpdate  
+- RDG builder 新增 addStaticMeshesTasks, 前置任务UpdateUniformExpressionsTask, 可标记bAsyncCacheMeshDrawCommands  
+	- real add static meshes(FPrimitiveSceneInfo::AddStaticMeshes)  
+		- 并行执行每个primitive scene proxy的DrawStaticElements  
+		- 遍历所有的scene infos, 将每个primitive的所有static meshes添加如 staticMeshes in scene, allocate OIT index buffer for sorted triangles in translucent material  
+	- update virtual textures  
+	- flush runtime virtual texture  
+- update reflection scene data  
+- update static meshes  
+  
 
 
 ## FDeferredShadingSceneRenderer::InitViews
