@@ -10,7 +10,7 @@ namespace My
                 uint32_t d = 24, uint32_t s = 0, uint32_t msaa = 0,
                 uint32_t width = 1920, uint32_t height = 1080, const wchar_t* app_name = L"GameEngine") :
                 redBits(r), greenBits(g), blueBits(b), alphaBits(a),
-                depthBits(r), stencilBits(s), msaaSamples(msaa),
+                depthBits(d), stencilBits(s), msaaSamples(msaa),
                 screenWidth(width), screenHeight(height), appName(app_name)
         {}
 

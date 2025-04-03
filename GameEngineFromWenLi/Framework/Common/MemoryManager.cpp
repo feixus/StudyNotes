@@ -1,6 +1,10 @@
 #include "MemoryManager.hpp"
 #include <malloc.h>
 
+#ifndef ALIGN
+#define ALIGN(x, a)     (((x) + ((a) - 1)) & ~((a) - 1))
+#endif
+
 using namespace My;
 
 namespace My
@@ -80,6 +84,22 @@ void* My::MemoryManager::Allocate(size_t size)
         return pAlloc->Allocate();
     else
         return malloc(size);
+}
+
+void *My::MemoryManager::Allocate(size_t size, size_t alignment)
+{
+    uint8_t* p;
+    size += alignment;
+    Allocator* pAlloc = LookupAllocator(size);
+    if (pAlloc) {
+        p = reinterpret_cast<uint8_t*>(pAlloc->Allocate());
+    } else {
+        p = reinterpret_cast<uint8_t*>(malloc(size));
+    }
+
+    p = reinterpret_cast<uint8_t*>(ALIGN(reinterpret_cast<size_t>(p), alignment));
+
+    return static_cast<void*>(p);
 }
 
 void My::MemoryManager::Free(void* p, size_t size)
