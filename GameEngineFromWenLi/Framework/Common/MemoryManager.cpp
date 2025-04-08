@@ -48,7 +48,7 @@ int My::MemoryManager::Initialize()
         // initialize the allocators
         m_pAllocators = new Allocator[kNumBlockSizes];
         for (size_t i = 0; i < kNumBlockSizes; i++) {
-            m_pAllocators->Reset(kBlockSizes[i], kPageSize, kAlignment);
+            m_pAllocators[i].Reset(kBlockSizes[i], kPageSize, kAlignment);
         }
 
         s_bInitialized = true;

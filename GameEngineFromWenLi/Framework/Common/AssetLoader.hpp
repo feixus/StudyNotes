@@ -39,14 +39,14 @@ namespace My
         bool FileExists(const char* path);
 
         AssetFilePtr OpenFile(const char* name, AssetOpenMode mode);
-        void CloseFile(const AssetFilePtr& fp);
+        void CloseFile(AssetFilePtr& fp);
 
         Buffer SyncOpenAndReadText(const char* filePath);
         size_t SyncRead(const AssetFilePtr& fp, Buffer& buf);
 
         size_t GetSize(const AssetFilePtr& fp);
 
-        int32_t Seek(const AssetFilePtr& fp, long offset, AssetSeekBase where);
+        int32_t Seek(AssetFilePtr fp, long offset, AssetSeekBase where);
 
         inline std::string SyncOpenAndReadTextFileToString(const char* fileName)
         {
