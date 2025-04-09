@@ -1,3 +1,7 @@
+#include <fstream>
+#include <filesystem>
+#include <string>
+
 #include "AssetLoader.hpp"
 
 int My::AssetLoader::Initialize()
@@ -17,13 +21,10 @@ void My::AssetLoader::Tick()
 
 bool My::AssetLoader::AddSearchPath(const char* path)
 {
-    std::vector<std::string>::iterator src = m_strSeachPaths.begin();
-
-    while (src != m_strSeachPaths.end()) {
-        if (!(*src).compare(path)) {
+    for (const auto& src : m_strSeachPaths) {
+        if (src == path) {
             return true;
         }
-        src++;
     }
 
     m_strSeachPaths.push_back(path);
@@ -32,68 +33,68 @@ bool My::AssetLoader::AddSearchPath(const char* path)
 
 bool My::AssetLoader::RemoveSearchPath(const char* path)
 {
-    std::vector<std::string>::iterator src = m_strSeachPaths.begin();
-
-    while (src != m_strSeachPaths.end()) {
-        if (!(*src).compare(path)) {
-            m_strSeachPaths.erase(src);
-            return true;
-        }
-        src++;
+    auto it = std::remove(m_strSeachPaths.begin(), m_strSeachPaths.end(), path);
+    if (it != m_strSeachPaths.end()) {
+        m_strSeachPaths.erase(it, m_strSeachPaths.end());
+        return true;
     }
 
-    return true;
+    return false;
 }
 
 bool My::AssetLoader::FileExists(const char* filePath)
 {
-    AssetFilePtr fp = OpenFile(filePath, MY_OPEN_BINARY);
-    if (fp) {
-        CloseFile(fp);
-        return true;
-    }
-    return false;
+    return std::filesystem::exists(filePath);
 }
 
 My::AssetLoader::AssetFilePtr My::AssetLoader::OpenFile(const char* name, AssetOpenMode mode)
 {
-    FILE* fp = nullptr;
-    std::string upPath;
-    std::string fullPath;
+    std::filesystem::path upPath;
+    std::filesystem::path assetPath;
+
     for (int32_t i = 0; i < 10; i++) {
         std::vector<std::string>::iterator src = m_strSeachPaths.begin();
         bool looping = true;
+
         while (looping) {
-            fullPath.assign(upPath);
+            assetPath = upPath;
+
             if (src != m_strSeachPaths.end()) {
-                fullPath.append(*src);
-                fullPath.append("/Asset/");
-                src++;
-            }
-            else {
-                fullPath.append("Asset/");
+                assetPath /= *src;
+                assetPath /= "Asset";
+            } else {
+                assetPath /= "Asset";
                 looping = false;
             }
-            fullPath.append(name);
+
+            std::filesystem::path fullPath = assetPath / name;
 
             #ifdef DEBUG
-            fprintf(stderr, "Trying to open %s\n", fullPath.c_str());
+            std::cerr << "Trying to open " << fullPath << std::endl;
             #endif
 
-            switch(mode) {
-                case MY_OPEN_TEXT:
-                    fp = fopen(fullPath.c_str(), "r");
-                    break;
-                case MY_OPEN_BINARY:
-                    fp = fopen(fullPath.c_str(), "rb");
-                    break;
-            }
+			if (std::filesystem::exists(fullPath)) {
+				std::ios_base::openmode openMode = std::ios::in;
+				switch (mode) {
+				case MY_OPEN_TEXT:
+					openMode = std::ios::in;
+					break;
+				case MY_OPEN_BINARY:
+					openMode = std::ios::in | std::ios::binary;
+					break;
+				}
 
-            if (fp)
-                return (AssetFilePtr)fp;
+				std::fstream* fileStream = new std::fstream(fullPath, openMode);
+				if (fileStream->is_open()) {
+					return static_cast<AssetFilePtr>(fileStream);
+				}
+				else {
+					delete fileStream;
+				}
+			}
         }
 
-        upPath.append("../");
+        upPath /= "../";
     }
 
     return nullptr;
@@ -108,7 +109,8 @@ My::Buffer My::AssetLoader::SyncOpenAndReadText(const char* filePath)
         size_t length = GetSize(fp);
 
         pBuffer = new Buffer(length + 1);
-        fread(pBuffer->m_pData, length, 1, static_cast<FILE*>(fp));
+        auto* fileStream = static_cast<std::ifstream*>(fp);
+        fileStream->read(reinterpret_cast<char*>(pBuffer->m_pData), length);
         pBuffer->m_pData[length] = '\0';
 
         CloseFile(fp);
@@ -126,35 +128,36 @@ My::Buffer My::AssetLoader::SyncOpenAndReadText(const char* filePath)
 
 void My::AssetLoader::CloseFile(AssetFilePtr& fp)
 {
-    fclose(static_cast<FILE*>(fp));
+    auto* fileStream = static_cast<std::fstream*>(fp);
+    fileStream->close();
+    delete fileStream;
     fp = nullptr;
 }
 
 size_t My::AssetLoader::GetSize(const AssetFilePtr& fp)
 {
-    FILE* _fp = static_cast<FILE*>(fp);
-
-    long pos = ftell(_fp);
-    fseek(_fp, 0, SEEK_END);
-    size_t length = ftell(_fp);
-    fseek(_fp, pos, SEEK_SET);
+    auto* fileStream = static_cast<std::ifstream*>(fp);
+    auto currentPos = fileStream->tellg();
+    fileStream->seekg(0, std::ios::end);
+    size_t length = fileStream->tellg();
+    fileStream->seekg(currentPos, std::ios::beg);
 
     return length;
 }
 
 size_t My::AssetLoader::SyncRead(const AssetFilePtr& fp, Buffer& buf)
 {
-    size_t sz;
-
+    
     if (!fp) {
         fprintf(stderr, "Error reading file\n");
         return 0;
     }
-
-    sz = fread(buf.m_pData, buf.m_szSize, 1, static_cast<FILE*>(fp));
-
+    auto* fileStream = static_cast<std::ifstream*>(fp);
+    fileStream->read(reinterpret_cast<char*>(buf.m_pData), buf.m_szSize);
+    size_t sz = fileStream->gcount();
+    
     #ifdef DEBUG
-    fprintf(stderr, "Read file '%s', %d bytes\n", filePath, length);
+    fprintf(stderr, "Read file %d bytes\n", sz);
     #endif
 
     return sz;
@@ -162,6 +165,26 @@ size_t My::AssetLoader::SyncRead(const AssetFilePtr& fp, Buffer& buf)
 
 int32_t My::AssetLoader::Seek(AssetFilePtr fp, long offset, AssetSeekBase where)
 {
-    return fseek(static_cast<FILE*>(fp), offset, static_cast<int32_t>(where));
+    if (!fp) return -1;
+
+    auto* fileStream = static_cast<std::ifstream*>(fp);
+    std::ios_base::seekdir dir;
+
+    switch (where) {
+    case MY_SEEK_SET:
+        dir = std::ios::beg;
+        break;
+    case MY_SEEK_CUR:
+        dir = std::ios::cur;
+        break;
+    case MY_SEEK_END:
+        dir = std::ios::end;
+        break;
+    default:
+        return -1;
+    }
+
+    fileStream->seekg(offset, dir);
+    return fileStream->good() ? 0 : -1;
 }
 

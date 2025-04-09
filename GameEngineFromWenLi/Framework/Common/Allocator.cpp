@@ -62,6 +62,9 @@ void* My::Allocator::Allocate()
 
         if (m_pPageList) {
             pNewPage->pNext = m_pPageList;
+        } else {
+            // 首次创建的page指定next为nullptr, 否则在free page时会指向野指针
+            pNewPage->pNext = nullptr;
         }
 
         m_pPageList = pNewPage;

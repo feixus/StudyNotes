@@ -53,7 +53,7 @@ namespace My
             size_t   m_szPageSize;
             size_t   m_szAlignmentSize;
             size_t   m_szBlockSize;
-            uint32_t m_nBlockPerPage;
+            size_t   m_nBlockPerPage;
 
             uint32_t m_nPages;
             uint32_t m_nBlocks;
