@@ -1,42 +1,40 @@
 cmake_minimum_required(VERSION 3.10)
+project (GameEngineFromWenLi)
+
+set (CMAKE_C_STANDARD 99)
+set (CMAKE_CXX_STANDARD 20)
+
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+include(TargetArchDetect)
+
+target_architecture(TARGET_ARCH)
+
+if (TARGET_ARCH MATCHES "x86_64")
+        set (ARCH_BIT 64)
+else()
+        set (ARCH_BIT 32)
+endif()
+
+include_directories("${PROJECT_SOURCE_DIR}/Framework/Common")
+include_directories("${PROJECT_SOURCE_DIR}/Framework/Interface")
+include_directories("${PROJECT_SOURCE_DIR}/Framework/GeomMath")
+include_directories("${PROJECT_SOURCE_DIR}/RHI")
 IF(${UNIX})
-        set (CMAKE_C_COMPILER               "clang")
-        set (CMAKE_C_FLAGS_DEBUG            "-g")
-        set (CMAKE_C_FLAGS_RELWITHDEBINFO   "-O2 -g")
-        set (CMAKE_CXX_COMPILER             "clang++")
-        set (CMAKE_CXX_FLAGS                "-Wall")
-        set (CMAKE_CXX_FLAGS_DEBUG          "-g")
-        set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
-        set (CMAKE_CXX_STANDARD 20)
+        include_directories("${PROJECT_SOURCE_DIR}/Platform/Linux")
 ELSEIF(${WIN32})
-        # only x64
-        if(${CMAKE_GENERATOR} MATCHES "Unix Makefiles")
-                set (CMAKE_C_COMPILER               "clang-cl")
-                set (CMAKE_CXX_COMPILER             "clang-cl")
-                set (CMAKE_C_FLAGS                  "-Wall --target=x86_64-pc-windows-msvc")
-                set (CMAKE_CXX_FLAGS                "-Wall /clang:-std=c++20 --target=x86_64-pc-windows-msvc -Wno-c++98-compat")
-                set (CMAKE_MODULE_LINKER_FLAGS      "/MACHINE:X64")
-                set (CMAKE_STATIC_LINKER_FLAGS      "/MACHINE:X64")
-                set (CMAKE_EXE_LINKER_FLAGS         "/MACHINE:X64")
-        else()
-                set (CMAKE_C_FLAGS                  "/W4 /wd4514")
-                set (CMAKE_CXX_FLAGS                "/W4 /wd4514 /wd4819 /EHsc /std:c++20")
-        endif(${CMAKE_GENERATOR} MATCHES "Unix Makefiles")
-        set (CMAKE_C_FLAGS_DEBUG            "/Debug /Zi")
-        set (CMAKE_C_FLAGS_RELWITHDEBINFO   "-O2 /Debug")
-        set (CMAKE_CXX_FLAGS_DEBUG          "/Debug /Zi")
-        set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 /Debug")
-ENDIF()
-        set (CMAKE_C_FLAGS_MINSIZEREL       "-Os -DNDEBUG")
-        set (CMAKE_C_FLAGS_RELEASE          "-O4 -DNDEBUG")
-        set (CMAKE_C_STANDARD 11)
-        set (CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
-        set (CMAKE_CXX_FLAGS_RELEASE        "-O4 -DNDEBUG")
+        include_directories("${PROJECT_SOURCE_DIR}/Platform/Windows")
+ENDIF(${UNIX})
+include(CTest)
+add_subdirectory(Framework)
+add_subdirectory(Platform)
+add_subdirectory(RHI)
 
 # ------------------------- Begin Generic CMake Variable Logging ------------------
 
 # /*	C++ comment style not allowed	*/
 
+# current generator in use 
+MESSAGE( STATUS "CMAKE_GENERATOR:         " ${CMAKE_GENERATOR} )
 
 # if you are building in-source, this is the same as CMAKE_SOURCE_DIR, otherwise 
 # this is the top level directory of your build tree 
@@ -89,6 +87,13 @@ MESSAGE( STATUS "CMAKE_INCLUDE_PATH: " ${CMAKE_INCLUDE_PATH} )
 # this is used when searching for libraries e.g. using the FIND_LIBRARY() command.
 MESSAGE( STATUS "CMAKE_LIBRARY_PATH: " ${CMAKE_LIBRARY_PATH} )
 
+## HOST
+# the complete system name, e.g. "Linux-2.4.22", "FreeBSD-5.4-RELEASE" or "Windows 5.1" 
+MESSAGE( STATUS "CMAKE_HOST_SYSTEM: " ${CMAKE_HOST_SYSTEM} )
+
+# the short system name, e.g. "Linux", "FreeBSD" or "Windows"
+MESSAGE( STATUS "CMAKE_HOST_SYSTEM_NAME: " ${CMAKE_HOST_SYSTEM_NAME} )
+
 # the complete system name, e.g. "Linux-2.4.22", "FreeBSD-5.4-RELEASE" or "Windows 5.1" 
 MESSAGE( STATUS "CMAKE_SYSTEM: " ${CMAKE_SYSTEM} )
 
@@ -122,11 +127,8 @@ MESSAGE( STATUS "BORLAND: " ${BORLAND} )
 # Microsoft compiler 
 MESSAGE( STATUS "MSVC: " ${MSVC} )
 MESSAGE( STATUS "MSVC_IDE: " ${MSVC_IDE} )
-MESSAGE( STATUS "MSVC60: " ${MSVC60} )
-MESSAGE( STATUS "MSVC70: " ${MSVC70} )
-MESSAGE( STATUS "MSVC71: " ${MSVC71} )
-MESSAGE( STATUS "MSVC80: " ${MSVC80} )
-MESSAGE( STATUS "MSVC_COMPILER_2005 : " ${CMAKE_COMPILER_2005} )
+MESSAGE( STATUS "MSVC_VERSION: " ${MSVC_VERSION} )
+MESSAGE( STATUS "CMAKE_CXX_COMPILER_VERSION: " ${CMAKE_CXX_COMPILER_VERSION} )
 
 
 # set this to true if you don't want to rebuild the object files if the rules have changed, 
@@ -153,10 +155,18 @@ MESSAGE( STATUS "CMAKE_SUPPRESS_REGENERATION: " ${CMAKE_SUPPRESS_REGENERATION} )
 # But there are also two variables exactly for this purpose: 
 
 # the compiler flags for compiling C sources 
-MESSAGE( STATUS "CMAKE_C_FLAGS: " ${CMAKE_C_FLAGS} )
+MESSAGE( STATUS "CMAKE_C_FLAGS: "                   ${CMAKE_C_FLAGS} )
+MESSAGE( STATUS "CMAKE_C_FLAGS_DEBUG: "             ${CMAKE_C_FLAGS_DEBUG})
+MESSAGE( STATUS "CMAKE_C_FLAGS_RELEASE: "           ${CMAKE_C_FLAGS_RELEASE})
+MESSAGE( STATUS "CMAKE_C_FLAGS_RELWITHDEBINFO: "    ${CMAKE_C_FLAGS_RELWITHDEBINFO})
+MESSAGE( STATUS "CMAKE_C_FLAGS_MINSIZEREL: "        ${CMAKE_C_FLAGS_MINSIZEREL})
 
 # the compiler flags for compiling C++ sources 
-MESSAGE( STATUS "CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS} )
+MESSAGE( STATUS "CMAKE_CXX_FLAGS: "                 ${CMAKE_CXX_FLAGS} )
+MESSAGE( STATUS "CMAKE_CXX_FLAGS_DEBUG: "           ${CMAKE_CXX_FLAGS_DEBUG} )
+MESSAGE( STATUS "CMAKE_CXX_FLAGS_RELEASE: "         ${CMAKE_CXX_FLAGS_RELEASE} )
+MESSAGE( STATUS "CMAKE_CXX_FLAGS_RELWITHDEBINFO: "  ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} )
+MESSAGE( STATUS "CMAKE_CXX_FLAGS_MINSIZEREL: "      ${CMAKE_CXX_FLAGS_MINSIZEREL} )
 
 
 # Choose the type of build.  Example: SET(CMAKE_BUILD_TYPE Debug) 
@@ -181,21 +191,11 @@ MESSAGE( STATUS "CMAKE_COMPILER_IS_GNUCXX : " ${CMAKE_COMPILER_IS_GNUCXX} )
 MESSAGE( STATUS "CMAKE_AR: " ${CMAKE_AR} )
 MESSAGE( STATUS "CMAKE_RANLIB: " ${CMAKE_RANLIB} )
 
+MESSAGE( STATUS "CMAKE_CROSSCOMPILING: " ${CMAKE_CROSSCOMPILING} )
+
+MESSAGE( STATUS "TARGET_ARCH: " ${TARGET_ARCH} )
+MESSAGE( STATUS "CMAKE_STATIC_LIBRARY_PREFIX: " ${CMAKE_STATIC_LIBRARY_PREFIX} )
+MESSAGE( STATUS "CMAKE_STATIC_LIBRARY_SUFFIX: " ${CMAKE_STATIC_LIBRARY_SUFFIX} )
 #
 #MESSAGE( STATUS ": " ${} )
 # ------------------------- End of Generic CMake Variable Logging ------------------
-
-project (GameEngineFromWenLi)
-include_directories("${PROJECT_SOURCE_DIR}/Framework/Common")
-include_directories("${PROJECT_SOURCE_DIR}/Framework/Interface")
-include_directories("${PROJECT_SOURCE_DIR}/Framework/GeomMath")
-include_directories("${PROJECT_SOURCE_DIR}/RHI")
-IF(${UNIX})
-        include_directories("${PROJECT_SOURCE_DIR}/Platform/Linux")
-ELSEIF(${WIN32})
-        include_directories("${PROJECT_SOURCE_DIR}/Platform/Windows")
-ENDIF(${UNIX})
-include(CTest)
-add_subdirectory(Framework)
-add_subdirectory(Platform)
-add_subdirectory(RHI)
