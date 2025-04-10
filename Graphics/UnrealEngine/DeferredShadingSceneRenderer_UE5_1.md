@@ -26,11 +26,11 @@
 - OIT::OnRenderBegin 在scene update之前清空OITSceneData  
 - FScene::Update  
 	- 构建FScene::FUpdateParameters  
-	- 若允许GPUSkinCache, 添加GPUSkinCacheTask(异步并行执行FGPUSkinCache::DoDispatch)  
+	- 若允许<u>GPUSkinCache</u>, 添加GPUSkinCacheTask(异步并行执行FGPUSkinCache::DoDispatch)  
 	- add interface to render graph builder blackboard to receive scene updates from compute, submit updates to modify GPU-scene  
 	- FComputeGraphTaskWorker::SubmitWork: submit enqueued compute graph work for ComputeTaskExecutionGroup of EndOfFrameUpdate  
 	- WaitForCleanUpTasks/WaitForAsyncExecuteTask: 等待前一帧的scene render结束及 async RDG execution tasks  
-	- FMaterialRenderProxy::UpdateDeferredCachedUniformExpressions  
+	- FMaterialRenderProxy::Update<u>DeferredCachedUniformExpressions</u>  
 	- UpdateAllLightSceneInfos  
 	- UpdateAllPrimitiveSceneInfos  
   
@@ -45,7 +45,7 @@
 	- 重新创建FSceneCulling, 处理所有的removed primitives  
 	- RDG builder 分配对象FSceneExtensionsUpdaters, 调用其PreSceneUpdate  
 - RemovePrimitiveSceneInfos  
-	- FLODSceneTree 清除掉待删除的primitives  
+	- <u>FLODSceneTree</u> 清除掉待删除的primitives  
 	- 循环处理待删除的primitives, 配合TypeOffsetTable和PrimitiveSceneProxies, 将每个primitive交换移动到各个数组的末端, 并执行删除.  
      - VelocityData.RemoveFromScene  
      - UnlinkAttachmentGroup  
@@ -77,7 +77,7 @@
     ```  
     
 - RDG builder分配对象SceneInfosWithAddToScene/SceneInfosWithStaticDrawListUpdate. 收集待分配InstanceId的primitives(added/updateInstances)  
-- allocator consolidation for FSpanAllocator(InstanceSceneData/InstancePayloadData/LightmapData/PersistentPrimitiveId)  
+- allocator consolidation for <u>FSpanAllocator</u>(InstanceSceneData/InstancePayloadData/LightmapData/PersistentPrimitiveId)  
 - AddPrimitiveSceneInfos  
 	- 扩展各个数组大小(Primitives/PrimitiveTransforms/PrimitiveSceneProxies/PrimitiveBounds...)  
     - 循环处理待添加的primitives  
@@ -112,7 +112,7 @@
 	- pending flush virtual texture  
 	- 若支持velocity rendering, 更新localtoworld to VelocityData  
 	- update primitive transform(WorldBounds/LocalBounds/LocalToWorld/AttachmentRootPosition)  
-	- 若不支持VolumeTexture(mobile device) 并且 movable object 则 mark indirect lighting cache buffer dirty  
+	- 若不支持<u>VolumeTexture</u>(mobile device) 并且 movable object 则 mark indirect lighting cache buffer dirty  
 	- DistanceFieldSceneData/lumen update primitive  
 	- overrides the primitive previous localToWorld matrix for this frame only in VelocityData  
   
@@ -128,16 +128,13 @@
   
 - allocate all GPUScene instances slots(added + updateInstances) in FPrimitiveSceneInfo::AllocateGPUSceneInstances.  
 - real add to scene(FPrimitiveSceneInfo::AddToScene)  
-	- IndirectLightingCacheUniformBuffers(point/volume),  
-	- IndirectLightingCacheAllocation(track a primitive allocation in the volume texture atlas that stores indirect lighting),  
+	- IndirectLightingCacheUniformBuffers,    
+	- IndirectLightingCacheAllocation,    
 	- LightmapDataOffset,  
-	- ReflectionCaptures(mobile/forwardShading, reflectionCapture/planarReflection),  
-	- AddStaticMeshes(DrawStaticElements, UpdateSceneArrays, CacheMeshDrawCommands/CacheNaniteDrawCommands/CacheRayTracingPrimitives),  
+	- ReflectionCaptures(cached closest reflectionCaptureProxy/planarReflectionProxy | mobile HQ rflections),    
 	- AddToPrimitiveOctree,  
 	- UpdateBounds,  
-	- UpdateVirtualTexture,  
-	- find lights that affect the primitives in the light octree(local light/non-local(directional) shadow-casting lights),  
-	- levelNotifyPrimitives.  
+	- LevelNotifyPrimitives.    
 - level commands  
 	- add command, 查找对应level关联的所有primitives, pending add static meshes | remove static meshes | 对于NaniteMesh, add PrimitivesToUpdate/PrimitiveDirtyState for GPUScene.    
 	- remove command, 查找对应level关联的所有primitives, 对于NaniteMesh, add PrimitivesToUpdate/PrimitiveDirtyState for GPUScene.    
@@ -147,9 +144,12 @@
 	- FScene::UpdateCachedShadowState  
 	- FShadowScene::PostSceneUpdate  
 	- SceneExtensionsUpdaters.PostSceneUpdate  
-- RDG builder 新增 addStaticMeshesTasks, 前置任务UpdateUniformExpressionsTask, 可标记bAsyncCacheMeshDrawCommands  
+- RDG builder 新增任务addStaticMeshesTasks, 前置任务UpdateUniformExpressionsTask.  
+	- 可标记bAsyncCacheMeshDrawCommands    
+  - 若无前置任务, 则立即执行, 否则为异步执行启动一个任务, 必须在前置任务后执行.  
+  - 任务优先级为High  
 	- real add static meshes(FPrimitiveSceneInfo::AddStaticMeshes)  
-		- 并行执行每个primitive scene proxy的DrawStaticElements  
+		- 并行执行每个primitive scene proxy的<u>DrawStaticElements</u>  
 		- 遍历所有的scene infos, 将每个primitive的所有static meshes添加如 staticMeshes in scene, allocate OIT index buffer for sorted triangles in translucent material  
 	- update virtual textures  
 	- flush runtime virtual texture  
@@ -157,17 +157,21 @@
 - pending update static meshes  
 	- 若skylight state(render skylight in basePass)(FScene::ShouldRenderSkylightInBasePass)前一帧和当前帧不一致,场景需要重新创建static draw lists, 即强制更新所有的mesh draw commands  
 	- 若前一帧和当前帧的BasePassDepthStencilAccess不一致, 也需要更新所有的static draw lists  
-	- 若 pipeline variable rate shading(VRS) 状态发生变更(r.VRS.Enable), 对所有使用non-1x1 per-material shading rates的primitives更新static meshes  
+	- 若 <u>pipeline variable rate shading(VRS)</u> 状态发生变更(r.VRS.Enable), 对所有使用non-1x1 per-material shading rates的primitives更新static meshes  
 	- 对于待更新的static meshes, 移除cachedMeshDrawCommands/cachedNaniteMaterialBins  
-- CreateLightPrimitiveInteractionsTask  
+- RDG builder新增任务:CreateLightPrimitiveInteractionsTask, 此类型任务 synced prior to graph execution, 若不允许并行执行, 则立即执行.  
+  - 任务优先级为Normal    
 	- nanite primitives 默认跳过LightPrimitiveInteraction(ShouldSkipNaniteLPIs)  
-	- local light primitive interaction(DoesPlatformNeedLocalLightPrimitiveInteraction), 在light octree中查询会影响primitive的local light, to createLightPrimitiveInteraction  
+	- local light primitive interaction(LocalShadowCastingLightOctree), LPI creation需要在static mesh update之后启动  
+    - r.Visibility.LocalLightPrimitiveInteraction 判别局部光是否需要进行图元交互, 禁止可以加速render thread time  
+    - mobile platform 不进行此处理  
+    - bound test: 使用fast box-box intersection来遍历light octree, 若有交互, create light interaction and add to light/primitive lists  
 	- non-local(directional) shadow-casting lights  
 	- 可选的异步执行此LightPrimitiveInteraction任务  
-- update nanite primitives that need re-caching in GPU Scene.  
+- update nanite primitives that need re-caching in GPU Scene(GPUScene.AddPrimitiveToUpdate).  
 - real update static meshes  
 	- 新增CacheMeshDrawCommandsTask(FPrimitiveSceneInfo::CacheMeshDrawCommands)  
-	- 前置任务 AddStaticMeshesTask, mobile platform限定的CreateLightPrimitiveInteractionsTasks  
+	- 前置任务 AddStaticMeshesTask 以及 mobile platform限定的CreateLightPrimitiveInteractionsTasks  
 	- 可选的异步执行CacheMeshDrawCommands  
 - 新增 CacheNaniteMaterialBinsTask(FPrimitiveSceneInfo::CacheNaniteMaterialBins), 前置任务AddStaticMeshesTask, 可选的异步执行  
 - 收集需更新custom primitive data的primitives  
@@ -184,10 +188,10 @@
 	- update PrimitivesToUpdate/PrimitiveDirtyState in GPUScene for PrimitivesNeedingUniformBufferUpdate  
 	- RDG builder 新增任务, 处理每个需更新的proxy(FPrimitiveSceneProxy::UpdateUniformBuffer), 过滤vertex factories使用GPUScene处理primitive data的primitives  
   
-- update GPU scene(FGPUScene::Update)  
+- <u>update GPU scene(FGPUScene::Update)</u>, pull all pending updates from scene and upload primitive & instance data.  
   
 - SceneExtensionsUpdaters.PostGPUSceneUpdate  
-- RDG builder新增setupTask, 删除DeletedPrimitiveSceneInfos, HitProxies需要在game thread释放  
+- RDG builder新增任务: 删除DeletedPrimitiveSceneInfos, HitProxies需要在game thread释放  
 - AddStaticMeshesTask.Wait()  
   
   
@@ -198,8 +202,8 @@
 	- 异步缓存MaterialUniformExpressions(r.AsyncCacheMaterialUniformExpressions 且 非移动平台)    
 - GPUSceneUpdateTaskPrerequisites 初始化为空任务  
 - Callbacks.PostStaticMeshUpdate  
-	- view extension pre render view  
-	- LensDistortion && PaniniProjection: add a RDG pass to generate the lens distortion LUT  
+	- view extension per render view  
+	- <u>LensDistortion && PaniniProjection</u>: add a RDG pass to generate the lens distortion LUT  
 	- setups FViewInfo::ViewRect according to ViewFamilly's ScreenPercentageInterface  
 	- initializes a scene textures config instance from the view family  
 	- custom render passes have own view family structure  
@@ -209,7 +213,7 @@
 		- wait for GPU skin cache task  
 		- select appropriate LOD & geometry type(ProcessHairStrandsBookmark)    
 	- LightFunctionAtlas::OnRenderBegin, Lighting 在ERendererOutput::DepthPrepassOnly or ERendererOutput::BasePass时会跳过执行  
-	- LaunchVisibilityTasks  
+	- <u>LaunchVisibilityTasks</u>    
 		- linear bulk allocator in scene renderer 创建对象FVisibilityTaskData  
 		- FVisibilityTaskData::LaunchVisibilityTasks  
 	- 若允许ParallelSetup(r.RDG.ParallelSetup), GPUSceneUpdateTaskPrerequisites添加前置任务VisibilityTaskData->GetComputeRelevanceTask  
@@ -221,18 +225,18 @@
 当处于parallel mode时, 一个复杂的task graph处理每个visibility stage, pipelines results从一个stage转向另一个stage.  
 这避免了除当前局限于render thread的dynamic mesh elements gather之外的major join/fork sync points.  
 对于不能从并行性收益或者不支持的平台,render-thread centric mode也支持在渲染线程处理visibility,通过一些并行来支持task threads.  
-Visibility 为所有视图单独处理, 每一个view执行多个阶段的pipelined task work. 
+Visibility 为所有视图单独处理, 每一个view执行多个阶段的pipelined task work.    
 view stages:  
-	Frustum Cull  		 - primitives经历frustum/distance culled, visible primitive传入下一阶段 
-	Occlusion Cull       - primitives 沿着场景中的occluders进行culled, visible primitives传入下一阶段 
-	Compute Relevance    - 查询primitives以获取view relevance information, 标识出的dynamic elements 传入下一阶段, static meshes 过滤入各个mesh passes 
-接下来的阶段为所有视图执行:  
-	Gather Dynamic Mesh Elements(GDME)		- 使用view mask查询标识为dynamic relevance的primitives,以支持dynamic meshes 
-	Setup Mesh Passes 						- 启动任务以生成 static | dynamic meshes的mesh draw command  
-	  
-	visibility pipeline使用command pipes, 每个视图有两个pipes: OcclusionCull和Relevance  
-	当渲染器仅有一个view时, GDME会利用一个command pipe尽可能快的处理relevance requests,实现与相关性的一定重叠,以减少关键路径  
-	多个views时, 需事先同步Relevance, 因gather需要每个dynamic primitive的view mask  
+	Frustum Cull  		   - primitives经历frustum/distance culled, visible primitive传入下一阶段  
+	Occlusion Cull       - primitives 沿着场景中的occluders进行culled, visible primitives传入下一阶段  
+	Compute Relevance    - 查询primitives以获取view relevance information, 标识出的dynamic elements 传入下一阶段, static meshes 过滤入各个mesh passes  
+接下来的阶段为所有视图执行:    
+	Gather Dynamic Mesh Elements(GDME)		- 使用view mask查询标识为dynamic relevance的primitives,以支持dynamic meshes     
+	Setup Mesh Passes 						        - 启动任务以生成 static | dynamic meshes的mesh draw command       
+    
+visibility pipeline使用command pipes, 每个视图有两个pipes: OcclusionCull和Relevance  
+当渲染器仅有一个view时, GDME会利用一个command pipe尽可能快的处理relevance requests,实现与相关性的一定重叠,以减少关键路径  
+多个views时, 需事先同步Relevance, 因gather需要每个dynamic primitive的view mask  
 
   
   
@@ -490,3 +494,5 @@ whether bNanite or bHZBOcclusion is enables
 - r.SkinCache.Visualize overview/memory/off: 可视化GPU skin cache 数据  (仅可在编辑器下可视)  
   list skincacheusage 可打印出每个骨骼网格的skincache使用类型  
 - r.HZBOcclusion 选择occlusion system: 0-hardware occlusion queries, 1-HZB occlusion system(default, less GPU and CPU cost, 更保守的结果) 2-force HZB occlusion system(覆盖渲染平台的偏好设置)  
+- r.Visibility.LocalLightPrimitiveInteraction 局部光和图元交互的开关  
+  
