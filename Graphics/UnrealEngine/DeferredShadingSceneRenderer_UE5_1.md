@@ -3,13 +3,15 @@
 <br>
 
 - [FDeferredShadingSceneRenderer::Render](#fdeferredshadingscenerendererrender)
+  - [Virtual Texture](#virtual-texture)
   - [FSceneRenderer::OnRenderBegin](#fscenerendereronrenderbegin)
     - [UpdateAllPrimitiveSceneInfos](#updateallprimitivesceneinfos)
-    - [FScene::FUpdateParameters](#fscenefupdateparameters)
+      - [FScene::FUpdateParameters](#fscenefupdateparameters)
     - [FVisibilityTaskData](#fvisibilitytaskdata)
-  - [FDeferredShadingSceneRenderer::InitViews](#fdeferredshadingscenerendererinitviews)
-  - [UpdateGPUScene](#updategpuscene)
+    - [FDeferredShadingSceneRenderer::InitViews](#fdeferredshadingscenerendererinitviews)
+    - [UpdateGPUScene](#updategpuscene)
   - [Detail Code](#detail-code)
+        - [EMeshPass](#emeshpass)
         - [FInstanceCullingManager](#finstancecullingmanager)
         - [FRelevancePacket](#frelevancepacket)
         - [FPerViewPipelineState](#fperviewpipelinestate)
@@ -19,9 +21,26 @@
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
-# FDeferredShadingSceneRenderer::Render
-
+# FDeferredShadingSceneRenderer::Render  
+- 在渲染开始之前, 处理场景更新: 更新所有的图元信息/光源信息/所有视图的可见性测试/GPUSceneData上传到GPU.  
+- FInitViewTaskDatas 收集到场景更新后的VisibilityTaskData  
+- GPUScene 启动FGPUScene::BeginRender,通过Scope会自动析构所有数据.  
+- VirtualTexture初始化  
+-     
+    
+    
+    
+## Virtual Texture  
+virtual texturing仅运行在ERendererOutput::BasePass | ERendererOutput::FinalSceneColor  
+- FVirtualTextureSystem::BeginUpdate  
+- VirtualTextureFeedbackBegin  
+- virtual texture是否支持, 依据r.VirtualTextures, 若为mobile platform, 还需依据r.Mobile.VirtualTextures  
+      
+    
 ## FSceneRenderer::OnRenderBegin  
+场景的数据更新通过一系列由RDG builder创建的任务来执行,如:  
+GPUSkinCacheTask/UpdateUniformExpressionsTask/AddToScene/AddStaticMeshesTask/LightPrimitiveInteractionsTask/CacheMeshDrawCommandsTask/CacheNaniteMaterialBinsTask/VisibilityTask/GPUSceneUpdate/DeletePrimitiveSceneInfo...     
+  
 - 在scene update之前清空virtual texture system的回调信息, 以避免和mesh draw command caching tasking产生竞争情况  
 - OIT::OnRenderBegin 在scene update之前清空OITSceneData  
 - FScene::Update  
@@ -183,7 +202,7 @@
 - primitive occlusion bounds update  
 - instance cull distance update  
 - draw distance update  
-- 回调PostStaticMeshUpdate for FUpdateParameters  
+- 执行PostStaticMeshUpdate of FUpdateParameters, 此时启动VisibilityTask, 可视任务的前置任务:AddStaticMeshesTask, 设置GPUSceneUpdateTask的前置任务:ComputeRelevance in VisibilityTask.  
 - update uniform buffers  
 	- update PrimitivesToUpdate/PrimitiveDirtyState in GPUScene for PrimitivesNeedingUniformBufferUpdate  
 	- RDG builder 新增任务, 处理每个需更新的proxy(FPrimitiveSceneProxy::UpdateUniformBuffer), 过滤vertex factories使用GPUScene处理primitive data的primitives  
@@ -193,9 +212,9 @@
 - SceneExtensionsUpdaters.PostGPUSceneUpdate  
 - RDG builder新增任务: 删除DeletedPrimitiveSceneInfos, HitProxies需要在game thread释放  
 - AddStaticMeshesTask.Wait()  
-  
-  
-### FScene::FUpdateParameters  
+      
+    
+#### FScene::FUpdateParameters  
 - 收集UpdateAllPrimitiveSceneInfos的异步操作集:  
 	- 异步创建light和primitive的交互(r.AsyncCreateLightPrimitiveInteractions)    
 	- 异步缓存MeshDrawCommands(r.AsyncCacheMeshDrawCommands)  
@@ -214,12 +233,12 @@
 		- select appropriate LOD & geometry type(ProcessHairStrandsBookmark)    
 	- LightFunctionAtlas::OnRenderBegin, Lighting 在ERendererOutput::DepthPrepassOnly or ERendererOutput::BasePass时会跳过执行  
 	- <u>LaunchVisibilityTasks</u>    
-		- linear bulk allocator in scene renderer 创建对象FVisibilityTaskData  
+		- SceneRenderer.Allocator(linear bulk allocator in scene renderer)创建对象FVisibilityTaskData  
 		- FVisibilityTaskData::LaunchVisibilityTasks  
 	- 若允许ParallelSetup(r.RDG.ParallelSetup), GPUSceneUpdateTaskPrerequisites添加前置任务VisibilityTaskData->GetComputeRelevanceTask  
 	- trigger GPUSceneUpdateTaskPrerequisites, 这是为了确保visibility处理完成    
-  
     
+
 ### FVisibilityTaskData  
 此类管理指定的scene renderer关联的所有views与visibility computation相关的所有states.  
 当处于parallel mode时, 一个复杂的task graph处理每个visibility stage, pipelines results从一个stage转向另一个stage.  
@@ -237,6 +256,31 @@ view stages:
 visibility pipeline使用command pipes, 每个视图有两个pipes: OcclusionCull和Relevance  
 当渲染器仅有一个view时, GDME会利用一个command pipe尽可能快的处理relevance requests,实现与相关性的一定重叠,以减少关键路径  
 多个views时, 需事先同步Relevance, 因gather需要每个dynamic primitive的view mask  
+    
+- LaunchVisibilityTasks  
+  - 遍历每个view
+    - 构建FVisibilityViewPacket,每个view都有自己的visibility task packet, 包含管理task graph的所有状态.  
+    - Tasks收集每个view的可见性的各个对应的阶段的任务, LightVisibility/FrustumCull/OcclusionCull/ComputeRelevance, 放入前置  
+    - <u>Decompress precomputed occlusion</u>(FSceneViewState::ResolvePrecomputedVisibilityData)  
+  - 每个relevance task需等待CacheMeshDrawCommandsTask  
+  - GDME 需要等待 GPUSkinCacheTask  
+  - 若Visibility是作为async task graph来处理的, 除了dynamic mesh element gather仍在render thread,在这种模式调度下:  
+    - 实例化的多视图拥有的secondary view会将visibility data注入primary view. 因此所有视图在启动MergeSecondaryViewsTask(merge secondary visibility maps into the primary view)任务之前必须首先完成culling, 而此merge task也变成relevance pipe commands的前置任务, 因此所有视图共享单个relevance pipe  
+    - 若仅有一个视图, gather dynamic mesh elements被推入一个pipe, 在渲染线程执行, 允许和compute relevance work有一些重叠. 单个视图的parallel mode不需要primitive view masks.  
+  - 对于多视图, 需要分配PrimitiveViewMasks(FDynamicPrimitiveViewMasks)  
+  - Tasks.LightVisibility添加前置任务: FSceneRenderer::ComputeLightVisibility  
+  - 若任务可以并行调度  
+    - 等待OcclusionTests(FSceneRenderer::WaitOcclusionTests): wait OcclusionSubmittedFence  
+    - parallel occlusion culling 不支持 mobile  
+    - multi-viewport instanced stereo rendering, 需将所有primitive重定向到primary view的relevance command pipe, secondary viewports因此需要reference  
+    - 遍历ViewPackets, parrallel occlusion cull执行Map(FGPUOcclusionParallel::Map), Tasks.BeginInitVisibility添加前置任务: FVisibilityViewPacket::BeginInitVisibility  
+    - Tasks.FinalizeRelevance新增任务: FinalizeStaticRelevance, 前置任务事件Tasks.ComputeRelevance  
+    - 当前所有的task events连接到prerequisites, 可以安全触发: BeginInitVisibility/LightVisibility/FrustumCull/OcclusionCull/ComputeRelevance  
+
+    
+  
+    
+
 
   
   
@@ -246,7 +290,7 @@ visibility pipeline使用command pipes, 每个视图有两个pipes: OcclusionCul
 
 
 
-## FDeferredShadingSceneRenderer::InitViews
+### FDeferredShadingSceneRenderer::InitViews
 initialize scene's views. Check visibility, build visible mesh commands, etc.  
 
 - prior to visibility  
@@ -365,7 +409,12 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
 
 
 
-## UpdateGPUScene  
+### UpdateGPUScene  
+- BeginRender  
+GPUScene在渲染器的入口函数  
+缓存FGPUSceneDynamicContext的引用, 此类用来包含和控制场景渲染收集的任何dynamic primitive的生命周期, 和SceneRenderer共享生命周期  
+调用RegisterBuffers, 将PrimitiveBuffer/InstanceSceneDataBuffer/InstancePayloadBuffer/LightmapDataBuffer/LightDataBuffer注册为RDG的external buffer,以便被render graph追踪  
+  
 - FGPUScene::Update  主要更新场景中的primitives.  
   - 若GGPUSceneUploadEveryFrame(用于调试)或者bUpdateAllPrimitives(shift scene data), 需要更新所有primitives.  
   - 过滤PrimitivesToUpdate中已删除的primitive.  
@@ -419,7 +468,52 @@ initialize scene's views. Check visibility, build visible mesh commands, etc.
 - FScene::UpdatePhysicsField (Physics Field)
 
 
-## Detail Code
+## Detail Code  
+    
+##### EMeshPass  
+- DepthPass  
+- SecondStageDepthPass  
+- BasePass  
+- AnisotropyPass  
+- SkyPass  
+- SingleLayerWaterPass  
+- SingleLayerWaterDepthPrepass  
+- CSMShadowDepth  
+- VSMShadowDepth  
+- OnePassPointLightShadowDepth  
+- Distortion  
+- Velocity  
+- TranslucentVelocity  
+- TranslucencyStandard  
+- TranslucencyStandardModulate  
+- TranslucencyAfterDOF  
+- TranslucencyAfterDOFModulate  
+- TranslucencyAfterMotionBlur  
+- TranslucencyHoldout  
+- TranslucencyAll  
+- LightmapDensity  
+- DebugViewMode  
+- CustomDepth  
+- MobileBasePassCSM  
+- VirtualTexture  
+- LumenCardCapture  
+- LumenCardNanite  
+- LumenTranslucencyRadianceCacheMark  
+- LumenFrontLayerTranslucencyGBuffer  
+- DitheredLODFadingOutMaskPass  
+- NaniteMeshPass  
+- MeshDecal_DBuffer  
+- MeshDecal_SceneColorAndGBuffer  
+- MeshDecal_SceneColorAndGBufferNoNormal  
+- MeshDecal_SceneColor  
+- MeshDecal_AmbientOcclusion  
+- WaterInfoTextureDepthPass  
+- WaterInfoTexturePass  
+- HitProxy  
+- HitProxyOpaqueOnly  
+- EditorLevelInstance  
+- EditorSelection  
+    
 
 ##### FInstanceCullingManager
   为所有instanced draws管理indirect arguments和culling jobs的分配(使用GPU Scene culling).  
@@ -494,5 +588,8 @@ whether bNanite or bHZBOcclusion is enables
 - r.SkinCache.Visualize overview/memory/off: 可视化GPU skin cache 数据  (仅可在编辑器下可视)  
   list skincacheusage 可打印出每个骨骼网格的skincache使用类型  
 - r.HZBOcclusion 选择occlusion system: 0-hardware occlusion queries, 1-HZB occlusion system(default, less GPU and CPU cost, 更保守的结果) 2-force HZB occlusion system(覆盖渲染平台的偏好设置)  
+      
 - r.Visibility.LocalLightPrimitiveInteraction 局部光和图元交互的开关  
-  
+- r.Visibility.DynamicMeshElements.NumMainViewTasks 控制gather dynamic mesh elements tasks的数量(默认为4),以便在view visibility期间异步运行  
+- r.Visibility.FrustumCull.Enabled 视锥体剔除开关  
+- 
