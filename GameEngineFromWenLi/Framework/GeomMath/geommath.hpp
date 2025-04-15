@@ -87,12 +87,12 @@ namespace My
 			swizzle<Vector2Type<T>, 2, 0> zx;
 			swizzle<Vector2Type<T>, 1, 2> yz;
 			swizzle<Vector2Type<T>, 2, 1> zy;
-			swizzle<Vector2Type<T>, 0, 1, 2> xyz;
-			swizzle<Vector2Type<T>, 1, 0, 2> yxz;
-			swizzle<Vector2Type<T>, 0, 2, 1> xzy;
-			swizzle<Vector2Type<T>, 2, 0, 1> zxy;
-			swizzle<Vector2Type<T>, 1, 2, 0> yzx;
-			swizzle<Vector2Type<T>, 2, 1, 0> zyx;
+			swizzle<Vector3Type<T>, 0, 1, 2> xyz;
+			swizzle<Vector3Type<T>, 1, 0, 2> yxz;
+			swizzle<Vector3Type<T>, 0, 2, 1> xzy;
+			swizzle<Vector3Type<T>, 2, 0, 1> zxy;
+			swizzle<Vector3Type<T>, 1, 2, 0> yzx;
+			swizzle<Vector3Type<T>, 2, 1, 0> zyx;
 		};
 
 		Vector3Type() {};
@@ -113,11 +113,12 @@ namespace My
 			struct { T x, y, z, w; };
 			struct { T r, g, b, a; };
 			Vector3Type<T> xyz;
-			swizzle<Vector2Type<T>, 0, 2, 1> xzy;
-			swizzle<Vector2Type<T>, 1, 0, 2> yxz;
-			swizzle<Vector2Type<T>, 1, 2, 0> yzx;
-			swizzle<Vector2Type<T>, 2, 0, 1> zxy;
-			swizzle<Vector2Type<T>, 2, 1, 0> zyx;
+			swizzle<Vector3Type<T>, 0, 2, 1> xzy;
+			swizzle<Vector3Type<T>, 1, 0, 2> yxz;
+			swizzle<Vector3Type<T>, 1, 2, 0> yzx;
+			swizzle<Vector3Type<T>, 2, 0, 1> zxy;
+			swizzle<Vector3Type<T>, 2, 1, 0> zyx;
+			swizzle<Vector4Type<T>, 2, 1, 0, 3> bgra;
 		};
 
 		Vector4Type() {};
@@ -129,6 +130,8 @@ namespace My
 	};
 
 	using Vector4f = Vector4Type<float>;
+	// unsigned normalized 8-bit integer
+	using R8G8B8A8Unorm = Vector4Type<uint8_t>;
 
 	template <template <typename> class TT, typename T>
 	std::ostream& operator<<(std::ostream& out, TT<T> vector)

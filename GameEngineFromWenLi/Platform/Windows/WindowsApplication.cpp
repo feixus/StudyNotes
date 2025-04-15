@@ -36,7 +36,7 @@ int My::WindowsApplication::Initialize()
                             NULL,
                             NULL,
                             hInstance,
-                            NULL);
+                            this);
 
     ShowWindow(hWnd, SW_SHOW);
 
@@ -67,13 +67,36 @@ void My::WindowsApplication::Tick()
 
 LRESULT CALLBACK My::WindowsApplication::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    WindowsApplication* pThis;
+    if (message == WM_NCCREATE)
+    {
+        pThis = reinterpret_cast<WindowsApplication*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
+
+        SetLastError(0);
+        if (!SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis)))
+        {
+            if (GetLastError() != 0)
+                return -1;
+        }
+    }
+    else
+    {
+        pThis = reinterpret_cast<WindowsApplication*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+    }
+
     switch (message)
     {
     case WM_PAINT:
         // replace this part with Rendering Module
         {
-
+            if (pThis)
+            pThis->OnDraw();
         } break;
+    case WM_KEYDOWN:
+        {
+            m_bQuit = true;
+        }
+        break;
     case WM_DESTROY:
         PostQuitMessage(0);
         BaseApplication::m_bQuit = true;
