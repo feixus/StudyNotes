@@ -137,5 +137,4 @@ dumpbin(Windows)/nm(Linux/Unix) to locate where the mangled symbol is defined or
 such as: dumpbin /symbols Normalize.o | findstr DotProduct
 此处是Normalize.o引用的DotProduct的函数签名不一致引起的
 
-
 */

@@ -1,10 +1,16 @@
 #pragma once
 
-#include <glm/gtx/hash.hpp>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan.hpp>
+#include <glm/gtx/hash.hpp>
 #include <array>
+#include <optional>
+#include <string>
 
+struct UniformBufferObject {
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 proj;
+};
 
 struct Vertex {
 	glm::vec3 pos;
