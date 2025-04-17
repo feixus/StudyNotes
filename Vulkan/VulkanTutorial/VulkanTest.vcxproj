@@ -144,18 +144,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DebugMessager.cpp" />
-    <ClCompile Include="Vertex.cpp" />
     <ClCompile Include="HelloTriangleApplication.cpp" />
+    <ClCompile Include="HelpUtility.cpp" />
+    <ClCompile Include="MacrosDefine.h" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="VulkanExampleBase.cpp" />
-    <ClCompile Include="ParticleApplication.cpp" />
+    <ClCompile Include="Vertex.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ConstDefine.h" />
+    <ClInclude Include="ConstStruct.h" />
     <ClInclude Include="DebugMessager.h" />
-    <ClInclude Include="Vertex.h" />
     <ClInclude Include="HelloTriangleApplication.h" />
-    <ClInclude Include="VulkanExampleBase.h" />
-    <ClInclude Include="ParticleApplication.h" />
+    <ClInclude Include="HelpUtility.h" />
+    <ClInclude Include="Vertex.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

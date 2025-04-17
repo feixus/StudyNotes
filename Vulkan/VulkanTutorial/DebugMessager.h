@@ -1,6 +1,8 @@
 #pragma once
 
-#include "VulkanExampleBase.h"
+#include <vulkan/vulkan.h>
+
+#include "ConstDefine.h"
 
 
 class DebugMessager {

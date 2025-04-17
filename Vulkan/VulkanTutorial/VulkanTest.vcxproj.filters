@@ -21,37 +21,5 @@
     <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="HelloTriangleApplication.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="DebugMessager.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="VulkanExampleBase.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Vertex.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="ParticleApplication.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="HelloTriangleApplication.h">
-      <Filter>源文件</Filter>
-    </ClInclude>
-    <ClInclude Include="DebugMessager.h">
-      <Filter>源文件</Filter>
-    </ClInclude>
-    <ClInclude Include="VulkanExampleBase.h">
-      <Filter>源文件</Filter>
-    </ClInclude>
-    <ClInclude Include="Vertex.h">
-      <Filter>源文件</Filter>
-    </ClInclude>
-    <ClInclude Include="ParticleApplication.h">
-      <Filter>源文件</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>
