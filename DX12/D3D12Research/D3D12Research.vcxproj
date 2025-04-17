@@ -132,13 +132,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Graphics.cpp" />
+    <ClCompile Include="LinearAllocator.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="stdafx.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="D3DUtils.h" />
     <ClInclude Include="d3dx12.h" />
+    <ClInclude Include="GpuResource.h" />
     <ClInclude Include="Graphics.h" />
+    <ClInclude Include="LinearAllocator.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="Timer.h" />
+    <ClInclude Include="UploadBuffer.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders.hlsl">
