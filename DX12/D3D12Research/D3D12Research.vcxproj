@@ -135,6 +135,7 @@
     <ClCompile Include="LinearAllocator.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="UWP_Graphics.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3DUtils.h" />
@@ -145,6 +146,7 @@
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="UploadBuffer.h" />
+    <ClInclude Include="UWP_Graphics.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders.hlsl">
@@ -162,7 +164,9 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
   </ItemGroup>
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets">
-  </ImportGroup>
+  <ImportGroup Label="ExtensionTargets" />
 </Project>

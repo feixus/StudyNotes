@@ -27,6 +27,9 @@
     <ClCompile Include="LinearAllocator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="UWP_Graphics.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -53,8 +56,14 @@
     <ClInclude Include="Timer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="UWP_Graphics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest" />
   </ItemGroup>
 </Project>
