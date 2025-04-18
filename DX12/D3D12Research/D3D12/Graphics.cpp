@@ -598,7 +598,7 @@ void Graphics::BuildShaderAndInputLayout()
 
 	ComPtr<ID3DBlob> pErrorBlob;
 
-	D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompileFromFile(L"D3D12/shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
@@ -607,7 +607,7 @@ void Graphics::BuildShaderAndInputLayout()
 	}
 
 	pErrorBlob.Reset();
-	D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &m_pPixelShaderCode, &pErrorBlob);
+	D3DCompileFromFile(L"D3D12/shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &m_pPixelShaderCode, &pErrorBlob);
 	if (pErrorBlob != nullptr)
 	{
 		wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
@@ -789,7 +789,7 @@ void Graphics::BuildPSO()
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psDesc.DSVFormat = m_DepthStencilFormat;
 	psDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	psDesc.InputLayout.NumElements = m_InputElements.size();
+	psDesc.InputLayout.NumElements = (UINT)m_InputElements.size();
 	psDesc.InputLayout.pInputElementDescs = m_InputElements.data();
 	psDesc.NodeMask = 0;
 	psDesc.NumRenderTargets = 1;

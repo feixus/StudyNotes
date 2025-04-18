@@ -631,7 +631,7 @@ void UWP_Graphics::BuildPSO()
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psDesc.DSVFormat = m_DepthStencilFormat;
 	psDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	psDesc.InputLayout.NumElements = m_InputElements.size();
+	psDesc.InputLayout.NumElements = (UINT)m_InputElements.size();
 	psDesc.InputLayout.pInputElementDescs = m_InputElements.data();
 	psDesc.NodeMask = 0;
 	psDesc.NumRenderTargets = 1;

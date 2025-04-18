@@ -29,7 +29,7 @@ DynamicAllocation LinearAllocator::Allocate(const LinearAllocationType type, siz
 	allocation.GpuAddress = m_pCurrentPage->m_pGpuAddress + m_CurrentOffset;
 	allocation.pCpuAddress = (char*)m_pCurrentPage->m_pCpuAddress + m_CurrentOffset;
 
-	m_CurrentOffset += size;
+	m_CurrentOffset += (UINT)size;
 
 	return allocation;
 }
