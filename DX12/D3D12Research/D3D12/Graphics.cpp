@@ -1,9 +1,11 @@
+#include "stdafx.h"
 #include "Graphics.h"
-#include "LinearAllocator.h"
 #include "GpuResource.h"
 #include "Timer.h"
-#include "D3DUtils.h"
 #include <map>
+#include <fstream>
+#include "CommandAllocatorPool.h"
+#include "CommandQueue.h"
 
 #pragma comment(lib, "dxguid.lib")
 
@@ -12,11 +14,15 @@ Graphics::Graphics(UINT width, UINT height, std::wstring name):
 {
 }
 
+Graphics::~Graphics()
+{
+}
+
 void Graphics::Initialize()
 {
 	MakeWindow();
 	InitD3D();
-	OnResize();
+	OnResize(m_WindowWidth, m_WindowHeight);
 
 	InitializeAssets();
 
@@ -39,9 +45,8 @@ void Graphics::Initialize()
 void Graphics::Update()
 {
 	Timer(L"Update");
-	m_CommandAllocators[m_CurrentBackBufferIndex]->Reset();
-
-	m_pCommandList->Reset(m_CommandAllocators[m_CurrentBackBufferIndex].Get(), m_pPipelineStateObject.Get());
+	m_pAllocators[m_CurrentBackBufferIndex]->Reset();
+	m_pCommandList->Reset(m_pAllocators[m_CurrentBackBufferIndex], m_pPipelineStateObject.Get());
 
 	m_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
@@ -62,7 +67,7 @@ void Graphics::Update()
 	auto depthStencilView = GetDepthStencilView();
 	m_pCommandList->OMSetRenderTargets(1, &currentBackBufferView, true, &depthStencilView);
 
-	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+	const float clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
 	m_pCommandList->ClearRenderTargetView(GetCurrentBackBufferView(), clearColor, 0, nullptr);
 	m_pCommandList->ClearDepthStencilView(GetDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0F, 0, 0, nullptr);
 
@@ -76,8 +81,6 @@ void Graphics::Update()
 		D3D12_RESOURCE_STATE_RENDER_TARGET,
 		D3D12_RESOURCE_STATE_PRESENT);
 	m_pCommandList->ResourceBarrier(1, &barrier_target2present);
-
-	m_pCommandList->Close();
 }
 
 void Graphics::CreateRtvAndDsvHeaps()
@@ -101,17 +104,18 @@ void Graphics::CreateRtvAndDsvHeaps()
 
 void Graphics::Render()
 {
-	ID3D12CommandList* ppCommandLists[] = { m_pCommandList.Get() };
-	m_pCommandQueue->ExecuteCommandLists(1, ppCommandLists);
+	const UINT64 currentFenceValue = m_pCommandQueue->ExecuteCommandList(m_pCommandList.Get());
 
 	m_pSwapchain->Present(1, 0);
 
-	MoveToNextFrame();
+	m_pCommandQueue->WaitForFenceBlock(m_FenceValues[m_CurrentBackBufferIndex]);
+	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
+	m_FenceValues[m_CurrentBackBufferIndex] = currentFenceValue;
 }
 
 void Graphics::Shutdown()
 {
-	WaitForGPU();
+	m_pCommandQueue->WaitForIdle();
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Graphics::GetCurrentBackBufferView() const
@@ -249,20 +253,14 @@ void Graphics::InitD3D()
 void Graphics::CreateCommandObjects()
 {
 	// command queue
-	D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-
-	HR(m_pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_pCommandQueue)));
+	m_pCommandQueue = std::make_unique<CommandQueue>(m_pDevice.Get(), CommandQueueType::Graphics);
 
 	//// command allocator
-	for (int i = 0; i < m_CommandAllocators.size(); i++)
-	{
-		HR(m_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_CommandAllocators[i])));
-	}
+	m_pAllocators[0] = m_pCommandQueue->GetAllocator();
+	m_pAllocators[1] = m_pCommandQueue->GetAllocator();
 	
 	// command list
-	HR(m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocators[m_CurrentBackBufferIndex].Get(), nullptr, IID_PPV_ARGS(&m_pCommandList)));
+	HR(m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pAllocators[0], nullptr, IID_PPV_ARGS(&m_pCommandList)));
 	
 	// command lists are created in the recording state, close it before moving on
 	HR(m_pCommandList->Close());
@@ -282,57 +280,28 @@ void Graphics::CreateSwapchain()
 	swapchainDesc.Flags = 0;
 	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	swapchainDesc.SampleDesc.Count = 1;  // must set for msaa >= 1, not 0
-
+	
+	ComPtr<IDXGISwapChain1> pSwapChain = nullptr;
 	HR(m_pFactory->CreateSwapChainForHwnd(
-		m_pCommandQueue.Get(),
+		m_pCommandQueue->GetCommandQueue(),
 		m_Hwnd,
 		&swapchainDesc,
 		nullptr,
 		nullptr,
-		&m_pSwapchain));
-}
-
-void Graphics::WaitForGPU()
-{
-	// schedule a signal command in the queue
-	HR(m_pCommandQueue->Signal(m_pFence.Get(), m_FenceValues[m_CurrentBackBufferIndex]));
-
-	// wait until the fence has been processed
-	HANDLE eventHandle = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
-	HR(m_pFence->SetEventOnCompletion(m_FenceValues[m_CurrentBackBufferIndex], eventHandle));
-	WaitForSingleObjectEx(eventHandle, INFINITE, false);
-	CloseHandle(eventHandle);
-
-	// increment the fence value for the current frame
-	m_FenceValues[m_CurrentBackBufferIndex]++;
+		&pSwapChain));
+	pSwapChain.As(&m_pSwapchain);
 }
 
 void Graphics::MoveToNextFrame()
 {
-	CONST UINT64 currentFenceValue = m_FenceValues[m_CurrentBackBufferIndex];
-
-	m_pCommandQueue->Signal(m_pFence.Get(), currentFenceValue);
-
-	m_CurrentBackBufferIndex = (m_CurrentBackBufferIndex + 1) % 2;
-
-	if (m_pFence->GetCompletedValue() < m_FenceValues[m_CurrentBackBufferIndex])
-	{
-		HANDLE eventHandle = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
-		HR(m_pFence->SetEventOnCompletion(m_FenceValues[m_CurrentBackBufferIndex], eventHandle));
-		{
-			Timer a(L"Wait for next frame");
-			WaitForSingleObject(eventHandle, INFINITE);
-		}
-		CloseHandle(eventHandle);
-	}
-
-	m_FenceValues[m_CurrentBackBufferIndex] = currentFenceValue + 1;
 }
 
-void Graphics::OnResize()
+void Graphics::OnResize(int width, int height)
 {
-	WaitForGPU();
-	m_pCommandList->Reset(m_CommandAllocators[m_CurrentBackBufferIndex].Get(), nullptr);
+	m_WindowWidth = width;
+	m_WindowHeight = height;
+
+	m_pCommandQueue->WaitForIdle();
 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
@@ -388,17 +357,16 @@ void Graphics::OnResize()
 
 	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, GetDepthStencilView());
 
+	m_pCommandList->Reset(m_pAllocators[0], nullptr);
+
 	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
 					m_pDepthStencilBuffer.Get(),
 					D3D12_RESOURCE_STATE_COMMON,
 					D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	m_pCommandList->ResourceBarrier(1, &barrier);
 
-	m_pCommandList->Close();
-	ID3D12CommandList* pCommandList[] = { m_pCommandList.Get() };
-	m_pCommandQueue->ExecuteCommandLists(1, pCommandList);
-
-	WaitForGPU();
+	m_pCommandQueue->ExecuteCommandList(m_pCommandList.Get());
+	m_pCommandQueue->WaitForIdle();
 
 	m_Viewport.Height = (float)m_WindowHeight;
 	m_Viewport.Width = (float)m_WindowWidth;
@@ -460,7 +428,7 @@ LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			{
 				mMinimized = false;
 				mMaximized = true;
-				OnResize();
+				OnResize(m_WindowWidth, m_WindowHeight);
 			}
 			else if (wParam == SIZE_RESTORED)
 			{
@@ -468,13 +436,13 @@ LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (mMinimized)
 				{
 					mMinimized = false;
-					OnResize();
+					OnResize(m_WindowWidth, m_WindowHeight);
 				}
 				// restoring from maximized state
 				else if (mMaximized)
 				{
 					mMaximized = false;
-					OnResize();
+					OnResize(m_WindowWidth, m_WindowHeight);
 				}
 				else if (mResizing)
 				{
@@ -482,7 +450,7 @@ LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 				else  // api call such as SetWindowPos/ mSwapchain->SetFullscreenState
 				{
-					OnResize();
+					OnResize(m_WindowWidth, m_WindowHeight);
 				}
 			}
 			return 0;
@@ -503,7 +471,7 @@ LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 void Graphics::InitializeAssets()
 {
-	m_pCommandList->Reset(m_CommandAllocators[m_CurrentBackBufferIndex].Get(), nullptr);
+	m_pCommandList->Reset(m_pAllocators[0], nullptr);
 
 	BuildDescriptorHeaps();
 	BuildConstantBuffers();
@@ -512,12 +480,8 @@ void Graphics::InitializeAssets()
 	BuildGeometry();
 	BuildPSO();
 
-	m_pCommandList->Close();
-
-	ID3D12CommandList* ppCommandLists[] = { m_pCommandList.Get() };
-	m_pCommandQueue->ExecuteCommandLists(1, ppCommandLists);
-
-	WaitForGPU();
+	m_pCommandQueue->ExecuteCommandList(m_pCommandList.Get());
+	m_pCommandQueue->WaitForIdle();
 }
 
 void Graphics::BuildDescriptorHeaps()
@@ -542,6 +506,7 @@ void Graphics::BuildConstantBuffers()
 
 	// alignment to a 256-byte boundary for constant buffers
 	int size = (sizeof(ConstantBufferData) + 255) & ~255;
+
 	CD3DX12_RESOURCE_DESC constantBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
 	auto head_props_upload = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	HR(m_pDevice->CreateCommittedResource(
@@ -571,6 +536,7 @@ void Graphics::BuildRootSignature()
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 	CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+
 	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 	rootParameters[0].InitAsDescriptorTable(1, ranges, D3D12_SHADER_VISIBILITY_ALL);
 
@@ -598,7 +564,7 @@ void Graphics::BuildShaderAndInputLayout()
 
 	ComPtr<ID3DBlob> pErrorBlob;
 
-	D3DCompileFromFile(L"D3D12/shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
@@ -607,7 +573,7 @@ void Graphics::BuildShaderAndInputLayout()
 	}
 
 	pErrorBlob.Reset();
-	D3DCompileFromFile(L"D3D12/shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &m_pPixelShaderCode, &pErrorBlob);
+	D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &m_pPixelShaderCode, &pErrorBlob);
 	if (pErrorBlob != nullptr)
 	{
 		wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
@@ -640,6 +606,7 @@ void Graphics::BuildShaderAndInputLayout()
 		case D3D_SIT_CBUFFER:
 		case D3D_SIT_TBUFFER:
 			cbRegisterMap[resourceDesc.Name] = resourceDesc.BindPoint;
+			break;
 		case D3D_SIT_TEXTURE:
 		case D3D_SIT_SAMPLER:
 		case D3D_SIT_UAV_RWTYPED:

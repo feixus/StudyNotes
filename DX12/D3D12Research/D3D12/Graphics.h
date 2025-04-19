@@ -1,11 +1,13 @@
 #pragma once
 
-#include "stdafx.h"
+class CommandAllocatorPool;
+class CommandQueue;
 
 class Graphics
 {
 public:
 	Graphics(UINT width, UINT height, std::wstring name);
+	~Graphics();
 
 	virtual void Initialize();
 	virtual void Update();
@@ -14,6 +16,7 @@ public:
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	bool IsFenceComplete(const UINT64 fenceValue) const { return false; }
+	void OnResize(int width, int height);
 
 private:
 	static const UINT FRAME_COUNT = 2;
@@ -22,12 +25,13 @@ private:
 	D3D12_VIEWPORT m_Viewport;
 	D3D12_RECT m_ScissorRect;
 	ComPtr<IDXGIFactory7> m_pFactory;
-	ComPtr<IDXGISwapChain1> m_pSwapchain;
+	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
 	array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
-	array<ComPtr<ID3D12CommandAllocator>, FRAME_COUNT> m_CommandAllocators;
-	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
+
+	std::unique_ptr<CommandQueue> m_pCommandQueue;
+	array<ID3D12CommandAllocator*, FRAME_COUNT> m_pAllocators;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferView() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() const;
@@ -58,11 +62,9 @@ private:
 	void CreateCommandObjects();
 	void CreateSwapchain();
 	void CreateRtvAndDsvHeaps();
-	void WaitForGPU();
 
 	void MoveToNextFrame();
 
-	void OnResize();
 
 	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);

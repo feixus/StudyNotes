@@ -1,3 +1,4 @@
+#include "stdafx.h"
 #include "CommandAllocatorPool.h"
 
 CommandAllocatorPool::CommandAllocatorPool(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type)
@@ -24,7 +25,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(__int64 fenceValue)
 	}
 
 	ComPtr<ID3D12CommandAllocator> pAllocator;
-	m_pDevice->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf());
+	m_pDevice->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
 	m_CommandAllocators.push_back(std::move(pAllocator));
 
 	return m_CommandAllocators.back().Get();

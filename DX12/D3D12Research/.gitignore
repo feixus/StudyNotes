@@ -3,3 +3,6 @@ Debug/
 Build
 packages/
 *.sln
+*.vcxproj
+*.filters
+*.user

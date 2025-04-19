@@ -2,6 +2,9 @@
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
+#define D3DX12_NO_STATE_OBJECT_HELPERS
+#include "d3dx12.h"
+
 #include <DirectXMath.h>
 #include <wrl.h>
 #include <d3dcompiler.h>
@@ -12,9 +15,10 @@
 #include <string>
 #include <queue>
 #include <array>
+#include <mutex>
 
-#define D3DX12_NO_STATE_OBJECT_HELPERS
-#include "d3dx12.h"
+#include "D3DUtils.h"
+
 
 using namespace std;
 using Microsoft::WRL::ComPtr;

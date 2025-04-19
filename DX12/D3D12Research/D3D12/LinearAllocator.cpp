@@ -1,3 +1,4 @@
+#include "stdafx.h"
 #include "LinearAllocator.h"
 #include "Graphics.h"
 

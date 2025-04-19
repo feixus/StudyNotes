@@ -8,6 +8,7 @@ workspace (engineName)
     platforms { "x32", "x64" }
     startproject (engineName)
     language "C++"
+	cppdialect "C++20"
     defines { "_CONSOLE", "THREADING", "PLATFORM_WINDOWS" }
     kind "WindowedApp"
 
@@ -69,7 +70,6 @@ project (engineName)
 
     -- Libraries to link
     links {
-        "d3d12",
         "dxgi",
         "d3dcompiler"
     }
