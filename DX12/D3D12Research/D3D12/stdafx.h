@@ -16,6 +16,8 @@
 #include <queue>
 #include <array>
 #include <mutex>
+#include <map>
+#include <fstream>
 
 #include "D3DUtils.h"
 

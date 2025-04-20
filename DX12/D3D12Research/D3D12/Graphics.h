@@ -2,6 +2,7 @@
 
 class CommandAllocatorPool;
 class CommandQueue;
+class CommandQueueManager;
 
 class Graphics
 {
@@ -11,14 +12,13 @@ public:
 
 	virtual void Initialize();
 	virtual void Update();
-	virtual void Render();
 	virtual void Shutdown();
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	bool IsFenceComplete(const UINT64 fenceValue) const { return false; }
 	void OnResize(int width, int height);
 
-private:
+protected:
 	static const UINT FRAME_COUNT = 2;
 
 	// pipeline objects
@@ -30,8 +30,7 @@ private:
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
 	array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
 
-	std::unique_ptr<CommandQueue> m_pCommandQueue;
-	array<ID3D12CommandAllocator*, FRAME_COUNT> m_pAllocators;
+	std::unique_ptr<CommandQueueManager> m_pQueueManager;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferView() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() const;
@@ -45,7 +44,6 @@ private:
 
 	ComPtr<ID3D12DescriptorHeap> m_pRtvHeap;
 	ComPtr<ID3D12DescriptorHeap> m_pDsvHeap;
-	ComPtr<ID3D12GraphicsCommandList> m_pCommandList;
 
 	// synchronization objects
 	UINT m_CurrentBackBufferIndex = 0;
@@ -60,7 +58,7 @@ private:
 	void MakeWindow();
 	void InitD3D();
 	void CreateCommandObjects();
-	void CreateSwapchain();
+	virtual void CreateSwapchain();
 	void CreateRtvAndDsvHeaps();
 
 	void MoveToNextFrame();
