@@ -1,16 +1,28 @@
 #pragma once
 
-class CommandAllocatorPool;
+#ifdef UWP
+using WindowHandle = Windows::UI::CoreWindow^;
+#else
+using WindowHandle = HWND;
+#endif
+
 class CommandQueue;
-class CommandQueueManager;
+
+class CommandContext
+{
+public:
+	ID3D12GraphicsCommandList* pCommandList;
+	ID3D12CommandAllocator* pAllocator;
+	D3D12_COMMAND_LIST_TYPE QueueType;
+};
 
 class Graphics
 {
 public:
-	Graphics(UINT width, UINT height, std::wstring name);
+	Graphics(UINT width, UINT height, std::string name);
 	~Graphics();
 
-	virtual void Initialize();
+	virtual void Initialize(WindowHandle window);
 	virtual void Update();
 	virtual void Shutdown();
 
@@ -18,8 +30,23 @@ public:
 	bool IsFenceComplete(const UINT64 fenceValue) const { return false; }
 	void OnResize(int width, int height);
 
+	CommandQueue* GetMainCommandQueue() const;
+	CommandContext* AllocatorCommandList(D3D12_COMMAND_LIST_TYPE type);
+	void FreeCommandList(CommandContext* pCommandContext);
+
+	uint64_t ExecuteCommandList(CommandContext* pCommandContext, bool waitForCompletion = false);
+	void IdleGPU();
+
 protected:
 	static const UINT FRAME_COUNT = 2;
+
+	uint64_t m_CurrentFence = 0;
+
+	std::map<D3D12_COMMAND_LIST_TYPE, std::unique_ptr<CommandQueue>> m_CommandQueues;
+	std::vector<CommandContext> m_CommandListPool;
+	std::queue<CommandContext*> m_FreeCommandLists;
+
+	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 
 	// pipeline objects
 	D3D12_VIEWPORT m_Viewport;
@@ -29,8 +56,6 @@ protected:
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
 	array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
-
-	std::unique_ptr<CommandQueueManager> m_pQueueManager;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferView() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() const;
@@ -48,7 +73,7 @@ protected:
 	// synchronization objects
 	UINT m_CurrentBackBufferIndex = 0;
 	ComPtr<ID3D12Fence> m_pFence;
-	array<UINT64, FRAME_COUNT> m_FenceValues;
+	array<UINT64, FRAME_COUNT> m_FenceValues = {};
 
 	HWND m_Hwnd;
 
@@ -56,13 +81,10 @@ protected:
 	unsigned int m_WindowHeight;
 
 	void MakeWindow();
-	void InitD3D();
+	void InitD3D(WindowHandle pWindow);
 	void CreateCommandObjects();
-	virtual void CreateSwapchain();
+	virtual void CreateSwapchain(WindowHandle pWindow);
 	void CreateRtvAndDsvHeaps();
-
-	void MoveToNextFrame();
-
 
 	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -105,4 +127,5 @@ protected:
 	vector<D3D12_INPUT_ELEMENT_DESC> m_InputElements;
 	ComPtr<ID3D12PipelineState> m_pPipelineStateObject;
 	ComPtr<ID3D12Resource> m_pConstantBuffer;
+	int m_IndexCount = 0;
 };

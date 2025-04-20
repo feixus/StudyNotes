@@ -18,6 +18,7 @@
 #include <mutex>
 #include <map>
 #include <fstream>
+#include <algorithm>
 
 #include "D3DUtils.h"
 

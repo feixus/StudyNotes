@@ -1,69 +1,17 @@
 #include "stdafx.h"
 #include "CommandQueue.h"
 #include "CommandAllocatorPool.h"
+#include "Graphics.h"
 
-CommandQueueManager::CommandQueueManager(ID3D12Device* pDevice)
-	: m_pDevice(pDevice)
-{
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(pDevice, CommandQueueType::Graphics);
-}
-
-CommandQueue* CommandQueueManager::GetMainCommandQueue() const
-{
-	return m_CommandQueues.at(D3D12_COMMAND_LIST_TYPE_DIRECT).get();
-}
-
-CommandContext* CommandQueueManager::AllocatorCommandList(D3D12_COMMAND_LIST_TYPE type)
-{
-	unsigned long long fenceValue = m_CommandQueues[type]->GetLastCompletedFence();
-	ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->GetAllocatorPool()->GetAllocator(fenceValue);
-	if (m_FreeCommandList.size() > 0)
-	{
-		CommandContext* pCommandContext = m_FreeCommandList.front();
-		m_FreeCommandList.pop();
-		pCommandContext->pCommandList->Reset(pAllocator, nullptr);
-		pCommandContext->pAllocator = pAllocator;
-
-		return pCommandContext;
-	}
-
-	ID3D12CommandList* pCommandList;
-	m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
-	std::unique_ptr<ID3D12GraphicsCommandList> pCmd = std::unique_ptr<ID3D12GraphicsCommandList>(static_cast<ID3D12GraphicsCommandList*>(pCommandList));
-	
-	m_CommandListPool.push_back(CommandContext(std::move(pCmd), pAllocator));
-	return &m_CommandListPool.back();
-}
-
-void CommandQueueManager::FreeCommandList(CommandContext* pCommandList)
-{
-	m_FreeCommandList.push(pCommandList);
-}
-
-CommandQueue::CommandQueue(ID3D12Device* pDevice, CommandQueueType type)
+CommandQueue::CommandQueue(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type)
 {
 	D3D12_COMMAND_QUEUE_DESC desc = {};
 	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	desc.NodeMask = 0;
 	desc.Priority = 0;
-	switch (type)
-	{
-	case CommandQueueType::Graphics:
-		desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-		break;
-	case CommandQueueType::Compute:
-		desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-		break;
-	case CommandQueueType::Copy:
-		desc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
-		break;
-	case CommandQueueType::MAX:
-	default:
-		return;
-		break;
-	}
+	desc.Type = type;
 
-	m_Type = desc.Type;
+	m_Type = type;
 
 	HR(pDevice->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())));
 	HR(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())));
@@ -79,10 +27,10 @@ CommandQueue::~CommandQueue()
 	CloseHandle(m_pFenceEventHandle);
 }
 
-UINT64 CommandQueue::ExecuteCommandList(CommandContext* pCommandContext, bool waitForCompletion)
+uint64_t CommandQueue::ExecuteCommandList(CommandContext* pCommandContext, bool waitForCompletion)
 {  
    HR(pCommandContext->pCommandList->Close());
-   ID3D12CommandList* ppCommandLists[] = { pCommandContext->pCommandList.get()};
+   ID3D12CommandList* ppCommandLists[] = { pCommandContext->pCommandList};
    m_pCommandQueue->ExecuteCommandLists(1, ppCommandLists);  
 
    // Use std::scoped_lock instead of std::lock_guard to avoid the deleted copy constructor issue  
@@ -94,27 +42,26 @@ UINT64 CommandQueue::ExecuteCommandList(CommandContext* pCommandContext, bool wa
    {
 	   WaitForFenceBlock(m_NextFenceValue);
    }
-   m_NextFenceValue++;
 
-   return m_NextFenceValue;  
+   return m_NextFenceValue++;  
 }
 
-bool CommandQueue::IsFenceComplete(UINT64 fenceValue)
+bool CommandQueue::IsFenceComplete(uint64_t fenceValue)
 {
 	if (fenceValue > m_LastCompletedFenceValue)
 	{
-		PollCurrentFenceValue();
+		m_LastCompletedFenceValue = (std::max)(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
 	}
 
 	return fenceValue <= m_LastCompletedFenceValue;
 }
 
-void CommandQueue::InsertWait(UINT64 fenceValue)
+void CommandQueue::InsertWait(uint64_t fenceValue)
 {
 	m_pCommandQueue->Wait(m_pFence.Get(), fenceValue);
 }
 
-void CommandQueue::InsertWaitForQueueFence(CommandQueue* pCommandQueue, UINT64 fenceValue)
+void CommandQueue::InsertWaitForQueueFence(CommandQueue* pCommandQueue, uint64_t fenceValue)
 {
 	m_pCommandQueue->Wait(pCommandQueue->GetFence(), fenceValue);
 }
@@ -124,7 +71,14 @@ void CommandQueue::InsertWaitForQueue(CommandQueue* pCommandQueue)
 	m_pCommandQueue->Wait(pCommandQueue->GetFence(), pCommandQueue->GetNextFenceValue() - 1);
 }
 
-void CommandQueue::WaitForFenceBlock(UINT64 fenceValue)
+uint64_t CommandQueue::IncrementFence()
+{
+	std::scoped_lock lock(m_FenceMutex);
+	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
+	return m_NextFenceValue++;
+}
+
+void CommandQueue::WaitForFenceBlock(uint64_t fenceValue)
 {
 	if (IsFenceComplete(fenceValue))
 	{
@@ -142,10 +96,10 @@ void CommandQueue::WaitForFenceBlock(UINT64 fenceValue)
 
 void CommandQueue::WaitForIdle()
 {
-	WaitForFenceBlock((UINT64)max(0ll, (INT64)m_NextFenceValue - 1));
+	WaitForFenceBlock(IncrementFence());
 }
 
-UINT64 CommandQueue::PollCurrentFenceValue()
+uint64_t CommandQueue::PollCurrentFenceValue()
 {
 	m_LastCompletedFenceValue = max(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
 	return m_LastCompletedFenceValue;
