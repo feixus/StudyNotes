@@ -37,11 +37,11 @@ DynamicAllocation LinearAllocator::Allocate(const LinearAllocationType type, siz
 
 LinearAllocationPage* LinearAllocatorPageManager::RequestPage()
 {
-	while (!m_RetiredPages.empty() && m_pGraphics->IsFenceComplete(m_RetiredPages.front().first))
+	/*while (!m_RetiredPages.empty() && m_pGraphics->IsFenceComplete(m_RetiredPages.front().first))
 	{
 		m_AvailablePages.push(m_RetiredPages.front().second);
 		m_RetiredPages.pop();
-	}
+	}*/
 
 	LinearAllocationPage* pPage = nullptr;
 

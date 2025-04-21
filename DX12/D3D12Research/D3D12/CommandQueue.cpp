@@ -86,7 +86,7 @@ void CommandQueue::WaitForFenceBlock(uint64_t fenceValue)
 	}
 
 	{
-		std::lock_guard<std::mutex> lockGuard(m_EventMutex);
+		std::lock_guard lockGuard(m_EventMutex);
 
 		m_pFence->SetEventOnCompletion(fenceValue, m_pFenceEventHandle);
 		WaitForSingleObject(m_pFenceEventHandle, INFINITE);

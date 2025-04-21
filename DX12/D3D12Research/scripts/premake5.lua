@@ -10,8 +10,19 @@ workspace (engineName)
     language "C++"
 	cppdialect "C++20"
     defines { "_CONSOLE", "THREADING", "PLATFORM_WINDOWS" }
-    kind "WindowedApp"
 
+	-- Custom command-line option
+    newoption {
+        trigger     = "base",
+        value       = "API",
+        description = "Choose a particular 3D API for rendering",
+        default     = "windows",
+        allowed = {
+            { "windows", "Windows" },
+            { "uwp", "Universal Windows Platform" },
+        }
+    }
+	
     -- Platform-specific defines
     filter { "platforms:x64" }
         defines { "x64", "_AMD64_" }
@@ -41,6 +52,7 @@ workspace (engineName)
 
 project (engineName)
     location (ROOT .. engineName)
+	kind "WindowedApp"
     targetdir (ROOT .. "Build/" .. engineName .. "_%{platform}_%{cfg.buildcfg}")
     objdir (ROOT .. "Build/Intermediate/%{prj.name}_%{platform}_%{cfg.buildcfg}")
 
@@ -74,5 +86,13 @@ project (engineName)
         "d3dcompiler"
     }
 
-    -- Reset filter
+    -- API base option logic
     filter {}
+    if _OPTIONS["base"] == "uwp" then
+        defines { "PLATFORM_UWP" }
+        filter "action:vs*"
+            toolset "v143"
+            systemversion "10.0"
+    else
+        defines { "PLATFORM_WINDOWS" }
+    end

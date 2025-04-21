@@ -6,7 +6,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 {
 	std::cout << "hello dx12" << std::endl;
 
-	Graphics* graphic = new Graphics(1024, 512, "aaa");
+	Graphics* graphic = new Graphics(1024, 512);
 	graphic->Initialize(nullptr);
 
 	return 0;

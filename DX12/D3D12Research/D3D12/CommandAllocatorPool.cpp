@@ -11,11 +11,11 @@ CommandAllocatorPool::~CommandAllocatorPool()
 {
 }
 
-ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(__int64 fenceValue)
+ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64_t fenceValue)
 {
 	if (m_FreeAllocators.empty() == false)
 	{
-		std::pair<ID3D12CommandAllocator*, __int64>& pFirst = m_FreeAllocators.front();
+		std::pair<ID3D12CommandAllocator*, uint64_t>& pFirst = m_FreeAllocators.front();
 		if (pFirst.second <= fenceValue)
 		{
 			m_FreeAllocators.pop();
@@ -31,7 +31,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(__int64 fenceValue)
 	return m_CommandAllocators.back().Get();
 }
 
-void CommandAllocatorPool::FreeAllocator(ID3D12CommandAllocator* pAllocator, __int64 fenceValue)
+void CommandAllocatorPool::FreeAllocator(ID3D12CommandAllocator* pAllocator, uint64_t fenceValue)
 {
-	m_FreeAllocators.push(std::pair<ID3D12CommandAllocator*, __int64>(pAllocator, fenceValue));
+	m_FreeAllocators.push(std::pair<ID3D12CommandAllocator*, uint64_t>(pAllocator, fenceValue));
 }

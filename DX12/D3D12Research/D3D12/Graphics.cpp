@@ -1,14 +1,15 @@
 #include "stdafx.h"
 #include "Graphics.h"
-#include "GpuResource.h"
-#include "Timer.h"
 #include "CommandAllocatorPool.h"
 #include "CommandQueue.h"
 #include "SimpleMath/SimpleMath.h"
 
 #pragma comment(lib, "dxguid.lib")
 
-Graphics::Graphics(UINT width, UINT height, std::string name):
+using namespace DirectX;
+using namespace DirectX::SimpleMath;
+
+Graphics::Graphics(uint32_t width, uint32_t height):
 	m_WindowWidth(width), m_WindowHeight(height)
 {
 }
@@ -42,8 +43,6 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
-	Timer(L"Update");
-
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->WaitForFenceBlock(m_FenceValues[m_CurrentBackBufferIndex]);
 
 	CommandContext* pCommandContext = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -69,7 +68,7 @@ void Graphics::Update()
 	auto depthStencilView = GetDepthStencilView();
 	pCommandList->OMSetRenderTargets(1, &currentBackBufferView, true, &depthStencilView);
 
-	const float clearColor[] = { 1.0f, 0.0f, 1.0f, 1.0f };
+	const float clearColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
 	pCommandList->ClearRenderTargetView(GetCurrentBackBufferView(), clearColor, 0, nullptr);
 	pCommandList->ClearDepthStencilView(GetDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0F, 0, 0, nullptr);
 
@@ -84,8 +83,7 @@ void Graphics::Update()
 		D3D12_RESOURCE_STATE_PRESENT);
 	pCommandList->ResourceBarrier(1, &barrier_target2present);
 
-	const uint64_t currentFenceValue = ExecuteCommandList(pCommandContext);
-	m_FenceValues[m_CurrentBackBufferIndex] = currentFenceValue;
+	m_FenceValues[m_CurrentBackBufferIndex] = ExecuteCommandList(pCommandContext);
 
 	m_pSwapchain->Present(1, 0);
 
@@ -164,8 +162,8 @@ void Graphics::MakeWindow()
 	RECT windowRec = { 0, 0, (LONG)m_WindowWidth, (LONG)m_WindowHeight };
 	AdjustWindowRect(&windowRec, windowStyle, false);
 
-	unsigned int windowWidth = windowRec.right - windowRec.left;
-	unsigned int windowHeight = windowRec.bottom - windowRec.top;
+	uint32_t windowWidth = windowRec.right - windowRec.left;
+	uint32_t windowHeight = windowRec.bottom - windowRec.top;
 
 	int x = (displayWidth - windowWidth) / 2;
 	int y = (displayHeight - windowHeight) / 2;
@@ -195,16 +193,16 @@ void Graphics::InitD3D(WindowHandle pWindow)
 {
 #ifdef _DEBUG
 	// enable debug
-	/*ComPtr<ID3D12Debug> pDebugController;
+	ComPtr<ID3D12Debug> pDebugController;
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
-	pDebugController->EnableDebugLayer();*/
+	pDebugController->EnableDebugLayer();
 #endif
 
 	// factory
 	HR(CreateDXGIFactory1(IID_PPV_ARGS(&m_pFactory)));
 
 	// look for an adapter
-	UINT adapter = 0;
+	uint32_t adapter = 0;
 	IDXGIAdapter1* pAdapter;
 	while (m_pFactory->EnumAdapterByGpuPreference(adapter, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&pAdapter)) != DXGI_ERROR_NOT_FOUND)
 	{
@@ -224,9 +222,6 @@ void Graphics::InitD3D(WindowHandle pWindow)
 
 	// device
 	HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
-
-	// fence
-	HR(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence)));
 
 	// decriptor sizes
 	m_RtvDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -274,7 +269,7 @@ void Graphics::CreateSwapchain(WindowHandle pWindow)
 
 	ComPtr<IDXGISwapChain1> pSwapChain = nullptr;
 
-#ifdef UWP
+#ifdef PLATFORM_UWP
 	HR(m_pFactory->CreateSwapChainForCoreWindow(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
 		reinterpret_cast<IUnknown*>(pWindow),
@@ -496,8 +491,6 @@ void Graphics::BuildDescriptorHeaps()
 void Graphics::BuildConstantBuffers()
 {
 	// constant buffer
-	using namespace DirectX;
-	using namespace DirectX::SimpleMath;
 
 	struct ConstantBufferData
 	{
@@ -547,7 +540,7 @@ void Graphics::BuildRootSignature()
 	CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
 
 	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-	rootParameters[0].InitAsDescriptorTable(1, ranges, D3D12_SHADER_VISIBILITY_ALL);
+	rootParameters[0].InitAsDescriptorTable(1, ranges, D3D12_SHADER_VISIBILITY_VERTEX);
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -566,9 +559,9 @@ void Graphics::BuildShaderAndInputLayout()
 {
 #if defined(_DEBUG)
 	// shader debugging
-	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+	uint32_t compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
-	UINT compileFlags = 0;
+	uint32_t compileFlags = 0;
 #endif
 
 	std::string data = "\
@@ -600,8 +593,8 @@ void Graphics::BuildShaderAndInputLayout()
 	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
-		wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-		wcout << errorMessage << endl;
+		std::wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
+		std::wcout << errorMessage << std::endl;
 		return;
 	}
 
@@ -609,70 +602,13 @@ void Graphics::BuildShaderAndInputLayout()
 	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, &m_pPixelShaderCode, &pErrorBlob);
 	if (pErrorBlob != nullptr)
 	{
-		wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-		wcout << errorMessage << endl;
+		std::wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
+		std::wcout << errorMessage << std::endl;
 		return;
 	}
 
 	// input layout
 	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-
-	// shader reflection reference
-	ComPtr<ID3D12ShaderReflection> pShaderReflection;
-	D3D12_SHADER_DESC shaderDesc;
-	D3DReflect(m_pPixelShaderCode->GetBufferPointer(), 
-		m_pPixelShaderCode->GetBufferSize(), 
-		IID_ID3D11ShaderReflection,
-		(void**)pShaderReflection.GetAddressOf());
-	pShaderReflection->GetDesc(&shaderDesc);
-
-	std::map<std::string, int> cbRegisterMap;
-
-	for (unsigned int i = 0; i < shaderDesc.BoundResources; i++)
-	{
-		D3D12_SHADER_INPUT_BIND_DESC resourceDesc;
-		pShaderReflection->GetResourceBindingDesc(i, &resourceDesc);
-
-		switch (resourceDesc.Type)
-		{
-		case D3D_SIT_CBUFFER:
-		case D3D_SIT_TBUFFER:
-			cbRegisterMap[resourceDesc.Name] = resourceDesc.BindPoint;
-			break;
-		case D3D_SIT_TEXTURE:
-		case D3D_SIT_SAMPLER:
-		case D3D_SIT_UAV_RWTYPED:
-		case D3D_SIT_STRUCTURED:
-		case D3D_SIT_UAV_RWSTRUCTURED:
-		case D3D_SIT_BYTEADDRESS:
-		case D3D_SIT_UAV_RWBYTEADDRESS:
-		case D3D_SIT_UAV_APPEND_STRUCTURED:
-		case D3D_SIT_UAV_CONSUME_STRUCTURED:
-		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
-		default:
-			break;
-		}
-	}
-
-	for (unsigned int c = 0; c < shaderDesc.ConstantBuffers; c++)
-	{
-		ID3D12ShaderReflectionConstantBuffer* pReflectionConstantBuffer = pShaderReflection->GetConstantBufferByIndex(c);
-		D3D12_SHADER_BUFFER_DESC bufferDesc;
-		pReflectionConstantBuffer->GetDesc(&bufferDesc);
-		unsigned int cbRegister = cbRegisterMap[std::string(bufferDesc.Name)];
-
-		// ...
-
-		for (unsigned int v = 0; v < bufferDesc.Variables; v++)
-		{
-			ID3D12ShaderReflectionVariable* pVariable = pReflectionConstantBuffer->GetVariableByIndex(v);
-			D3D12_SHADER_VARIABLE_DESC variableDesc;
-			pVariable->GetDesc(&variableDesc);
-			std::string name = variableDesc.Name;
-
-			// ...
-		}
-	}
 }
 
 void Graphics::BuildGeometry()
@@ -680,124 +616,50 @@ void Graphics::BuildGeometry()
 	CommandContext* pCommandContext = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12GraphicsCommandList* pCommandList = pCommandContext->pCommandList;
 
-	{
-		// vertex buffer
-		vector<XMFLOAT3> vertices = {
-			XMFLOAT3(0, 0, 0),
-			XMFLOAT3(1, 0, 0),
-			XMFLOAT3(1, 1, 0),
-			XMFLOAT3(0, 1, 0),
-			XMFLOAT3(0, 1, 1),
-			XMFLOAT3(1, 1, 1),
-			XMFLOAT3(1, 0, 1),
-			XMFLOAT3(0, 0, 1),
-		};
-
-		auto heap_props_default = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-		auto resource_buff_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices) * sizeof(XMFLOAT3));
-		HR(m_pDevice->CreateCommittedResource(
-			&heap_props_default,
-			D3D12_HEAP_FLAG_NONE,
-			&resource_buff_desc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_pVertexBuffer.GetAddressOf())));
-
-		auto heap_props_upload = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		HR(m_pDevice->CreateCommittedResource(
-			&heap_props_upload,
-			D3D12_HEAP_FLAG_NONE,
-			&resource_buff_desc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(pVertexUploadBuffer.GetAddressOf())));
-
-		D3D12_SUBRESOURCE_DATA subResourceData = {};
-		subResourceData.pData = vertices.data();
-		subResourceData.RowPitch = vertices.size() * sizeof(XMFLOAT3);
-		subResourceData.SlicePitch = subResourceData.RowPitch;
-
-		auto barrier_read2copy = CD3DX12_RESOURCE_BARRIER::Transition(
-			m_pVertexBuffer.Get(),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			D3D12_RESOURCE_STATE_COPY_DEST);
-		pCommandList->ResourceBarrier(1, &barrier_read2copy);
-
-		UpdateSubresources(pCommandList, m_pVertexBuffer.Get(), pVertexUploadBuffer.Get(), 0, 0, 1, &subResourceData);
-
-		auto barrier_copy2read = CD3DX12_RESOURCE_BARRIER::Transition(
-			m_pVertexBuffer.Get(),
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			D3D12_RESOURCE_STATE_GENERIC_READ);
-		pCommandList->ResourceBarrier(1, &barrier_copy2read);
-
-		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
-		m_VertexBufferView.SizeInBytes = static_cast<UINT>(sizeof(XMFLOAT3) * vertices.size());
-		m_VertexBufferView.StrideInBytes = sizeof(XMFLOAT3);
-	}
+	ComPtr<ID3D12Resource> pVertexUploadBuffer;
+	ComPtr<ID3D12Resource> pIndexUploadBuffer;
 	
-	{
-		// index buffer
-		vector<unsigned int> indices = {
-			0, 2, 1, //face front
-			0, 3, 2,
-			2, 3, 4, //face top
-			2, 4, 5,
-			1, 2, 5, //face right
-			1, 5, 6,
-			0, 7, 4, //face left
-			0, 4, 3,
-			5, 4, 7, //face back
-			5, 7, 6,
-			0, 6, 7, //face bottom
-			0, 1, 6
-		};
+	// vertex buffer
+	std::vector<Vector3> vertices = {
+		Vector3(0, 0, 0),
+		Vector3(1, 0, 0),
+		Vector3(1, 1, 0),
+		Vector3(0, 1, 0),
+		Vector3(0, 1, 1),
+		Vector3(1, 1, 1),
+		Vector3(1, 0, 1),
+		Vector3(0, 0, 1),
+	};
 
-		m_IndexCount = (int)indices.size();
+	m_pVertexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, vertices.data(), vertices.size() * sizeof(Vector3), pVertexUploadBuffer);
 
-		auto heapProps_default = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-		auto resource_buff_desc = CD3DX12_RESOURCE_DESC::Buffer(indices.size() * sizeof(unsigned int));
-		HR(m_pDevice->CreateCommittedResource(
-			&heapProps_default,
-			D3D12_HEAP_FLAG_NONE,
-			&resource_buff_desc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_pIndexBuffer.GetAddressOf())));
+	m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
+	m_VertexBufferView.SizeInBytes = static_cast<UINT>(sizeof(XMFLOAT3) * vertices.size());
+	m_VertexBufferView.StrideInBytes = sizeof(XMFLOAT3);
+	
+	// index buffer
+	vector<uint32_t> indices = {
+		0, 2, 1, //face front
+		0, 3, 2,
+		2, 3, 4, //face top
+		2, 4, 5,
+		1, 2, 5, //face right
+		1, 5, 6,
+		0, 7, 4, //face left
+		0, 4, 3,
+		5, 4, 7, //face back
+		5, 7, 6,
+		0, 6, 7, //face bottom
+		0, 1, 6
+	};
 
-		auto heapProps_upload = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		HR(m_pDevice->CreateCommittedResource(
-			&heapProps_upload,
-			D3D12_HEAP_FLAG_NONE,
-			&resource_buff_desc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(pIndexUploadBuffer.GetAddressOf())));
+	m_IndexCount = (int)indices.size();
+	m_pIndexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, indices.data(), indices.size() * sizeof(uint32_t), pIndexUploadBuffer);
 
-		D3D12_SUBRESOURCE_DATA subResourceData = {};
-		subResourceData.pData = indices.data();
-		subResourceData.RowPitch = indices.size() * sizeof(unsigned int);
-		subResourceData.SlicePitch = subResourceData.RowPitch;
-
-		auto barrier_read2dest = CD3DX12_RESOURCE_BARRIER::Transition(
-			m_pIndexBuffer.Get(),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			D3D12_RESOURCE_STATE_COPY_DEST);
-		pCommandList->ResourceBarrier(1, &barrier_read2dest);
-
-		UpdateSubresources(pCommandList, m_pIndexBuffer.Get(), pIndexUploadBuffer.Get(), 0, 0, 1, &subResourceData);
-
-		auto barrier_dest2read = CD3DX12_RESOURCE_BARRIER::Transition(
-			m_pIndexBuffer.Get(),
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			D3D12_RESOURCE_STATE_GENERIC_READ);
-		pCommandList->ResourceBarrier(1, &barrier_dest2read);
-
-		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
-		m_IndexBufferView.SizeInBytes = static_cast<UINT>(sizeof(unsigned int) * indices.size());
-		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
-	}
-
+	m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
+	m_IndexBufferView.SizeInBytes = static_cast<uint32_t>(sizeof(uint32_t) * indices.size());
+	m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+	
 	ExecuteCommandList(pCommandContext, true);
 }
 
@@ -808,7 +670,7 @@ void Graphics::BuildPSO()
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psDesc.DSVFormat = m_DepthStencilFormat;
 	psDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	psDesc.InputLayout.NumElements = (UINT)m_InputElements.size();
+	psDesc.InputLayout.NumElements = (uint32_t)m_InputElements.size();
 	psDesc.InputLayout.pInputElementDescs = m_InputElements.data();
 	psDesc.NodeMask = 0;
 	psDesc.NumRenderTargets = 1;
