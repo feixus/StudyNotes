@@ -2,12 +2,13 @@
 #include "Graphics.h"
 #include "CommandAllocatorPool.h"
 #include "CommandQueue.h"
-#include "SimpleMath/SimpleMath.h"
+#include "CommandContext.h"
+
+#include <filesystem>
+#include <stdexcept>
+#include <cstddef>
 
 #pragma comment(lib, "dxguid.lib")
-
-using namespace DirectX;
-using namespace DirectX::SimpleMath;
 
 Graphics::Graphics(uint32_t width, uint32_t height):
 	m_WindowWidth(width), m_WindowHeight(height)
@@ -43,10 +44,10 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->WaitForFenceBlock(m_FenceValues[m_CurrentBackBufferIndex]);
+	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 
-	CommandContext* pCommandContext = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pCommandContext->pCommandList;
+	CommandContext* pCommandContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
 	
 	pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
 	pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
@@ -55,38 +56,34 @@ void Graphics::Update()
 	pCommandList->SetDescriptorHeaps(1, ppHeaps);
 	pCommandList->SetGraphicsRootDescriptorTable(0, m_pCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
 
-	pCommandList->RSSetViewports(1, &m_Viewport);
-	pCommandList->RSSetScissorRects(1, &m_ScissorRect);
+	pCommandContext->SetViewport(m_Viewport);
+	pCommandContext->SetScissorRect(m_Viewport);
 
-	CD3DX12_RESOURCE_BARRIER barrier_present2target = CD3DX12_RESOURCE_BARRIER::Transition(
-		m_RenderTargets[m_CurrentBackBufferIndex].Get(), 
-		D3D12_RESOURCE_STATE_PRESENT, 
-		D3D12_RESOURCE_STATE_RENDER_TARGET);
-	pCommandList->ResourceBarrier(1, &barrier_present2target);
+	pCommandContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(
+		m_RenderTargets[m_CurrentBackBufferIndex].Get(),
+		D3D12_RESOURCE_STATE_PRESENT,
+		D3D12_RESOURCE_STATE_RENDER_TARGET), true);
 
-	auto currentBackBufferView = GetCurrentBackBufferView();
-	auto depthStencilView = GetDepthStencilView();
-	pCommandList->OMSetRenderTargets(1, &currentBackBufferView, true, &depthStencilView);
+	pCommandContext->SetRenderTarget(GetCurrentBackBufferView());
+	pCommandContext->SetDepthStencil(GetDepthStencilView());
 
-	const float clearColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
-	pCommandList->ClearRenderTargetView(GetCurrentBackBufferView(), clearColor, 0, nullptr);
-	pCommandList->ClearDepthStencilView(GetDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0F, 0, 0, nullptr);
+	DirectX::SimpleMath::Color clearColor{ 0.1f, 0.1f, 0.1f, 1.0f };
+	pCommandContext->ClearRenderTarget(GetCurrentBackBufferView(), clearColor);
+	pCommandContext->ClearDepth(GetDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
-	pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
-	pCommandList->IASetIndexBuffer(&m_IndexBufferView);
-	pCommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
+	pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pCommandContext->SetVertexBuffer(m_VertexBufferView);
+	pCommandContext->SetIndexBuffer(m_IndexBufferView);
+	pCommandContext->DrawIndexed(m_IndexCount, 0);
 
-	auto barrier_target2present = CD3DX12_RESOURCE_BARRIER::Transition(
+	pCommandContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(
 		m_RenderTargets[m_CurrentBackBufferIndex].Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET,
-		D3D12_RESOURCE_STATE_PRESENT);
-	pCommandList->ResourceBarrier(1, &barrier_target2present);
+		D3D12_RESOURCE_STATE_PRESENT));
 
-	m_FenceValues[m_CurrentBackBufferIndex] = ExecuteCommandList(pCommandContext);
+	m_FenceValues[m_CurrentBackBufferIndex] = pCommandContext->Execute(false);
 
 	m_pSwapchain->Present(1, 0);
-
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 }
 
@@ -96,7 +93,7 @@ void Graphics::Shutdown()
 	IdleGPU();
 }
 
-void Graphics::CreateRtvAndDsvHeaps()
+void Graphics::CreateDescriptorHeaps()
 {
 	// rtv heap
 	D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
@@ -113,6 +110,14 @@ void Graphics::CreateRtvAndDsvHeaps()
 	dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	dsvHeapDesc.NodeMask = 0;
 	HR(m_pDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(m_pDsvHeap.GetAddressOf())));
+
+	// cbv/srv heap
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+	heapDesc.NumDescriptors = FRAME_COUNT;
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	heapDesc.NodeMask = 0;
+	HR(m_pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pCbvSrvHeap.GetAddressOf())));
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Graphics::GetCurrentBackBufferView() const
@@ -237,17 +242,15 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
 
 	m_MsaaQuality = qualityLevels.NumQualityLevels;
-	if (m_MsaaQuality <= 0) return;
+	if (m_MsaaQuality <= 0)
+	{
+		return;
+	}
 
-	CreateCommandObjects();
+	m_CommandQueues[0] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+
 	CreateSwapchain(pWindow);
-	CreateRtvAndDsvHeaps();
-}
-
-void Graphics::CreateCommandObjects()
-{
-	// command queue
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(m_pDevice.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CreateDescriptorHeaps();
 }
 
 void Graphics::CreateSwapchain(WindowHandle pWindow)
@@ -356,28 +359,23 @@ void Graphics::OnResize(int width, int height)
 
 	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, GetDepthStencilView());
 
-	CommandContext* pCommandContext = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pCommandContext->pCommandList;
+	CommandContext* pCommandContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	pCommandContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(
+		m_pDepthStencilBuffer.Get(),
+		D3D12_RESOURCE_STATE_COMMON,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE));
 
-	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-					m_pDepthStencilBuffer.Get(),
-					D3D12_RESOURCE_STATE_COMMON,
-					D3D12_RESOURCE_STATE_DEPTH_WRITE);
-	pCommandList->ResourceBarrier(1, &barrier);
+	pCommandContext->Execute(true);
 
-	ExecuteCommandList(pCommandContext, true);
+	m_Viewport.x = 0;
+	m_Viewport.y = 0;
+	m_Viewport.height = m_WindowHeight;
+	m_Viewport.width = m_WindowWidth;
 
-	m_Viewport.Height = (float)m_WindowHeight;
-	m_Viewport.Width = (float)m_WindowWidth;
-	m_Viewport.MaxDepth = 1.0f;
-	m_Viewport.MinDepth = 0.0f;
-	m_Viewport.TopLeftX = 0.0f;
-	m_Viewport.TopLeftY = 0.0f;
-
-	m_ScissorRect.left = 0;
-	m_ScissorRect.top = 0;
-	m_ScissorRect.right = m_WindowWidth;
-	m_ScissorRect.bottom = m_WindowHeight;
+	m_ScissorRect.x = 0;
+	m_ScissorRect.y = 0;
+	m_ScissorRect.height = m_WindowHeight;
+	m_ScissorRect.width = m_WindowWidth;
 }
 
 LRESULT Graphics::WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -470,22 +468,11 @@ LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 void Graphics::InitializeAssets()
 {
-	BuildDescriptorHeaps();
 	BuildConstantBuffers();
 	BuildRootSignature();
 	BuildShaderAndInputLayout();
 	BuildGeometry();
 	BuildPSO();
-}
-
-void Graphics::BuildDescriptorHeaps()
-{
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	heapDesc.NumDescriptors = 2;
-	heapDesc.NodeMask = 0;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	HR(m_pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pCbvSrvHeap.GetAddressOf())));
 }
 
 void Graphics::BuildConstantBuffers()
@@ -494,16 +481,18 @@ void Graphics::BuildConstantBuffers()
 
 	struct ConstantBufferData
 	{
+		Matrix World;
 		Matrix WorldViewProjection;
 	} Data;
 
 	Matrix proj = XMMatrixPerspectiveFovLH(
 		XM_PIDIV4,
-		static_cast<float>(m_WindowWidth) / static_cast<float>(m_WindowHeight),
-		0.001f,
-		100.0f);
+		static_cast<float>(m_WindowWidth) / m_WindowHeight,
+		0.1f,
+		1000.0f);
 	Matrix view = XMMatrixLookAtLH(Vector3(0, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0));
 	Matrix world = XMMatrixTranslation(0, 0, 10);
+	Data.World = world;
 	Data.WorldViewProjection = world * view * proj;
 
 	// alignment to a 256-byte boundary for constant buffers
@@ -555,6 +544,32 @@ void Graphics::BuildRootSignature()
 	HR(m_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature)));
 }
 
+std::vector<std::byte> Graphics::ReadFile(const std::filesystem::path& filePath)
+{
+	if (!std::filesystem::exists(filePath))
+	{
+		throw std::runtime_error("Files does not exist: " + filePath.string());
+	}
+
+	std::ifstream file("shaders.hlsl", std::ios::ate);
+	if (!file.is_open())
+	{
+		throw std::runtime_error("Files does not exist: " + filePath.string());
+	}
+
+	const auto size = static_cast<size_t>(file.tellg());
+	if (size == 0)
+	{
+		return {};
+	}
+
+	std::vector<std::byte> buffer(size);
+	file.seekg(0);
+	file.read(reinterpret_cast<char*>(buffer.data()), size);
+
+	return buffer;
+}
+
 void Graphics::BuildShaderAndInputLayout()
 {
 #if defined(_DEBUG)
@@ -563,33 +578,12 @@ void Graphics::BuildShaderAndInputLayout()
 #else
 	uint32_t compileFlags = 0;
 #endif
+	
+	compileFlags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 
-	std::string data = "\
- 	cbuffer Data : register(b0) \
- 	{ \
- 		float4x4 WorldViewProjection; \
- 	} \
- 	struct VSInput \
- 	{ \
- 		float3 position : POSITION; \
- 	}; \
- 	struct PSInput \
- 	{ \
- 		float4 position : SV_POSITION; \
- 	}; \
- 	PSInput VSMain(VSInput input) \
- 	{ \
- 		PSInput result; \
- 		result.position = mul(float4(input.position, 1.0f), WorldViewProjection); \
- 		return result; \
- 	} \
- 	float4 PSMain(PSInput input) : SV_TARGET \
- 	{ \
- 		return float4(1,0,1,1); \
- 	}";
-
+	std::vector<std::byte> data = ReadFile("shaders.hlsl");
+	
 	ComPtr<ID3DBlob> pErrorBlob;
-
 	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
@@ -609,16 +603,18 @@ void Graphics::BuildShaderAndInputLayout()
 
 	// input layout
 	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	//m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	
 }
 
 void Graphics::BuildGeometry()
 {
-	CommandContext* pCommandContext = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pCommandContext->pCommandList;
-
 	ComPtr<ID3D12Resource> pVertexUploadBuffer;
 	ComPtr<ID3D12Resource> pIndexUploadBuffer;
 	
+	CommandContext* pCommandContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
+
 	// vertex buffer
 	std::vector<Vector3> vertices = {
 		Vector3(0, 0, 0),
@@ -660,7 +656,7 @@ void Graphics::BuildGeometry()
 	m_IndexBufferView.SizeInBytes = static_cast<uint32_t>(sizeof(uint32_t) * indices.size());
 	m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	
-	ExecuteCommandList(pCommandContext, true);
+	pCommandContext->Execute(true);
 }
 
 void Graphics::BuildPSO()
@@ -686,31 +682,37 @@ void Graphics::BuildPSO()
 	HR(m_pDevice->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(m_pPipelineStateObject.GetAddressOf())));
 }
 
-CommandQueue* Graphics::GetMainCommandQueue() const
+CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 {
-	return m_CommandQueues.at(D3D12_COMMAND_LIST_TYPE_DIRECT).get();
+	return m_CommandQueues.at(type).get();
 }
 
-CommandContext* Graphics::AllocatorCommandList(D3D12_COMMAND_LIST_TYPE type)
+CommandContext* Graphics::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type)
 {
-	uint64_t fenceValue = m_CommandQueues[type]->GetLastCompletedFence();
-	ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->GetAllocatorPool()->GetAllocator(fenceValue);
 	if (m_FreeCommandLists.size() > 0)
 	{
 		CommandContext* pCommandContext = m_FreeCommandLists.front();
 		m_FreeCommandLists.pop();
-		pCommandContext->pCommandList->Reset(pAllocator, m_pPipelineStateObject.Get());
-		pCommandContext->pAllocator = pAllocator;
+
+		pCommandContext->Reset();
 		return pCommandContext;
 	}
 	else
 	{
 		ComPtr<ID3D12CommandList> pCommandList;
+		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
 		m_CommandLists.push_back(std::move(pCommandList));
-		m_CommandListPool.push_back(CommandContext{ static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type });
-		return &m_CommandListPool.back();
+		m_CommandListPool.emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
+		return m_CommandListPool.back().get();
 	}
+}
+
+void Graphics::WaitForFence(uint64_t fenceValue)
+{
+	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
+	CommandQueue* pQueue = GetCommandQueue(type);
+	pQueue->WaitForFence(fenceValue);
 }
 
 void Graphics::FreeCommandList(CommandContext * pCommandContext)
@@ -718,18 +720,10 @@ void Graphics::FreeCommandList(CommandContext * pCommandContext)
 	m_FreeCommandLists.push(pCommandContext);
 }
 
-uint64_t Graphics::ExecuteCommandList(CommandContext* pCommandContext, bool waitForCompletion)
-{
-	CommandQueue* pOwningQueue = m_CommandQueues[pCommandContext->QueueType].get();
-	uint64_t fenceValue = pOwningQueue->ExecuteCommandList(pCommandContext, waitForCompletion);
-	FreeCommandList(pCommandContext);
-	return fenceValue;
-}
-
 void Graphics::IdleGPU()
 {
 	for (auto& pCommandQueue : m_CommandQueues)
 	{
-		pCommandQueue.second->WaitForIdle();
+		pCommandQueue->WaitForIdle();
 	}
 }

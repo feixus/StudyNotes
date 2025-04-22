@@ -7,6 +7,7 @@
 
 #include <DirectXMath.h>
 #include <wrl.h>
+#include <windows.h>
 #include <d3dcompiler.h>
 #include <DirectXColors.h>
 
@@ -21,11 +22,13 @@
 #include <algorithm>
 
 #include "D3DUtils.h"
-
+#include "SimpleMath/SimpleMath.h"
 
 using namespace std;
 using Microsoft::WRL::ComPtr;
+
 using namespace DirectX;
+using namespace DirectX::SimpleMath;
 using namespace DirectX::Colors;
 
 #pragma comment(lib, "d3d12.lib")
