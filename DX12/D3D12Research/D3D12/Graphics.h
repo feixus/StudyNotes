@@ -8,6 +8,7 @@ using WindowHandle = HWND;
 
 class CommandQueue;
 class CommandContext;
+class DescriptorAllocator;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -50,18 +51,11 @@ protected:
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
 	std::array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferView() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() const;
-	ID3D12Resource* CurrentBackBuffer() const;
-
-	uint32_t m_RtvDescriptorSize;
-	uint32_t m_DsvDescriptorSize;
-	uint32_t m_CbvSrvDescriptorSize;
+	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
+	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_DepthStencilHandle;
 
 	uint32_t m_MsaaQuality = 0;
-
-	ComPtr<ID3D12DescriptorHeap> m_pRtvHeap;
-	ComPtr<ID3D12DescriptorHeap> m_pDsvHeap;
 
 	// synchronization objects
 	uint32_t m_CurrentBackBufferIndex = 0;
@@ -95,7 +89,6 @@ protected:
 	void BuildGeometry();
 	void BuildPSO();
 
-	ComPtr<ID3D12DescriptorHeap> m_pCbvSrvHeap;
 	ComPtr<ID3D12Resource> m_pVertexBuffer;
 	ComPtr<ID3D12Resource> m_pIndexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;

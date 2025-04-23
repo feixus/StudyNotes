@@ -18,8 +18,8 @@ public:
 	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.2f, 0.2f, 0.2f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 
-	void SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE&& pRtv);
-	void SetDepthStencil(D3D12_CPU_DESCRIPTOR_HANDLE&& pDsv);
+	void SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv);
+	void SetDepthStencil(D3D12_CPU_DESCRIPTOR_HANDLE* pDsv);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
 	void SetVertexBuffer(D3D12_VERTEX_BUFFER_VIEW vertexBufferView);
 	void SetVertexBuffers(D3D12_VERTEX_BUFFER_VIEW* pBuffers, int bufferCount);
@@ -38,8 +38,8 @@ private:
 	std::array<D3D12_RESOURCE_BARRIER, 6> m_QueueBarriers = {};
 	int m_NumQueueBarriers = 0;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE m_pRenderTarget;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_pDepthStencilView;
+	D3D12_CPU_DESCRIPTOR_HANDLE* m_pRenderTarget;
+	D3D12_CPU_DESCRIPTOR_HANDLE* m_pDepthStencilView;
 	Graphics* m_pGraphics;
 
 	ID3D12GraphicsCommandList* m_pCommandList;

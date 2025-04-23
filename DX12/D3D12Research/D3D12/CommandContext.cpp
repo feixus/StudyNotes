@@ -64,12 +64,12 @@ void CommandContext::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLA
 	m_pCommandList->ClearDepthStencilView(dsv, clearFlags, depth, stencil, 0, nullptr);
 }
 
-void CommandContext::SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE&& pRtv)
+void CommandContext::SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv)
 {
 	m_pRenderTarget = pRtv;
 }
 
-void CommandContext::SetDepthStencil(D3D12_CPU_DESCRIPTOR_HANDLE&& pDsv)
+void CommandContext::SetDepthStencil(D3D12_CPU_DESCRIPTOR_HANDLE* pDsv)
 {
 	m_pDepthStencilView = pDsv;
 }
@@ -144,5 +144,5 @@ void CommandContext::FlushResourceBarriers()
 
 void CommandContext::PrepareDraw()
 {
-	m_pCommandList->OMSetRenderTargets(1, &m_pRenderTarget, false, &m_pDepthStencilView);
+	m_pCommandList->OMSetRenderTargets(1, m_pRenderTarget, false, m_pDepthStencilView);
 }
