@@ -35,11 +35,9 @@ public:
 protected:
 	static const uint32_t FRAME_COUNT = 2;
 
-	uint64_t m_CurrentFence = 0;
-
 	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
 	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
-	std::queue<CommandContext*> m_FreeCommandLists;
+	std::queue<CommandContext*> m_FreeCommandContexts;
 
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 

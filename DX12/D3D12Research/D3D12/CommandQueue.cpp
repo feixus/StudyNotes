@@ -5,7 +5,7 @@
 
 CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics),
-	m_NextFenceValue((uint64_t)type << 56 | 1),
+	m_NextFenceValue((uint64_t)type << 56 | 1),			// set the command list type nested in fence value
 	m_LastCompletedFenceValue((uint64_t)type << 56),
 	m_Type(type)
 {
@@ -44,7 +44,7 @@ bool CommandQueue::IsFenceComplete(uint64_t fenceValue)
 {
 	if (fenceValue > m_LastCompletedFenceValue)
 	{
-		m_LastCompletedFenceValue = (std::max)(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
+		m_LastCompletedFenceValue = std::max<uint64_t>(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
 	}
 
 	return fenceValue <= m_LastCompletedFenceValue;

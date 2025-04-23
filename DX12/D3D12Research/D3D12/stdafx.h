@@ -22,7 +22,7 @@
 #include <algorithm>
 
 #include "D3DUtils.h"
-#include "SimpleMath/SimpleMath.h"
+#include "External/SimpleMath/SimpleMath.h"
 
 using namespace std;
 using Microsoft::WRL::ComPtr;

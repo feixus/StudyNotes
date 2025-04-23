@@ -7,6 +7,11 @@
 #include <filesystem>
 #include <stdexcept>
 #include <cstddef>
+#include <assert.h>
+
+#include "assimp/Importer.hpp"
+#include "assimp/postprocess.h"
+#include "assimp/scene.h"
 
 #pragma comment(lib, "dxguid.lib")
 
@@ -274,7 +279,7 @@ void Graphics::CreateSwapchain(WindowHandle pWindow)
 
 #ifdef PLATFORM_UWP
 	HR(m_pFactory->CreateSwapChainForCoreWindow(
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
+		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
 		reinterpret_cast<IUnknown*>(pWindow),
 		&swapchainDesc,
 		nullptr,
@@ -490,8 +495,8 @@ void Graphics::BuildConstantBuffers()
 		static_cast<float>(m_WindowWidth) / m_WindowHeight,
 		0.1f,
 		1000.0f);
-	Matrix view = XMMatrixLookAtLH(Vector3(0, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0));
-	Matrix world = XMMatrixTranslation(0, 0, 10);
+	Matrix view = XMMatrixLookAtLH(Vector3(0, 50, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+	Matrix world = XMMatrixTranslation(0, -50, 500);
 	Data.World = world;
 	Data.WorldViewProjection = world * view * proj;
 
@@ -603,52 +608,56 @@ void Graphics::BuildShaderAndInputLayout()
 
 	// input layout
 	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	//m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 	
 }
 
 void Graphics::BuildGeometry()
 {
+	struct Vertex
+	{
+		Vector3 Position;
+		Vector3 Normal;
+	};
+
+	Assimp::Importer importer;
+	const aiScene* pScene = importer.ReadFile("Man.dae",
+			aiProcess_Triangulate |
+			aiProcess_ConvertToLeftHanded |
+			aiProcess_GenSmoothNormals |
+			aiProcess_CalcTangentSpace |
+			aiProcess_LimitBoneWeights);
+
+	std::vector<Vertex> vertices(pScene->mMeshes[0]->mNumVertices);
+	for (size_t i = 0; i < vertices.size(); i++)
+	{
+		Vertex& vertex = vertices[i];
+		vertex.Position = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mVertices[i]);
+		vertex.Normal = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mNormals[i]);
+	}
+
+	std::vector<uint32_t> indices(pScene->mMeshes[0]->mNumFaces * 3);
+	for (size_t i = 0; i < pScene->mMeshes[0]->mNumFaces; i++)
+	{
+		for (size_t j = 0; j < 3; j++)
+		{
+			assert(pScene->mMeshes[0]->mFaces[i].mNumIndices == 3);
+			indices[i * 3 + j] = pScene->mMeshes[0]->mFaces[i].mIndices[j];
+		}
+	}
+
 	ComPtr<ID3D12Resource> pVertexUploadBuffer;
 	ComPtr<ID3D12Resource> pIndexUploadBuffer;
-	
+
 	CommandContext* pCommandContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
 
-	// vertex buffer
-	std::vector<Vector3> vertices = {
-		Vector3(0, 0, 0),
-		Vector3(1, 0, 0),
-		Vector3(1, 1, 0),
-		Vector3(0, 1, 0),
-		Vector3(0, 1, 1),
-		Vector3(1, 1, 1),
-		Vector3(1, 0, 1),
-		Vector3(0, 0, 1),
-	};
-
-	m_pVertexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, vertices.data(), vertices.size() * sizeof(Vector3), pVertexUploadBuffer);
+	m_pVertexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, vertices.data(), vertices.size() * sizeof(Vertex), pVertexUploadBuffer);
 
 	m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
-	m_VertexBufferView.SizeInBytes = static_cast<UINT>(sizeof(XMFLOAT3) * vertices.size());
-	m_VertexBufferView.StrideInBytes = sizeof(XMFLOAT3);
+	m_VertexBufferView.SizeInBytes = static_cast<UINT>(sizeof(Vertex) * vertices.size());
+	m_VertexBufferView.StrideInBytes = sizeof(Vertex);
 	
-	// index buffer
-	vector<uint32_t> indices = {
-		0, 2, 1, //face front
-		0, 3, 2,
-		2, 3, 4, //face top
-		2, 4, 5,
-		1, 2, 5, //face right
-		1, 5, 6,
-		0, 7, 4, //face left
-		0, 4, 3,
-		5, 4, 7, //face back
-		5, 7, 6,
-		0, 6, 7, //face bottom
-		0, 1, 6
-	};
-
 	m_IndexCount = (int)indices.size();
 	m_pIndexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, indices.data(), indices.size() * sizeof(uint32_t), pIndexUploadBuffer);
 
@@ -689,10 +698,10 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 
 CommandContext* Graphics::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type)
 {
-	if (m_FreeCommandLists.size() > 0)
+	if (m_FreeCommandContexts.size() > 0)
 	{
-		CommandContext* pCommandContext = m_FreeCommandLists.front();
-		m_FreeCommandLists.pop();
+		CommandContext* pCommandContext = m_FreeCommandContexts.front();
+		m_FreeCommandContexts.pop();
 
 		pCommandContext->Reset();
 		return pCommandContext;
@@ -717,7 +726,7 @@ void Graphics::WaitForFence(uint64_t fenceValue)
 
 void Graphics::FreeCommandList(CommandContext * pCommandContext)
 {
-	m_FreeCommandLists.push(pCommandContext);
+	m_FreeCommandContexts.push(pCommandContext);
 }
 
 void Graphics::IdleGPU()

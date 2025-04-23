@@ -11,23 +11,11 @@ workspace (engineName)
 	cppdialect "C++20"
     defines { "_CONSOLE", "THREADING", "PLATFORM_WINDOWS" }
 
-	-- Custom command-line option
-    newoption {
-        trigger     = "base",
-        value       = "API",
-        description = "Choose a particular 3D API for rendering",
-        default     = "windows",
-        allowed = {
-            { "windows", "Windows" },
-            { "uwp", "Universal Windows Platform" },
-        }
-    }
-	
     -- Platform-specific defines
-    filter { "platforms:x64" }
+    filter "platforms:x64"
         defines { "x64", "_AMD64_" }
 
-    filter { "platforms:x32" }
+    filter "platforms:x32"
         defines { "x32", "_X86" }
 
     -- Configuration-specific settings
@@ -49,10 +37,10 @@ workspace (engineName)
 
     -- Reset filter
     filter {}
+        kind "WindowedApp"
 
 project (engineName)
     location (ROOT .. engineName)
-	kind "WindowedApp"
     targetdir (ROOT .. "Build/" .. engineName .. "_%{platform}_%{cfg.buildcfg}")
     objdir (ROOT .. "Build/Intermediate/%{prj.name}_%{platform}_%{cfg.buildcfg}")
 
@@ -64,6 +52,16 @@ project (engineName)
     filter "action:vs*"
         systemversion "10.0.22621.0"
         toolset "v143"
+
+	-- API base option logic
+    if _OPTIONS["base"] == "uwp" then
+        defines { "PLATFORM_UWP" }
+        filter "action:vs*"
+            toolset "v143"
+            systemversion "10.0"
+    else
+        defines { "PLATFORM_WINDOWS" }
+    end
 
     -- Files to include
     files {
@@ -77,22 +75,42 @@ project (engineName)
 
     -- Include directories
     includedirs {
-        "$(ProjectDir)"
+        "$(ProjectDir)",
+
+        ROOT .. engineName .. "/External/Assimp/include",
     }
 
-    -- Libraries to link
+	-- Disable PCH for specific files
+	filter { "files:**/External/**" }
+    flags { "NoPCH" }
+
+	local p =  { "x64" }
+	for j = 1, #p do
+		filter { "platforms:" .. p[j] }
+			libdirs { ROOT .. engineName .. "/External/Assimp/lib/" .. p[j] }
+			postbuildcommands {
+				'copy "$(ProjectDir)External\\Assimp\\bin\\' .. p[j] .. '\\assimp-vc143-mt.dll" "$(OutDir)"'
+			}
+	end
+	
+	-- Libraries to link
     links {
         "dxgi",
-        "d3dcompiler"
+        "d3dcompiler",
+
+        "assimp-vc143-mt",
     }
 
-    -- API base option logic
     filter {}
-    if _OPTIONS["base"] == "uwp" then
-        defines { "PLATFORM_UWP" }
-        filter "action:vs*"
-            toolset "v143"
-            systemversion "10.0"
-    else
-        defines { "PLATFORM_WINDOWS" }
-    end
+
+-- Custom command-line option
+newoption {
+    trigger     = "base",
+    value       = "API",
+    description = "Choose a particular 3D API for rendering",
+    default     = "windows",
+    allowed = {
+        { "windows", "Windows" },
+        { "uwp", "Universal Windows Platform" },
+    }
+}
