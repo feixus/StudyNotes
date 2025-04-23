@@ -4,6 +4,7 @@
 #include "CommandQueue.h"
 #include "CommandContext.h"
 #include "DescriptorAllocator.h"
+#include "DynamicResourceAllocator.h"
 
 #include <filesystem>
 #include <stdexcept>
@@ -14,7 +15,8 @@
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
-#pragma comment(lib, "dxguid.lib")
+#define STB_IMAGE_IMPLEMENTATION
+#include "External/stb/stb_image.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height):
 	m_WindowWidth(width), m_WindowHeight(height)
@@ -164,15 +166,20 @@ void Graphics::MakeWindow()
 
 void Graphics::InitD3D(WindowHandle pWindow)
 {
+	UINT dxgiFactoryFlags = 0;
+
 #ifdef _DEBUG
 	// enable debug
 	ComPtr<ID3D12Debug> pDebugController;
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
 	pDebugController->EnableDebugLayer();
+
+	// additional debug layers
+	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
 	// factory
-	HR(CreateDXGIFactory1(IID_PPV_ARGS(&m_pFactory)));
+	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
 	// look for an adapter
 	uint32_t adapter = 0;
@@ -214,6 +221,8 @@ void Graphics::InitD3D(WindowHandle pWindow)
 
 	CreateSwapchain(pWindow);
 	CreateDescriptorHeaps();
+
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 512);
 }
 
 void Graphics::CreateSwapchain(WindowHandle pWindow)
@@ -266,7 +275,7 @@ void Graphics::OnResize(int width, int height)
 	m_WindowWidth = width;
 	m_WindowHeight = height;
 
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->WaitForIdle();
+	IdleGPU();
 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
@@ -315,20 +324,12 @@ void Graphics::OnResize(int width, int height)
 			&heapProps,
 			D3D12_HEAP_FLAG_NONE,
 			&desc,
-			D3D12_RESOURCE_STATE_COMMON,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE,
 			&clearValue,
 			IID_PPV_ARGS(m_pDepthStencilBuffer.GetAddressOf())));
 
 	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor();
 	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, m_DepthStencilHandle);
-
-	CommandContext* pCommandContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	pCommandContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(
-		m_pDepthStencilBuffer.Get(),
-		D3D12_RESOURCE_STATE_COMMON,
-		D3D12_RESOURCE_STATE_DEPTH_WRITE));
-
-	pCommandContext->Execute(true);
 
 	m_Viewport.x = 0;
 	m_Viewport.y = 0;
@@ -435,6 +436,7 @@ void Graphics::InitializeAssets()
 	BuildRootSignature();
 	BuildShaderAndInputLayout();
 	BuildGeometry();
+	LoadTexture();
 	BuildPSO();
 }
 
@@ -619,6 +621,10 @@ void Graphics::BuildGeometry()
 	m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	
 	pCommandContext->Execute(true);
+}
+
+void Graphics::LoadTexture()
+{
 }
 
 void Graphics::BuildPSO()

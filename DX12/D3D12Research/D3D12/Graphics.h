@@ -9,6 +9,7 @@ using WindowHandle = HWND;
 class CommandQueue;
 class CommandContext;
 class DescriptorAllocator;
+class DynamicResourceAllocator;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -33,8 +34,12 @@ public:
 
 	void IdleGPU();
 
+	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
+
 protected:
 	static const uint32_t FRAME_COUNT = 2;
+
+	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
 
 	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
 	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
@@ -87,7 +92,12 @@ protected:
 	void BuildRootSignature();
 	void BuildShaderAndInputLayout();
 	void BuildGeometry();
+	void LoadTexture();
 	void BuildPSO();
+
+	ComPtr<ID3D12Resource> m_pTexture;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_SamplerHandle;
 
 	ComPtr<ID3D12Resource> m_pVertexBuffer;
 	ComPtr<ID3D12Resource> m_pIndexBuffer;
