@@ -80,4 +80,30 @@ static Microsoft::WRL::ComPtr<ID3D12Resource> CreateDefaultBuffer(
 	return defaultBuffer;
 }
 
+static std::vector<std::byte> ReadFile(const std::filesystem::path& filePath, std::ios_base::openmode mode = std::ios::ate)
+{
+	if (!std::filesystem::exists(filePath))
+	{
+		throw std::runtime_error("Files does not exist: " + filePath.string());
+	}
+
+	std::ifstream file(filePath, mode);
+	if (!file.is_open())
+	{
+		throw std::runtime_error("Files does not exist: " + filePath.string());
+	}
+
+	const auto size = static_cast<size_t>(file.tellg());
+	if (size == 0)
+	{
+		return {};
+	}
+
+	std::vector<std::byte> buffer(size);
+	file.seekg(0);
+	file.read(reinterpret_cast<char*>(buffer.data()), size);
+
+	return buffer;
+}
+
 

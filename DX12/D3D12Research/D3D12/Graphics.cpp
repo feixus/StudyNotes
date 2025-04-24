@@ -364,7 +364,7 @@ void Graphics::BuildShaderAndInputLayout()
 	
 	compileFlags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 
-	std::vector<std::byte> data = ReadFile("shaders.hlsl");
+	std::vector<std::byte> data = ReadFile("Resources/shaders.hlsl");
 	
 	ComPtr<ID3DBlob> pErrorBlob;
 	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
@@ -400,7 +400,7 @@ void Graphics::BuildGeometry()
 	};
 
 	Assimp::Importer importer;
-	const aiScene* pScene = importer.ReadFile("Man.dae",
+	const aiScene* pScene = importer.ReadFile("Resources/Man.dae",
 			aiProcess_Triangulate |
 			aiProcess_ConvertToLeftHanded |
 			aiProcess_GenSmoothNormals |
@@ -450,7 +450,7 @@ void Graphics::BuildGeometry()
 
 void Graphics::LoadTexture()
 {
-	std::vector<std::byte> buffer = ReadFile("Man.png", std::ios::ate | std::ios::binary);
+	std::vector<std::byte> buffer = ReadFile("Resources/Man.png", std::ios::ate | std::ios::binary);
 	// if channel 3 , to force to 4
 	int width, height, channel;
 	void* pPixels = stbi_load_from_memory((unsigned char*)buffer.data(), (int)buffer.size(), &width, &height, &channel, 4);
