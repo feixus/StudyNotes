@@ -2,9 +2,8 @@
 #include "CommandAllocatorPool.h"
 
 CommandAllocatorPool::CommandAllocatorPool(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type)
+		: m_pDevice(pDevice), m_Type(type)
 {
-	m_pDevice = pDevice;
-	m_Type = type;
 }
 
 CommandAllocatorPool::~CommandAllocatorPool()

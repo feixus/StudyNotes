@@ -33,7 +33,9 @@ DynamicResourceAllocator::DynamicResourceAllocator(ID3D12Device* pDevice, bool g
 		nullptr,
 		IID_PPV_ARGS(m_pBackingResource.GetAddressOf())));
 
-	D3D12_RANGE readRange;
+	// map and initialize the constant buffer. dont unmap this until the app closes
+	// keeping things mapped for the lifetime of the resource is okay
+	D3D12_RANGE readRange; // dont intend to read from this resource on the CPU
 	readRange.Begin = 0;
 	readRange.End = 0;
 	HR(m_pBackingResource->Map(0, &readRange, &m_pMappedMemory));

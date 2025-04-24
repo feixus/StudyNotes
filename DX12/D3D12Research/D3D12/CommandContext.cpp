@@ -2,16 +2,15 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 #include "CommandQueue.h"
+#include "DynamicResourceAllocator.h"
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
-
 }
 
 CommandContext::~CommandContext()
 {
-
 }
 
 void CommandContext::Reset()
@@ -31,7 +30,9 @@ uint64_t CommandContext::Execute(bool wait)
 	{
 		pQueue->WaitForFence(fenceValue);
 	}
+
 	m_pGraphics->FreeCommandList(this);
+	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
 
 	return fenceValue;
 }
@@ -120,7 +121,7 @@ void CommandContext::SetScissorRect(const DirectX::SimpleMath::Rectangle& rect)
 
 void CommandContext::InsertResourceBarrier(D3D12_RESOURCE_BARRIER barrier, bool executeImmediate)
 {
-	if (m_NumQueueBarriers >= 16)
+	if (m_NumQueueBarriers >= m_QueueBarriers.size())
 	{
 		FlushResourceBarriers();
 	}
@@ -140,6 +141,35 @@ void CommandContext::FlushResourceBarriers()
 		m_pCommandList->ResourceBarrier(m_NumQueueBarriers, m_QueueBarriers.data());
 		m_NumQueueBarriers = 0;
 	}
+}
+
+void CommandContext::SetDynamicConstantBufferView(int slot, void* pData, uint32_t dataSize)
+{
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	m_pCommandList->SetGraphicsRootConstantBufferView(slot, allocation.GpuHandle);
+}
+
+void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData)
+{
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(elementCount * elementSize);
+	memcpy(allocation.pMappedMemory, pData, elementCount * elementSize);
+	D3D12_VERTEX_BUFFER_VIEW view{};
+	view.BufferLocation = allocation.GpuHandle;
+	view.SizeInBytes = elementCount * elementSize;
+	view.StrideInBytes = elementSize;
+	m_pCommandList->IASetVertexBuffers(slot, 1, &view);
+}
+
+void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
+{
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(elementCount * sizeof(uint32_t));
+	memcpy(allocation.pMappedMemory, pData, elementCount * sizeof(uint32_t));
+	D3D12_INDEX_BUFFER_VIEW view{};
+	view.BufferLocation = allocation.GpuHandle;
+	view.SizeInBytes = elementCount * sizeof(uint32_t);
+	view.Format = DXGI_FORMAT_R32_UINT;
+	m_pCommandList->IASetIndexBuffer(&view);
 }
 
 void CommandContext::PrepareDraw()

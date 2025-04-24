@@ -60,8 +60,6 @@ void Graphics::Update()
 	pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
 	pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
-	pCommandList->SetGraphicsRootConstantBufferView(0, m_pConstantBuffer->GetGPUVirtualAddress());
-
 	pCommandContext->SetViewport(m_Viewport);
 	pCommandContext->SetScissorRect(m_Viewport);
 
@@ -70,12 +68,20 @@ void Graphics::Update()
 		D3D12_RESOURCE_STATE_PRESENT,
 		D3D12_RESOURCE_STATE_RENDER_TARGET), true);
 
-	pCommandContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
-	pCommandContext->SetDepthStencil(&m_DepthStencilHandle);
-
 	DirectX::SimpleMath::Color clearColor{ 0.1f, 0.1f, 0.1f, 1.0f };
 	pCommandContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
 	pCommandContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+
+	pCommandContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
+	pCommandContext->SetDepthStencil(&m_DepthStencilHandle);
+
+	SetDynamicConstantBufferView(pCommandContext);
+
+	auto srvDescriptorHeaps = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->GetDescriptorHeapPool();
+	ID3D12DescriptorHeap* ppHeaps[] = { srvDescriptorHeaps[0].Get()};
+	pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+	pCommandList->SetGraphicsRootDescriptorTable(1, m_TextureGpuHandle);
 
 	pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pCommandContext->SetVertexBuffer(m_VertexBufferView);
@@ -106,62 +112,6 @@ void Graphics::CreateDescriptorHeaps()
 	{
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
-}
-
-void Graphics::MakeWindow()
-{
-	WNDCLASSW wc;
-
-	wc.hInstance = GetModuleHandle(nullptr);
-	wc.cbClsExtra = 0;
-	wc.cbWndExtra = 0;
-	wc.hIcon = 0;
-	wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-	wc.lpfnWndProc = WndProcStatic;
-	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpszClassName = L"wndClass";
-	wc.lpszMenuName = nullptr;
-	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-
-	if (!RegisterClass(&wc))
-	{
-		auto error = GetLastError();
-		return;
-	}
-
-	int displayWidth = GetSystemMetrics(SM_CXSCREEN);
-	int displayHeight = GetSystemMetrics(SM_CYSCREEN);
-
-	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
-
-	RECT windowRec = { 0, 0, (LONG)m_WindowWidth, (LONG)m_WindowHeight };
-	AdjustWindowRect(&windowRec, windowStyle, false);
-
-	uint32_t windowWidth = windowRec.right - windowRec.left;
-	uint32_t windowHeight = windowRec.bottom - windowRec.top;
-
-	int x = (displayWidth - windowWidth) / 2;
-	int y = (displayHeight - windowHeight) / 2;
-
-	m_Hwnd = CreateWindow(
-				L"wndClass",
-				L"Hello World DX12",
-				windowStyle,
-				x,
-				y,
-				windowWidth,
-				windowHeight,
-				nullptr,
-				nullptr,
-				GetModuleHandle(nullptr),
-				this
-	);
-
-	if (!m_Hwnd) return;
-
-	ShowWindow(m_Hwnd, SW_SHOWDEFAULT);
-
-	if (!UpdateWindow(m_Hwnd)) return;
 }
 
 void Graphics::InitD3D(WindowHandle pWindow)
@@ -342,154 +292,26 @@ void Graphics::OnResize(int width, int height)
 	m_ScissorRect.width = m_WindowWidth;
 }
 
-LRESULT Graphics::WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	Graphics* pThis = nullptr;
-	if (message == WM_NCCREATE)
-	{
-		pThis = static_cast<Graphics*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
-		SetLastError(0);
-		if (!SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis)))
-		{
-			if (GetLastError() != 0)
-			{
-				return 0;
-			}
-		}
-	}
-	else
-	{
-		pThis = reinterpret_cast<Graphics*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-	}
-
-	if (pThis)
-	{
-		return pThis->WndProc(hWnd, message, wParam, lParam);
-	}
-
-	return DefWindowProc(hWnd, message, wParam, lParam);
-}
-
-LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	switch (message)
-	{
-	// resize the window
-	case WM_SIZE:
-		m_WindowWidth = LOWORD(lParam);
-		m_WindowHeight = HIWORD(lParam);
-		if (m_pDevice)
-		{
-			if (wParam == SIZE_MINIMIZED)
-			{
-				mMinimized = true;
-				mMaximized = false;
-			}
-			else if (wParam == SIZE_MAXIMIZED)
-			{
-				mMinimized = false;
-				mMaximized = true;
-				OnResize(m_WindowWidth, m_WindowHeight);
-			}
-			else if (wParam == SIZE_RESTORED)
-			{
-				// restoring from minimized state
-				if (mMinimized)
-				{
-					mMinimized = false;
-					OnResize(m_WindowWidth, m_WindowHeight);
-				}
-				// restoring from maximized state
-				else if (mMaximized)
-				{
-					mMaximized = false;
-					OnResize(m_WindowWidth, m_WindowHeight);
-				}
-				else if (mResizing)
-				{
-
-				}
-				else  // api call such as SetWindowPos/ mSwapchain->SetFullscreenState
-				{
-					OnResize(m_WindowWidth, m_WindowHeight);
-				}
-			}
-			return 0;
-		}
-	case WM_KEYUP:
-		if (wParam == VK_ESCAPE)
-		{
-			PostQuitMessage(0);
-		}
-		return 0;
-	case WM_DESTROY:
-		PostQuitMessage(0);
-		return 0;
-	}
-
-	return DefWindowProc(hWnd, message, wParam, lParam);
-}
-
 void Graphics::InitializeAssets()
 {
-	BuildConstantBuffers();
+	LoadTexture();
 	BuildRootSignature();
 	BuildShaderAndInputLayout();
 	BuildGeometry();
-	LoadTexture();
 	BuildPSO();
-}
-
-void Graphics::BuildConstantBuffers()
-{
-	// constant buffer
-
-	struct ConstantBufferData
-	{
-		Matrix World;
-		Matrix WorldViewProjection;
-	} Data;
-
-	Matrix proj = XMMatrixPerspectiveFovLH(
-		XM_PIDIV4,
-		static_cast<float>(m_WindowWidth) / m_WindowHeight,
-		0.1f,
-		1000.0f);
-	Matrix view = XMMatrixLookAtLH(Vector3(0, 50, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
-	Matrix world = XMMatrixTranslation(0, -50, 500);
-	Data.World = world;
-	Data.WorldViewProjection = world * view * proj;
-
-	// alignment to a 256-byte boundary for constant buffers
-	int size = (sizeof(ConstantBufferData) + 255) & ~255;
-
-	CD3DX12_RESOURCE_DESC constantBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-	auto head_props_upload = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	HR(m_pDevice->CreateCommittedResource(
-		&head_props_upload,
-		D3D12_HEAP_FLAG_NONE,
-		&constantBufferDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&m_pConstantBuffer)));
-
-	// map and initialize the constant buffer. dont unmap this until the app closes
-	// keeping things mapped for the lifetime of the resource is okay
-	CD3DX12_RANGE readRange(0, 0);  // dont intend to read from this resource on the CPU
-	void* pData = nullptr;
-	m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pData));
-	memcpy(pData, &Data, sizeof(Data));
 }
 
 void Graphics::BuildRootSignature()
 {
-	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc{};
 
-	CD3DX12_ROOT_PARAMETER1 rootParameters[1];
-	CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+	CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+	CD3DX12_DESCRIPTOR_RANGE1 srvRange;
 
-	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 	rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+
+	srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+	rootParameters[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -497,21 +319,22 @@ void Graphics::BuildRootSignature()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = CD3DX12_STATIC_SAMPLER_DESC(0);
+	rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &samplerDesc, rootSignatureFlags);
 
 	ComPtr<ID3DBlob> signature, error;
 	HR(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
 	HR(m_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature)));
 }
 
-std::vector<std::byte> Graphics::ReadFile(const std::filesystem::path& filePath)
+std::vector<std::byte> Graphics::ReadFile(const std::filesystem::path& filePath, std::ios_base::openmode mode)
 {
 	if (!std::filesystem::exists(filePath))
 	{
 		throw std::runtime_error("Files does not exist: " + filePath.string());
 	}
 
-	std::ifstream file("shaders.hlsl", std::ios::ate);
+	std::ifstream file(filePath, mode);
 	if (!file.is_open())
 	{
 		throw std::runtime_error("Files does not exist: " + filePath.string());
@@ -563,8 +386,8 @@ void Graphics::BuildShaderAndInputLayout()
 
 	// input layout
 	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 }
 
 void Graphics::BuildGeometry()
@@ -572,6 +395,7 @@ void Graphics::BuildGeometry()
 	struct Vertex
 	{
 		Vector3 Position;
+		Vector2 TexCoord;
 		Vector3 Normal;
 	};
 
@@ -588,6 +412,7 @@ void Graphics::BuildGeometry()
 	{
 		Vertex& vertex = vertices[i];
 		vertex.Position = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mVertices[i]);
+		vertex.TexCoord = *reinterpret_cast<Vector2*>(&pScene->mMeshes[0]->mTextureCoords[0][i]);
 		vertex.Normal = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mNormals[i]);
 	}
 
@@ -617,7 +442,7 @@ void Graphics::BuildGeometry()
 	m_pIndexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, indices.data(), indices.size() * sizeof(uint32_t), pIndexUploadBuffer);
 
 	m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
-	m_IndexBufferView.SizeInBytes = static_cast<uint32_t>(sizeof(uint32_t) * indices.size());
+	m_IndexBufferView.SizeInBytes = static_cast<UINT>(sizeof(uint32_t) * indices.size());
 	m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	
 	pCommandContext->Execute(true);
@@ -625,6 +450,82 @@ void Graphics::BuildGeometry()
 
 void Graphics::LoadTexture()
 {
+	std::vector<std::byte> buffer = ReadFile("Man.png", std::ios::ate | std::ios::binary);
+	// if channel 3 , to force to 4
+	int width, height, channel;
+	void* pPixels = stbi_load_from_memory((unsigned char*)buffer.data(), (int)buffer.size(), &width, &height, &channel, 4);
+	if (!pPixels)
+	{
+		throw std::runtime_error("Failed to load texture: " + std::string(stbi_failure_reason()));
+	}
+
+	channel = 4;
+
+	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	auto resDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height);
+	HR(m_pDevice->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&resDesc,
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		nullptr,
+		IID_PPV_ARGS(m_pTexture.GetAddressOf())));
+
+	ComPtr<ID3D12Resource> pUploadBuffer;
+
+	auto heapUploadProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	auto resBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(width * height * channel);
+	HR(m_pDevice->CreateCommittedResource(
+		&heapUploadProps,
+		D3D12_HEAP_FLAG_NONE,
+		&resBufferDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(pUploadBuffer.GetAddressOf())));
+
+	D3D12_SUBRESOURCE_DATA	subResourceData{};
+	subResourceData.pData = pPixels;
+	subResourceData.RowPitch = width * channel;			// row pixels
+	subResourceData.SlicePitch = subResourceData.RowPitch;
+	
+	CommandContext* pContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	ID3D12GraphicsCommandList* pCmd = pContext->GetCommandList();
+
+	// CPU memory -> intermediate upload heap -> GPU memory
+	auto resBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			m_pTexture.Get(),
+			D3D12_RESOURCE_STATE_COPY_DEST, 
+			D3D12_RESOURCE_STATE_GENERIC_READ);
+	UpdateSubresources<1>(pCmd, m_pTexture.Get(), pUploadBuffer.Get(), 0, 0, 1, &subResourceData);
+	pCmd->ResourceBarrier(1, &resBarrier);
+
+	pContext->Execute(true);
+
+	stbi_image_free(pPixels);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.PlaneSlice = 0;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+
+	auto [cpuHandle, gpuHandle] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptorWithGPU();
+	m_TextureHandle = cpuHandle;
+	m_TextureGpuHandle = gpuHandle;
+	m_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, m_TextureHandle);
+
+	D3D12_SAMPLER_DESC samplerDesc{};
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+
+	m_SamplerHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]->AllocateDescriptor();
+	m_pDevice->CreateSampler(&samplerDesc, m_SamplerHandle);
 }
 
 void Graphics::BuildPSO()
@@ -694,4 +595,173 @@ void Graphics::IdleGPU()
 	{
 		pCommandQueue->WaitForIdle();
 	}
+}
+
+void Graphics::SetDynamicConstantBufferView(CommandContext* pCommandContext)
+{
+	struct ConstantBufferData
+	{
+		Matrix World;
+		Matrix WorldViewProjection;
+	} Data;
+
+	Matrix proj = XMMatrixPerspectiveFovLH(
+		XM_PIDIV4,
+		static_cast<float>(m_WindowWidth) / m_WindowHeight,
+		0.1f,
+		1000.0f);
+	Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+	Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(0, -50, 500);
+	Data.World = world;
+	Data.WorldViewProjection = world * view * proj;
+
+	// alignment to a 256-byte boundary for constant buffers
+	int size = (sizeof(ConstantBufferData) + 255) & ~255;
+	pCommandContext->SetDynamicConstantBufferView(0, &Data, size);
+}
+
+
+void Graphics::MakeWindow()
+{
+	WNDCLASSW wc;
+
+	wc.hInstance = GetModuleHandle(nullptr);
+	wc.cbClsExtra = 0;
+	wc.cbWndExtra = 0;
+	wc.hIcon = 0;
+	wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+	wc.lpfnWndProc = WndProcStatic;
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+	wc.lpszClassName = L"wndClass";
+	wc.lpszMenuName = nullptr;
+	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+
+	if (!RegisterClass(&wc))
+	{
+		auto error = GetLastError();
+		return;
+	}
+
+	int displayWidth = GetSystemMetrics(SM_CXSCREEN);
+	int displayHeight = GetSystemMetrics(SM_CYSCREEN);
+
+	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
+
+	RECT windowRec = { 0, 0, (LONG)m_WindowWidth, (LONG)m_WindowHeight };
+	AdjustWindowRect(&windowRec, windowStyle, false);
+
+	uint32_t windowWidth = windowRec.right - windowRec.left;
+	uint32_t windowHeight = windowRec.bottom - windowRec.top;
+
+	int x = (displayWidth - windowWidth) / 2;
+	int y = (displayHeight - windowHeight) / 2;
+
+	m_Hwnd = CreateWindow(
+		L"wndClass",
+		L"Hello World DX12",
+		windowStyle,
+		x,
+		y,
+		windowWidth,
+		windowHeight,
+		nullptr,
+		nullptr,
+		GetModuleHandle(nullptr),
+		this
+	);
+
+	if (!m_Hwnd) return;
+
+	ShowWindow(m_Hwnd, SW_SHOWDEFAULT);
+
+	if (!UpdateWindow(m_Hwnd)) return;
+}
+
+
+LRESULT Graphics::WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	Graphics* pThis = nullptr;
+	if (message == WM_NCCREATE)
+	{
+		pThis = static_cast<Graphics*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
+		SetLastError(0);
+		if (!SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis)))
+		{
+			if (GetLastError() != 0)
+			{
+				return 0;
+			}
+		}
+	}
+	else
+	{
+		pThis = reinterpret_cast<Graphics*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+	}
+
+	if (pThis)
+	{
+		return pThis->WndProc(hWnd, message, wParam, lParam);
+	}
+
+	return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+		// resize the window
+	case WM_SIZE:
+		m_WindowWidth = LOWORD(lParam);
+		m_WindowHeight = HIWORD(lParam);
+		if (m_pDevice)
+		{
+			if (wParam == SIZE_MINIMIZED)
+			{
+				mMinimized = true;
+				mMaximized = false;
+			}
+			else if (wParam == SIZE_MAXIMIZED)
+			{
+				mMinimized = false;
+				mMaximized = true;
+				OnResize(m_WindowWidth, m_WindowHeight);
+			}
+			else if (wParam == SIZE_RESTORED)
+			{
+				// restoring from minimized state
+				if (mMinimized)
+				{
+					mMinimized = false;
+					OnResize(m_WindowWidth, m_WindowHeight);
+				}
+				// restoring from maximized state
+				else if (mMaximized)
+				{
+					mMaximized = false;
+					OnResize(m_WindowWidth, m_WindowHeight);
+				}
+				else if (mResizing)
+				{
+
+				}
+				else  // api call such as SetWindowPos/ mSwapchain->SetFullscreenState
+				{
+					OnResize(m_WindowWidth, m_WindowHeight);
+				}
+			}
+			return 0;
+		}
+	case WM_KEYUP:
+		if (wParam == VK_ESCAPE)
+		{
+			PostQuitMessage(0);
+		}
+		return 0;
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	}
+
+	return DefWindowProc(hWnd, message, wParam, lParam);
 }

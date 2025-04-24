@@ -36,6 +36,9 @@ public:
 
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
 
+private:
+	void SetDynamicConstantBufferView(CommandContext* pCommandContext);
+
 protected:
 	static const uint32_t FRAME_COUNT = 2;
 
@@ -86,9 +89,8 @@ protected:
 	DXGI_FORMAT m_DepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	std::vector<std::byte> ReadFile(const std::filesystem::path& filePath);
+	std::vector<std::byte> ReadFile(const std::filesystem::path& filePath, std::ios_base::openmode mode = std::ios::ate);
 	void InitializeAssets();
-	void BuildConstantBuffers();
 	void BuildRootSignature();
 	void BuildShaderAndInputLayout();
 	void BuildGeometry();
@@ -98,6 +100,9 @@ protected:
 	ComPtr<ID3D12Resource> m_pTexture;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_SamplerHandle;
+	D3D12_GPU_DESCRIPTOR_HANDLE m_TextureGpuHandle;
+	D3D12_GPU_DESCRIPTOR_HANDLE m_SamplerGpuHandle;
+
 
 	ComPtr<ID3D12Resource> m_pVertexBuffer;
 	ComPtr<ID3D12Resource> m_pIndexBuffer;
@@ -108,6 +113,5 @@ protected:
 	ComPtr<ID3DBlob> m_pPixelShaderCode;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputElements;
 	ComPtr<ID3D12PipelineState> m_pPipelineStateObject;
-	ComPtr<ID3D12Resource> m_pConstantBuffer;
 	int m_IndexCount = 0;
 };
