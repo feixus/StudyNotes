@@ -1,10 +1,6 @@
 #pragma once
 
-#ifdef PLATFORM_UWP
-using WindowHandle = Windows::UI::CoreWindow^;
-#else
 using WindowHandle = HWND;
-#endif
 
 class CommandQueue;
 class CommandContext;
@@ -30,12 +26,15 @@ public:
 
 	void WaitForFence(uint64_t fenceValue);
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
-	CommandContext* AllocateCommandList(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandContext);
 
 	void IdleGPU();
 
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
+
+	int32_t GetWindowWidth() const { return m_WindowWidth; }
+	int32_t GetWindowHeight() const { return m_WindowHeight; }
 
 private:
 	void SetDynamicConstantBufferView(CommandContext* pCommandContext);

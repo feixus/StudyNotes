@@ -4,6 +4,10 @@
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
 
+#if _DEBUG
+#include <pix3.h>
+#endif
+
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
@@ -33,6 +37,21 @@ uint64_t CommandContext::Execute(bool wait)
 
 	m_pGraphics->FreeCommandList(this);
 	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
+
+	return fenceValue;
+}
+
+uint64_t CommandContext::ExecuteAndReset(bool wait)
+{
+	FlushResourceBarriers();
+	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
+	uint64_t fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
+	if (wait)
+	{
+		pQueue->WaitForFence(fenceValue);
+	}
+	
+	m_pCommandList->Reset(m_pAllocator, nullptr);
 
 	return fenceValue;
 }
@@ -93,6 +112,22 @@ void CommandContext::SetVertexBuffers(D3D12_VERTEX_BUFFER_VIEW* pBuffers, int bu
 void CommandContext::SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView)
 {
 	m_pCommandList->IASetIndexBuffer(&indexBufferView);
+}
+
+DynamicAllocation CommandContext::AllocateUploadMemory(size_t size)
+{
+	return m_pGraphics->GetCpuVisibleAllocator()->Allocate(size);
+}
+
+void CommandContext::InitializeBuffer(ID3D12Resource* pResource, void* pData, uint32_t dataSize)
+{
+	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource, 
+			D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST), true);
+	m_pCommandList->CopyBufferRegion(pResource, 0, allocation.pBackingResource, allocation.Offset, dataSize);
+	InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource,
+		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ), true);
 }
 
 void CommandContext::SetViewport(const DirectX::SimpleMath::Rectangle& rect, float minDepth, float maxDepth)
@@ -174,6 +209,27 @@ void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 	view.SizeInBytes = elementCount * sizeof(uint32_t);
 	view.Format = DXGI_FORMAT_R32_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
+}
+
+void CommandContext::MarkBegin(const wchar_t* pName)
+{
+#ifdef _DEBUG
+	::PIXBeginEvent(m_pCommandList, 0, pName);
+#endif
+}
+
+void CommandContext::MarkEvent(const wchar_t* pName)
+{
+#ifdef _DEBUG
+	::PIXSetMarker(m_pCommandList, 0, pName);
+#endif
+}
+
+void CommandContext::MarkEnd()
+{
+#ifdef _DEBUG
+	::PIXEndEvent(m_pCommandList);
+#endif
 }
 
 void CommandContext::PrepareDraw()

@@ -50,6 +50,8 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size)
 	DynamicAllocation allocation;
 	allocation.pBackingResource = m_pBackingResource.Get();
 	allocation.Size = size;
+
+	m_CurrentOffset = ((size_t)m_CurrentOffset + 255) & ~255;
 	if (size + m_CurrentOffset >= m_Size)
 	{
 		m_CurrentOffset = 0;

@@ -54,14 +54,7 @@ project (engineName)
         toolset "v143"
 
 	-- API base option logic
-    if _OPTIONS["base"] == "uwp" then
-        defines { "PLATFORM_UWP" }
-        filter "action:vs*"
-            toolset "v143"
-            systemversion "10.0"
-    else
-        defines { "PLATFORM_WINDOWS" }
-    end
+    defines { "PLATFORM_WINDOWS" }
 
     -- Files to include
     files {
@@ -78,20 +71,22 @@ project (engineName)
         "$(ProjectDir)",
 
         ROOT .. engineName .. "/External/Assimp/include",
+        ROOT .. engineName .. "/External/Pix/include",
     }
 
 	-- Disable PCH for specific files
 	filter { "files:**/External/**" }
     flags { "NoPCH" }
 
-	local p =  { "x64" }
-	for j = 1, #p do
-		filter { "platforms:" .. p[j] }
-			libdirs { ROOT .. engineName .. "/External/Assimp/lib/" .. p[j] }
-			postbuildcommands {
-				'copy "$(ProjectDir)External\\Assimp\\bin\\' .. p[j] .. '\\assimp-vc143-mt.dll" "$(OutDir)"'
-			}
-	end
+	filter { "platforms:x64" }
+		libdirs { 
+            ROOT .. engineName .. "/External/Assimp/lib/x64",
+            ROOT .. engineName .. "/External/Pix/lib",
+        }
+		postbuildcommands {
+			'copy "$(ProjectDir)External\\Assimp\\bin\\x64\\assimp-vc143-mt.dll" "$(OutDir)"',
+            'copy "$(ProjectDir)External\\Pix\\bin\\WinPixEventRuntime.dll" "$(OutDir)"',
+		}
 	
 	-- Libraries to link
     links {
@@ -99,18 +94,7 @@ project (engineName)
         "d3dcompiler",
 
         "assimp-vc143-mt",
+        "WinPixEventRuntime",
     }
 
     filter {}
-
--- Custom command-line option
-newoption {
-    trigger     = "base",
-    value       = "API",
-    description = "Choose a particular 3D API for rendering",
-    default     = "windows",
-    allowed = {
-        { "windows", "Windows" },
-        { "uwp", "Universal Windows Platform" },
-    }
-}

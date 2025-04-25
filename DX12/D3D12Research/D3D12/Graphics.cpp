@@ -60,7 +60,7 @@ void Graphics::Update()
 	m_pImGuiRenderer->NewFrame();
 	ImGui::ShowDemoWindow();
 
-	CommandContext* pCommandContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
 	
 	pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
@@ -181,6 +181,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	CreateDescriptorHeaps();
 
 	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 1024 * 1024);
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 }
 
 void Graphics::CreateSwapchain(WindowHandle pWindow)
@@ -202,14 +203,6 @@ void Graphics::CreateSwapchain(WindowHandle pWindow)
 
 	ComPtr<IDXGISwapChain1> pSwapChain = nullptr;
 
-#ifdef PLATFORM_UWP
-	HR(m_pFactory->CreateSwapChainForCoreWindow(
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-		reinterpret_cast<IUnknown*>(pWindow),
-		&swapchainDesc,
-		nullptr,
-		&pSwapChain));
-#else
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
 	fsDesc.RefreshRate.Denominator = 60;
 	fsDesc.RefreshRate.Numerator = 1;
@@ -223,7 +216,6 @@ void Graphics::CreateSwapchain(WindowHandle pWindow)
 		&fsDesc,
 		nullptr,
 		&pSwapChain));
-#endif
 
 	pSwapChain.As(&m_pSwapchain);
 }
@@ -307,8 +299,6 @@ void Graphics::InitializeAssets()
 	BuildShaderAndInputLayout();
 	BuildGeometry();
 	BuildPSO();
-
-	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.Get());
 }
 
 void Graphics::BuildRootSignature()
@@ -410,24 +400,45 @@ void Graphics::BuildGeometry()
 		}
 	}
 
-	ComPtr<ID3D12Resource> pVertexUploadBuffer;
-	ComPtr<ID3D12Resource> pIndexUploadBuffer;
-
-	CommandContext* pCommandContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
 
-	m_pVertexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, vertices.data(), vertices.size() * sizeof(Vertex), pVertexUploadBuffer);
+	{
+		uint32_t size = vertices.size() * sizeof(Vertex);
+		auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+		auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
+		HR(m_pDevice->CreateCommittedResource(
+			&heapProps,
+			D3D12_HEAP_FLAG_NONE,
+			&resourceDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(m_pVertexBuffer.GetAddressOf())));
+		pCommandContext->InitializeBuffer(m_pVertexBuffer.Get(), vertices.data(), size);
 
-	m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
-	m_VertexBufferView.SizeInBytes = static_cast<UINT>(sizeof(Vertex) * vertices.size());
-	m_VertexBufferView.StrideInBytes = sizeof(Vertex);
-	
-	m_IndexCount = (int)indices.size();
-	m_pIndexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, indices.data(), indices.size() * sizeof(uint32_t), pIndexUploadBuffer);
+		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
+		m_VertexBufferView.SizeInBytes = size;
+		m_VertexBufferView.StrideInBytes = sizeof(Vertex);
+	}
 
-	m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
-	m_IndexBufferView.SizeInBytes = static_cast<UINT>(sizeof(uint32_t) * indices.size());
-	m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+	{
+		m_IndexCount = (int)indices.size();
+		uint32_t size = sizeof(uint32_t)* indices.size();
+		auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+		auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
+		HR(m_pDevice->CreateCommittedResource(
+			&heapProps,
+			D3D12_HEAP_FLAG_NONE,
+			&resourceDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(m_pIndexBuffer.GetAddressOf())));
+		pCommandContext->InitializeBuffer(m_pIndexBuffer.Get(), indices.data(), size);
+
+		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
+		m_IndexBufferView.SizeInBytes = size;
+		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+	}
 	
 	pCommandContext->Execute(true);
 }
@@ -472,7 +483,7 @@ void Graphics::LoadTexture()
 	subResourceData.RowPitch = width * channel;			// row pixels
 	subResourceData.SlicePitch = subResourceData.RowPitch;
 	
-	CommandContext* pContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12GraphicsCommandList* pCmd = pContext->GetCommandList();
 
 	// CPU memory -> intermediate upload heap -> GPU memory
@@ -538,7 +549,7 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 	return m_CommandQueues.at(type).get();
 }
 
-CommandContext* Graphics::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type)
+CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
 	if (m_FreeCommandContexts.size() > 0)
 	{

@@ -1,4 +1,6 @@
 #pragma once
+#include "DynamicResourceAllocator.h"
+
 class Graphics;
 
 class CommandContext
@@ -10,6 +12,7 @@ public:
 
 	void Reset();
 	uint64_t Execute(bool wait);
+	uint64_t ExecuteAndReset(bool wait);
 
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
@@ -24,6 +27,10 @@ public:
 	void SetVertexBuffer(D3D12_VERTEX_BUFFER_VIEW vertexBufferView);
 	void SetVertexBuffers(D3D12_VERTEX_BUFFER_VIEW* pBuffers, int bufferCount);
 	void SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView);
+	
+	DynamicAllocation AllocateUploadMemory(size_t size);
+	void InitializeBuffer(ID3D12Resource* pResource, void* pData, uint32_t dataSize);
+
 	void SetViewport(const DirectX::SimpleMath::Rectangle& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const DirectX::SimpleMath::Rectangle& rect);
 
@@ -35,6 +42,10 @@ public:
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
+
+	void MarkBegin(const wchar_t* pName);
+	void MarkEvent(const wchar_t* pName);
+	void MarkEnd();
 
 private:
 	static const int MAX_QUEUED_BARRIERS = 12;
