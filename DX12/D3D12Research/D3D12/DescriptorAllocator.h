@@ -1,4 +1,5 @@
 #pragma once
+#include "DescriptorHandle.h"
 
 class DescriptorAllocator
 {
@@ -8,7 +9,7 @@ public:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor();
 
-	std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> AllocateDescriptorWithGPU();
+	DescriptorHandle AllocateDescriptorWithGPU();
 
 	std::vector<ComPtr<ID3D12DescriptorHeap>>& GetDescriptorHeapPool() { return m_DescriptorHeapPool
 	; }

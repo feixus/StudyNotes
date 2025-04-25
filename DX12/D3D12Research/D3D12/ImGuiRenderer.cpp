@@ -84,9 +84,13 @@ ImGuiRenderer::ImGuiRenderer(ID3D12Device* pDevice)
 	psDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	HR(m_pDevice->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())));
 
+	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->AddFontDefault();
+
+	ImGui::StyleColorsDark();
+
 	unsigned char* pPixels;
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);

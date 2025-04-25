@@ -5,6 +5,7 @@
 #include "CommandContext.h"
 #include "DescriptorAllocator.h"
 #include "DynamicResourceAllocator.h"
+#include "ImGuiRenderer.h"
 
 #include <filesystem>
 #include <stdexcept>
@@ -17,6 +18,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "External/stb/stb_image.h"
+
+#include "External/imgui/imgui.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height):
 	m_WindowWidth(width), m_WindowHeight(height)
@@ -54,6 +57,9 @@ void Graphics::Update()
 {
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 
+	m_pImGuiRenderer->NewFrame();
+	ImGui::ShowDemoWindow();
+
 	CommandContext* pCommandContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
 	
@@ -81,12 +87,14 @@ void Graphics::Update()
 	ID3D12DescriptorHeap* ppHeaps[] = { srvDescriptorHeaps[0].Get()};
 	pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	pCommandList->SetGraphicsRootDescriptorTable(1, m_TextureGpuHandle);
+	pCommandList->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
 
 	pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pCommandContext->SetVertexBuffer(m_VertexBufferView);
 	pCommandContext->SetIndexBuffer(m_IndexBufferView);
 	pCommandContext->DrawIndexed(m_IndexCount, 0);
+
+	m_pImGuiRenderer->Render(*pCommandContext);
 
 	pCommandContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(
 		m_RenderTargets[m_CurrentBackBufferIndex].Get(),
@@ -172,7 +180,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	CreateSwapchain(pWindow);
 	CreateDescriptorHeaps();
 
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 512);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 1024 * 1024);
 }
 
 void Graphics::CreateSwapchain(WindowHandle pWindow)
@@ -299,6 +307,8 @@ void Graphics::InitializeAssets()
 	BuildShaderAndInputLayout();
 	BuildGeometry();
 	BuildPSO();
+
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.Get());
 }
 
 void Graphics::BuildRootSignature()
@@ -325,32 +335,6 @@ void Graphics::BuildRootSignature()
 	ComPtr<ID3DBlob> signature, error;
 	HR(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
 	HR(m_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature)));
-}
-
-std::vector<std::byte> Graphics::ReadFile(const std::filesystem::path& filePath, std::ios_base::openmode mode)
-{
-	if (!std::filesystem::exists(filePath))
-	{
-		throw std::runtime_error("Files does not exist: " + filePath.string());
-	}
-
-	std::ifstream file(filePath, mode);
-	if (!file.is_open())
-	{
-		throw std::runtime_error("Files does not exist: " + filePath.string());
-	}
-
-	const auto size = static_cast<size_t>(file.tellg());
-	if (size == 0)
-	{
-		return {};
-	}
-
-	std::vector<std::byte> buffer(size);
-	file.seekg(0);
-	file.read(reinterpret_cast<char*>(buffer.data()), size);
-
-	return buffer;
 }
 
 void Graphics::BuildShaderAndInputLayout()
@@ -512,10 +496,8 @@ void Graphics::LoadTexture()
 	srvDesc.Texture2D.ResourceMinLODClamp = 0;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 
-	auto [cpuHandle, gpuHandle] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptorWithGPU();
-	m_TextureHandle = cpuHandle;
-	m_TextureGpuHandle = gpuHandle;
-	m_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, m_TextureHandle);
+	m_TextureHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptorWithGPU();
+	m_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, m_TextureHandle.GetCpuHandle());
 
 	D3D12_SAMPLER_DESC samplerDesc{};
 	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -615,9 +597,7 @@ void Graphics::SetDynamicConstantBufferView(CommandContext* pCommandContext)
 	Data.World = world;
 	Data.WorldViewProjection = world * view * proj;
 
-	// alignment to a 256-byte boundary for constant buffers
-	int size = (sizeof(ConstantBufferData) + 255) & ~255;
-	pCommandContext->SetDynamicConstantBufferView(0, &Data, size);
+	pCommandContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
 }
 
 

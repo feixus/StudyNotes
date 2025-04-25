@@ -10,6 +10,7 @@ class CommandQueue;
 class CommandContext;
 class DescriptorAllocator;
 class DynamicResourceAllocator;
+class ImGuiRenderer;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -89,7 +90,6 @@ protected:
 	DXGI_FORMAT m_DepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	std::vector<std::byte> ReadFile(const std::filesystem::path& filePath, std::ios_base::openmode mode = std::ios::ate);
 	void InitializeAssets();
 	void BuildRootSignature();
 	void BuildShaderAndInputLayout();
@@ -97,10 +97,11 @@ protected:
 	void LoadTexture();
 	void BuildPSO();
 
+	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
+
 	ComPtr<ID3D12Resource> m_pTexture;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
+	DescriptorHandle m_TextureHandle;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_SamplerHandle;
-	D3D12_GPU_DESCRIPTOR_HANDLE m_TextureGpuHandle;
 	D3D12_GPU_DESCRIPTOR_HANDLE m_SamplerGpuHandle;
 
 

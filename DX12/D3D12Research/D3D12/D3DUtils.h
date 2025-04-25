@@ -1,5 +1,7 @@
 #pragma once
 
+#include "filesystem"
+
 #define HR(hr) \
 LogHRESULT(hr)
 

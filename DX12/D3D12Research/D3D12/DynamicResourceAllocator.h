@@ -16,7 +16,7 @@ public:
 	~DynamicResourceAllocator();
 
 	DynamicAllocation Allocate(int size);
-	void Free(int fenceValue);
+	void Free(uint64_t fenceValue);
 
 private:
 	ComPtr<ID3D12Resource> m_pBackingResource;

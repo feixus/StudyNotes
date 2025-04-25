@@ -145,14 +145,17 @@ void CommandContext::FlushResourceBarriers()
 
 void CommandContext::SetDynamicConstantBufferView(int slot, void* pData, uint32_t dataSize)
 {
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(dataSize);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
+	// alignment to a 256-byte boundary for constant buffers
+	int bufferSize = (dataSize + 255) & ~255;
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
+	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	m_pCommandList->SetGraphicsRootConstantBufferView(slot, allocation.GpuHandle);
 }
 
 void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData)
 {
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(elementCount * elementSize);
+	int bufferSize = (elementCount * elementSize + 255) & ~255;
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, elementCount * elementSize);
 	D3D12_VERTEX_BUFFER_VIEW view{};
 	view.BufferLocation = allocation.GpuHandle;
@@ -163,7 +166,8 @@ void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elem
 
 void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 {
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(elementCount * sizeof(uint32_t));
+	int bufferSize = (elementCount * sizeof(uint32_t) + 255) & ~255;
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, elementCount * sizeof(uint32_t));
 	D3D12_INDEX_BUFFER_VIEW view{};
 	view.BufferLocation = allocation.GpuHandle;

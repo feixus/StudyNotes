@@ -22,6 +22,7 @@
 #include <algorithm>
 
 #include "D3DUtils.h"
+#include "DescriptorHandle.h"
 #include "External/SimpleMath/SimpleMath.h"
 #include "GameTimer.h"
 

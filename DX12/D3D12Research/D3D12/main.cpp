@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Graphics.h"
+#include "External/imgui/imgui_impl_win32.h"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 //int main()

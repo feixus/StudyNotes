@@ -25,7 +25,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptor()
 	return handle;
 }
 
-std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> DescriptorAllocator::AllocateDescriptorWithGPU()
+DescriptorHandle DescriptorAllocator::AllocateDescriptorWithGPU()
 {
 	if (m_RemainingDescriptors <= 0)
 	{

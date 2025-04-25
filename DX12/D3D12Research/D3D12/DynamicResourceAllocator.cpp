@@ -68,7 +68,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size)
 	return allocation;
 }
 
-void DynamicResourceAllocator::Free(int fenceValue)
+void DynamicResourceAllocator::Free(uint64_t fenceValue)
 {
 	while (m_FenceOffsets.size() > 0)
 	{
