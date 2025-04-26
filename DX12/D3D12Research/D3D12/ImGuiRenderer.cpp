@@ -45,8 +45,8 @@ void ImGuiRenderer::Render(CommandContext& context)
 	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)width, (float)height, 0.0f, 0.0f, 1.0f);
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.SetViewport({ 0, 0, (long)width, (long)height }, 0, 1);
-	context.SetScissorRect({ 0, 0, (long)width, (long)height });
+	context.SetViewport(FloatRect(0, 0, width, height), 0, 1);
+	context.SetScissorRect(FloatRect(0, 0, width, height));
 	
 	int vertexOffset = 0;
 	int indexOffset = 0;
@@ -65,6 +65,7 @@ void ImGuiRenderer::Render(CommandContext& context)
 			}
 			else
 			{
+				context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
 				context.DrawIndexed(pCmd->ElemCount, indexOffset, vertexOffset);
 			}
 			indexOffset += pCmd->ElemCount;
@@ -136,7 +137,7 @@ void ImGuiRenderer::CreatePipelineState(const ComPtr<ID3DBlob>& pVertexShaderCod
 	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 
 	// pipeline state
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psDesc = {};
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC psDesc{};
 	psDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 	psDesc.NodeMask = 0;
 	psDesc.pRootSignature = m_pRootSignature.Get();
@@ -150,11 +151,22 @@ void ImGuiRenderer::CreatePipelineState(const ComPtr<ID3DBlob>& pVertexShaderCod
 	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 	psDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psDesc.DepthStencilState.DepthEnable = false;
 	psDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 	psDesc.DepthStencilState.DepthEnable = true;
+	psDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 	psDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	psDesc.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderCode.Get());
 	psDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	psDesc.BlendState.AlphaToCoverageEnable = false;
+	psDesc.BlendState.RenderTarget[0].BlendEnable = true;
+	psDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	psDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	psDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+	psDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	psDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	psDesc.NumRenderTargets = 1;
 	psDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	HR(m_pGraphics->GetDevice()->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())));

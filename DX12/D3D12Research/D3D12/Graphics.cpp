@@ -6,6 +6,8 @@
 #include "DescriptorAllocator.h"
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
+#include "GraphicsResource.h"
+#include "RootSignature.h"
 
 #include <filesystem>
 #include <stdexcept>
@@ -60,48 +62,51 @@ void Graphics::Update()
 	m_pImGuiRenderer->NewFrame();
 	ImGui::ShowDemoWindow();
 
-	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
+	// 3D
+	{
+		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
+
+		pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
+		pCommandList->SetGraphicsRootSignature(m_pRootSignature->GetRootSignature());
+		
+		pCommandContext->SetViewport(m_Viewport);
+		pCommandContext->SetScissorRect(m_Viewport);
 	
-	pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
-	pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
+		pCommandContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+		
+		DirectX::SimpleMath::Color clearColor{ 0.1f, 0.1f, 0.1f, 1.0f };
+		pCommandContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
+		pCommandContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
-	pCommandContext->SetViewport(m_Viewport);
-	pCommandContext->SetScissorRect(m_Viewport);
+		pCommandContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
+		pCommandContext->SetDepthStencil(&m_DepthStencilHandle);
+		
+		SetDynamicConstantBufferView(pCommandContext);
 
-	pCommandContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(
-		m_RenderTargets[m_CurrentBackBufferIndex].Get(),
-		D3D12_RESOURCE_STATE_PRESENT,
-		D3D12_RESOURCE_STATE_RENDER_TARGET), true);
+		auto srvDescriptorHeaps = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->GetDescriptorHeapPool();
+		ID3D12DescriptorHeap* ppHeaps[] = { srvDescriptorHeaps[0].Get()};
+		pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	DirectX::SimpleMath::Color clearColor{ 0.1f, 0.1f, 0.1f, 1.0f };
-	pCommandContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
-	pCommandContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+		pCommandList->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
 
-	pCommandContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
-	pCommandContext->SetDepthStencil(&m_DepthStencilHandle);
+		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCommandContext->SetVertexBuffer(m_VertexBufferView);
+		pCommandContext->SetIndexBuffer(m_IndexBufferView);
+		pCommandContext->DrawIndexed(m_IndexCount, 0);
 
-	SetDynamicConstantBufferView(pCommandContext);
+		pCommandContext->Execute(false);
+	}
 
-	auto srvDescriptorHeaps = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->GetDescriptorHeapPool();
-	ID3D12DescriptorHeap* ppHeaps[] = { srvDescriptorHeaps[0].Get()};
-	pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	// UI
+	{
+		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	pCommandList->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
+		m_pImGuiRenderer->Render(*pCommandContext);
 
-	pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCommandContext->SetVertexBuffer(m_VertexBufferView);
-	pCommandContext->SetIndexBuffer(m_IndexBufferView);
-	pCommandContext->DrawIndexed(m_IndexCount, 0);
-
-	m_pImGuiRenderer->Render(*pCommandContext);
-
-	pCommandContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(
-		m_RenderTargets[m_CurrentBackBufferIndex].Get(),
-		D3D12_RESOURCE_STATE_RENDER_TARGET,
-		D3D12_RESOURCE_STATE_PRESENT));
-
-	m_FenceValues[m_CurrentBackBufferIndex] = pCommandContext->Execute(false);
+		pCommandContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
+		m_FenceValues[m_CurrentBackBufferIndex] = pCommandContext->Execute(false);
+	}
 
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
@@ -229,9 +234,9 @@ void Graphics::OnResize(int width, int height)
 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
-		m_RenderTargets[i].Reset();
+		m_RenderTargets[i].reset();
 	}
-	m_pDepthStencilBuffer.Reset();
+	m_pDepthStencilBuffer.reset();
 
 	// resize the buffers
 	HR(m_pSwapchain->ResizeBuffers(
@@ -246,9 +251,11 @@ void Graphics::OnResize(int width, int height)
 	// recreate the render target views
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
+		ID3D12Resource* pResource = nullptr;
 		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor();
-		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&m_RenderTargets[i])));
-		m_pDevice->CreateRenderTargetView(m_RenderTargets[i].Get(), nullptr, m_RenderTargetHandles[i]);
+		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+		m_pDevice->CreateRenderTargetView(pResource, nullptr, m_RenderTargetHandles[i]);
+		m_RenderTargets[i] = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_PRESENT);
 	}
 
 	// recreate the depth stencil buffer and view
@@ -265,6 +272,7 @@ void Graphics::OnResize(int width, int height)
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
 
+	ID3D12Resource* pResource = nullptr;
 	D3D12_CLEAR_VALUE clearValue;
 	clearValue.Format = m_DepthStencilFormat;
 	clearValue.DepthStencil.Depth = 1.0f;
@@ -276,20 +284,18 @@ void Graphics::OnResize(int width, int height)
 			&desc,
 			D3D12_RESOURCE_STATE_DEPTH_WRITE,
 			&clearValue,
-			IID_PPV_ARGS(m_pDepthStencilBuffer.GetAddressOf())));
+			IID_PPV_ARGS(&pResource)));
 
 	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor();
-	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, m_DepthStencilHandle);
+	m_pDevice->CreateDepthStencilView(pResource, nullptr, m_DepthStencilHandle);
+	m_pDepthStencilBuffer = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-	m_Viewport.x = 0;
-	m_Viewport.y = 0;
-	m_Viewport.height = m_WindowHeight;
-	m_Viewport.width = m_WindowWidth;
+	m_Viewport.Left = 0;
+	m_Viewport.Top = 0;
+	m_Viewport.Right = m_WindowWidth;
+	m_Viewport.Bottom = m_WindowHeight;
 
-	m_ScissorRect.x = 0;
-	m_ScissorRect.y = 0;
-	m_ScissorRect.height = m_WindowHeight;
-	m_ScissorRect.width = m_WindowWidth;
+	m_ScissorRect = m_Viewport;
 }
 
 void Graphics::InitializeAssets()
@@ -303,28 +309,31 @@ void Graphics::InitializeAssets()
 
 void Graphics::BuildRootSignature()
 {
-	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+	m_pRootSignature = std::make_unique<RootSignature>(2);
+	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 
-	CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-	CD3DX12_DESCRIPTOR_RANGE1 srvRange;
+	D3D12_DESCRIPTOR_RANGE1 DesRange{};
+	DesRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	DesRange.NumDescriptors = 1;
+	DesRange.BaseShaderRegister = 1;
+	DesRange.RegisterSpace = 0;
+	DesRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
+	DesRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+	(*m_pRootSignature)[1].AsShaderResourceView(DesRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
-	srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-	rootParameters[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+	D3D12_SAMPLER_DESC samplerDesc{};
+	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-	D3D12_STATIC_SAMPLER_DESC samplerDesc = CD3DX12_STATIC_SAMPLER_DESC(0);
-	rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &samplerDesc, rootSignatureFlags);
-
-	ComPtr<ID3DBlob> signature, error;
-	HR(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-	HR(m_pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_pRootSignature)));
+	m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
 }
 
 void Graphics::BuildShaderAndInputLayout()
@@ -401,22 +410,13 @@ void Graphics::BuildGeometry()
 	}
 
 	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
-
 	{
 		uint32_t size = vertices.size() * sizeof(Vertex);
-		auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-		auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-		HR(m_pDevice->CreateCommittedResource(
-			&heapProps,
-			D3D12_HEAP_FLAG_NONE,
-			&resourceDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_pVertexBuffer.GetAddressOf())));
-		pCommandContext->InitializeBuffer(m_pVertexBuffer.Get(), vertices.data(), size);
+		m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
+		m_pVertexBuffer->Create(m_pDevice.Get(), size, false);
+		m_pVertexBuffer->SetData(pCommandContext, vertices.data(), size);
 
-		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
+		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGpuHandle();
 		m_VertexBufferView.SizeInBytes = size;
 		m_VertexBufferView.StrideInBytes = sizeof(Vertex);
 	}
@@ -424,18 +424,11 @@ void Graphics::BuildGeometry()
 	{
 		m_IndexCount = (int)indices.size();
 		uint32_t size = sizeof(uint32_t)* indices.size();
-		auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-		auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-		HR(m_pDevice->CreateCommittedResource(
-			&heapProps,
-			D3D12_HEAP_FLAG_NONE,
-			&resourceDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_pIndexBuffer.GetAddressOf())));
-		pCommandContext->InitializeBuffer(m_pIndexBuffer.Get(), indices.data(), size);
+		m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
+		m_pIndexBuffer->Create(m_pDevice.Get(), size, false);
+		m_pIndexBuffer->SetData(pCommandContext, indices.data(), size);
 
-		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
+		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGpuHandle();
 		m_IndexBufferView.SizeInBytes = size;
 		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	}
@@ -509,16 +502,6 @@ void Graphics::LoadTexture()
 
 	m_TextureHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptorWithGPU();
 	m_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, m_TextureHandle.GetCpuHandle());
-
-	D3D12_SAMPLER_DESC samplerDesc{};
-	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
-
-	m_SamplerHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]->AllocateDescriptor();
-	m_pDevice->CreateSampler(&samplerDesc, m_SamplerHandle);
 }
 
 void Graphics::BuildPSO()
@@ -533,7 +516,7 @@ void Graphics::BuildPSO()
 	psDesc.NodeMask = 0;
 	psDesc.NumRenderTargets = 1;
 	psDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psDesc.pRootSignature = m_pRootSignature.Get();
+	psDesc.pRootSignature = m_pRootSignature->GetRootSignature();
 	psDesc.VS = CD3DX12_SHADER_BYTECODE(m_pVertexShaderCode.Get());
 	psDesc.PS = CD3DX12_SHADER_BYTECODE(m_pPixelShaderCode.Get());
 	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);

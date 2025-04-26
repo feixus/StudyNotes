@@ -2,6 +2,8 @@
 #include "DynamicResourceAllocator.h"
 
 class Graphics;
+class GraphicsResource;
+class GraphicsBuffer;
 
 class CommandContext
 {
@@ -28,13 +30,13 @@ public:
 	void SetVertexBuffers(D3D12_VERTEX_BUFFER_VIEW* pBuffers, int bufferCount);
 	void SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView);
 	
-	DynamicAllocation AllocateUploadMemory(size_t size);
-	void InitializeBuffer(ID3D12Resource* pResource, void* pData, uint32_t dataSize);
+	DynamicAllocation AllocateUploadMemory(uint32_t size);
+	void InitializeBuffer(GraphicsBuffer* pResource, void* pData, uint32_t dataSize);
 
-	void SetViewport(const DirectX::SimpleMath::Rectangle& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
-	void SetScissorRect(const DirectX::SimpleMath::Rectangle& rect);
+	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
+	void SetScissorRect(const FloatRect& rect);
 
-	void InsertResourceBarrier(D3D12_RESOURCE_BARRIER barrier, bool executeImmediate = false);
+	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
 	void SetDynamicConstantBufferView(int slot, void* pData, uint32_t dataSize);

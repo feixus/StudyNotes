@@ -25,6 +25,8 @@
 #include "DescriptorHandle.h"
 #include "External/SimpleMath/SimpleMath.h"
 #include "GameTimer.h"
+#include "BitField.h"
+#include "MathTypes.h"
 
 using namespace std;
 using Microsoft::WRL::ComPtr;

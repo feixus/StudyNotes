@@ -3,6 +3,7 @@
 #include "Graphics.h"
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
+#include "GraphicsResource.h"
 
 #if _DEBUG
 #include <pix3.h>
@@ -114,58 +115,60 @@ void CommandContext::SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView)
 	m_pCommandList->IASetIndexBuffer(&indexBufferView);
 }
 
-DynamicAllocation CommandContext::AllocateUploadMemory(size_t size)
+DynamicAllocation CommandContext::AllocateUploadMemory(uint32_t size)
 {
 	return m_pGraphics->GetCpuVisibleAllocator()->Allocate(size);
 }
 
-void CommandContext::InitializeBuffer(ID3D12Resource* pResource, void* pData, uint32_t dataSize)
+void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, void* pData, uint32_t dataSize)
 {
 	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-	InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource, 
-			D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST), true);
-	m_pCommandList->CopyBufferRegion(pResource, 0, allocation.pBackingResource, allocation.Offset, dataSize);
-	InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource,
-		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ), true);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	m_pCommandList->CopyBufferRegion(pResource->GetResource(), 0, allocation.pBackingResource, allocation.Offset, dataSize);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
 }
 
-void CommandContext::SetViewport(const DirectX::SimpleMath::Rectangle& rect, float minDepth, float maxDepth)
+void CommandContext::SetViewport(const FloatRect& rect, float minDepth, float maxDepth)
 {
 	D3D12_VIEWPORT viewport;
-	viewport.Height = (float)rect.width;
-	viewport.Width = (float)rect.height;
+	viewport.Height = (float)rect.GetHeight();
+	viewport.Width = (float)rect.GetWidth();
 	viewport.MinDepth = minDepth;
 	viewport.MaxDepth = maxDepth;
-	viewport.TopLeftX = (float)rect.x;
-	viewport.TopLeftY = (float)rect.y;
+	viewport.TopLeftX = (float)rect.Left;
+	viewport.TopLeftY = (float)rect.Top;
 
 	m_pCommandList->RSSetViewports(1, &viewport);
 }
 
-void CommandContext::SetScissorRect(const DirectX::SimpleMath::Rectangle& rect)
+void CommandContext::SetScissorRect(const FloatRect& rect)
 {
 	D3D12_RECT r;
-	r.left = rect.x;
-	r.top = rect.y;
-	r.right = rect.x + rect.width;
-	r.bottom = rect.y + rect.height;
+	r.left = rect.Left;
+	r.top = rect.Top;
+	r.right = rect.Right;
+	r.bottom = rect.Bottom;
 
 	m_pCommandList->RSSetScissorRects(1, &r);
 }
 
-void CommandContext::InsertResourceBarrier(D3D12_RESOURCE_BARRIER barrier, bool executeImmediate)
+void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate)
 {
-	if (m_NumQueueBarriers >= m_QueueBarriers.size())
+	if (pBuffer->GetResourceState() != state)
 	{
-		FlushResourceBarriers();
-	}
+		m_QueueBarriers[m_NumQueueBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(
+			pBuffer->GetResource(),
+			pBuffer->GetResourceState(),
+			state);
 
-	m_QueueBarriers[m_NumQueueBarriers] = barrier;
-	++m_NumQueueBarriers;
-	if (executeImmediate)
-	{
-		FlushResourceBarriers();
+		++m_NumQueueBarriers;
+		if (executeImmediate || m_NumQueueBarriers >= m_QueueBarriers.size())
+		{
+			FlushResourceBarriers();
+		}
+
+		pBuffer->SetResourceState(state);
 	}
 }
 
@@ -180,33 +183,31 @@ void CommandContext::FlushResourceBarriers()
 
 void CommandContext::SetDynamicConstantBufferView(int slot, void* pData, uint32_t dataSize)
 {
-	// alignment to a 256-byte boundary for constant buffers
-	int bufferSize = (dataSize + 255) & ~255;
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
-	memcpy(allocation.pMappedMemory, pData, bufferSize);
+	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
 	m_pCommandList->SetGraphicsRootConstantBufferView(slot, allocation.GpuHandle);
 }
 
 void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData)
 {
-	int bufferSize = (elementCount * elementSize + 255) & ~255;
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
-	memcpy(allocation.pMappedMemory, pData, elementCount * elementSize);
+	int bufferSize = elementCount * elementSize;
+	DynamicAllocation allocation = AllocateUploadMemory(bufferSize);
+	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_VERTEX_BUFFER_VIEW view{};
 	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = elementCount * elementSize;
+	view.SizeInBytes = bufferSize;
 	view.StrideInBytes = elementSize;
 	m_pCommandList->IASetVertexBuffers(slot, 1, &view);
 }
 
 void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 {
-	int bufferSize = (elementCount * sizeof(uint32_t) + 255) & ~255;
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
-	memcpy(allocation.pMappedMemory, pData, elementCount * sizeof(uint32_t));
+	int bufferSize = elementCount * sizeof(uint32_t);
+	DynamicAllocation allocation = AllocateUploadMemory(bufferSize);
+	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_INDEX_BUFFER_VIEW view{};
 	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = elementCount * sizeof(uint32_t);
+	view.SizeInBytes = bufferSize;
 	view.Format = DXGI_FORMAT_R32_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
 }

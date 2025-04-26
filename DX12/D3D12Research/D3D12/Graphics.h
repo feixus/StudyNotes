@@ -7,6 +7,9 @@ class CommandContext;
 class DescriptorAllocator;
 class DynamicResourceAllocator;
 class ImGuiRenderer;
+class GraphicsBuffer;
+class GraphicsResource;
+class RootSignature;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -51,13 +54,13 @@ protected:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 
 	// pipeline objects
-	DirectX::SimpleMath::Rectangle m_Viewport;
-	DirectX::SimpleMath::Rectangle m_ScissorRect;
+	FloatRect m_Viewport;
+	FloatRect m_ScissorRect;
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
-	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
-	std::array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
+	std::array<std::unique_ptr<GraphicsResource>, FRAME_COUNT> m_RenderTargets;
+	std::unique_ptr<GraphicsResource> m_pDepthStencilBuffer;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles;
@@ -100,15 +103,12 @@ protected:
 
 	ComPtr<ID3D12Resource> m_pTexture;
 	DescriptorHandle m_TextureHandle;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_SamplerHandle;
-	D3D12_GPU_DESCRIPTOR_HANDLE m_SamplerGpuHandle;
 
-
-	ComPtr<ID3D12Resource> m_pVertexBuffer;
-	ComPtr<ID3D12Resource> m_pIndexBuffer;
+	std::unique_ptr<GraphicsBuffer> m_pVertexBuffer;
+	std::unique_ptr<GraphicsBuffer> m_pIndexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;
-	ComPtr<ID3D12RootSignature> m_pRootSignature;
+	std::unique_ptr<RootSignature> m_pRootSignature;
 	ComPtr<ID3DBlob> m_pVertexShaderCode;
 	ComPtr<ID3DBlob> m_pPixelShaderCode;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputElements;

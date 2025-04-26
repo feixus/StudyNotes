@@ -1,5 +1,5 @@
 #pragma once
-#include "GpuResource.h"
+#include "GraphicsResource.h"
 
 class Graphics;
 
@@ -16,13 +16,13 @@ struct DynamicAllocation
 	D3D12_GPU_VIRTUAL_ADDRESS GpuAddress;
 };
 
-class LinearAllocationPage : public GpuResource
+class LinearAllocationPage : public GraphicsResource
 {
 public:
 	LinearAllocationPage(ID3D12Resource* pResource, const size_t size, D3D12_RESOURCE_STATES usageState) :
-		GpuResource(usageState), m_Size(size)
+		GraphicsResource(pResource, usageState), m_Size(size)
 	{
-		m_pResource.Attach(pResource);
+		//m_pResource.Attach(pResource);
 		m_pGpuAddress = pResource->GetGPUVirtualAddress();
 		Map();
 	}
