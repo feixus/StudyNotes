@@ -48,20 +48,20 @@ void RootSignature::Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS f
 
     for (size_t i = 0; i < m_RootParameters.size(); i++)
     {
-        const RootParameter& rootParameter = m_RootParameters[i];
-		if (rootParameter.Data.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
+        const CD3DX12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
+		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
-            if (rootParameter.Data.DescriptorTable.pDescriptorRanges->RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+            if (rootParameter.DescriptorTable.pDescriptorRanges->RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
             {
 			    m_DescriptorTableMask.SetBit(i);
             }
             else
             {
                 m_SamplerMask.SetBit(1);
-                m_DescriptorTableSizes[i] = rootParameter.Data.DescriptorTable.NumDescriptorRanges;
+                m_DescriptorTableSizes[i] = rootParameter.DescriptorTable.NumDescriptorRanges;
             }
 		}
-		else if (rootParameter.Data.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV)
+		else if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV)
 		{
 			m_DescriptorTableMask.SetBit(i);
 		}

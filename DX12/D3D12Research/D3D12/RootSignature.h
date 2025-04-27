@@ -34,15 +34,15 @@ public:
 
 	void AddStaticSampler(uint32_t slot, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility);
 
-	RootParameter& operator[](uint32_t i) { return m_RootParameters[i]; }
-	const RootParameter& operator[](uint32_t i) const { return m_RootParameters[i]; }
+	CD3DX12_ROOT_PARAMETER1& operator[](uint32_t i) { return m_RootParameters[i]; }
+	const CD3DX12_ROOT_PARAMETER1& operator[](uint32_t i) const { return m_RootParameters[i]; }
 
 	void Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags);
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
 
 private:
-	std::vector<RootParameter> m_RootParameters;
+	std::vector<CD3DX12_ROOT_PARAMETER1> m_RootParameters;
 	std::vector<uint32_t> m_DescriptorTableSizes;
 	std::vector<D3D12_STATIC_SAMPLER_DESC> m_StaticSamplers;
 	ComPtr<ID3D12RootSignature> m_pRootSignature;

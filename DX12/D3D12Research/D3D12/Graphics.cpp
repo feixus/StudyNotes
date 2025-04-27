@@ -310,17 +310,11 @@ void Graphics::InitializeAssets()
 void Graphics::BuildRootSignature()
 {
 	m_pRootSignature = std::make_unique<RootSignature>(2);
-	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	(*m_pRootSignature)[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);;
 
-	D3D12_DESCRIPTOR_RANGE1 DesRange{};
-	DesRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	DesRange.NumDescriptors = 1;
-	DesRange.BaseShaderRegister = 1;
-	DesRange.RegisterSpace = 0;
-	DesRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
-	DesRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	(*m_pRootSignature)[1].AsShaderResourceView(DesRange, D3D12_SHADER_VISIBILITY_PIXEL);
+	CD3DX12_DESCRIPTOR_RANGE1 srvRange;
+	srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+	(*m_pRootSignature)[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	D3D12_SAMPLER_DESC samplerDesc{};
 	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
