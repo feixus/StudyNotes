@@ -10,6 +10,7 @@ class ImGuiRenderer;
 class GraphicsBuffer;
 class GraphicsResource;
 class RootSignature;
+class PipelineState;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -93,11 +94,9 @@ protected:
 	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 	void InitializeAssets();
-	void BuildRootSignature();
-	void BuildShaderAndInputLayout();
 	void BuildGeometry();
 	void LoadTexture();
-	void BuildPSO();
+	void CreatePipeline();
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 
@@ -112,6 +111,6 @@ protected:
 	ComPtr<ID3DBlob> m_pVertexShaderCode;
 	ComPtr<ID3DBlob> m_pPixelShaderCode;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputElements;
-	ComPtr<ID3D12PipelineState> m_pPipelineStateObject;
+	std::unique_ptr<PipelineState> m_pPipelineStateObject;
 	int m_IndexCount = 0;
 };

@@ -8,6 +8,8 @@
 #include "ImGuiRenderer.h"
 #include "GraphicsResource.h"
 #include "RootSignature.h"
+#include "PipelineState.h"
+#include "Shader.h"
 
 #include <filesystem>
 #include <stdexcept>
@@ -67,7 +69,7 @@ void Graphics::Update()
 		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		ID3D12GraphicsCommandList* pCommandList = pCommandContext->GetCommandList();
 
-		pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
+		pCommandList->SetPipelineState(m_pPipelineStateObject->GetPipelineState());
 		pCommandList->SetGraphicsRootSignature(m_pRootSignature->GetRootSignature());
 		
 		pCommandContext->SetViewport(m_Viewport);
@@ -301,70 +303,8 @@ void Graphics::OnResize(int width, int height)
 void Graphics::InitializeAssets()
 {
 	LoadTexture();
-	BuildRootSignature();
-	BuildShaderAndInputLayout();
 	BuildGeometry();
-	BuildPSO();
-}
-
-void Graphics::BuildRootSignature()
-{
-	m_pRootSignature = std::make_unique<RootSignature>(2);
-	(*m_pRootSignature)[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);;
-
-	CD3DX12_DESCRIPTOR_RANGE1 srvRange;
-	srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-	(*m_pRootSignature)[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
-
-	D3D12_SAMPLER_DESC samplerDesc{};
-	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-	m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
-}
-
-void Graphics::BuildShaderAndInputLayout()
-{
-#if defined(_DEBUG)
-	// shader debugging
-	uint32_t compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-	uint32_t compileFlags = 0;
-#endif
-	
-	compileFlags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
-
-	std::vector<std::byte> data = ReadFile("Resources/shaders.hlsl");
-	
-	ComPtr<ID3DBlob> pErrorBlob;
-	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
-	if (pErrorBlob != nullptr)
-	{
-		std::wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-		std::wcout << errorMessage << std::endl;
-		return;
-	}
-
-	pErrorBlob.Reset();
-	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, &m_pPixelShaderCode, &pErrorBlob);
-	if (pErrorBlob != nullptr)
-	{
-		std::wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-		std::wcout << errorMessage << std::endl;
-		return;
-	}
-
-	// input layout
-	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	CreatePipeline();
 }
 
 void Graphics::BuildGeometry()
@@ -498,27 +438,47 @@ void Graphics::LoadTexture()
 	m_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, m_TextureHandle.GetCpuHandle());
 }
 
-void Graphics::BuildPSO()
+void Graphics::CreatePipeline()
 {
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psDesc = {};
-	psDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-	psDesc.DSVFormat = m_DepthStencilFormat;
-	psDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	psDesc.InputLayout.NumElements = (uint32_t)m_InputElements.size();
-	psDesc.InputLayout.pInputElementDescs = m_InputElements.data();
-	psDesc.NodeMask = 0;
-	psDesc.NumRenderTargets = 1;
-	psDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psDesc.pRootSignature = m_pRootSignature->GetRootSignature();
-	psDesc.VS = CD3DX12_SHADER_BYTECODE(m_pVertexShaderCode.Get());
-	psDesc.PS = CD3DX12_SHADER_BYTECODE(m_pPixelShaderCode.Get());
-	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	psDesc.RTVFormats[0] = m_RenderTargetFormat;
-	psDesc.SampleDesc.Count = 1;
-	psDesc.SampleDesc.Quality = 0;
-	psDesc.SampleMask = UINT_MAX;
-	HR(m_pDevice->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(m_pPipelineStateObject.GetAddressOf())));
+	// shaders
+	Shader vertexShader;
+	vertexShader.Load("Resources/shaders.hlsl", Shader::Type::VertexShader, "VSMain");
+	Shader pixelShader;
+	pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
+
+	// input layout
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+
+	// root signature
+	m_pRootSignature = std::make_unique<RootSignature>(2);
+	(*m_pRootSignature)[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);;
+
+	CD3DX12_DESCRIPTOR_RANGE1 srvRange;
+	srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+	(*m_pRootSignature)[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+
+	D3D12_SAMPLER_DESC samplerDesc{};
+	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+
+	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+	m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
+
+	// pipeline state
+	m_pPipelineStateObject = std::make_unique<PipelineState>();
+	m_pPipelineStateObject->SetInputLayout(m_InputElements.data(), (uint32_t)m_InputElements.size());
+	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
+	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+	m_pPipelineStateObject->Finalize(m_pDevice.Get());
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

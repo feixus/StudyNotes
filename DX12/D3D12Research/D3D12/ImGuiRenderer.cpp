@@ -27,6 +27,9 @@ void ImGuiRenderer::NewFrame()
 	ImGui::NewFrame();
 }
 
+bool show_demo_window = false;
+bool show_another_window = false;
+ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 void ImGuiRenderer::Render(CommandContext& context)
 {
 	context.GetCommandList()->SetPipelineState(m_pPipelineState.Get());
@@ -176,7 +179,7 @@ void ImGuiRenderer::InitializeImGui()
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.Fonts->AddFontDefault();
 
 	ImGui::StyleColorsDark();
