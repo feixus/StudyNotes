@@ -38,3 +38,14 @@ public:
 private:
 	uint32_t m_Size;
 };
+
+class GraphicsTexture : public GraphicsResource
+{
+public:
+	void Create(ID3D12Device* pDevice, uint32_t width, uint32_t height);
+	void SetData(CommandContext* pContext, void* pData, uint32_t dataSize);
+
+private:
+	uint32_t m_Width;
+	uint32_t m_Height;
+};

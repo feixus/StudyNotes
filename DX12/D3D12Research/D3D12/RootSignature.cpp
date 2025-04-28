@@ -46,27 +46,32 @@ void RootSignature::Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS f
 {
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc{};
 
-    for (size_t i = 0; i < m_RootParameters.size(); i++)
+   /* for (size_t i = 0; i < m_RootParameters.size(); i++)
     {
-        const CD3DX12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
-		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
+        const RootParameter& rootParameter = m_RootParameters[i];
+		if (rootParameter.Data.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
-            if (rootParameter.DescriptorTable.pDescriptorRanges->RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+            if (rootParameter.Data.DescriptorTable.pDescriptorRanges->RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
             {
 			    m_DescriptorTableMask.SetBit(i);
             }
             else
             {
                 m_SamplerMask.SetBit(1);
-                m_DescriptorTableSizes[i] = rootParameter.DescriptorTable.NumDescriptorRanges;
+                m_DescriptorTableSizes[i] = rootParameter.Data.DescriptorTable.NumDescriptorRanges;
             }
 		}
-		else if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV)
+		else if (rootParameter.Data.ParameterType == D3D12_ROOT_PARAMETER_TYPE_CBV)
 		{
 			m_DescriptorTableMask.SetBit(i);
 		}
-    }
+    }*/
 
+    /*std::vector<D3D12_ROOT_PARAMETER1> parameters(m_RootParameters.size());
+    for (size_t i = 0; i < parameters.size(); i++)
+    {
+        parameters[i] = m_RootParameters[i].Data;
+    }*/
     desc.Init_1_1(m_NumParameters, reinterpret_cast<D3D12_ROOT_PARAMETER1*>(m_RootParameters.data()), (uint32_t)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 
     ComPtr<ID3DBlob> pDataBlob, pErrorBlob;

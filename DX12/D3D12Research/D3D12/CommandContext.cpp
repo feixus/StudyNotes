@@ -129,6 +129,28 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, void* pData, ui
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
 }
 
+void CommandContext::InitializeTexture(GraphicsTexture* pResource, void* pData, uint32_t dataSize)
+{
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(dataSize, 512);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+
+	D3D12_TEXTURE_COPY_LOCATION location{};
+	location.pResource = pResource->GetResource();
+	location.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	location.SubresourceIndex = 0;
+
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
+	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
+	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, 0, 1, 0, &layout, nullptr, nullptr, nullptr);
+	layout.Offset = allocation.Offset;
+	auto pDst = CD3DX12_TEXTURE_COPY_LOCATION(pResource->GetResource(), 0);
+	auto pSrc = CD3DX12_TEXTURE_COPY_LOCATION(allocation.pBackingResource, layout);
+	m_pCommandList->CopyTextureRegion(&pDst, 0, 0, 0, &pSrc, nullptr);
+
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
+}
+
 void CommandContext::SetViewport(const FloatRect& rect, float minDepth, float maxDepth)
 {
 	D3D12_VIEWPORT viewport;

@@ -4,6 +4,7 @@
 class Graphics;
 class GraphicsResource;
 class GraphicsBuffer;
+class GraphicsTexture;
 
 class CommandContext
 {
@@ -32,6 +33,7 @@ public:
 	
 	DynamicAllocation AllocateUploadMemory(uint32_t size);
 	void InitializeBuffer(GraphicsBuffer* pResource, void* pData, uint32_t dataSize);
+	void InitializeTexture(GraphicsTexture* pResource, void* pData, uint32_t dataSize);
 
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);

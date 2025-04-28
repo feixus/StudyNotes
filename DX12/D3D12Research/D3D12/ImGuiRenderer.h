@@ -1,6 +1,8 @@
 #pragma once
 class CommandContext;
 class Graphics;
+class RootSignature;
+class PipelineState;
 
 class ImGuiRenderer
 {
@@ -15,12 +17,10 @@ private:
 	static const uint32_t m_WindowWidth{ 1240 };
 	static const uint32_t m_WindowHeight{ 720 };
 
-	void LoadShaders(const char* pFilePath, ComPtr<ID3DBlob>* pVertexShaderCode, ComPtr<ID3DBlob>* pPixelShaderCode);
-	void CreateRootSignature();
-	void CreatePipelineState(const ComPtr<ID3DBlob>& pVertexShaderCode, const ComPtr<ID3DBlob>& pPixelShaderCode);
+	void CreatePipeline();
 	void InitializeImGui();
 
 	Graphics* m_pGraphics;
-	ComPtr<ID3D12PipelineState> m_pPipelineState;
-	ComPtr<ID3D12RootSignature> m_pRootSignature;
+	std::unique_ptr<PipelineState> m_pPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pRootSignature;
 };

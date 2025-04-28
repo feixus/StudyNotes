@@ -11,6 +11,7 @@ class GraphicsBuffer;
 class GraphicsResource;
 class RootSignature;
 class PipelineState;
+class GraphicsTexture;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -29,11 +30,11 @@ public:
 	void OnResize(int width, int height);
 
 	void WaitForFence(uint64_t fenceValue);
+	void IdleGPU();
+
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandContext);
-
-	void IdleGPU();
 
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
 
@@ -41,76 +42,68 @@ public:
 	int32_t GetWindowHeight() const { return m_WindowHeight; }
 
 private:
+	void MakeWindow();
+	void InitD3D(WindowHandle pWindow);
+	void InitializeAssets();
+	void LoadGeometry();
+	void LoadTexture();
+	void CreatePipeline();
 	void SetDynamicConstantBufferView(CommandContext* pCommandContext);
 
-protected:
 	static const uint32_t FRAME_COUNT = 2;
 
-	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
-
-	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
-	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
-	std::queue<CommandContext*> m_FreeCommandContexts;
-
-	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
-
-	// pipeline objects
-	FloatRect m_Viewport;
-	FloatRect m_ScissorRect;
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	std::array<std::unique_ptr<GraphicsResource>, FRAME_COUNT> m_RenderTargets;
 	std::unique_ptr<GraphicsResource> m_pDepthStencilBuffer;
-
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
+	std::unique_ptr<DescriptorAllocator> m_pTextureGpuDescriptorHeap;
+	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
+	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
+	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
+	std::queue<CommandContext*> m_FreeCommandContexts;
+	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
+
+	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
+
 	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_DepthStencilHandle;
 
-	uint32_t m_MsaaQuality = 0;
+	FloatRect m_Viewport;
+	FloatRect m_ScissorRect;
+	uint32_t m_WindowWidth;
+	uint32_t m_WindowHeight;
 
 	// synchronization objects
 	uint32_t m_CurrentBackBufferIndex = 0;
 	std::array<UINT64, FRAME_COUNT> m_FenceValues = {};
 
-	HWND m_Hwnd;
-
-	uint32_t m_WindowWidth;
-	uint32_t m_WindowHeight;
-
-	void MakeWindow();
-	void InitD3D(WindowHandle pWindow);
-	virtual void CreateSwapchain(WindowHandle pWindow);
-	void CreateDescriptorHeaps();
-
-	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-
-	bool mMaximized = false;
-	bool mResizing = false;
-	bool mMinimized = false;
-
 	DXGI_FORMAT m_DepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	void InitializeAssets();
-	void BuildGeometry();
-	void LoadTexture();
-	void CreatePipeline();
-
-	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
-
-	ComPtr<ID3D12Resource> m_pTexture;
+	std::unique_ptr<GraphicsTexture> m_pTexture;
 	DescriptorHandle m_TextureHandle;
 
 	std::unique_ptr<GraphicsBuffer> m_pVertexBuffer;
 	std::unique_ptr<GraphicsBuffer> m_pIndexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;
+
 	std::unique_ptr<RootSignature> m_pRootSignature;
-	ComPtr<ID3DBlob> m_pVertexShaderCode;
-	ComPtr<ID3DBlob> m_pPixelShaderCode;
-	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputElements;
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;
+
 	int m_IndexCount = 0;
+	uint32_t m_MsaaQuality = 0;
+
+	HWND m_Hwnd;
+	bool mMaximized = false;
+	bool mResizing = false;
+	bool mMinimized = false;
+
+	virtual void CreateSwapchain(WindowHandle pWindow);
+	void CreateDescriptorHeaps();
+
+	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 };

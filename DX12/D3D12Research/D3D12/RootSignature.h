@@ -11,15 +11,42 @@ struct RootParameter
 		Data.ShaderVisibility = visibility;
 	}
 
-	void AsShaderResourceView(D3D12_DESCRIPTOR_RANGE1& range, D3D12_SHADER_VISIBILITY visibility)
+	void AsShaderResourceView(uint32_t registersSlot, uint32_t registersState, D3D12_SHADER_VISIBILITY visibility)
 	{
 		Data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+		Data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+		Data.Descriptor.ShaderRegister = registersSlot;
+		Data.Descriptor.RegisterSpace = registersState;
 		Data.ShaderVisibility = visibility;
-		Data.DescriptorTable.NumDescriptorRanges = range.NumDescriptors;
-		Data.DescriptorTable.pDescriptorRanges = &range;
+	}
+
+	void AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shaderRegister, uint32_t count, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL)
+	{
+		AsDescriptorTable(1, visibility);
+		SetTableRange(0, type, shaderRegister, count);
+	}
+
+	void AsDescriptorTable(uint32_t rangeCount, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL)
+	{
+		Data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+		Data.DescriptorTable.NumDescriptorRanges = rangeCount;
+		Data.DescriptorTable.pDescriptorRanges = m_DescriptorTableRanges;
+		Data.ShaderVisibility = visibility;
+	}
+
+	void SetTableRange(uint32_t rangeIndex, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shaderRegister, uint32_t count, uint32_t space = 0)
+	{
+		D3D12_DESCRIPTOR_RANGE1& range = m_DescriptorTableRanges[rangeIndex];
+		range.RangeType = type;
+		range.NumDescriptors = count;
+		range.BaseShaderRegister = shaderRegister;
+		range.RegisterSpace = space;
+		range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+		range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
 	}
 
 	D3D12_ROOT_PARAMETER1 Data{};
+	D3D12_DESCRIPTOR_RANGE1 m_DescriptorTableRanges[4];
 };
 
 class RootSignature

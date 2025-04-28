@@ -38,7 +38,6 @@ void Graphics::Initialize(WindowHandle window)
 {
 	MakeWindow();
 	InitD3D(m_Hwnd);
-	OnResize(m_WindowWidth, m_WindowHeight);
 
 	InitializeAssets();
 
@@ -86,11 +85,13 @@ void Graphics::Update()
 		
 		SetDynamicConstantBufferView(pCommandContext);
 
-		auto srvDescriptorHeaps = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->GetDescriptorHeapPool();
-		ID3D12DescriptorHeap* ppHeaps[] = { srvDescriptorHeaps[0].Get()};
-		pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		/*ID3D12DescriptorHeap* pDesHeap = m_pTextureGpuDescriptorHeap->GetCurrentHeap();
+		pCommandList->SetDescriptorHeaps(1, &pDesHeap);
+		pCommandList->SetGraphicsRootDescriptorTable(1, pDesHeap->GetGPUDescriptorHandleForHeapStart());*/
 
-		pCommandList->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
+		ID3D12DescriptorHeap* pDesHeap = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->GetCurrentHeap();
+		pCommandList->SetDescriptorHeaps(1, &pDesHeap);
+		pCommandList->SetGraphicsRootDescriptorTable(1, pDesHeap->GetGPUDescriptorHandleForHeapStart());
 
 		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pCommandContext->SetVertexBuffer(m_VertexBufferView);
@@ -118,15 +119,6 @@ void Graphics::Shutdown()
 {
 	// wait for all the GPU work to finish
 	IdleGPU();
-}
-
-void Graphics::CreateDescriptorHeaps()
-{
-	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
-	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++)
-	{
-		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
-	}
 }
 
 void Graphics::InitD3D(WindowHandle pWindow)
@@ -176,18 +168,22 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	qualityLevels.SampleCount = 4;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
 
-	m_MsaaQuality = qualityLevels.NumQualityLevels;
-	if (m_MsaaQuality <= 0)
-	{
-		return;
-	}
-
 	m_CommandQueues[0] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	CreateSwapchain(pWindow);
-	CreateDescriptorHeaps();
+	// allocate descriptor heaps pool
+	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
+	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++)
+	{
+		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i, (D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV == i));
+	}
+	m_pTextureGpuDescriptorHeap = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 1024 * 1024);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 1024 * 1024 * 32);
+	
+	// swap chain
+	CreateSwapchain(pWindow);
+	OnResize(m_WindowWidth, m_WindowHeight);
+
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 }
 
@@ -261,20 +257,8 @@ void Graphics::OnResize(int width, int height)
 	}
 
 	// recreate the depth stencil buffer and view
-	D3D12_RESOURCE_DESC desc = {};
-	desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	desc.Alignment = 0;
-	desc.Width = m_WindowWidth;
-	desc.Height = m_WindowHeight;
-	desc.DepthOrArraySize = 1;
-	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-	desc.Format = m_DepthStencilFormat;
-	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	desc.MipLevels = 1;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-
 	ID3D12Resource* pResource = nullptr;
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(m_DepthStencilFormat, width, height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 	D3D12_CLEAR_VALUE clearValue;
 	clearValue.Format = m_DepthStencilFormat;
 	clearValue.DepthStencil.Depth = 1.0f;
@@ -296,18 +280,17 @@ void Graphics::OnResize(int width, int height)
 	m_Viewport.Top = 0;
 	m_Viewport.Right = m_WindowWidth;
 	m_Viewport.Bottom = m_WindowHeight;
-
 	m_ScissorRect = m_Viewport;
 }
 
 void Graphics::InitializeAssets()
 {
 	LoadTexture();
-	BuildGeometry();
+	LoadGeometry();
 	CreatePipeline();
 }
 
-void Graphics::BuildGeometry()
+void Graphics::LoadGeometry()
 {
 	struct Vertex
 	{
@@ -383,43 +366,11 @@ void Graphics::LoadTexture()
 
 	channel = 4;
 
-	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	auto resDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height);
-	HR(m_pDevice->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&resDesc,
-		D3D12_RESOURCE_STATE_COPY_DEST,
-		nullptr,
-		IID_PPV_ARGS(m_pTexture.GetAddressOf())));
-
-	ComPtr<ID3D12Resource> pUploadBuffer;
-
-	auto heapUploadProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	auto resBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(width * height * channel);
-	HR(m_pDevice->CreateCommittedResource(
-		&heapUploadProps,
-		D3D12_HEAP_FLAG_NONE,
-		&resBufferDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(pUploadBuffer.GetAddressOf())));
-
-	D3D12_SUBRESOURCE_DATA	subResourceData{};
-	subResourceData.pData = pPixels;
-	subResourceData.RowPitch = width * channel;			// row pixels
-	subResourceData.SlicePitch = subResourceData.RowPitch;
+	m_pTexture = std::make_unique<GraphicsTexture>();
+	m_pTexture->Create(m_pDevice.Get(), width, height);
 	
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCmd = pContext->GetCommandList();
-
-	// CPU memory -> intermediate upload heap -> GPU memory
-	auto resBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			m_pTexture.Get(),
-			D3D12_RESOURCE_STATE_COPY_DEST, 
-			D3D12_RESOURCE_STATE_GENERIC_READ);
-	UpdateSubresources<1>(pCmd, m_pTexture.Get(), pUploadBuffer.Get(), 0, 0, 1, &subResourceData);
-	pCmd->ResourceBarrier(1, &resBarrier);
+	m_pTexture->SetData(pContext, pPixels, width * height * channel);
 
 	pContext->Execute(true);
 
@@ -434,8 +385,11 @@ void Graphics::LoadTexture()
 	srvDesc.Texture2D.ResourceMinLODClamp = 0;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 
+	/*m_TextureHandle = m_pTextureGpuDescriptorHeap->AllocateDescriptor();
+	m_pDevice->CreateShaderResourceView(m_pTexture->GetResource(), &srvDesc, m_TextureHandle.GetCpuHandle());*/
+
 	m_TextureHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptorWithGPU();
-	m_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, m_TextureHandle.GetCpuHandle());
+	m_pDevice->CreateShaderResourceView(m_pTexture->GetResource(), &srvDesc, m_TextureHandle.GetCpuHandle());
 }
 
 void Graphics::CreatePipeline()
@@ -447,17 +401,23 @@ void Graphics::CreatePipeline()
 	pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
 
 	// input layout
-	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
+	inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 
 	// root signature
+	/*m_pRootSignature = std::make_unique<RootSignature>(2);
+	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);;
+	(*m_pRootSignature)[1].AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);*/
+
 	m_pRootSignature = std::make_unique<RootSignature>(2);
 	(*m_pRootSignature)[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);;
 
 	CD3DX12_DESCRIPTOR_RANGE1 srvRange;
 	srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 	(*m_pRootSignature)[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+
 
 	D3D12_SAMPLER_DESC samplerDesc{};
 	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -474,7 +434,7 @@ void Graphics::CreatePipeline()
 
 	// pipeline state
 	m_pPipelineStateObject = std::make_unique<PipelineState>();
-	m_pPipelineStateObject->SetInputLayout(m_InputElements.data(), (uint32_t)m_InputElements.size());
+	m_pPipelineStateObject->SetInputLayout(inputElements.data(), (uint32_t)inputElements.size());
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
