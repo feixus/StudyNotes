@@ -10,6 +10,7 @@
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "Shader.h"
+#include "Mesh.h"
 
 #include <filesystem>
 #include <stdexcept>
@@ -61,7 +62,7 @@ void Graphics::Update()
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 
 	m_pImGuiRenderer->NewFrame();
-	ImGui::ShowDemoWindow();
+	ImGui::Text("Hello, world!");
 
 	// 3D
 	{
@@ -83,16 +84,14 @@ void Graphics::Update()
 		pCommandContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
 		pCommandContext->SetDepthStencil(&m_DepthStencilHandle);
 		
-		SetDynamicConstantBufferView(pCommandContext);
-
 		ID3D12DescriptorHeap* pDesHeap = m_pTextureGpuDescriptorHeap->GetCurrentHeap();
 		pCommandList->SetDescriptorHeaps(1, &pDesHeap);
 		pCommandList->SetGraphicsRootDescriptorTable(1, pDesHeap->GetGPUDescriptorHandleForHeapStart());
 
 		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pCommandContext->SetVertexBuffer(m_VertexBufferView);
-		pCommandContext->SetIndexBuffer(m_IndexBufferView);
-		pCommandContext->DrawIndexed(m_IndexCount, 0);
+	
+		SetDynamicConstantBufferView(pCommandContext);
+		m_pMesh->Draw(pCommandContext);
 
 		pCommandContext->Execute(false);
 	}
@@ -288,63 +287,10 @@ void Graphics::InitializeAssets()
 
 void Graphics::LoadGeometry()
 {
-	struct Vertex
-	{
-		Vector3 Position;
-		Vector2 TexCoord;
-		Vector3 Normal;
-	};
-
-	Assimp::Importer importer;
-	const aiScene* pScene = importer.ReadFile("Resources/Man.dae",
-			aiProcess_Triangulate |
-			aiProcess_ConvertToLeftHanded |
-			aiProcess_GenSmoothNormals |
-			aiProcess_CalcTangentSpace |
-			aiProcess_LimitBoneWeights);
-
-	std::vector<Vertex> vertices(pScene->mMeshes[0]->mNumVertices);
-	for (size_t i = 0; i < vertices.size(); i++)
-	{
-		Vertex& vertex = vertices[i];
-		vertex.Position = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mVertices[i]);
-		vertex.TexCoord = *reinterpret_cast<Vector2*>(&pScene->mMeshes[0]->mTextureCoords[0][i]);
-		vertex.Normal = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mNormals[i]);
-	}
-
-	std::vector<uint32_t> indices(pScene->mMeshes[0]->mNumFaces * 3);
-	for (size_t i = 0; i < pScene->mMeshes[0]->mNumFaces; i++)
-	{
-		for (size_t j = 0; j < 3; j++)
-		{
-			assert(pScene->mMeshes[0]->mFaces[i].mNumIndices == 3);
-			indices[i * 3 + j] = pScene->mMeshes[0]->mFaces[i].mIndices[j];
-		}
-	}
-
 	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	{
-		uint32_t size = vertices.size() * sizeof(Vertex);
-		m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
-		m_pVertexBuffer->Create(m_pDevice.Get(), size, false);
-		m_pVertexBuffer->SetData(pCommandContext, vertices.data(), size);
-
-		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGpuHandle();
-		m_VertexBufferView.SizeInBytes = size;
-		m_VertexBufferView.StrideInBytes = sizeof(Vertex);
-	}
-
-	{
-		m_IndexCount = (int)indices.size();
-		uint32_t size = sizeof(uint32_t)* indices.size();
-		m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
-		m_pIndexBuffer->Create(m_pDevice.Get(), size, false);
-		m_pIndexBuffer->SetData(pCommandContext, indices.data(), size);
-
-		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGpuHandle();
-		m_IndexBufferView.SizeInBytes = size;
-		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
-	}
+	
+	m_pMesh = std::make_unique<Mesh>();
+	m_pMesh->Load("Resources/Man.dae", m_pDevice.Get(), pCommandContext);
 	
 	pCommandContext->Execute(true);
 }

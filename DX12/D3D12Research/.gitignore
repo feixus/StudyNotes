@@ -6,3 +6,4 @@ packages/
 *.vcxproj
 *.filters
 *.user
+*.vscode

@@ -12,6 +12,7 @@ class GraphicsResource;
 class RootSignature;
 class PipelineState;
 class GraphicsTexture;
+class Mesh;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -83,13 +84,9 @@ private:
 	DXGI_FORMAT m_DepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<GraphicsTexture> m_pTexture;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
-
-	std::unique_ptr<GraphicsBuffer> m_pVertexBuffer;
-	std::unique_ptr<GraphicsBuffer> m_pIndexBuffer;
-	D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
-	D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;
 
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;
