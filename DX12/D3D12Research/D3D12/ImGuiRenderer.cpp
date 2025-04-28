@@ -92,8 +92,7 @@ void ImGuiRenderer::CreatePipeline()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 	m_pRootSignature = std::make_unique<RootSignature>(1);
-	//(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	(*m_pRootSignature)[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 	m_pRootSignature->Finalize(m_pGraphics->GetDevice(), rootSignatureFlags);
 
 	// input layout

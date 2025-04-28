@@ -85,11 +85,7 @@ void Graphics::Update()
 		
 		SetDynamicConstantBufferView(pCommandContext);
 
-		/*ID3D12DescriptorHeap* pDesHeap = m_pTextureGpuDescriptorHeap->GetCurrentHeap();
-		pCommandList->SetDescriptorHeaps(1, &pDesHeap);
-		pCommandList->SetGraphicsRootDescriptorTable(1, pDesHeap->GetGPUDescriptorHandleForHeapStart());*/
-
-		ID3D12DescriptorHeap* pDesHeap = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->GetCurrentHeap();
+		ID3D12DescriptorHeap* pDesHeap = m_pTextureGpuDescriptorHeap->GetCurrentHeap();
 		pCommandList->SetDescriptorHeaps(1, &pDesHeap);
 		pCommandList->SetGraphicsRootDescriptorTable(1, pDesHeap->GetGPUDescriptorHandleForHeapStart());
 
@@ -385,11 +381,8 @@ void Graphics::LoadTexture()
 	srvDesc.Texture2D.ResourceMinLODClamp = 0;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 
-	/*m_TextureHandle = m_pTextureGpuDescriptorHeap->AllocateDescriptor();
-	m_pDevice->CreateShaderResourceView(m_pTexture->GetResource(), &srvDesc, m_TextureHandle.GetCpuHandle());*/
-
-	m_TextureHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptorWithGPU();
-	m_pDevice->CreateShaderResourceView(m_pTexture->GetResource(), &srvDesc, m_TextureHandle.GetCpuHandle());
+	m_TextureHandle = m_pTextureGpuDescriptorHeap->AllocateDescriptor();
+	m_pDevice->CreateShaderResourceView(m_pTexture->GetResource(), &srvDesc, m_TextureHandle);
 }
 
 void Graphics::CreatePipeline()
@@ -407,17 +400,9 @@ void Graphics::CreatePipeline()
 	inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 
 	// root signature
-	/*m_pRootSignature = std::make_unique<RootSignature>(2);
-	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);;
-	(*m_pRootSignature)[1].AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);*/
-
 	m_pRootSignature = std::make_unique<RootSignature>(2);
-	(*m_pRootSignature)[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);;
-
-	CD3DX12_DESCRIPTOR_RANGE1 srvRange;
-	srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-	(*m_pRootSignature)[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
-
+	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);;
+	(*m_pRootSignature)[1].AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	D3D12_SAMPLER_DESC samplerDesc{};
 	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;

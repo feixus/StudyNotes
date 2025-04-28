@@ -49,6 +49,7 @@ private:
 	void LoadTexture();
 	void CreatePipeline();
 	void SetDynamicConstantBufferView(CommandContext* pCommandContext);
+	void CreateSwapchain(WindowHandle pWindow);
 
 	static const uint32_t FRAME_COUNT = 2;
 
@@ -83,7 +84,7 @@ private:
 	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 	std::unique_ptr<GraphicsTexture> m_pTexture;
-	DescriptorHandle m_TextureHandle;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
 
 	std::unique_ptr<GraphicsBuffer> m_pVertexBuffer;
 	std::unique_ptr<GraphicsBuffer> m_pIndexBuffer;
@@ -100,9 +101,6 @@ private:
 	bool mMaximized = false;
 	bool mResizing = false;
 	bool mMinimized = false;
-
-	virtual void CreateSwapchain(WindowHandle pWindow);
-	void CreateDescriptorHeaps();
 
 	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
