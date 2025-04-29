@@ -43,7 +43,7 @@ bool Mesh::Load(const char* pFilePath, ID3D12Device* pDevice, CommandContext* pC
 	}
 
 	{
-		uint32_t size = vertices.size() * sizeof(Vertex);
+		uint32_t size = uint32_t(vertices.size() * sizeof(Vertex));
 		m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
 		m_pVertexBuffer->Create(pDevice, size, false);
 		m_pVertexBuffer->SetData(pContext, vertices.data(), size);
@@ -55,7 +55,7 @@ bool Mesh::Load(const char* pFilePath, ID3D12Device* pDevice, CommandContext* pC
 
 	{
 		m_IndexCount = (int)indices.size();
-		uint32_t size = sizeof(uint32_t)* indices.size();
+		uint32_t size = (uint32_t)(sizeof(uint32_t)* indices.size());
 		m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
 		m_pIndexBuffer->Create(pDevice, size, false);
 		m_pIndexBuffer->SetData(pContext, indices.data(), size);

@@ -32,6 +32,15 @@ public:
 		}
 	}
 
+	DescriptorHandle operator + (uint32_t offset)
+	{
+		D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle{};
+		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle{};
+		cpuHandle.ptr = m_CpuHandle.ptr + offset;
+		gpuHandle.ptr = m_GpuHandle.ptr + offset;
+		return { cpuHandle, gpuHandle };
+	}
+
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle() const { return m_CpuHandle; }
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle() const { return m_GpuHandle; }
 

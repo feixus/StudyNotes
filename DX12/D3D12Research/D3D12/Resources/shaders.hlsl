@@ -1,4 +1,4 @@
-cbuffer Data : register(b0) // b-const buffer t-texture s-sampler
+cbuffer ObjectData : register(b0) // b-const buffer t-texture s-sampler
 {
     float4x4 World;
     float4x4 WorldViewProjection;

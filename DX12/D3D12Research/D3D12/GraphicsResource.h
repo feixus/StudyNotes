@@ -24,15 +24,15 @@ public:
 	void SetResourceState(D3D12_RESOURCE_STATES state) { m_CurrentState = state; }
 
 protected:
-	ID3D12Resource* m_pResource;
-	D3D12_RESOURCE_STATES m_CurrentState;
+	ID3D12Resource* m_pResource{};
+	D3D12_RESOURCE_STATES m_CurrentState{ D3D12_RESOURCE_STATE_COMMON };
 };
 
 class GraphicsBuffer : public GraphicsResource
 {
 public:
-	void Create(ID3D12Device* pDevice, int size, bool cpuVisible = false);
-	void SetData(CommandContext* pContext, void* pData, int dataSize);
+	void Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisible = false);
+	void SetData(CommandContext* pContext, void* pData, uint32_t dataSize);
 
 	uint32_t GetSize() const { return m_Size; }
 
@@ -45,12 +45,12 @@ class GraphicsTexture : public GraphicsResource
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath);
 	void Create(Graphics* pGraphics, int width, int height);
-	void SetData(CommandContext* pContext, void* pData, int dataSize);
+	void SetData(CommandContext* pContext, void* pData, uint32_t dataSize);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuDescriptorHandle() { return m_CpuDescriptorHandle; }
 
 private:
-	int m_Width;
-	int m_Height;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_CpuDescriptorHandle;
+	int m_Width{0};
+	int m_Height{0};
+	D3D12_CPU_DESCRIPTOR_HANDLE m_CpuDescriptorHandle{};
 };

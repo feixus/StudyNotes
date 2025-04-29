@@ -17,6 +17,11 @@ PipelineState::PipelineState()
     m_Desc.NodeMask = 0;
 }
 
+void PipelineState::Finalize(ID3D12Device* pDevice)
+{
+	pDevice->CreateGraphicsPipelineState(&m_Desc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf()));
+}
+
 void PipelineState::SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage)
 {
     D3D12_RENDER_TARGET_BLEND_DESC& desc = m_Desc.BlendState.RenderTarget[0];
@@ -151,11 +156,6 @@ void PipelineState::SetCullMode(D3D12_CULL_MODE cullMode)
 void PipelineState::SetLineAntialias(bool lineAntialias)
 {
 	m_Desc.RasterizerState.AntialiasedLineEnable = lineAntialias;
-}
-
-void PipelineState::Finalize(ID3D12Device* pDevice)
-{
-	pDevice->CreateGraphicsPipelineState(&m_Desc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf()));
 }
 
 void PipelineState::SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32_t count)

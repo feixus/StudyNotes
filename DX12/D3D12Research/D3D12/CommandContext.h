@@ -5,6 +5,9 @@ class Graphics;
 class GraphicsResource;
 class GraphicsBuffer;
 class GraphicsTexture;
+class DynamicDescriptorAllocator;
+class RootSignature;
+class PipelineState;
 
 class CommandContext
 {
@@ -38,12 +41,18 @@ public:
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 
+	void SetGraphicsRootSignature(RootSignature* pRootSignature);
+	void SetPipelineState(PipelineState* pPipelineState);
+
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
-	void SetDynamicConstantBufferView(int slot, void* pData, uint32_t dataSize);
-	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
+	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
+	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
+
+	void SetDynamicDescriptor(int rootIndex, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 
@@ -54,16 +63,20 @@ public:
 private:
 	static const int MAX_QUEUED_BARRIERS = 12;
 
+	void BindDescriptorHeaps();
 	void PrepareDraw();
 
-	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueueBarriers = {};
+	std::unique_ptr<DynamicDescriptorAllocator> m_pDynamicDescriptorAllocator;
+	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_CurrentDescriptorHeaps{};
+
+	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueueBarriers{};
 	int m_NumQueueBarriers = 0;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE* m_pRenderTarget;
-	D3D12_CPU_DESCRIPTOR_HANDLE* m_pDepthStencilView;
-	Graphics* m_pGraphics;
+	D3D12_CPU_DESCRIPTOR_HANDLE* m_pRenderTarget{};
+	D3D12_CPU_DESCRIPTOR_HANDLE* m_pDepthStencilView{};
+	Graphics* m_pGraphics{};
 
-	ID3D12GraphicsCommandList* m_pCommandList;
-	ID3D12CommandAllocator* m_pAllocator;
+	ID3D12GraphicsCommandList* m_pCommandList{};
+	ID3D12CommandAllocator* m_pAllocator{};
 	D3D12_COMMAND_LIST_TYPE m_Type;
 };

@@ -4,7 +4,7 @@
 #include "Graphics.h"
 #include "External/stb/stb_image.h"
 
-void GraphicsBuffer::Create(ID3D12Device* pDevice, int size, bool cpuVisible)
+void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisible)
 {
 	m_Size = size;
 
@@ -34,7 +34,7 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, int size, bool cpuVisible)
 	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
-void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, int dataSize)
+void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32_t dataSize)
 {
 	assert(m_Size == dataSize);
 	pContext->AllocateUploadMemory(dataSize);
@@ -92,8 +92,8 @@ void GraphicsTexture::Create(Graphics* pGraphics, CommandContext* pContext, cons
 	stbi_image_free(pPixels);
 }
 
-void GraphicsTexture::SetData(CommandContext* pContext, void* pData, int dataSize)
+void GraphicsTexture::SetData(CommandContext* pContext, void* pData, uint32_t dataSize)
 {
-	assert(m_Width * m_Height * 4 == dataSize);
+	assert((uint32_t)(m_Width * m_Height * 4) == dataSize);
 	pContext->InitializeTexture(this, pData, dataSize);
 }

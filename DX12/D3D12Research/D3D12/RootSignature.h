@@ -1,80 +1,39 @@
 #pragma once
 
-struct RootParameter
-{
-	void AsConstantBufferView(uint32_t registersSlot, uint32_t registersState, D3D12_SHADER_VISIBILITY visibility)
-	{
-		Data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		Data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
-		Data.Descriptor.ShaderRegister = registersSlot;
-		Data.Descriptor.RegisterSpace = registersState;
-		Data.ShaderVisibility = visibility;
-	}
-
-	void AsShaderResourceView(uint32_t registersSlot, uint32_t registersState, D3D12_SHADER_VISIBILITY visibility)
-	{
-		Data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-		Data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
-		Data.Descriptor.ShaderRegister = registersSlot;
-		Data.Descriptor.RegisterSpace = registersState;
-		Data.ShaderVisibility = visibility;
-	}
-
-	void AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shaderRegister, uint32_t count, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL)
-	{
-		AsDescriptorTable(1, visibility);
-		SetTableRange(0, type, shaderRegister, count);
-	}
-
-	void AsDescriptorTable(uint32_t rangeCount, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL)
-	{
-		Data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;  // this dont match will result in fatal error.
-		Data.DescriptorTable.NumDescriptorRanges = rangeCount;
-		Data.DescriptorTable.pDescriptorRanges = m_DescriptorTableRanges;
-		Data.ShaderVisibility = visibility;
-	}
-
-	void SetTableRange(uint32_t rangeIndex, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shaderRegister, uint32_t count, uint32_t space = 0)
-	{
-		D3D12_DESCRIPTOR_RANGE1& range = m_DescriptorTableRanges[rangeIndex];
-		range.RangeType = type;
-		range.NumDescriptors = count;
-		range.BaseShaderRegister = shaderRegister;
-		range.RegisterSpace = space;
-		range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-		range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
-	}
-
-	D3D12_ROOT_PARAMETER1 Data{};
-	D3D12_DESCRIPTOR_RANGE1 m_DescriptorTableRanges[4];
-};
-
 class RootSignature
 {
 public:
-	RootSignature(uint32_t numRootParameters)
-	{
-		m_NumParameters = numRootParameters;
-		m_RootParameters.resize(numRootParameters);
-		m_DescriptorTableSizes.resize(numRootParameters);
-	}
 
+	static const int MAX_NUM_DESCRIPTORS = 16;
+	static const int MAX_RANGES_PER_TABLE = 2;
+	using RootSignatureDescriptorMask = BitField<MAX_NUM_DESCRIPTORS, uint32_t>;
+
+	RootSignature(uint32_t numRootParameters);
+
+	void SetConstantBufferView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility);
+	void SetShaderResourceView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility);
+	void SetDescriptorTable(uint32_t rootIndex, uint32_t rangeCount, D3D12_SHADER_VISIBILITY visibility);
+	void SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIndex, uint32_t startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count);
+	void SetDescriptorTableSimple(uint32_t rootIndex, uint32_t startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, D3D12_SHADER_VISIBILITY visibility);
+	
 	void AddStaticSampler(uint32_t slot, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility);
-
-	RootParameter& operator[](uint32_t i) { return m_RootParameters[i]; }
-	const RootParameter& operator[](uint32_t i) const { return m_RootParameters[i]; }
 
 	void Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags);
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
+	
+	const BitField<16, uint32_t>& GetSamplerTableMask() const { return m_SamplerMask; }
+	const BitField<16, uint32_t>& GetDescriptorTableMask() const { return m_DescriptorTableMask; }
+	const std::vector<uint32_t>& GetDescriptorTableSizes() const { return m_DescriptorTableSizes; }
 
 private:
-	std::vector<RootParameter> m_RootParameters;
+	std::vector<D3D12_ROOT_PARAMETER1> m_RootParameters;
+	std::vector<std::array<D3D12_DESCRIPTOR_RANGE1, MAX_RANGES_PER_TABLE>> m_DescriptorTableRanges;
 	std::vector<uint32_t> m_DescriptorTableSizes;
 	std::vector<D3D12_STATIC_SAMPLER_DESC> m_StaticSamplers;
 	ComPtr<ID3D12RootSignature> m_pRootSignature;
 
-	BitField<16, uint32_t> m_DescriptorTableMask;
-	BitField<16, uint32_t> m_SamplerMask;
+	RootSignatureDescriptorMask m_DescriptorTableMask;
+	RootSignatureDescriptorMask m_SamplerMask;
 	uint32_t m_NumParameters{ 0 };
 };

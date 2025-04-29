@@ -4,6 +4,9 @@
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
 #include "GraphicsResource.h"
+#include "DynamicDescriptorAllocator.h"
+#include "PipelineState.h"
+#include "RootSignature.h"
 
 #if _DEBUG
 #include <pix3.h>
@@ -12,6 +15,7 @@
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
+	m_pDynamicDescriptorAllocator = std::make_unique<DynamicDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
 CommandContext::~CommandContext()
@@ -22,6 +26,7 @@ void CommandContext::Reset()
 {
 	m_pAllocator = m_pGraphics->GetCommandQueue(m_Type)->RequestAllocator();
 	m_pCommandList->Reset(m_pAllocator, nullptr);
+	BindDescriptorHeaps();
 }
 
 uint64_t CommandContext::Execute(bool wait)
@@ -38,6 +43,7 @@ uint64_t CommandContext::Execute(bool wait)
 
 	m_pGraphics->FreeCommandList(this);
 	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
+	m_pDynamicDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 
 	return fenceValue;
 }
@@ -167,12 +173,23 @@ void CommandContext::SetViewport(const FloatRect& rect, float minDepth, float ma
 void CommandContext::SetScissorRect(const FloatRect& rect)
 {
 	D3D12_RECT r;
-	r.left = rect.Left;
-	r.top = rect.Top;
-	r.right = rect.Right;
-	r.bottom = rect.Bottom;
+	r.left = (LONG)rect.Left;
+	r.top = (LONG)rect.Top;
+	r.right = (LONG)rect.Right;
+	r.bottom = (LONG)rect.Bottom;
 
 	m_pCommandList->RSSetScissorRects(1, &r);
+}
+
+void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
+{
+	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
+	m_pDynamicDescriptorAllocator->ParseRootSignature(pRootSignature);
+}
+
+void CommandContext::SetPipelineState(PipelineState* pPipelineState)
+{
+	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
 }
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate)
@@ -203,14 +220,14 @@ void CommandContext::FlushResourceBarriers()
 	}
 }
 
-void CommandContext::SetDynamicConstantBufferView(int slot, void* pData, uint32_t dataSize)
+void CommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize)
 {
 	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-	m_pCommandList->SetGraphicsRootConstantBufferView(slot, allocation.GpuHandle);
+	m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
-void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData)
+void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData)
 {
 	int bufferSize = elementCount * elementSize;
 	DynamicAllocation allocation = AllocateUploadMemory(bufferSize);
@@ -219,7 +236,7 @@ void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elem
 	view.BufferLocation = allocation.GpuHandle;
 	view.SizeInBytes = bufferSize;
 	view.StrideInBytes = elementSize;
-	m_pCommandList->IASetVertexBuffers(slot, 1, &view);
+	m_pCommandList->IASetVertexBuffers(rootIndex, 1, &view);
 }
 
 void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
@@ -232,6 +249,38 @@ void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 	view.SizeInBytes = bufferSize;
 	view.Format = DXGI_FORMAT_R32_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
+}
+
+void CommandContext::SetDynamicDescriptor(int rootIndex, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+{
+	m_pDynamicDescriptorAllocator->SetDescriptors(rootIndex, 0, 1, &handle);
+}
+
+void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type)
+{
+	if (m_CurrentDescriptorHeaps[type] != pHeap)
+	{
+		m_CurrentDescriptorHeaps[type] = pHeap;
+		BindDescriptorHeaps();
+	}
+}
+
+void CommandContext::BindDescriptorHeaps()
+{
+	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> heapsToBind{};
+	int heapCount = 0;
+	for (size_t i = 0; i < heapsToBind.size(); ++i)
+	{
+		if (m_CurrentDescriptorHeaps[i] != nullptr)
+		{
+			heapsToBind[heapCount++] = m_CurrentDescriptorHeaps[i];
+		}
+	}
+
+	if (heapCount > 0)
+	{
+		m_pCommandList->SetDescriptorHeaps(heapCount, heapsToBind.data());
+	}
 }
 
 void CommandContext::MarkBegin(const wchar_t* pName)
@@ -257,5 +306,8 @@ void CommandContext::MarkEnd()
 
 void CommandContext::PrepareDraw()
 {
+	FlushResourceBarriers();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+
 	m_pCommandList->OMSetRenderTargets(1, m_pRenderTarget, false, m_pDepthStencilView);
 }

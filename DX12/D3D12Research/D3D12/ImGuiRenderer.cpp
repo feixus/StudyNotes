@@ -13,8 +13,8 @@
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
 {
-	CreatePipeline();
 	InitializeImGui();
+	CreatePipeline();
 }
 
 ImGuiRenderer::~ImGuiRenderer()
@@ -27,6 +27,26 @@ void ImGuiRenderer::NewFrame()
 	ImGuiIO& io = ImGui::GetIO();
 	io.DisplaySize = ImVec2((float)m_WindowWidth, (float)m_WindowHeight);
 	ImGui::NewFrame();
+}
+
+void ImGuiRenderer::InitializeImGui()
+{
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.Fonts->AddFontDefault();
+
+	ImGui::StyleColorsDark();
+
+	unsigned char* pPixels;
+	int width, height;
+	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
+
+	m_pFontTexture = std::make_unique<GraphicsTexture>();
+	m_pFontTexture->Create(m_pGraphics, width, height);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
+	pContext->Execute(true);
 }
 
 void ImGuiRenderer::CreatePipeline()
@@ -44,8 +64,8 @@ void ImGuiRenderer::CreatePipeline()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 	m_pRootSignature = std::make_unique<RootSignature>(2);
-	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	(*m_pRootSignature)[1].AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	D3D12_SAMPLER_DESC samplerDesc = {};
 	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -73,34 +93,8 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineStateObject->Finalize(m_pGraphics->GetDevice());
 }
 
-void ImGuiRenderer::InitializeImGui()
-{
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->AddFontDefault();
-
-	ImGui::StyleColorsDark();
-
-	unsigned char* pPixels;
-	int width, height;
-	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
-
-	m_pFontTexture = std::make_unique<GraphicsTexture>();
-	m_pFontTexture->Create(m_pGraphics, width, height);
-	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
-	pContext->Execute(true);
-
-	m_FontTextureHandle = m_pGraphics->GetGpuVisibleSRVAllocator()->AllocateDescriptor();
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, m_FontTextureHandle.GetCpuHandle(), m_pFontTexture->GetCpuDescriptorHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-}
-
 void ImGuiRenderer::Render(CommandContext& context)
 {
-	context.GetCommandList()->SetPipelineState(m_pPipelineStateObject->GetPipelineState());
-	context.GetCommandList()->SetGraphicsRootSignature(m_pRootSignature->GetRootSignature());
-
 	// copy the new data to the buffers
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -109,17 +103,19 @@ void ImGuiRenderer::Render(CommandContext& context)
 		return;
 	}
 
+	context.SetPipelineState(m_pPipelineStateObject.get());
+	context.SetGraphicsRootSignature(m_pRootSignature.get());
+
 	uint32_t width = m_pGraphics->GetWindowWidth();
 	uint32_t height = m_pGraphics->GetWindowHeight();
 	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)width, (float)height, 0.0f, 0.0f, 1.0f);
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
-	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.SetViewport(FloatRect(0, 0, width, height), 0, 1);
-	context.SetScissorRect(FloatRect(0, 0, width, height));
 
-	ID3D12DescriptorHeap* pDesHeap = m_pGraphics->GetGpuVisibleSRVAllocator()->GetCurrentHeap();
-	context.GetCommandList()->SetDescriptorHeaps(1, &pDesHeap);
-	context.GetCommandList()->SetGraphicsRootDescriptorTable(1, m_FontTextureHandle.GetGpuHandle());
+	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context.SetViewport(FloatRect(0, 0, (float)width, (float)height), 0, 1);
+	context.SetScissorRect(FloatRect(0, 0, (float)width, (float)height));
+
+	context.SetDynamicDescriptor(1, m_pFontTexture->GetCpuDescriptorHandle());
 
 	int vertexOffset = 0;
 	int indexOffset = 0;

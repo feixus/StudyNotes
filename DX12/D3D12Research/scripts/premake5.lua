@@ -4,8 +4,8 @@ ROOT = "../"
 
 workspace (engineName)
     basedir (ROOT)
-    configurations { "Debug", "Development", "Shipping" }
-    platforms { "x32", "x64" }
+    configurations { "Debug", "Release" }
+    platforms { "x64" }
     startproject (engineName)
     language "C++"
 	cppdialect "C++20"
@@ -15,23 +15,14 @@ workspace (engineName)
     filter "platforms:x64"
         defines { "x64", "_AMD64_" }
 
-    filter "platforms:x32"
-        defines { "x32", "_X86" }
-
     -- Configuration-specific settings
     filter "configurations:Debug"
         defines { "_DEBUG" }
         symbols "On"
         warnings "Extra"
 
-    filter "configurations:Development"
-        defines { "DEVELOPMENT" }
-        optimize "Speed"
-        symbols "On"
-        warnings "Extra"
-
-    filter "configurations:Shipping"
-        defines { "SHIPPING" }
+    filter "configurations:Release"
+        defines { "RELEASE" }
         optimize "Speed"
         flags { "No64BitChecks" }
 
