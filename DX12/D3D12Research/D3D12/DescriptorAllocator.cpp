@@ -11,29 +11,15 @@ DescriptorAllocator::~DescriptorAllocator()
 {
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptor()
+DescriptorHandle DescriptorAllocator::AllocateDescriptor()
 {
 	if (m_RemainingDescriptors <= 0)
 	{
 		AllocateNewHeap();
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_CurrentHandle;
-	m_CurrentHandle.Offset(1, m_DescriptorSize);
-	--m_RemainingDescriptors;
-
-	return handle;
-}
-
-DescriptorHandle DescriptorAllocator::AllocateDescriptorWithGPU()
-{
-	if (m_RemainingDescriptors <= 0)
-	{
-		AllocateNewHeap();
-	}
-
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_CurrentHandle;
-	m_CurrentHandle.Offset(1, m_DescriptorSize);
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_CurrentCpuHandle;
+	m_CurrentCpuHandle.Offset(1, m_DescriptorSize);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_CurrentGPUHandle;
 	m_CurrentGPUHandle.Offset(1, m_DescriptorSize);
@@ -44,6 +30,8 @@ DescriptorHandle DescriptorAllocator::AllocateDescriptorWithGPU()
 
 void DescriptorAllocator::AllocateNewHeap()
 {
+	// D3D12_DESCRIPTOR_HEAP_FLAG_NONE: CPU-only, write-only heap
+	// D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE: GPU visible head(eg. shader access)
 	D3D12_DESCRIPTOR_HEAP_DESC desc{};
 	desc.Flags = m_GpuVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	desc.NodeMask = 0;
@@ -54,7 +42,7 @@ void DescriptorAllocator::AllocateNewHeap()
 	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pNewHeap.GetAddressOf()));
 	m_DescriptorHeapPool.push_back(std::move(pNewHeap));
 
-	m_CurrentHandle = m_DescriptorHeapPool.back()->GetCPUDescriptorHandleForHeapStart();
+	m_CurrentCpuHandle = m_DescriptorHeapPool.back()->GetCPUDescriptorHandleForHeapStart();
 	m_CurrentGPUHandle = m_DescriptorHeapPool.back()->GetGPUDescriptorHandleForHeapStart();
 
 	m_RemainingDescriptors = DESCRIPTORS_PER_HEAP;

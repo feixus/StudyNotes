@@ -62,7 +62,7 @@ void Graphics::Update()
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 
 	m_pImGuiRenderer->NewFrame();
-	ImGui::Text("Hello, world!");
+	ImGui::ShowDemoWindow();
 
 	// 3D
 	{
@@ -86,7 +86,7 @@ void Graphics::Update()
 		
 		ID3D12DescriptorHeap* pDesHeap = m_pTextureGpuDescriptorHeap->GetCurrentHeap();
 		pCommandList->SetDescriptorHeaps(1, &pDesHeap);
-		pCommandList->SetGraphicsRootDescriptorTable(1, pDesHeap->GetGPUDescriptorHandleForHeapStart());
+		pCommandList->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
 
 		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
@@ -169,7 +169,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++)
 	{
-		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i, (D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV == i));
+		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
 	m_pTextureGpuDescriptorHeap = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
@@ -245,7 +245,7 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
 		ID3D12Resource* pResource = nullptr;
-		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor();
+		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor().GetCpuHandle();
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_pDevice->CreateRenderTargetView(pResource, nullptr, m_RenderTargetHandles[i]);
 		m_RenderTargets[i] = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_PRESENT);
@@ -267,7 +267,7 @@ void Graphics::OnResize(int width, int height)
 			&clearValue,
 			IID_PPV_ARGS(&pResource)));
 
-	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor();
+	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor().GetCpuHandle();
 	m_pDevice->CreateDepthStencilView(pResource, nullptr, m_DepthStencilHandle);
 	m_pDepthStencilBuffer = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
@@ -279,59 +279,6 @@ void Graphics::OnResize(int width, int height)
 }
 
 void Graphics::InitializeAssets()
-{
-	LoadTexture();
-	LoadGeometry();
-	CreatePipeline();
-}
-
-void Graphics::LoadGeometry()
-{
-	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	
-	m_pMesh = std::make_unique<Mesh>();
-	m_pMesh->Load("Resources/Man.dae", m_pDevice.Get(), pCommandContext);
-	
-	pCommandContext->Execute(true);
-}
-
-void Graphics::LoadTexture()
-{
-	std::vector<std::byte> buffer = ReadFile("Resources/Man.png", std::ios::ate | std::ios::binary);
-	// if channel 3 , to force to 4
-	int width, height, channel;
-	void* pPixels = stbi_load_from_memory((unsigned char*)buffer.data(), (int)buffer.size(), &width, &height, &channel, 4);
-	if (!pPixels)
-	{
-		throw std::runtime_error("Failed to load texture: " + std::string(stbi_failure_reason()));
-	}
-
-	channel = 4;
-
-	m_pTexture = std::make_unique<GraphicsTexture>();
-	m_pTexture->Create(m_pDevice.Get(), width, height);
-	
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pTexture->SetData(pContext, pPixels, width * height * channel);
-
-	pContext->Execute(true);
-
-	stbi_image_free(pPixels);
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	srvDesc.Texture2D.MipLevels = 1;
-	srvDesc.Texture2D.MostDetailedMip = 0;
-	srvDesc.Texture2D.PlaneSlice = 0;
-	srvDesc.Texture2D.ResourceMinLODClamp = 0;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-
-	m_TextureHandle = m_pTextureGpuDescriptorHeap->AllocateDescriptor();
-	m_pDevice->CreateShaderResourceView(m_pTexture->GetResource(), &srvDesc, m_TextureHandle);
-}
-
-void Graphics::CreatePipeline()
 {
 	// shaders
 	Shader vertexShader;
@@ -370,6 +317,21 @@ void Graphics::CreatePipeline()
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 	m_pPipelineStateObject->Finalize(m_pDevice.Get());
+
+	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+	// geometry
+	m_pMesh = std::make_unique<Mesh>();
+	m_pMesh->Load("Resources/Man.dae", m_pDevice.Get(), pCommandContext);
+
+	// texture
+	m_pTexture = std::make_unique<GraphicsTexture>();
+	m_pTexture->Create(this, pCommandContext, "Resources/Man.png");
+	// place descriptor on GPU visible heap
+	m_TextureHandle = m_pTextureGpuDescriptorHeap->AllocateDescriptor();
+	m_pDevice->CopyDescriptorsSimple(1, m_TextureHandle.GetCpuHandle(), m_pTexture->GetCpuDescriptorHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	pCommandContext->Execute(true);
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
@@ -396,6 +358,11 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		m_CommandListPool.emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
 		return m_CommandListPool.back().get();
 	}
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
+{
+	return m_DescriptorHeaps[type]->AllocateDescriptor().GetCpuHandle();
 }
 
 void Graphics::WaitForFence(uint64_t fenceValue)

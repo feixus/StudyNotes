@@ -7,6 +7,8 @@
 #include "Shader.h"
 #include "RootSignature.h"
 #include "PipelineState.h"
+#include "GraphicsResource.h"
+#include "DescriptorAllocator.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -27,56 +29,6 @@ void ImGuiRenderer::NewFrame()
 	ImGui::NewFrame();
 }
 
-bool show_demo_window = false;
-bool show_another_window = false;
-ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-void ImGuiRenderer::Render(CommandContext& context)
-{
-	context.GetCommandList()->SetPipelineState(m_pPipelineStateObject->GetPipelineState());
-	context.GetCommandList()->SetGraphicsRootSignature(m_pRootSignature->GetRootSignature());
-
-	// copy the new data to the buffers
-	ImGui::Render();
-	ImDrawData* pDrawData = ImGui::GetDrawData();
-	if (pDrawData->CmdListsCount == 0)
-	{
-		return;
-	}
-
-	uint32_t width = m_pGraphics->GetWindowWidth();
-	uint32_t height = m_pGraphics->GetWindowHeight();
-	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)width, (float)height, 0.0f, 0.0f, 1.0f);
-	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
-	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.SetViewport(FloatRect(0, 0, width, height), 0, 1);
-	context.SetScissorRect(FloatRect(0, 0, width, height));
-	
-	int vertexOffset = 0;
-	int indexOffset = 0;
-	for (int n = 0; n < pDrawData->CmdListsCount; n++)
-	{
-		const ImDrawList* pCmdList = pDrawData->CmdLists[n];
-		context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
-		context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data);
-
-		for (int cmdIndex = 0; cmdIndex < pCmdList->CmdBuffer.Size; cmdIndex++)
-		{
-			const ImDrawCmd* pCmd = &pCmdList->CmdBuffer[cmdIndex];
-			if (pCmd->UserCallback)
-			{
-				pCmd->UserCallback(pCmdList, pCmd);
-			}
-			else
-			{
-				context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
-				context.DrawIndexed(pCmd->ElemCount, indexOffset, vertexOffset);
-			}
-			indexOffset += pCmd->ElemCount;
-		}
-		vertexOffset += pCmdList->VtxBuffer.Size;
-	}
-}
-
 void ImGuiRenderer::CreatePipeline()
 {
 	// shaders
@@ -91,8 +43,16 @@ void ImGuiRenderer::CreatePipeline()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	m_pRootSignature = std::make_unique<RootSignature>(1);
+	m_pRootSignature = std::make_unique<RootSignature>(2);
 	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	(*m_pRootSignature)[1].AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+
+	D3D12_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+
 	m_pRootSignature->Finalize(m_pGraphics->GetDevice(), rootSignatureFlags);
 
 	// input layout
@@ -117,7 +77,7 @@ void ImGuiRenderer::InitializeImGui()
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->AddFontDefault();
 
 	ImGui::StyleColorsDark();
@@ -125,4 +85,64 @@ void ImGuiRenderer::InitializeImGui()
 	unsigned char* pPixels;
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
+
+	m_pFontTexture = std::make_unique<GraphicsTexture>();
+	m_pFontTexture->Create(m_pGraphics, width, height);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
+	pContext->Execute(true);
+
+	m_FontTextureHandle = m_pGraphics->GetGpuVisibleSRVAllocator()->AllocateDescriptor();
+	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, m_FontTextureHandle.GetCpuHandle(), m_pFontTexture->GetCpuDescriptorHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+}
+
+void ImGuiRenderer::Render(CommandContext& context)
+{
+	context.GetCommandList()->SetPipelineState(m_pPipelineStateObject->GetPipelineState());
+	context.GetCommandList()->SetGraphicsRootSignature(m_pRootSignature->GetRootSignature());
+
+	// copy the new data to the buffers
+	ImGui::Render();
+	ImDrawData* pDrawData = ImGui::GetDrawData();
+	if (pDrawData->CmdListsCount == 0)
+	{
+		return;
+	}
+
+	uint32_t width = m_pGraphics->GetWindowWidth();
+	uint32_t height = m_pGraphics->GetWindowHeight();
+	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)width, (float)height, 0.0f, 0.0f, 1.0f);
+	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
+	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context.SetViewport(FloatRect(0, 0, width, height), 0, 1);
+	context.SetScissorRect(FloatRect(0, 0, width, height));
+
+	ID3D12DescriptorHeap* pDesHeap = m_pGraphics->GetGpuVisibleSRVAllocator()->GetCurrentHeap();
+	context.GetCommandList()->SetDescriptorHeaps(1, &pDesHeap);
+	context.GetCommandList()->SetGraphicsRootDescriptorTable(1, m_FontTextureHandle.GetGpuHandle());
+
+	int vertexOffset = 0;
+	int indexOffset = 0;
+	for (int n = 0; n < pDrawData->CmdListsCount; n++)
+	{
+		const ImDrawList* pCmdList = pDrawData->CmdLists[n];
+		context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
+		context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data);
+
+		for (int cmdIndex = 0; cmdIndex < pCmdList->CmdBuffer.Size; cmdIndex++)
+		{
+			const ImDrawCmd* pCmd = &pCmdList->CmdBuffer[cmdIndex];
+			if (pCmd->UserCallback)
+			{
+				pCmd->UserCallback(pCmdList, pCmd);
+			}
+			else
+			{
+				context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
+				context.DrawIndexed(pCmd->ElemCount, indexOffset, vertexOffset);
+			}
+			indexOffset += pCmd->ElemCount;
+		}
+		vertexOffset += pCmdList->VtxBuffer.Size;
+	}
 }

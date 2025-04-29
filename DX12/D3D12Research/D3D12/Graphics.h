@@ -1,4 +1,5 @@
 #pragma once
+#include "DescriptorHandle.h"
 
 using WindowHandle = HWND;
 
@@ -38,6 +39,8 @@ public:
 	void FreeCommandList(CommandContext* pCommandContext);
 
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
+	DescriptorAllocator* GetGpuVisibleSRVAllocator() const { return m_pTextureGpuDescriptorHeap.get(); }
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	int32_t GetWindowWidth() const { return m_WindowWidth; }
 	int32_t GetWindowHeight() const { return m_WindowHeight; }
@@ -46,9 +49,6 @@ private:
 	void MakeWindow();
 	void InitD3D(WindowHandle pWindow);
 	void InitializeAssets();
-	void LoadGeometry();
-	void LoadTexture();
-	void CreatePipeline();
 	void SetDynamicConstantBufferView(CommandContext* pCommandContext);
 	void CreateSwapchain(WindowHandle pWindow);
 
@@ -86,7 +86,7 @@ private:
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<GraphicsTexture> m_pTexture;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
+	DescriptorHandle m_TextureHandle;
 
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;

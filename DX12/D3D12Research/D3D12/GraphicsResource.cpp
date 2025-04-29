@@ -1,8 +1,10 @@
 #include "stdafx.h"
 #include "GraphicsResource.h"
 #include "CommandContext.h"
+#include "Graphics.h"
+#include "External/stb/stb_image.h"
 
-void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisible)
+void GraphicsBuffer::Create(ID3D12Device* pDevice, int size, bool cpuVisible)
 {
 	m_Size = size;
 
@@ -32,14 +34,14 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisibl
 	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
-void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32_t dataSize)
+void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, int dataSize)
 {
 	assert(m_Size == dataSize);
 	pContext->AllocateUploadMemory(dataSize);
 	pContext->InitializeBuffer(this, pData, dataSize);
 }
 
-void GraphicsTexture::Create(ID3D12Device* pDevice, uint32_t width, uint32_t height)
+void GraphicsTexture::Create(Graphics* pGraphics, int width, int height)
 {
 	m_Width = width;
 	m_Height = height;
@@ -58,7 +60,7 @@ void GraphicsTexture::Create(ID3D12Device* pDevice, uint32_t width, uint32_t hei
 	desc.SampleDesc.Quality = 0;
 
 	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	HR(pDevice->CreateCommittedResource(
+	HR(pGraphics->GetDevice()->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
@@ -66,9 +68,31 @@ void GraphicsTexture::Create(ID3D12Device* pDevice, uint32_t width, uint32_t hei
 		nullptr,
 		IID_PPV_ARGS(&m_pResource)));
 	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.PlaneSlice = 0;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+
+	m_CpuDescriptorHandle = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_CpuDescriptorHandle);
 }
 
-void GraphicsTexture::SetData(CommandContext* pContext, void* pData, uint32_t dataSize)
+void GraphicsTexture::Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath)
+{
+	int components = 0;
+	void* pPixels = stbi_load(filePath, &m_Width, &m_Height, &components, STBI_rgb_alpha);
+	Create(pGraphics, m_Width, m_Height);
+	SetData(pContext, pPixels, m_Width * m_Height * 4);
+	pContext->ExecuteAndReset(true);
+	stbi_image_free(pPixels);
+}
+
+void GraphicsTexture::SetData(CommandContext* pContext, void* pData, int dataSize)
 {
 	assert(m_Width * m_Height * 4 == dataSize);
 	pContext->InitializeTexture(this, pData, dataSize);

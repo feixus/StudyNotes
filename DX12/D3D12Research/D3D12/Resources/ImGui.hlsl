@@ -3,6 +3,9 @@ cbuffer Data : register(b0)
     float4x4 cViewProj;
 }
 
+SamplerState mySampler : register(s0);
+Texture2D diffuse : register(t0);
+
 struct VS_INPUT
 {
     float2 position : POSITION;
@@ -30,5 +33,5 @@ PS_INPUT VSMain(VS_INPUT input)
 
 float4 PSMain(PS_INPUT input) : SV_TARGET
 {
-    return input.color;
+    return input.color * diffuse.Sample(mySampler, input.texCoord);
 }
