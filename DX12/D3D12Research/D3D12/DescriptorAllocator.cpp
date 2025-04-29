@@ -21,8 +21,12 @@ DescriptorHandle DescriptorAllocator::AllocateDescriptor()
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_CurrentCpuHandle;
 	m_CurrentCpuHandle.Offset(1, m_DescriptorSize);
 
-	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_CurrentGPUHandle;
-	m_CurrentGPUHandle.Offset(1, m_DescriptorSize);
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle{};
+	if (m_GpuVisible)
+	{
+		gpuHandle = m_CurrentGPUHandle;
+		m_CurrentGPUHandle.Offset(1, m_DescriptorSize);
+	}
 
 	--m_RemainingDescriptors;
 	return { handle, gpuHandle };
@@ -43,7 +47,10 @@ void DescriptorAllocator::AllocateNewHeap()
 	m_DescriptorHeapPool.push_back(std::move(pNewHeap));
 
 	m_CurrentCpuHandle = m_DescriptorHeapPool.back()->GetCPUDescriptorHandleForHeapStart();
-	m_CurrentGPUHandle = m_DescriptorHeapPool.back()->GetGPUDescriptorHandleForHeapStart();
+	if (m_GpuVisible)
+	{
+		m_CurrentGPUHandle = m_DescriptorHeapPool.back()->GetGPUDescriptorHandleForHeapStart();
+	}
 
 	m_RemainingDescriptors = DESCRIPTORS_PER_HEAP;
 }
