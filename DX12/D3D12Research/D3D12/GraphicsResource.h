@@ -25,7 +25,7 @@ public:
 
 protected:
 	ID3D12Resource* m_pResource{};
-	D3D12_RESOURCE_STATES m_CurrentState{ D3D12_RESOURCE_STATE_COMMON };
+	D3D12_RESOURCE_STATES m_CurrentState;
 };
 
 class GraphicsBuffer : public GraphicsResource

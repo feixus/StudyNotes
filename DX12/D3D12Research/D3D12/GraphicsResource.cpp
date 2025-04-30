@@ -27,11 +27,11 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisibl
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
-		D3D12_RESOURCE_STATE_COMMON,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&m_pResource)));
 
-	m_CurrentState = D3D12_RESOURCE_STATE_COMMON;
+	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
 void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32_t dataSize)

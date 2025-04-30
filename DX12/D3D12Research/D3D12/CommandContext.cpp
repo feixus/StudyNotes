@@ -150,6 +150,7 @@ void CommandContext::InitializeTexture(GraphicsTexture* pResource, void* pData, 
 	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
 	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, 0, 1, 0, &layout, nullptr, nullptr, nullptr);
 	layout.Offset = allocation.Offset;
+
 	auto pDst = CD3DX12_TEXTURE_COPY_LOCATION(pResource->GetResource(), 0);
 	auto pSrc = CD3DX12_TEXTURE_COPY_LOCATION(allocation.pBackingResource, layout);
 	m_pCommandList->CopyTextureRegion(&pDst, 0, 0, 0, &pSrc, nullptr);

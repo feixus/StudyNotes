@@ -59,8 +59,6 @@ void Graphics::Initialize()
 
 void Graphics::Update()
 {
-	// WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-
 	m_pImGuiRenderer->NewFrame();
 	ImGui::ShowDemoWindow();
 

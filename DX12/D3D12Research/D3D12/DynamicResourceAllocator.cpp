@@ -22,14 +22,18 @@ DynamicResourceAllocator::DynamicResourceAllocator(ID3D12Device* pDevice, bool g
 	heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
 	heapProps.CreationNodeMask = 0;
 	heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	// where the resource's memory resides and who(CPU or GPU) can access it.
+	//default: GPU-only memory, upload: CPU-accessible memory, readback: CPU-accessible memory
 	heapProps.Type = gpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
 	heapProps.VisibleNodeMask = 0;
 
+	// resource state: how the GPU to use a resource. 
+	// combine heap type + resource state.  i.e. upload + generic_read, default + copy_dest -> pixel_shader_resource
 	HR(pDevice->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
-		D3D12_RESOURCE_STATE_COMMON,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(m_pBackingResource.GetAddressOf())));
 
