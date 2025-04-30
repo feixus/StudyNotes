@@ -24,8 +24,8 @@ public:
 	void SetResourceState(D3D12_RESOURCE_STATES state) { m_CurrentState = state; }
 
 protected:
-	ID3D12Resource* m_pResource{};
-	D3D12_RESOURCE_STATES m_CurrentState;
+	ID3D12Resource* m_pResource {};
+	D3D12_RESOURCE_STATES m_CurrentState {};
 };
 
 class GraphicsBuffer : public GraphicsResource

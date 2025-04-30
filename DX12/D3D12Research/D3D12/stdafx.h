@@ -20,6 +20,8 @@
 #include <map>
 #include <fstream>
 #include <algorithm>
+#include <assert.h>
+#include <filesystem>
 
 #include "D3DUtils.h"
 #include "DescriptorHandle.h"

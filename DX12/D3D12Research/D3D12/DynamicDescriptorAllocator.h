@@ -39,24 +39,22 @@ private:
 
     struct RootDescriptorEntry
     {
-        RootDescriptorEntry() : AssignedHandlesBitMap(0), TableStart(nullptr), TableSize(0) {}
-
-        BitField<16, uint32_t> AssignedHandlesBitMap;
-        D3D12_CPU_DESCRIPTOR_HANDLE* TableStart;
-        uint32_t TableSize;
+        BitField32 AssignedHandlesBitMap {};
+        D3D12_CPU_DESCRIPTOR_HANDLE* TableStart {};
+        uint32_t TableSize {};
     };
 
     std::array<RootDescriptorEntry, MAX_DESCRIPTOR_PER_TABLE> m_RootDescriptorTable{};
     std::array<D3D12_CPU_DESCRIPTOR_HANDLE, DESCRIPTORS_PER_HEAP> m_HandleCache{};
 
-    BitField<16, uint32_t> m_RootDescriptorMask;
-    BitField<16, uint32_t> m_StaleRootParameters;
+    BitField32 m_RootDescriptorMask;
+    BitField32 m_StaleRootParameters;
 
     Graphics* m_pGraphics;
     CommandContext* m_pOwner;
     D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
-    DescriptorHandle m_StartHandle;
-    int m_CurrentOffst{0};
-    ID3D12DescriptorHeap* m_pCurrentHeap{nullptr};
-    uint32_t m_DescriptorSize{0};
+    DescriptorHandle m_StartHandle {};
+    int m_CurrentOffst {0};
+    ID3D12DescriptorHeap* m_pCurrentHeap {nullptr};
+    uint32_t m_DescriptorSize {0};
 };

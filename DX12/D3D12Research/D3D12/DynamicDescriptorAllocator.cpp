@@ -53,9 +53,6 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors()
     std::array<uint32_t, MAX_DESCRIPTORS_PER_COPY> sourceRangeSizes{};
     std::array<uint32_t, MAX_DESCRIPTORS_PER_COPY> destinationRangeSizes{};
 
-    std::vector<uint32_t> rootIndices{}; // store root indices
-    std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> allGpuHandles{};
-
     for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
     {
         const int rootIndex = it.Value();
@@ -69,8 +66,7 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors()
         destinationRanges[descriptorRanges] = gpuHandle.GetCpuHandle();
         destinationRangeSizes[descriptorRanges] = rangeSize + 1;
 
-        rootIndices.push_back(rootIndex);
-        allGpuHandles.push_back(gpuHandle.GetGpuHandle());
+        m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
 
         gpuHandle += descriptorOffset * m_DescriptorSize;
         descriptorOffset += (rangeSize + 1);
@@ -79,14 +75,8 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors()
 
     m_StaleRootParameters.ClearAll();
 
-    // SetGraphicsRootDescriptorTable need set after CopyDescriptors, to ensure the new data
     m_pGraphics->GetDevice()->CopyDescriptors(descriptorRanges, destinationRanges.data(), destinationRangeSizes.data(),
             descriptorRanges, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
-    
-    for (size_t i = 0; i < rootIndices.size(); i++)
-    {
-        m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndices[i], allGpuHandles[i]);
-    }
 }
 
 bool DynamicDescriptorAllocator::HasSpace(int count)
@@ -116,8 +106,10 @@ void DynamicDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignatur
         int rootIndex = it.Value();
         RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
         entry.AssignedHandlesBitMap.ClearAll();
-        entry.TableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
-        entry.TableStart = m_HandleCache.data() + offset;
+        uint32_t tableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
+        assert(tableSize > 0);
+        entry.TableSize = tableSize;
+        entry.TableStart = &m_HandleCache[offset];
         offset += entry.TableSize;
     }
 }
@@ -148,15 +140,13 @@ uint32_t DynamicDescriptorAllocator::GetRequiredSpace()
 
 ID3D12DescriptorHeap* DynamicDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-    if (m_FreeDescriptors.empty() == false && m_pGraphics->IsFenceComplete(m_FreeDescriptors.front().first))
+    if (m_FreeDescriptors.size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors.front().first))
     {
-        std::cout << "Getting heap from pool" << std::endl;
         ID3D12DescriptorHeap* pHeap = m_FreeDescriptors.front().second;
         m_FreeDescriptors.pop();
         return pHeap;
     }
 
-    std::cout << "Creating new heap" << std::endl;
     ComPtr<ID3D12DescriptorHeap> pHeap;
     D3D12_DESCRIPTOR_HEAP_DESC desc{};
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;

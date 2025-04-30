@@ -39,6 +39,9 @@ namespace BitOperations
 template<uint32_t Bits, typename Storage = uint32_t>
 class BitField;
 
+using BitField16 = BitField<16, uint16_t>;
+using BitField32 = BitField<32, uint32_t>;
+
 template<uint32_t Bits, typename Storage>
 class BitField
 {
@@ -310,6 +313,11 @@ public:
             out.Data[i] = ~Data[i];
         }
         return out;
+    }
+
+    static constexpr uint32_t Capacity()
+    {
+        return Elements() * sizeof(Storage) * 8;
     }
 
 private:

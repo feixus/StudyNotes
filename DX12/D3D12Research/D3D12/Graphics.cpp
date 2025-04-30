@@ -12,18 +12,8 @@
 #include "Shader.h"
 #include "Mesh.h"
 
-#include <filesystem>
-#include <stdexcept>
-#include <cstddef>
-#include <assert.h>
-
-#include "assimp/Importer.hpp"
-#include "assimp/postprocess.h"
-#include "assimp/scene.h"
-
 #define STB_IMAGE_IMPLEMENTATION
 #include "External/stb/stb_image.h"
-
 #include "External/imgui/imgui.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height):
@@ -59,6 +49,8 @@ void Graphics::Initialize()
 
 void Graphics::Update()
 {
+	IdleGPU();
+
 	m_pImGuiRenderer->NewFrame();
 	ImGui::ShowDemoWindow();
 
@@ -222,7 +214,7 @@ void Graphics::InitD3D()
 	// 4x msaa
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
 	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-	qualityLevels.Format = m_RenderTargetFormat;
+	qualityLevels.Format = RENDER_TARGET_FORMAT;
 	qualityLevels.NumQualityLevels = 0;
 	qualityLevels.SampleCount = 1;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
@@ -252,7 +244,7 @@ void Graphics::CreateSwapchain()
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 	swapchainDesc.Width = m_WindowWidth;
 	swapchainDesc.Height = m_WindowHeight;
-	swapchainDesc.Format = m_RenderTargetFormat;
+	swapchainDesc.Format = RENDER_TARGET_FORMAT;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapchainDesc.BufferCount = FRAME_COUNT;
 	swapchainDesc.Scaling = DXGI_SCALING_NONE;
@@ -299,7 +291,7 @@ void Graphics::OnResize(int width, int height)
 			FRAME_COUNT,
 			m_WindowWidth,
 			m_WindowHeight,
-			m_RenderTargetFormat,
+			RENDER_TARGET_FORMAT,
 			DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	m_CurrentBackBufferIndex = 0;
@@ -316,9 +308,9 @@ void Graphics::OnResize(int width, int height)
 
 	// recreate the depth stencil buffer and view
 	ID3D12Resource* pResource = nullptr;
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(m_DepthStencilFormat, width, height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(DEPTH_STENCIL_FORMAT, width, height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 	D3D12_CLEAR_VALUE clearValue;
-	clearValue.Format = m_DepthStencilFormat;
+	clearValue.Format = DEPTH_STENCIL_FORMAT;
 	clearValue.DepthStencil.Depth = 1.0f;
 	clearValue.DepthStencil.Stencil = 0;
 	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);

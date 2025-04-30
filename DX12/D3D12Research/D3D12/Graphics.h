@@ -1,5 +1,4 @@
 #pragma once
-#include "DescriptorHandle.h"
 
 class CommandQueue;
 class CommandContext;
@@ -44,6 +43,13 @@ public:
 
 	bool IsFenceComplete(uint64_t fenceValue);
 
+	D3D12_CPU_DESCRIPTOR_HANDLE* GetDepthStencilView() { return &m_DepthStencilHandle; }
+	D3D12_CPU_DESCRIPTOR_HANDLE* GetCurrentRenderTargetView() { return &m_RenderTargetHandles[m_CurrentBackBufferIndex]; }
+
+	static const uint32_t FRAME_COUNT = 2;
+	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
+
 private:
 	void MakeWindow();
 	void InitD3D();
@@ -51,24 +57,24 @@ private:
 	void SetDynamicConstantBufferView(CommandContext* pCommandContext);
 	void CreateSwapchain();
 
-	static const uint32_t FRAME_COUNT = 2;
-
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
+
+	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_DepthStencilHandle;
 	std::array<std::unique_ptr<GraphicsResource>, FRAME_COUNT> m_RenderTargets;
 	std::unique_ptr<GraphicsResource> m_pDepthStencilBuffer;
+
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
+
 	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
 	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
 	std::queue<CommandContext*> m_FreeCommandContexts;
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
-
-	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles = {};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_DepthStencilHandle = {};
 
 	FloatRect m_Viewport;
 	FloatRect m_ScissorRect;
@@ -79,9 +85,6 @@ private:
 	uint32_t m_CurrentBackBufferIndex = 0;
 	std::array<UINT64, FRAME_COUNT> m_FenceValues = {};
 
-	DXGI_FORMAT m_DepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-
 	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<GraphicsTexture> m_pTexture;
 	std::unique_ptr<GraphicsTexture> m_pTexture2;
@@ -89,7 +92,6 @@ private:
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;
 
-	int m_IndexCount = 0;
 	uint32_t m_MsaaQuality = 0;
 
 	HWND m_Hwnd = nullptr;

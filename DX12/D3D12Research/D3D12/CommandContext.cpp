@@ -24,8 +24,12 @@ CommandContext::~CommandContext()
 
 void CommandContext::Reset()
 {
+	assert(m_pCommandList && m_pAllocator == nullptr);
+
 	m_pAllocator = m_pGraphics->GetCommandQueue(m_Type)->RequestAllocator();
 	m_pCommandList->Reset(m_pAllocator, nullptr);
+	m_NumQueueBarriers = 0;
+
 	BindDescriptorHeaps();
 }
 
@@ -34,16 +38,21 @@ uint64_t CommandContext::Execute(bool wait)
 	FlushResourceBarriers();
 	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
 	uint64_t fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
+	
 	pQueue->FreeAllocator(fenceValue, m_pAllocator);
+	m_pAllocator = nullptr;
+
+	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
+	m_pDynamicDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
 	}
 
+	m_pRenderTarget = nullptr;
+	m_pDepthStencilView = nullptr;
 	m_pGraphics->FreeCommandList(this);
-	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
-	m_pDynamicDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 
 	return fenceValue;
 }

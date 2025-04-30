@@ -6,7 +6,8 @@ public:
 
 	static const int MAX_NUM_DESCRIPTORS = 16;
 	static const int MAX_RANGES_PER_TABLE = 2;
-	using RootSignatureDescriptorMask = BitField<MAX_NUM_DESCRIPTORS, uint32_t>;
+	using RootSignatureDescriptorMask = BitField32;
+	static_assert(MAX_NUM_DESCRIPTORS <= BitField32::Capacity(), "Descriptor bitfield is not large enough");
 
 	RootSignature(uint32_t numRootParameters);
 
@@ -22,8 +23,8 @@ public:
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
 	
-	const BitField<16, uint32_t>& GetSamplerTableMask() const { return m_SamplerMask; }
-	const BitField<16, uint32_t>& GetDescriptorTableMask() const { return m_DescriptorTableMask; }
+	const BitField32& GetSamplerTableMask() const { return m_SamplerMask; }
+	const BitField32& GetDescriptorTableMask() const { return m_DescriptorTableMask; }
 	const std::vector<uint32_t>& GetDescriptorTableSizes() const { return m_DescriptorTableSizes; }
 
 private:
