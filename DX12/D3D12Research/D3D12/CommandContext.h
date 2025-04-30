@@ -51,7 +51,8 @@ public:
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
 
-	void SetDynamicDescriptor(int rootIndex, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle, int count);
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }

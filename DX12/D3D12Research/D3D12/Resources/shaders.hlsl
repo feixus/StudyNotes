@@ -36,7 +36,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 {
     float3 lightDirection = -normalize(float3(-1, -1, 1));
     float diffuse = saturate(dot(lightDirection, input.normal));
+    
     float4 textureColor = myTexture.Sample(mySampler, input.texCoord);
-    return textureColor * diffuse;
 
+    return textureColor * diffuse;
 }

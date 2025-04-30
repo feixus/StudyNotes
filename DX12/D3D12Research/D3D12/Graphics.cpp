@@ -91,7 +91,7 @@ void Graphics::Update()
 			ObjectData.WorldViewProjection = world * view * proj;
 
 			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-			pCommandContext->SetDynamicDescriptor(1, m_pTexture->GetCpuDescriptorHandle());
+			pCommandContext->SetDynamicDescriptor(1, 0, m_pTexture->GetCpuDescriptorHandle());
 			m_pMesh->Draw(pCommandContext);
 		}
 
@@ -101,7 +101,7 @@ void Graphics::Update()
 			ObjectData.WorldViewProjection = world * view * proj;
 
 			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-			pCommandContext->SetDynamicDescriptor(1, m_pTexture2->GetCpuDescriptorHandle());
+			pCommandContext->SetDynamicDescriptor(1, 0, m_pTexture2->GetCpuDescriptorHandle());
 			m_pMesh->Draw(pCommandContext);
 		}
 

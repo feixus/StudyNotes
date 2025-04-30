@@ -117,7 +117,7 @@ void ImGuiRenderer::Render(CommandContext& context)
 	context.SetDepthStencil(m_pGraphics->GetDepthStencilView());
 	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTargetView());
 
-	context.SetDynamicDescriptor(1, m_pFontTexture->GetCpuDescriptorHandle());
+	context.SetDynamicDescriptor(1, 0, m_pFontTexture->GetCpuDescriptorHandle());
 
 	int vertexOffset = 0;
 	int indexOffset = 0;
