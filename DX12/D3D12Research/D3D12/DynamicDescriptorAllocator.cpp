@@ -14,7 +14,7 @@ DynamicDescriptorAllocator::~DynamicDescriptorAllocator()
 {
 }
 
-void DynamicDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE handles[])
+void DynamicDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
 {
     assert(m_RootDescriptorMask.GetBit(rootIndex));
     assert(numHandles + offset <= m_RootDescriptorTable[rootIndex].TableSize);
@@ -22,7 +22,7 @@ void DynamicDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t off
     RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
     for (uint32_t i = 0; i < numHandles; i++)
     {
-        entry.TableStart[i + offset] = handles[i];
+        entry.TableStart[i + offset] = pHandles[i];
         entry.AssignedHandlesBitMap.SetBit(i + offset);
     }
     m_StaleRootParameters.SetBit(rootIndex);
@@ -47,9 +47,9 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors()
     DescriptorHandle gpuHandle = Allocate(requireSpace);
     int descriptorOffset = 0;
 
-    int descriptorSourceRanges = 0;
-    int descriptorDestinationRanges = 0;
-    static const int MAX_DESCRIPTORS_PER_COPY = 8;
+    int sourceRangeCount = 0;
+    int destinationRangeCount = 0;
+
     std::array<D3D12_CPU_DESCRIPTOR_HANDLE, MAX_DESCRIPTORS_PER_COPY> sourceRanges{};
     std::array<D3D12_CPU_DESCRIPTOR_HANDLE, MAX_DESCRIPTORS_PER_COPY> destinationRanges{};
     std::array<uint32_t, MAX_DESCRIPTORS_PER_COPY> sourceRangeSizes{};
@@ -57,32 +57,44 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors()
 
     for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
     {
-        const int rootIndex = it.Value();
+		if (sourceRangeCount >= MAX_DESCRIPTORS_PER_COPY)
+		{
+			m_pGraphics->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(),
+				sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
+
+			sourceRangeCount = 0;
+			destinationRangeCount = 0;
+		}
+
+        int rootIndex = it.Value();
         RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
+        
         uint32_t rangeSize = 0;
         entry.AssignedHandlesBitMap.MostSignificantBit(&rangeSize);
-        
-        for (int i = 0; i < rangeSize + 1; i++)
+        rangeSize += 1;
+
+		// copy the descriptors one by one because they aren't necessarily contiguous
+        for (int i = 0; i < rangeSize; i++)
         {
-            sourceRangeSizes[descriptorSourceRanges] = 1;
-            sourceRanges[descriptorSourceRanges] = *entry.TableStart;
-            ++descriptorSourceRanges;
+            sourceRangeSizes[sourceRangeCount] = 1;
+            sourceRanges[sourceRangeCount] = *entry.TableStart;
+            ++sourceRangeCount;
         }
 
-        destinationRanges[descriptorDestinationRanges] = gpuHandle.GetCpuHandle();
-        destinationRangeSizes[descriptorDestinationRanges] = rangeSize + 1;
+        destinationRanges[destinationRangeCount] = gpuHandle.GetCpuHandle();
+        destinationRangeSizes[destinationRangeCount] = rangeSize;
+        ++destinationRangeCount;
 
         m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
 
         gpuHandle += descriptorOffset * m_DescriptorSize;
-        ++descriptorDestinationRanges;
         descriptorOffset += rangeSize;
     }
 
     m_StaleRootParameters.ClearAll();
 
-    m_pGraphics->GetDevice()->CopyDescriptors(descriptorDestinationRanges, destinationRanges.data(), destinationRangeSizes.data(),
-        descriptorSourceRanges, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
+    m_pGraphics->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(),
+        sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
 }
 
 bool DynamicDescriptorAllocator::HasSpace(int count)
