@@ -21,7 +21,7 @@ public:
 	Graphics(uint32_t width, uint32_t height);
 	~Graphics();
 
-	virtual void Initialize();
+	virtual void Initialize(HWND hWnd);
 	virtual void Update();
 	virtual void Shutdown();
 
@@ -43,28 +43,26 @@ public:
 
 	bool IsFenceComplete(uint64_t fenceValue);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE* GetDepthStencilView() { return &m_DepthStencilHandle; }
-	D3D12_CPU_DESCRIPTOR_HANDLE* GetCurrentRenderTargetView() { return &m_RenderTargetHandles[m_CurrentBackBufferIndex]; }
+	GraphicsTexture* GetDepthStencilView() const { return m_pDepthStencilBuffer.get(); }
+	GraphicsTexture* GetCurrentRenderTarget() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	static const uint32_t FRAME_COUNT = 2;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 private:
-	void MakeWindow();
-	void InitD3D();
+	void InitD3D(HWND hWnd);
 	void InitializeAssets();
-	void SetDynamicConstantBufferView(CommandContext* pCommandContext);
-	void CreateSwapchain();
+	void CreateSwapchain(HWND hWnd);
+
+	void UpdateImGui();
 
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 
-	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_DepthStencilHandle;
-	std::array<std::unique_ptr<GraphicsResource>, FRAME_COUNT> m_RenderTargets;
-	std::unique_ptr<GraphicsResource> m_pDepthStencilBuffer;
+	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_RenderTargets;
+	std::unique_ptr<GraphicsTexture> m_pDepthStencilBuffer;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
@@ -93,12 +91,4 @@ private:
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;
 
 	uint32_t m_MsaaQuality = 0;
-
-	HWND m_Hwnd = nullptr;
-	bool mMaximized = false;
-	bool mResizing = false;
-	bool mMinimized = false;
-
-	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 };

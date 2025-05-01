@@ -47,10 +47,18 @@ public:
 	void Create(Graphics* pGraphics, int width, int height);
 	void SetData(CommandContext* pContext, void* pData, uint32_t dataSize);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuDescriptorHandle() { return m_CpuDescriptorHandle; }
+	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
+	void CreateDepthStencil(Graphics* pGraphics, int width, int height, DXGI_FORMAT format);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() { return m_Rtv; }
+
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() { return m_Srv; }
 
 private:
+	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
+
 	int m_Width{0};
 	int m_Height{0};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_CpuDescriptorHandle{};
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv;
 };

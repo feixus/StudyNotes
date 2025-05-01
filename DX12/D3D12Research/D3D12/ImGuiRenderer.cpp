@@ -25,7 +25,7 @@ ImGuiRenderer::~ImGuiRenderer()
 void ImGuiRenderer::NewFrame()
 {
 	ImGuiIO& io = ImGui::GetIO();
-	io.DisplaySize = ImVec2((float)m_WindowWidth, (float)m_WindowHeight);
+	io.DisplaySize = ImVec2((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
 	ImGui::NewFrame();
 }
 
@@ -46,6 +46,8 @@ void ImGuiRenderer::InitializeImGui()
 	m_pFontTexture->Create(m_pGraphics, width, height);
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
+	io.Fonts->SetTexID(m_pFontTexture->GetSRV().ptr);
+
 	pContext->Execute(true);
 }
 
@@ -95,7 +97,6 @@ void ImGuiRenderer::CreatePipeline()
 
 void ImGuiRenderer::Render(CommandContext& context)
 {
-	// copy the new data to the buffers
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
 	if (pDrawData->CmdListsCount == 0)
@@ -114,19 +115,19 @@ void ImGuiRenderer::Render(CommandContext& context)
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, (float)width, (float)height), 0, 1);
 	context.SetScissorRect(FloatRect(0, 0, (float)width, (float)height));
-	context.SetDepthStencil(m_pGraphics->GetDepthStencilView());
-	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTargetView());
 
-	context.SetDynamicDescriptor(1, 0, m_pFontTexture->GetCpuDescriptorHandle());
+	auto rtv = m_pGraphics->GetCurrentRenderTarget()->GetRTV();
+	auto srv = m_pGraphics->GetDepthStencilView()->GetRTV();
+	context.SetRenderTarget(&rtv);
+	context.SetDepthStencil(&srv);
 
-	int vertexOffset = 0;
-	int indexOffset = 0;
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{
 		const ImDrawList* pCmdList = pDrawData->CmdLists[n];
 		context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
 		context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data);
 
+		int indexOffset = 0;
 		for (int cmdIndex = 0; cmdIndex < pCmdList->CmdBuffer.Size; cmdIndex++)
 		{
 			const ImDrawCmd* pCmd = &pCmdList->CmdBuffer[cmdIndex];
@@ -137,10 +138,15 @@ void ImGuiRenderer::Render(CommandContext& context)
 			else
 			{
 				context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
-				context.DrawIndexed(pCmd->ElemCount, indexOffset, vertexOffset);
+				if (pCmd->TextureId > 0)
+				{
+					D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle{};
+					cpuHandle.ptr = pCmd->TextureId;
+					context.SetDynamicDescriptor(1, 0, cpuHandle);
+				}
+				context.DrawIndexed(pCmd->ElemCount, indexOffset, 0);
 			}
 			indexOffset += pCmd->ElemCount;
 		}
-		vertexOffset += pCmdList->VtxBuffer.Size;
 	}
 }

@@ -12,8 +12,6 @@
 #include "Shader.h"
 #include "Mesh.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "External/stb/stb_image.h"
 #include "External/imgui/imgui.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height):
@@ -25,40 +23,23 @@ Graphics::~Graphics()
 {
 }
 
-void Graphics::Initialize()
+void Graphics::Initialize(HWND hWnd)
 {
-	MakeWindow();
-	InitD3D();
-
+	InitD3D(hWnd);
 	InitializeAssets();
-
-	MSG msg = {};
-	while (msg.message != WM_QUIT)
-	{
-		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-		else
-		{
-			Update();
-		}
-	}
 }
 
 void Graphics::Update()
 {
-	IdleGPU();
-
 	m_pImGuiRenderer->NewFrame();
-	ImGui::ShowDemoWindow();
+
+	UpdateImGui();
 
 	uint64_t nextFenceValue = 0;
+	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	
 	// 3D
 	{
-		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 		pCommandContext->SetPipelineState(m_pPipelineStateObject.get());
 		pCommandContext->SetGraphicsRootSignature(m_pRootSignature.get());
 		
@@ -68,11 +49,13 @@ void Graphics::Update()
 		pCommandContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 		
 		DirectX::SimpleMath::Color clearColor{ 0.1f, 0.1f, 0.1f, 1.0f };
-		pCommandContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
-		pCommandContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+		pCommandContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);
+		pCommandContext->ClearDepth(GetDepthStencilView()->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
-		pCommandContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
-		pCommandContext->SetDepthStencil(&m_DepthStencilHandle);
+		auto rtv = GetCurrentRenderTarget()->GetRTV();
+		auto dsv = GetDepthStencilView()->GetRTV();
+		pCommandContext->SetRenderTarget(&rtv);
+		pCommandContext->SetDepthStencil(&dsv);
 
 		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
@@ -91,7 +74,7 @@ void Graphics::Update()
 			ObjectData.WorldViewProjection = world * view * proj;
 
 			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-			pCommandContext->SetDynamicDescriptor(1, 0, m_pTexture->GetCpuDescriptorHandle());
+			pCommandContext->SetDynamicDescriptor(1, 0, m_pTexture->GetSRV());
 			m_pMesh->Draw(pCommandContext);
 		}
 
@@ -101,28 +84,22 @@ void Graphics::Update()
 			ObjectData.WorldViewProjection = world * view * proj;
 
 			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-			pCommandContext->SetDynamicDescriptor(1, 0, m_pTexture2->GetCpuDescriptorHandle());
+			pCommandContext->SetDynamicDescriptor(1, 0, m_pTexture2->GetSRV());
 			m_pMesh->Draw(pCommandContext);
 		}
-
-		nextFenceValue = pCommandContext->Execute(false);
 	}
 
 	// UI
 	{
-		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 		m_pImGuiRenderer->Render(*pCommandContext);
-
-		nextFenceValue = pCommandContext->Execute(false);
 	}
 
 	// present
 	{
-		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		pCommandContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
-		nextFenceValue = pCommandContext->Execute(false);
 	}
+
+	nextFenceValue = pCommandContext->Execute(false);
 
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	m_FenceValues[m_CurrentBackBufferIndex] = nextFenceValue;
@@ -137,7 +114,7 @@ void Graphics::Shutdown()
 	IdleGPU();
 }
 
-void Graphics::InitD3D()
+void Graphics::InitD3D(HWND hWnd)
 {
 	UINT dxgiFactoryFlags = 0;
 
@@ -228,16 +205,16 @@ void Graphics::InitD3D()
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
 
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 1024 * 1024 * 32);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 0x20000);
 	
 	// swap chain
-	CreateSwapchain();
+	CreateSwapchain(hWnd);
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 }
 
-void Graphics::CreateSwapchain()
+void Graphics::CreateSwapchain(HWND hWnd)
 {
 	m_pSwapchain.Reset();
 
@@ -249,7 +226,7 @@ void Graphics::CreateSwapchain()
 	swapchainDesc.BufferCount = FRAME_COUNT;
 	swapchainDesc.Scaling = DXGI_SCALING_NONE;
 	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 	swapchainDesc.SampleDesc.Count = 1;  // must set for msaa >= 1, not 0
 	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapchainDesc.Stereo = false;
@@ -264,13 +241,59 @@ void Graphics::CreateSwapchain()
 
 	HR(m_pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-		m_Hwnd,
+		hWnd,
 		&swapchainDesc,
 		&fsDesc,
 		nullptr,
 		&pSwapChain));
 
 	pSwapChain.As(&m_pSwapchain);
+}
+
+void Graphics::UpdateImGui()
+{
+	//ImGui::ShowDemoWindow();
+	ImGui::SetNextWindowPos(ImVec2(GetWindowWidth(), 0), 0, ImVec2(1, 0));
+	ImGui::Begin("Debug Info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
+	ImGui::SameLine(100);
+	ImGui::Text("FPS: %.1f", GameTimer::DeltaTime());
+	ImGui::End();
+
+	ImGui::Begin("GPU Stats");
+	ImGui::BeginTabBar("GpuStatBar");
+	ImGui::BeginTabItem("Descriptor Heaps");
+	ImGui::Text("Used CPU Descriptor Heaps");
+	for (const auto& pAllocator : m_DescriptorHeaps)
+	{
+		switch (pAllocator->GetType())
+		{
+		case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
+			ImGui::Text("CBV_SRV_UAV");
+			break;
+		case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
+			ImGui::Text("RTV");
+			break;
+		case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
+			ImGui::Text("DSV");
+			break;
+		case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
+			ImGui::Text("Sampler");
+			break;
+		default:
+			break;
+		}
+
+		uint32_t totalDescriptors = pAllocator->GetHeapCount() * DescriptorAllocator::DESCRIPTORS_PER_HEAP;
+		uint32_t usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
+		std::stringstream str;
+		str << usedDescriptors << "/" << totalDescriptors;
+		ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
+	}
+
+	ImGui::EndTabItem();
+	ImGui::EndTabBar();
+	ImGui::End();
 }
 
 void Graphics::OnResize(int width, int height)
@@ -300,31 +323,13 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
 		ID3D12Resource* pResource = nullptr;
-		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor().GetCpuHandle();
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-		m_pDevice->CreateRenderTargetView(pResource, nullptr, m_RenderTargetHandles[i]);
-		m_RenderTargets[i] = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_PRESENT);
+		m_RenderTargets[i] = std::make_unique<GraphicsTexture>();
+		m_RenderTargets[i]->CreateForSwapChain(this, pResource);
 	}
 
-	// recreate the depth stencil buffer and view
-	ID3D12Resource* pResource = nullptr;
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(DEPTH_STENCIL_FORMAT, width, height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-	D3D12_CLEAR_VALUE clearValue;
-	clearValue.Format = DEPTH_STENCIL_FORMAT;
-	clearValue.DepthStencil.Depth = 1.0f;
-	clearValue.DepthStencil.Stencil = 0;
-	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	HR(m_pDevice->CreateCommittedResource(
-			&heapProps,
-			D3D12_HEAP_FLAG_NONE,
-			&desc,
-			D3D12_RESOURCE_STATE_DEPTH_WRITE,
-			&clearValue,
-			IID_PPV_ARGS(&pResource)));
-
-	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor().GetCpuHandle();
-	m_pDevice->CreateDepthStencilView(pResource, nullptr, m_DepthStencilHandle);
-	m_pDepthStencilBuffer = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	m_pDepthStencilBuffer = std::make_unique<GraphicsTexture>();
+	m_pDepthStencilBuffer->CreateDepthStencil(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT);
 
 	m_Viewport.Left = 0;
 	m_Viewport.Top = 0;
@@ -417,7 +422,7 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 
 D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-	return m_DescriptorHeaps[type]->AllocateDescriptor().GetCpuHandle();
+	return m_DescriptorHeaps[type]->AllocateDescriptor();
 }
 
 void Graphics::WaitForFence(uint64_t fenceValue)
@@ -440,28 +445,6 @@ void Graphics::IdleGPU()
 	}
 }
 
-void Graphics::SetDynamicConstantBufferView(CommandContext* pCommandContext)
-{
-	struct ConstantBufferData
-	{
-		Matrix World;
-		Matrix WorldViewProjection;
-	} Data;
-
-	Matrix proj = XMMatrixPerspectiveFovLH(
-		XM_PIDIV4,
-		static_cast<float>(m_WindowWidth) / m_WindowHeight,
-		0.1f,
-		1000.0f);
-	Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
-	Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(0, -50, 500);
-	Data.World = world;
-	Data.WorldViewProjection = world * view * proj;
-
-	pCommandContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
-}
-
-
 bool Graphics::IsFenceComplete(uint64_t fenceValue)
 {
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
@@ -469,146 +452,3 @@ bool Graphics::IsFenceComplete(uint64_t fenceValue)
 	return pQueue->IsFenceComplete(fenceValue);
 }
 
-void Graphics::MakeWindow()
-{
-	WNDCLASSW wc;
-
-	wc.hInstance = GetModuleHandle(nullptr);
-	wc.cbClsExtra = 0;
-	wc.cbWndExtra = 0;
-	wc.hIcon = 0;
-	wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-	wc.lpfnWndProc = WndProcStatic;
-	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpszClassName = L"wndClass";
-	wc.lpszMenuName = nullptr;
-	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-
-	if (!RegisterClass(&wc))
-	{
-		return;
-	}
-
-	int displayWidth = GetSystemMetrics(SM_CXSCREEN);
-	int displayHeight = GetSystemMetrics(SM_CYSCREEN);
-
-	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
-
-	RECT windowRec = { 0, 0, (LONG)m_WindowWidth, (LONG)m_WindowHeight };
-	AdjustWindowRect(&windowRec, windowStyle, false);
-
-	uint32_t windowWidth = windowRec.right - windowRec.left;
-	uint32_t windowHeight = windowRec.bottom - windowRec.top;
-
-	int x = (displayWidth - windowWidth) / 2;
-	int y = (displayHeight - windowHeight) / 2;
-
-	m_Hwnd = CreateWindow(
-		L"wndClass",
-		L"Hello World DX12",
-		windowStyle,
-		x,
-		y,
-		windowWidth,
-		windowHeight,
-		nullptr,
-		nullptr,
-		GetModuleHandle(nullptr),
-		this
-	);
-
-	if (!m_Hwnd) return;
-
-	ShowWindow(m_Hwnd, SW_SHOWDEFAULT);
-
-	if (!UpdateWindow(m_Hwnd)) return;
-}
-
-
-LRESULT Graphics::WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	Graphics* pThis = nullptr;
-	if (message == WM_NCCREATE)
-	{
-		pThis = static_cast<Graphics*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
-		SetLastError(0);
-		if (!SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis)))
-		{
-			if (GetLastError() != 0)
-			{
-				return 0;
-			}
-		}
-	}
-	else
-	{
-		pThis = reinterpret_cast<Graphics*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-	}
-
-	if (pThis)
-	{
-		return pThis->WndProc(hWnd, message, wParam, lParam);
-	}
-
-	return DefWindowProc(hWnd, message, wParam, lParam);
-}
-
-LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	switch (message)
-	{
-		// resize the window
-	case WM_SIZE:
-		m_WindowWidth = LOWORD(lParam);
-		m_WindowHeight = HIWORD(lParam);
-		if (m_pDevice)
-		{
-			if (wParam == SIZE_MINIMIZED)
-			{
-				mMinimized = true;
-				mMaximized = false;
-			}
-			else if (wParam == SIZE_MAXIMIZED)
-			{
-				mMinimized = false;
-				mMaximized = true;
-				OnResize(m_WindowWidth, m_WindowHeight);
-			}
-			else if (wParam == SIZE_RESTORED)
-			{
-				// restoring from minimized state
-				if (mMinimized)
-				{
-					mMinimized = false;
-					OnResize(m_WindowWidth, m_WindowHeight);
-				}
-				// restoring from maximized state
-				else if (mMaximized)
-				{
-					mMaximized = false;
-					OnResize(m_WindowWidth, m_WindowHeight);
-				}
-				else if (mResizing)
-				{
-
-				}
-				else  // api call such as SetWindowPos/ mSwapchain->SetFullscreenState
-				{
-					OnResize(m_WindowWidth, m_WindowHeight);
-				}
-			}
-		}
-		return 0;
-	case WM_KEYUP:
-		if (wParam == VK_ESCAPE)
-		{
-			PostQuitMessage(0);
-		}
-		return 0;
-	case WM_DESTROY:
-		PostQuitMessage(0);
-		return 0;
-	}
-
-	return DefWindowProc(hWnd, message, wParam, lParam);
-}
