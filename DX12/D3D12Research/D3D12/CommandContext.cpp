@@ -18,10 +18,6 @@ CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* p
 	m_pDynamicDescriptorAllocator = std::make_unique<DynamicDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
-CommandContext::~CommandContext()
-{
-}
-
 void CommandContext::Reset()
 {
 	assert(m_pCommandList && m_pAllocator == nullptr);
@@ -50,8 +46,6 @@ uint64_t CommandContext::Execute(bool wait)
 		pQueue->WaitForFence(fenceValue);
 	}
 
-	m_pRenderTarget = nullptr;
-	m_pDepthStencilView = nullptr;
 	m_pGraphics->FreeCommandList(this);
 
 	return fenceValue;
@@ -70,64 +64,6 @@ uint64_t CommandContext::ExecuteAndReset(bool wait)
 	m_pCommandList->Reset(m_pAllocator, nullptr);
 
 	return fenceValue;
-}
-
-void CommandContext::Draw(int vertexStart, int vertexCount)
-{
-	PrepareDraw();
-	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
-}
-
-void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex)
-{
-	PrepareDraw();
-	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
-}
-
-void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex, int instanceStart)
-{
-	PrepareDraw();
-	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
-}
-
-void CommandContext::ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const DirectX::SimpleMath::Color& color /*= Color(0.2f, 0.2f, 0.2f, 1.0f)*/)
-{
-	m_pCommandList->ClearRenderTargetView(rtv, color, 0, nullptr);
-}
-
-void CommandContext::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags /*= D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL*/, float depth /*= 1.0f*/, unsigned char stencil /*= 0*/)
-{
-	m_pCommandList->ClearDepthStencilView(dsv, clearFlags, depth, stencil, 0, nullptr);
-}
-
-void CommandContext::SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv)
-{
-	m_pRenderTarget = pRtv;
-}
-
-void CommandContext::SetDepthStencil(D3D12_CPU_DESCRIPTOR_HANDLE* pDsv)
-{
-	m_pDepthStencilView = pDsv;
-}
-
-void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
-{
-	m_pCommandList->IASetPrimitiveTopology(type);
-}
-
-void CommandContext::SetVertexBuffer(D3D12_VERTEX_BUFFER_VIEW pVertexBufferView)
-{
-	SetVertexBuffers(&pVertexBufferView, 1);
-}
-
-void CommandContext::SetVertexBuffers(D3D12_VERTEX_BUFFER_VIEW* pBuffers, int bufferCount)
-{
-	m_pCommandList->IASetVertexBuffers(0, bufferCount, pBuffers);
-}
-
-void CommandContext::SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView)
-{
-	m_pCommandList->IASetIndexBuffer(&indexBufferView);
 }
 
 DynamicAllocation CommandContext::AllocateUploadMemory(uint32_t size)
@@ -167,39 +103,16 @@ void CommandContext::InitializeTexture(GraphicsTexture* pResource, void* pData, 
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
 }
 
-void CommandContext::SetViewport(const FloatRect& rect, float minDepth, float maxDepth)
-{
-	D3D12_VIEWPORT viewport;
-	viewport.Height = (float)rect.GetHeight();
-	viewport.Width = (float)rect.GetWidth();
-	viewport.MinDepth = minDepth;
-	viewport.MaxDepth = maxDepth;
-	viewport.TopLeftX = (float)rect.Left;
-	viewport.TopLeftY = (float)rect.Top;
-
-	m_pCommandList->RSSetViewports(1, &viewport);
-}
-
-void CommandContext::SetScissorRect(const FloatRect& rect)
-{
-	D3D12_RECT r;
-	r.left = (LONG)rect.Left;
-	r.top = (LONG)rect.Top;
-	r.right = (LONG)rect.Right;
-	r.bottom = (LONG)rect.Bottom;
-
-	m_pCommandList->RSSetScissorRects(1, &r);
-}
-
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
 	m_pDynamicDescriptorAllocator->ParseRootSignature(pRootSignature);
 }
 
-void CommandContext::SetPipelineState(PipelineState* pPipelineState)
+void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 {
-	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
+	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
+	m_pDynamicDescriptorAllocator->ParseRootSignature(pRootSignature);
 }
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate)
@@ -319,10 +232,110 @@ void CommandContext::MarkEnd()
 #endif
 }
 
-void CommandContext::PrepareDraw()
+
+GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator)
+	: CommandContext(pGraphics, pCommandlist, pAllocator, D3D12_COMMAND_LIST_TYPE_DIRECT)
+{
+}
+
+void GraphicsCommandContext::Draw(int vertexStart, int vertexCount)
 {
 	FlushResourceBarriers();
 	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
+}
 
-	m_pCommandList->OMSetRenderTargets(1, m_pRenderTarget, false, m_pDepthStencilView);
+void GraphicsCommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex)
+{
+	FlushResourceBarriers();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
+}
+
+void GraphicsCommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex, int instanceStart)
+{
+	FlushResourceBarriers();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
+}
+
+void GraphicsCommandContext::ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const DirectX::SimpleMath::Color& color /*= Color(0.2f, 0.2f, 0.2f, 1.0f)*/)
+{
+	m_pCommandList->ClearRenderTargetView(rtv, color, 0, nullptr);
+}
+
+void GraphicsCommandContext::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags /*= D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL*/, float depth /*= 1.0f*/, unsigned char stencil /*= 0*/)
+{
+	m_pCommandList->ClearDepthStencilView(dsv, clearFlags, depth, stencil, 0, nullptr);
+}
+
+void GraphicsCommandContext::SetRenderTargets(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv)
+{
+	m_pCommandList->OMSetRenderTargets(1, pRtv, false, &dsv);
+}
+
+void GraphicsCommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
+{
+	m_pCommandList->IASetPrimitiveTopology(type);
+}
+
+void GraphicsCommandContext::SetVertexBuffer(D3D12_VERTEX_BUFFER_VIEW pVertexBufferView)
+{
+	SetVertexBuffers(&pVertexBufferView, 1);
+}
+
+void GraphicsCommandContext::SetVertexBuffers(D3D12_VERTEX_BUFFER_VIEW* pBuffers, int bufferCount)
+{
+	m_pCommandList->IASetVertexBuffers(0, bufferCount, pBuffers);
+}
+
+void GraphicsCommandContext::SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView)
+{
+	m_pCommandList->IASetIndexBuffer(&indexBufferView);
+}
+
+void GraphicsCommandContext::SetViewport(const FloatRect& rect, float minDepth, float maxDepth)
+{
+	D3D12_VIEWPORT viewport;
+	viewport.Height = (float)rect.GetHeight();
+	viewport.Width = (float)rect.GetWidth();
+	viewport.MinDepth = minDepth;
+	viewport.MaxDepth = maxDepth;
+	viewport.TopLeftX = (float)rect.Left;
+	viewport.TopLeftY = (float)rect.Top;
+
+	m_pCommandList->RSSetViewports(1, &viewport);
+}
+
+void GraphicsCommandContext::SetScissorRect(const FloatRect& rect)
+{
+	D3D12_RECT r;
+	r.left = (LONG)rect.Left;
+	r.top = (LONG)rect.Top;
+	r.right = (LONG)rect.Right;
+	r.bottom = (LONG)rect.Bottom;
+
+	m_pCommandList->RSSetScissorRects(1, &r);
+}
+
+void GraphicsCommandContext::SetPipelineState(GraphicsPipelineState* pPipelineState)
+{
+	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
+}
+
+ComputeCommandContext::ComputeCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator)
+	: CommandContext(pGraphics, pCommandlist, pAllocator, D3D12_COMMAND_LIST_TYPE_COMPUTE)
+{
+}
+
+void ComputeCommandContext::SetPipelineState(ComputePipelineState* pPipelineState)
+{
+	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
+}
+
+void ComputeCommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+	FlushResourceBarriers();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }

@@ -105,8 +105,8 @@ void GraphicsTexture::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pT
 	m_CurrentState = D3D12_RESOURCE_STATE_PRESENT;
 
 	D3D12_RESOURCE_DESC desc = pTexture->GetDesc();
-	m_Width = desc.Width;
-	m_Height = desc.Height;
+	m_Width = (int)desc.Width;
+	m_Height = (int)desc.Height;
 	m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
 }
@@ -154,11 +154,11 @@ void GraphicsTexture::CreateDepthStencil(Graphics* pGraphics, int width, int hei
 	srvDesc.Texture2D.ResourceMinLODClamp = 0;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 
-	m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
+	/*m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);*/
 
-	m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-	pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, nullptr, m_Rtv);
+	m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+	pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, nullptr, m_Srv);
 }
 
 DXGI_FORMAT GraphicsTexture::GetDepthFormat(DXGI_FORMAT format)

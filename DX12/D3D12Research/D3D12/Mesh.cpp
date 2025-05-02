@@ -5,73 +5,114 @@
 #include "assimp/postprocess.h"
 #include "GraphicsResource.h"
 #include "CommandContext.h"
+#include "Graphics.h"
 
-bool Mesh::Load(const char* pFilePath, ID3D12Device* pDevice, CommandContext* pContext)
+bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandContext* pContext)
 {
-    struct Vertex
+	Assimp::Importer importer;
+	const aiScene* pScene = importer.ReadFile(pFilePath,
+		aiProcess_Triangulate |
+		aiProcess_ConvertToLeftHanded |
+		aiProcess_GenUVCoords |
+		aiProcess_CalcTangentSpace);
+
+	for (int i = 0; i < pScene->mNumMeshes; ++i)
+	{
+		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], pGraphics->GetDevice(), pContext));
+		pContext->ExecuteAndReset(true);
+	}
+
+	std::filesystem::path path(pFilePath);
+	std::filesystem::path dirPath = path.parent_path();
+
+	m_Materials.resize(pScene->mNumMaterials);
+	for (int i = 0; i < pScene->mNumMaterials; ++i)
+	{
+		aiString path;
+		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
+
+		Material& m = m_Materials[i];
+		if (ret == aiReturn_SUCCESS)
+		{
+			std::filesystem::path texturePath = path.C_Str();
+			texturePath = dirPath / texturePath;
+			m.pDiffuseTexture = std::make_unique<GraphicsTexture>();
+			m.pDiffuseTexture->Create(pGraphics, pContext, texturePath.string().c_str());
+		}
+		pContext->ExecuteAndReset(true);
+	}
+
+	return true;
+}
+
+std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, GraphicsCommandContext* pContext)
+{
+	struct Vertex
 	{
 		Vector3 Position;
 		Vector2 TexCoord;
 		Vector3 Normal;
+		Vector3 Tangent;
 	};
 
-	Assimp::Importer importer;
-	const aiScene* pScene = importer.ReadFile(pFilePath,
-			aiProcess_Triangulate |
-			aiProcess_ConvertToLeftHanded |
-			aiProcess_GenSmoothNormals |
-			aiProcess_CalcTangentSpace |
-			aiProcess_LimitBoneWeights);
+	std::vector<Vertex> vertices(pMesh->mNumVertices);
+	std::vector<uint32_t> indices(pMesh->mNumFaces * 3);
 
-	std::vector<Vertex> vertices(pScene->mMeshes[0]->mNumVertices);
-	for (size_t i = 0; i < vertices.size(); i++)
+	for (size_t i = 0; i < pMesh->mNumVertices; i++)
 	{
 		Vertex& vertex = vertices[i];
-		vertex.Position = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mVertices[i]);
-		vertex.TexCoord = *reinterpret_cast<Vector2*>(&pScene->mMeshes[0]->mTextureCoords[0][i]);
-		vertex.Normal = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mNormals[i]);
-	}
-
-	std::vector<uint32_t> indices(pScene->mMeshes[0]->mNumFaces * 3);
-	for (size_t i = 0; i < pScene->mMeshes[0]->mNumFaces; i++)
-	{
-		for (size_t j = 0; j < 3; j++)
+		vertex.Position = *reinterpret_cast<Vector3*>(&pMesh->mVertices[i]);
+		vertex.TexCoord = *reinterpret_cast<Vector2*>(&pMesh->mTextureCoords[0][i]);
+		vertex.Normal = *reinterpret_cast<Vector3*>(&pMesh->mNormals[i]);
+		if (pMesh->HasTangentsAndBitangents())
 		{
-			assert(pScene->mMeshes[0]->mFaces[i].mNumIndices == 3);
-			indices[i * 3 + j] = pScene->mMeshes[0]->mFaces[i].mIndices[j];
+			vertex.Tangent = *reinterpret_cast<Vector3*>(&pMesh->mTangents[i]);
 		}
 	}
 
+	for (size_t i = 0; i < pMesh->mNumFaces; i++)
+	{
+		const aiFace& face = pMesh->mFaces[i];
+		for (size_t j = 0; j < 3; j++)
+		{
+			assert(face.mNumIndices == 3);
+			indices[i * 3 + j] = face.mIndices[j];
+		}
+	}
+
+	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	{
 		uint32_t size = uint32_t(vertices.size() * sizeof(Vertex));
-		m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
-		m_pVertexBuffer->Create(pDevice, size, false);
-		m_pVertexBuffer->SetData(pContext, vertices.data(), size);
+		pSubMesh->m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
+		pSubMesh->m_pVertexBuffer->Create(pDevice, size, false);
+		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
 
-		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGpuHandle();
-		m_VertexBufferView.SizeInBytes = size;
-		m_VertexBufferView.StrideInBytes = sizeof(Vertex);
+		pSubMesh->m_VertexBufferView.BufferLocation = pSubMesh->m_pVertexBuffer->GetGpuHandle();
+		pSubMesh->m_VertexBufferView.SizeInBytes = size;
+		pSubMesh->m_VertexBufferView.StrideInBytes = sizeof(Vertex);
 	}
 
 	{
-		m_IndexCount = (int)indices.size();
-		uint32_t size = (uint32_t)(sizeof(uint32_t)* indices.size());
-		m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
-		m_pIndexBuffer->Create(pDevice, size, false);
-		m_pIndexBuffer->SetData(pContext, indices.data(), size);
+		uint32_t size = (uint32_t)(sizeof(uint32_t) * indices.size());
+		pSubMesh->m_IndexCount = (int)indices.size();
+		pSubMesh->m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
+		pSubMesh->m_pIndexBuffer->Create(pDevice, size, false);
+		pSubMesh->m_pIndexBuffer->SetData(pContext, indices.data(), size);
 
-		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGpuHandle();
-		m_IndexBufferView.SizeInBytes = size;
-		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+		pSubMesh->m_IndexBufferView.BufferLocation = pSubMesh->m_pIndexBuffer->GetGpuHandle();
+		pSubMesh->m_IndexBufferView.SizeInBytes = size;
+		pSubMesh->m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	}
-	
-	return true;
+
+	pSubMesh->m_MaterialId = pMesh->mMaterialIndex;
+
+	return pSubMesh;
 }
 
-void Mesh::Draw(CommandContext* pContext)
+void SubMesh::Draw(GraphicsCommandContext* pContext)
 {
-    pContext->SetVertexBuffer(m_VertexBufferView);
-    pContext->SetIndexBuffer(m_IndexBufferView);
-    pContext->DrawIndexed(m_IndexCount, 0, 0);
+	pContext->SetVertexBuffer(m_VertexBufferView);
+	pContext->SetIndexBuffer(m_IndexBufferView);
+	pContext->DrawIndexed(m_IndexCount, 0, 0);
 }
 

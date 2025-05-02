@@ -51,6 +51,7 @@ public:
 	void CreateDepthStencil(Graphics* pGraphics, int width, int height, DXGI_FORMAT format);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() { return m_Rtv; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() { return m_Srv; }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() { return m_Srv; }
 

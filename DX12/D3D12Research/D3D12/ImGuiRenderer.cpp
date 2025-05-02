@@ -84,7 +84,7 @@ void ImGuiRenderer::CreatePipeline()
 	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 
 	// pipeline state
-	m_pPipelineStateObject = std::make_unique<PipelineState>();
+	m_pPipelineStateObject = std::make_unique<GraphicsPipelineState>();
 	m_pPipelineStateObject->SetBlendMode(BlendMode::ALPHA, false);
 	m_pPipelineStateObject->SetDepthWrite(false);
 	m_pPipelineStateObject->SetDepthEnable(true);
@@ -95,7 +95,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineStateObject->Finalize(m_pGraphics->GetDevice());
 }
 
-void ImGuiRenderer::Render(CommandContext& context)
+void ImGuiRenderer::Render(GraphicsCommandContext& context)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -117,9 +117,8 @@ void ImGuiRenderer::Render(CommandContext& context)
 	context.SetScissorRect(FloatRect(0, 0, (float)width, (float)height));
 
 	auto rtv = m_pGraphics->GetCurrentRenderTarget()->GetRTV();
-	auto srv = m_pGraphics->GetDepthStencilView()->GetRTV();
-	context.SetRenderTarget(&rtv);
-	context.SetDepthStencil(&srv);
+	auto dsv = m_pGraphics->GetDepthStencilView()->GetDSV();
+	context.SetRenderTargets(&rtv, dsv);
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{

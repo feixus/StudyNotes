@@ -2,10 +2,10 @@
 
 #include "DescriptorHandle.h"
 
-class CommandContext;
+class GraphicsCommandContext;
 class Graphics;
 class RootSignature;
-class PipelineState;
+class GraphicsPipelineState;
 class GraphicsTexture;
 class ImGuiRenderer
 {
@@ -14,7 +14,7 @@ public:
 	~ImGuiRenderer();
 
 	void NewFrame();
-	void Render(CommandContext& context);
+	void Render(GraphicsCommandContext& context);
 
 private:
 	static const uint32_t m_WindowWidth{ 1240 };
@@ -24,7 +24,7 @@ private:
 	void InitializeImGui();
 
 	Graphics* m_pGraphics;
-	std::unique_ptr<PipelineState> m_pPipelineStateObject;
+	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsTexture> m_pFontTexture;
 };

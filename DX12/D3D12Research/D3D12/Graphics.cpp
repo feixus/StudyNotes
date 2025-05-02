@@ -33,10 +33,8 @@ void Graphics::Update()
 {
 	m_pImGuiRenderer->NewFrame();
 
-	UpdateImGui();
-
 	uint64_t nextFenceValue = 0;
-	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	
 	// 3D
 	{
@@ -50,12 +48,11 @@ void Graphics::Update()
 		
 		DirectX::SimpleMath::Color clearColor{ 0.1f, 0.1f, 0.1f, 1.0f };
 		pCommandContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);
-		pCommandContext->ClearDepth(GetDepthStencilView()->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+		pCommandContext->ClearDepth(GetDepthStencilView()->GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
 		auto rtv = GetCurrentRenderTarget()->GetRTV();
-		auto dsv = GetDepthStencilView()->GetRTV();
-		pCommandContext->SetRenderTarget(&rtv);
-		pCommandContext->SetDepthStencil(&dsv);
+		auto dsv = GetDepthStencilView()->GetDSV();
+		pCommandContext->SetRenderTargets(&rtv, dsv);
 
 		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
@@ -65,29 +62,30 @@ void Graphics::Update()
 			Matrix WorldViewProjection;
 		} ObjectData;
 
-		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000.0f);
-		Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 10000.0f);
+		Matrix view = XMMatrixLookAtLH(Vector3(1, 1, -1) * 400, Vector3(0, 0, 0), Vector3(0, 1, 0));
 
 		{
-			Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(-50, -50, 500);
-			ObjectData.World = world;
-			ObjectData.WorldViewProjection = world * view * proj;
+			ObjectData.World = XMMatrixIdentity();
+			ObjectData.WorldViewProjection = ObjectData.World * view * proj;
 
 			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-			pCommandContext->SetDynamicDescriptor(1, 0, m_pTexture->GetSRV());
-			m_pMesh->Draw(pCommandContext);
-		}
 
-		{
-			Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(50, -50, 500);
-			ObjectData.World = world;
-			ObjectData.WorldViewProjection = world * view * proj;
+			for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
+			{
+				SubMesh* pSubMesh = m_pMesh->GetMesh(i);
+				const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
+				if (material.pDiffuseTexture)
+				{
+					pCommandContext->SetDynamicDescriptor(1, 0, material.pDiffuseTexture->GetSRV());
+				}
 
-			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-			pCommandContext->SetDynamicDescriptor(1, 0, m_pTexture2->GetSRV());
-			m_pMesh->Draw(pCommandContext);
+				pSubMesh->Draw(pCommandContext);
+			}
 		}
 	}
+
+	UpdateImGui();
 
 	// UI
 	{
@@ -196,7 +194,8 @@ void Graphics::InitD3D(HWND hWnd)
 	qualityLevels.SampleCount = 1;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
 
-	m_CommandQueues[0] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
 	// allocate descriptor heaps pool
 	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
@@ -205,7 +204,7 @@ void Graphics::InitD3D(HWND hWnd)
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
 
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 0x20000);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x20000);
 	
 	// swap chain
 	CreateSwapchain(hWnd);
@@ -260,7 +259,9 @@ void Graphics::UpdateImGui()
 	ImGui::Text("FPS: %.1f", GameTimer::DeltaTime());
 	ImGui::End();
 
-	ImGui::Begin("GPU Stats");
+	ImGui::Begin("GPU Stats", nullptr,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
 	ImGui::BeginTabBar("GpuStatBar");
 	ImGui::BeginTabItem("Descriptor Heaps");
 	ImGui::Text("Used CPU Descriptor Heaps");
@@ -340,58 +341,53 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializeAssets()
 {
-	// shaders
-	Shader vertexShader;
-	vertexShader.Load("Resources/shaders.hlsl", Shader::Type::VertexShader, "VSMain");
-	Shader pixelShader;
-	pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
+	{
+		// shaders
+		Shader vertexShader;
+		vertexShader.Load("Resources/shaders.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader pixelShader;
+		pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
 
-	// input layout
-	std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
-	inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+		// input layout
+		std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
+		inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+		inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+		inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+		inputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 
-	// root signature
-	m_pRootSignature = std::make_unique<RootSignature>(2);
-	m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+		// root signature
+		m_pRootSignature = std::make_unique<RootSignature>(2);
+		m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+		m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_PIXEL);
 
-	D3D12_SAMPLER_DESC samplerDesc{};
-	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+		D3D12_SAMPLER_DESC samplerDesc{};
+		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
-	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-	m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+		m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
 
-	// pipeline state
-	m_pPipelineStateObject = std::make_unique<PipelineState>();
-	m_pPipelineStateObject->SetInputLayout(inputElements.data(), (uint32_t)inputElements.size());
-	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
-	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-	m_pPipelineStateObject->Finalize(m_pDevice.Get());
+		// pipeline state
+		m_pPipelineStateObject = std::make_unique<GraphicsPipelineState>();
+		m_pPipelineStateObject->SetInputLayout(inputElements.data(), (uint32_t)inputElements.size());
+		m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
+		m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pPipelineStateObject->Finalize(m_pDevice.Get());
 
-	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		// geometry
+		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		m_pMesh = std::make_unique<Mesh>();
+		m_pMesh->Load("Resources/Man.dae", this, pCommandContext);
 
-	// geometry
-	m_pMesh = std::make_unique<Mesh>();
-	m_pMesh->Load("Resources/Man.dae", m_pDevice.Get(), pCommandContext);
-
-	// texture
-	m_pTexture = std::make_unique<GraphicsTexture>();
-	m_pTexture->Create(this, pCommandContext, "Resources/Man.png");
-	
-	m_pTexture2 = std::make_unique<GraphicsTexture>();
-	m_pTexture2->Create(this, pCommandContext, "Resources/ManInverted.png");
-
-	pCommandContext->Execute(true);
+		pCommandContext->Execute(true);
+	}
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
@@ -401,11 +397,13 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 
 CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
-	if (m_FreeCommandContexts.size() > 0)
-	{
-		CommandContext* pCommandContext = m_FreeCommandContexts.front();
-		m_FreeCommandContexts.pop();
+	int typeIndex = type;
 
+	std::scoped_lock lockGuard(m_ContextAllocationMutex);
+	if (m_FreeCommandContexts[typeIndex].size() > 0)
+	{
+		CommandContext* pCommandContext = m_FreeCommandContexts[typeIndex].front();
+		m_FreeCommandContexts[typeIndex].pop();
 		pCommandContext->Reset();
 		return pCommandContext;
 	}
@@ -415,8 +413,22 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
 		m_CommandLists.push_back(std::move(pCommandList));
-		m_CommandListPool.emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
-		return m_CommandListPool.back().get();
+		
+		switch (type)
+		{
+		case D3D12_COMMAND_LIST_TYPE_DIRECT:
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<GraphicsCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
+
+			break;
+		case D3D12_COMMAND_LIST_TYPE_COPY:
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<ComputeCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
+			break;
+		default:
+			assert(false);
+			break;
+		}
+
+		return m_CommandListPool[typeIndex].back().get();
 	}
 }
 
@@ -434,14 +446,18 @@ void Graphics::WaitForFence(uint64_t fenceValue)
 
 void Graphics::FreeCommandList(CommandContext * pCommandContext)
 {
-	m_FreeCommandContexts.push(pCommandContext);
+	std::scoped_lock lockGuard(m_ContextAllocationMutex);
+	m_FreeCommandContexts[pCommandContext->GetType()].push(pCommandContext);
 }
 
 void Graphics::IdleGPU()
 {
 	for (auto& pCommandQueue : m_CommandQueues)
 	{
-		pCommandQueue->WaitForIdle();
+		if (pCommandQueue)
+		{
+			pCommandQueue->WaitForIdle();
+		}
 	}
 }
 

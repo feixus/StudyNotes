@@ -8,7 +8,7 @@ class ImGuiRenderer;
 class GraphicsBuffer;
 class GraphicsResource;
 class RootSignature;
-class PipelineState;
+class GraphicsPipelineState;
 class GraphicsTexture;
 class Mesh;
 
@@ -46,7 +46,7 @@ public:
 	GraphicsTexture* GetDepthStencilView() const { return m_pDepthStencilBuffer.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
-	static const uint32_t FRAME_COUNT = 2;
+	static const uint32_t FRAME_COUNT = 3;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
@@ -67,10 +67,11 @@ private:
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
 
-	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
-	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
-	std::queue<CommandContext*> m_FreeCommandContexts;
+	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandContexts;
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
+	std::mutex m_ContextAllocationMutex;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 
@@ -88,7 +89,7 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pTexture2;
 
 	std::unique_ptr<RootSignature> m_pRootSignature;
-	std::unique_ptr<PipelineState> m_pPipelineStateObject;
+	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
 
 	uint32_t m_MsaaQuality = 0;
 };
