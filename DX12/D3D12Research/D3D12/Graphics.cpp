@@ -33,6 +33,14 @@ void Graphics::Update()
 {
 	m_pImGuiRenderer->NewFrame();
 
+	ComputeCommandContext* pComputeContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	pComputeContext->SetComputeRootSignature(m_pComputeTestRootSignature.get());
+	pComputeContext->SetPipelineState(m_pComputePipelineStateObject.get());
+	pComputeContext->SetDynamicDescriptor(0, 0, m_pMesh->GetMaterial(0).pDiffuseTexture->GetSRV());
+	pComputeContext->SetDynamicDescriptor(1, 0, m_UavHandle);
+	pComputeContext->Dispatch(64, 64, 1);
+	uint64_t computeFence = pComputeContext->Execute(false);
+
 	uint64_t nextFenceValue = 0;
 	GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	
@@ -56,6 +64,8 @@ void Graphics::Update()
 
 		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
+		pCommandContext->InsertResourceBarrier(m_pTestTargetTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
+
 		struct ConstantBufferData
 		{
 			Matrix World;
@@ -64,25 +74,25 @@ void Graphics::Update()
 
 		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 10000.0f);
 		Matrix view = XMMatrixLookAtLH(Vector3(1, 1, -1) * 400, Vector3(0, 0, 0), Vector3(0, 1, 0));
+		
+		ObjectData.World = XMMatrixIdentity();
+		ObjectData.WorldViewProjection = ObjectData.World * view * proj;
 
+		pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
+
+		for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 		{
-			ObjectData.World = XMMatrixIdentity();
-			ObjectData.WorldViewProjection = ObjectData.World * view * proj;
-
-			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-
-			for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
+			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
+			const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
+			if (material.pDiffuseTexture)
 			{
-				SubMesh* pSubMesh = m_pMesh->GetMesh(i);
-				const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
-				if (material.pDiffuseTexture)
-				{
-					pCommandContext->SetDynamicDescriptor(1, 0, material.pDiffuseTexture->GetSRV());
-				}
-
-				pSubMesh->Draw(pCommandContext);
+				pCommandContext->SetDynamicDescriptor(1, 0, m_pTestTargetTexture->GetSRV());
 			}
+
+			pSubMesh->Draw(pCommandContext);
 		}
+
+		pCommandContext->InsertResourceBarrier(m_pTestTargetTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 	}
 
 	UpdateImGui();
@@ -97,6 +107,7 @@ void Graphics::Update()
 		pCommandContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
 	}
 
+	WaitForFence(computeFence);
 	nextFenceValue = pCommandContext->Execute(false);
 
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
@@ -344,9 +355,9 @@ void Graphics::InitializeAssets()
 	{
 		// shaders
 		Shader vertexShader;
-		vertexShader.Load("Resources/shaders.hlsl", Shader::Type::VertexShader, "VSMain");
+		vertexShader.Load("Resources/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain");
 		Shader pixelShader;
-		pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
+		pixelShader.Load("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		// input layout
 		std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
@@ -388,6 +399,36 @@ void Graphics::InitializeAssets()
 
 		pCommandContext->Execute(true);
 	}
+
+	{
+		// shaders
+		Shader computeShader;
+		computeShader.Load("Resources/ComputeTest.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		// root signature
+		m_pComputeTestRootSignature = std::make_unique<RootSignature>(2);
+		m_pComputeTestRootSignature->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pComputeTestRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
+
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+		m_pComputeTestRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
+
+		// pipeline state
+		m_pComputePipelineStateObject = std::make_unique<ComputePipelineState>();
+		m_pComputePipelineStateObject->SetRootSignature(m_pComputeTestRootSignature->GetRootSignature());
+		m_pComputePipelineStateObject->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pComputePipelineStateObject->Finalize(m_pDevice.Get());
+	}
+
+	GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_pTestTargetTexture = std::make_unique<GraphicsTexture>();
+	m_pTestTargetTexture->Create(this, 128, 128);
+	m_UavHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptor();
+	m_pDevice->CreateUnorderedAccessView(m_pTestTargetTexture->GetResource(), nullptr, nullptr, m_UavHandle);
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
@@ -420,7 +461,7 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<GraphicsCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
 
 			break;
-		case D3D12_COMMAND_LIST_TYPE_COPY:
+		case D3D12_COMMAND_LIST_TYPE_COMPUTE:
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<ComputeCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
 			break;
 		default:

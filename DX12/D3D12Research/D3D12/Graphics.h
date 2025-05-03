@@ -9,6 +9,7 @@ class GraphicsBuffer;
 class GraphicsResource;
 class RootSignature;
 class GraphicsPipelineState;
+class ComputePipelineState;
 class GraphicsTexture;
 class Mesh;
 
@@ -85,11 +86,12 @@ private:
 	std::array<UINT64, FRAME_COUNT> m_FenceValues = {};
 
 	std::unique_ptr<Mesh> m_pMesh;
-	std::unique_ptr<GraphicsTexture> m_pTexture;
-	std::unique_ptr<GraphicsTexture> m_pTexture2;
 
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
 
-	uint32_t m_MsaaQuality = 0;
+	std::unique_ptr<RootSignature> m_pComputeTestRootSignature;
+	std::unique_ptr<ComputePipelineState> m_pComputePipelineStateObject;
+	std::unique_ptr<GraphicsTexture> m_pTestTargetTexture;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_UavHandle;
 };

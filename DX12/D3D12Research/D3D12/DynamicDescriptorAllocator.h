@@ -13,7 +13,7 @@ public:
 	~DynamicDescriptorAllocator() = default;
 
     void SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-    void UploadAndBindStagedDescriptors();
+    void UploadAndBindStagedDescriptors(bool compute = false);
 
     bool HasSpace(int count);
     ID3D12DescriptorHeap* GetHeap();

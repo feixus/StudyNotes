@@ -13,7 +13,7 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisibl
 	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	desc.Alignment = 0;
 	desc.DepthOrArraySize = 1;
-	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	desc.Width = size;
 	desc.Height = 1;
 	desc.Format = DXGI_FORMAT_UNKNOWN;
@@ -53,7 +53,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, int width, int height)
 	desc.DepthOrArraySize = 1;
 	desc.Width = width;
 	desc.Height = height;
-	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	desc.MipLevels = 1;
