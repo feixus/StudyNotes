@@ -93,5 +93,4 @@ private:
 	std::unique_ptr<RootSignature> m_pComputeTestRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputePipelineStateObject;
 	std::unique_ptr<GraphicsTexture> m_pTestTargetTexture;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_UavHandle;
 };

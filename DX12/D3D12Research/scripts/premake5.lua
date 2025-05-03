@@ -28,7 +28,8 @@ workspace (engineName)
 
     -- Reset filter
     filter {}
-        kind "WindowedApp"
+	   --kind "WindowedApp"
+       kind "ConsoleApp"
 
 project (engineName)
     location (ROOT .. engineName)

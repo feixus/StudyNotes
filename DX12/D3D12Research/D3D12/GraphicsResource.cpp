@@ -81,6 +81,9 @@ void GraphicsTexture::Create(Graphics* pGraphics, int width, int height)
 
 	m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
+
+	m_Uav = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, nullptr, m_Uav);
 }
 
 void GraphicsTexture::Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath)

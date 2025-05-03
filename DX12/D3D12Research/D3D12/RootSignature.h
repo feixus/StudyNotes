@@ -11,6 +11,7 @@ public:
 
 	RootSignature(uint32_t numRootParameters);
 
+	void SetRootConstants(uint32_t rootIndex, uint32_t registerSlot, uint32_t constantCount, D3D12_SHADER_VISIBILITY visibility);
 	void SetConstantBufferView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility);
 	void SetShaderResourceView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility);
 	void SetDescriptorTable(uint32_t rootIndex, uint32_t rangeCount, D3D12_SHADER_VISIBILITY visibility);

@@ -26,6 +26,7 @@ public:
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
 	void FlushResourceBarriers();
 	
+	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
