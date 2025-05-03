@@ -16,7 +16,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 		aiProcess_GenUVCoords |
 		aiProcess_CalcTangentSpace);
 
-	for (int i = 0; i < pScene->mNumMeshes; ++i)
+	for (uint32_t i = 0; i < pScene->mNumMeshes; ++i)
 	{
 		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], pGraphics->GetDevice(), pContext));
 		pContext->ExecuteAndReset(true);
@@ -26,15 +26,15 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 	std::filesystem::path dirPath = path.parent_path();
 
 	m_Materials.resize(pScene->mNumMaterials);
-	for (int i = 0; i < pScene->mNumMaterials; ++i)
+	for (uint32_t i = 0; i < pScene->mNumMaterials; ++i)
 	{
-		aiString path;
-		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
+		aiString diffusePath;
+		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &diffusePath);
 
 		Material& m = m_Materials[i];
 		if (ret == aiReturn_SUCCESS)
 		{
-			std::filesystem::path texturePath = path.C_Str();
+			std::filesystem::path texturePath = diffusePath.C_Str();
 			texturePath = dirPath / texturePath;
 			m.pDiffuseTexture = std::make_unique<GraphicsTexture>();
 			m.pDiffuseTexture->Create(pGraphics, pContext, texturePath.string().c_str());
@@ -58,7 +58,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 	std::vector<Vertex> vertices(pMesh->mNumVertices);
 	std::vector<uint32_t> indices(pMesh->mNumFaces * 3);
 
-	for (size_t i = 0; i < pMesh->mNumVertices; i++)
+	for (uint32_t i = 0; i < pMesh->mNumVertices; i++)
 	{
 		Vertex& vertex = vertices[i];
 		vertex.Position = *reinterpret_cast<Vector3*>(&pMesh->mVertices[i]);
@@ -70,10 +70,10 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 		}
 	}
 
-	for (size_t i = 0; i < pMesh->mNumFaces; i++)
+	for (uint32_t i = 0; i < pMesh->mNumFaces; i++)
 	{
 		const aiFace& face = pMesh->mFaces[i];
-		for (size_t j = 0; j < 3; j++)
+		for (uint32_t j = 0; j < 3; j++)
 		{
 			assert(face.mNumIndices == 3);
 			indices[i * 3 + j] = face.mIndices[j];

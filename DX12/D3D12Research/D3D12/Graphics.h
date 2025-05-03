@@ -89,8 +89,4 @@ private:
 
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
-
-	std::unique_ptr<RootSignature> m_pComputeTestRootSignature;
-	std::unique_ptr<ComputePipelineState> m_pComputePipelineStateObject;
-	std::unique_ptr<GraphicsTexture> m_pTestTargetTexture;
 };

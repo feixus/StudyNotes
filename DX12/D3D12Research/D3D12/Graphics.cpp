@@ -33,23 +33,6 @@ void Graphics::Update()
 {
 	m_pImGuiRenderer->NewFrame();
 
-	ComputeCommandContext* pComputeContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	pComputeContext->SetComputeRootSignature(m_pComputeTestRootSignature.get());
-	pComputeContext->SetPipelineState(m_pComputePipelineStateObject.get());
-
-	struct TexelSize
-	{
-		float X;
-		float Y;
-	} Data;
-	Data.X = 1.0f / m_pTestTargetTexture->GetWidth();
-	Data.Y = 1.0f / m_pTestTargetTexture->GetHeight();
-	pComputeContext->SetComputeRootConstants(0, 2, &Data);
-	pComputeContext->SetDynamicDescriptor(1, 0, m_pMesh->GetMaterial(0).pDiffuseTexture->GetSRV());
-	pComputeContext->SetDynamicDescriptor(2, 0, m_pTestTargetTexture->GetUAV());
-	pComputeContext->Dispatch(m_pTestTargetTexture->GetWidth() / 8, m_pTestTargetTexture->GetHeight() / 8, 1);
-	uint64_t computeFence = pComputeContext->Execute(false);
-
 	uint64_t nextFenceValue = 0;
 	GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	
@@ -87,19 +70,17 @@ void Graphics::Update()
 
 		pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 
-		pCommandContext->InsertResourceBarrier(m_pTestTargetTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
 		for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 		{
 			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
 			const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
 			if (material.pDiffuseTexture)
 			{
-				pCommandContext->SetDynamicDescriptor(1, 0, m_pTestTargetTexture->GetSRV());
+				pCommandContext->SetDynamicDescriptor(1, 0, material.pDiffuseTexture->GetSRV());
 			}
 
 			pSubMesh->Draw(pCommandContext);
 		}
-		pCommandContext->InsertResourceBarrier(m_pTestTargetTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 	}
 
 	UpdateImGui();
@@ -114,7 +95,6 @@ void Graphics::Update()
 		pCommandContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
 	}
 
-	WaitForFence(computeFence);
 	nextFenceValue = pCommandContext->Execute(false);
 
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
@@ -270,7 +250,7 @@ void Graphics::CreateSwapchain(HWND hWnd)
 void Graphics::UpdateImGui()
 {
 	//ImGui::ShowDemoWindow();
-	ImGui::SetNextWindowPos(ImVec2(GetWindowWidth(), 0), 0, ImVec2(1, 0));
+	ImGui::SetNextWindowPos(ImVec2((float)GetWindowWidth(), 0), 0, ImVec2(1, 0));
 	ImGui::Begin("Debug Info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
 	ImGui::SameLine(100);
@@ -405,41 +385,6 @@ void Graphics::InitializeAssets()
 		m_pMesh->Load("Resources/Man.dae", this, pCommandContext);
 
 		pCommandContext->Execute(true);
-	}
-
-	{
-		// shaders
-		Shader computeShader;
-		computeShader.Load("Resources/ComputeTest.hlsl", Shader::Type::ComputeShader, "CSMain");
-
-		// root signature
-		m_pComputeTestRootSignature = std::make_unique<RootSignature>(3);
-		m_pComputeTestRootSignature->SetRootConstants(0, 0, 2, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeTestRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeTestRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-		D3D12_SAMPLER_DESC samplerDesc{};
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		m_pComputeTestRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_ALL);
-
-		m_pComputeTestRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
-
-		// pipeline state
-		m_pComputePipelineStateObject = std::make_unique<ComputePipelineState>();
-		m_pComputePipelineStateObject->SetRootSignature(m_pComputeTestRootSignature->GetRootSignature());
-		m_pComputePipelineStateObject->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pComputePipelineStateObject->Finalize(m_pDevice.Get());
-
-		// texture for testing
-		m_pTestTargetTexture = std::make_unique<GraphicsTexture>();
-		m_pTestTargetTexture->Create(this, 512, 512);
 	}
 }
 

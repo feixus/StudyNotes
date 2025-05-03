@@ -108,8 +108,8 @@ void GraphicsTexture::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pT
 	m_CurrentState = D3D12_RESOURCE_STATE_PRESENT;
 
 	D3D12_RESOURCE_DESC desc = pTexture->GetDesc();
-	m_Width = (int)desc.Width;
-	m_Height = (int)desc.Height;
+	m_Width = (uint32_t)desc.Width;
+	m_Height = (uint32_t)desc.Height;
 	m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
 }
