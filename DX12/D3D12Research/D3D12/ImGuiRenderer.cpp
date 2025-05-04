@@ -43,7 +43,7 @@ void ImGuiRenderer::InitializeImGui()
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
 
 	m_pFontTexture = std::make_unique<GraphicsTexture>();
-	m_pFontTexture->Create(m_pGraphics, width, height);
+	m_pFontTexture->Create(m_pGraphics, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource);
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
 	io.Fonts->SetTexID(m_pFontTexture->GetSRV().ptr);
@@ -89,6 +89,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineStateObject->SetDepthWrite(false);
 	m_pPipelineStateObject->SetDepthEnable(true);
 	m_pPipelineStateObject->SetInputLayout(elementDesc.data(), (uint32_t)elementDesc.size());
+	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D24_UNORM_S8_UINT, 1, 0);
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());

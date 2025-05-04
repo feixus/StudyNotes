@@ -22,8 +22,8 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 		pContext->ExecuteAndReset(true);
 	}
 
-	std::filesystem::path path(pFilePath);
-	std::filesystem::path dirPath = path.parent_path();
+	std::filesystem::path filePath(pFilePath);
+	std::filesystem::path dirPath = filePath.parent_path();
 
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32_t i = 0; i < pScene->mNumMaterials; ++i)
@@ -37,8 +37,19 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 			std::filesystem::path texturePath = diffusePath.C_Str();
 			texturePath = dirPath / texturePath;
 			m.pDiffuseTexture = std::make_unique<GraphicsTexture>();
-			m.pDiffuseTexture->Create(pGraphics, pContext, texturePath.string().c_str());
+			m.pDiffuseTexture->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
 		}
+
+		/*aiString normalPath;
+		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_HEIGHT, 0, &normalPath);
+		if (ret == aiReturn_SUCCESS)
+		{
+			std::filesystem::path texturePath = normalPath.C_Str();
+			texturePath = dirPath / texturePath;
+			m.pNormalTexture = std::make_unique<GraphicsTexture>();
+			m.pNormalTexture->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
+		}*/
+
 		pContext->ExecuteAndReset(true);
 	}
 
@@ -82,7 +93,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	{
-		uint32_t size = uint32_t(vertices.size() * sizeof(Vertex));
+		uint32_t size = (uint32_t)vertices.size() * sizeof(Vertex);
 		pSubMesh->m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
 		pSubMesh->m_pVertexBuffer->Create(pDevice, size, false);
 		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
@@ -93,7 +104,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 	}
 
 	{
-		uint32_t size = (uint32_t)(sizeof(uint32_t) * indices.size());
+		uint32_t size = sizeof(uint32_t) * (uint32_t)indices.size();
 		pSubMesh->m_IndexCount = (int)indices.size();
 		pSubMesh->m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
 		pSubMesh->m_pIndexBuffer->Create(pDevice, size, false);

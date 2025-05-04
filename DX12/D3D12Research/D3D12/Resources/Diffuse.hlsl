@@ -4,9 +4,15 @@ cbuffer ObjectData : register(b0) // b-const buffer t-texture s-sampler
     float4x4 WorldViewProjection;
 }
 
+cbuffer PerFrameData : register(b1)
+{
+    float4 LightPosition;
+    float4x4 LightViewProjection;
+}
+
 SamplerState mySampler : register(s0);
 Texture2D myTexture : register(t0);
-Texture2D myNormalMap : register(t1);
+Texture2D myShadowMap : register(t1);
 
 struct VSInput
 {
@@ -22,21 +28,8 @@ struct PSInput
     float2 texCoord : TEXCOORD;
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
+    float4 lpos : TEXCOORD1;
 };
-
-float3 CalcNormal(float3 normal, float3 tangent, float2 texCoord, bool invertY)
-{
-    float3 binormal = normalize(cross(tangent, normal));
-    float3x3 normalMatrix = float3x3(tangent, binormal, normal);
-
-    float3 sampledNormal = myNormalMap.Sample(mySampler, texCoord).xyz * 2.0f - 1.0f;
-    if (invertY)
-    {
-        sampledNormal.y = -sampledNormal.y;
-    }
-
-    return mul(sampledNormal, normalMatrix);
-}
 
 PSInput VSMain(VSInput input)
 {
@@ -46,17 +39,26 @@ PSInput VSMain(VSInput input)
     result.texCoord = input.texCoord;
     result.normal = normalize(mul(input.normal, (float3x3)World));
     result.tangent = normalize(mul(input.tangent, (float3x3)World));
+    result.lpos = mul(float4(input.position, 1.0f), mul(World, LightViewProjection));
     return result;
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    float3 lightDirection = -normalize(float3(-1, -1, 1));
-
-    //float3 normal = CalcNormal(input.normal, input.tangent, input.texCoord, false);
+    float3 lightDirection = normalize(LightPosition.xyz);
     float diffuse = saturate(dot(lightDirection, input.normal));
-    
     float4 textureColor = myTexture.Sample(mySampler, input.texCoord);
+    
+    // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
+    input.lpos.xyz /= input.lpos.w;
+    input.lpos.x = input.lpos.x / 2.0f + 0.5f;
+    input.lpos.y = input.lpos.y / -2.0f + 0.5f;
+    input.lpos.z -= 0.0001f;
+    float depth = myShadowMap.Sample(mySampler, input.lpos.xy).r;
+    if (depth < input.lpos.z)
+    {
+        diffuse *= 0.5f;
+    }
 
     return textureColor * diffuse;
 }

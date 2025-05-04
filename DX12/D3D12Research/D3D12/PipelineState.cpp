@@ -6,15 +6,29 @@ GraphicsPipelineState::GraphicsPipelineState()
 	m_Desc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	m_Desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	m_Desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	m_Desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	m_Desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	m_Desc.NumRenderTargets = 1;
 	m_Desc.SampleDesc.Count = 1;
 	m_Desc.SampleDesc.Quality = 0;
     m_Desc.SampleMask = UINT_MAX;
 	m_Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	m_Desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
     m_Desc.NodeMask = 0;
+}
+
+void GraphicsPipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality)
+{
+	SetRenderTargetFormats(&rtvFormat, 1, dsvFormat, msaa, msaaQuality);
+}
+
+void GraphicsPipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32_t count, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality)
+{
+    m_Desc.NumRenderTargets = count;
+    for (uint32_t i = 0; i < count; i++)
+    {
+        m_Desc.RTVFormats[i] = rtvFormats[i];
+    }
+    m_Desc.SampleDesc.Count = msaa;
+    m_Desc.SampleDesc.Quality = msaaQuality;
+    m_Desc.DSVFormat = dsvFormat;
 }
 
 void GraphicsPipelineState::Finalize(ID3D12Device* pDevice)

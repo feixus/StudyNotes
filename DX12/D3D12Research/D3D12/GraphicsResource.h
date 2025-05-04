@@ -40,18 +40,26 @@ private:
 	uint32_t m_Size;
 };
 
+enum class TextureUsage
+{
+	UnorderedAccess				= 1 << 1,
+	ShaderResource				= 1 << 2,
+	RenderTarget				= 1 << 3,
+	DepthStencil				= 1 << 4,
+};
+DEFINE_ENUM_FLAG_OPERATORS(TextureUsage)
+
 class GraphicsTexture : public GraphicsResource
 {
 public:
-	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath);
-	void Create(Graphics* pGraphics, int width, int height);
+	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage);
 	void SetData(CommandContext* pContext, void* pData, uint32_t dataSize);
 
 	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
-	void CreateDepthStencil(Graphics* pGraphics, int width, int height, DXGI_FORMAT format);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() { return m_Rtv; }
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() { return m_Srv; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() { return m_Rtv; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() { return m_Srv; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() { return m_Uav; }
 

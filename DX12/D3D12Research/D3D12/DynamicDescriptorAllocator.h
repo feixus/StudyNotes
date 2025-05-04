@@ -6,14 +6,15 @@ class CommandContext;
 class Graphics;
 class RootSignature;
 
+enum class DescriptorTableType
+{
+    Graphics,
+    Compute,
+};
+
 class DynamicDescriptorAllocator
 {
 public:
-    enum class DescriptorTableType
-    {
-        Graphics,
-        Compute,
-    };
 
 	DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
 	~DynamicDescriptorAllocator() = default;

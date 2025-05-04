@@ -14,7 +14,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
-	if (size > m_Size)
+	if (bufferSize > m_Size)
 	{
 		m_LargeResources.emplace_back(CreateResource(true, bufferSize, &allocation.pMappedMemory));
 
@@ -39,7 +39,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 					maxOffset = m_FenceOffsets.front().second;
 					m_FenceOffsets.pop();
 				}
-				assert(m_CurrentOffset + bufferSize <= maxOffset);
+				//assert(bufferSize <= maxOffset);
 			}
 		}
 

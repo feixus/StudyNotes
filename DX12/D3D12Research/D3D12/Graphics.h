@@ -52,6 +52,8 @@ public:
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 private:
+	uint64_t GetFenceToWaitFor();
+
 	void InitD3D(HWND hWnd);
 	void InitializeAssets();
 	void CreateSwapchain(HWND hWnd);
@@ -89,4 +91,8 @@ private:
 
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
+
+	std::unique_ptr<GraphicsTexture> m_pShadowMap;
+	std::unique_ptr<RootSignature> m_pShadowRootSignature;
+	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
 };

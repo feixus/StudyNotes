@@ -42,19 +42,46 @@ void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32_t dat
 	pContext->InitializeBuffer(this, pData, dataSize);
 }
 
-void GraphicsTexture::Create(Graphics* pGraphics, int width, int height)
+void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage)
 {
+	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
+	assert((usage & depthAndRt) != depthAndRt);
+
 	m_Width = width;
 	m_Height = height;
 
+	D3D12_CLEAR_VALUE* pClearValue{};
+	D3D12_CLEAR_VALUE clearValue{};
+	clearValue.DepthStencil.Depth = 1;
+	clearValue.DepthStencil.Stencil = 0;
+	clearValue.Format = format;
+
+	D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
 	D3D12_RESOURCE_DESC desc = {};
-	desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	desc.Alignment = 0;
 	desc.DepthOrArraySize = 1;
+	desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	desc.Width = width;
 	desc.Height = height;
-	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	
+	if ((usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
+	{
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
+	{
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		initState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	}
+	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	{
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+		pClearValue = &clearValue;
+		initState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+	}
+
+	desc.Format = format;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	desc.MipLevels = 1;
 	desc.SampleDesc.Count = 1;
@@ -65,32 +92,56 @@ void GraphicsTexture::Create(Graphics* pGraphics, int width, int height)
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
+		initState,
+		pClearValue,
 		IID_PPV_ARGS(&m_pResource)));
-	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
+	m_CurrentState = initState;
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	{
+		srvDesc.Format = GetDepthFormat(format);
+	}
+	else
+	{
+		srvDesc.Format = format;
+	}
+
 	srvDesc.Texture2D.MipLevels = 1;
 	srvDesc.Texture2D.MostDetailedMip = 0;
 	srvDesc.Texture2D.PlaneSlice = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 
-	m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
-
-	m_Uav = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, nullptr, m_Uav);
+	if ((usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
+	{
+		m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
+	}
+	if ((usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
+	{
+		m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, nullptr, m_Uav);
+	}
+	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
+	{
+		m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
+	}
+	else if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	{
+		m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, nullptr, m_Rtv);
+	}
 }
 
-void GraphicsTexture::Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath)
+void GraphicsTexture::Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage)
 {
 	int components = 0;
 	void* pPixels = stbi_load(filePath, &m_Width, &m_Height, &components, STBI_rgb_alpha);
-	Create(pGraphics, m_Width, m_Height);
+	Create(pGraphics, m_Width, m_Height, DXGI_FORMAT_R8G8B8A8_UNORM, usage);
 	SetData(pContext, pPixels, m_Width * m_Height * 4);
 	pContext->ExecuteAndReset(true);
 	stbi_image_free(pPixels);
@@ -112,56 +163,6 @@ void GraphicsTexture::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pT
 	m_Height = (uint32_t)desc.Height;
 	m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
-}
-
-void GraphicsTexture::CreateDepthStencil(Graphics* pGraphics, int width, int height, DXGI_FORMAT format)
-{
-	m_Width = width;
-	m_Height = height;
-
-	D3D12_CLEAR_VALUE clearValue;
-	clearValue.Format = format;
-	clearValue.DepthStencil.Depth = 1.0f;
-	clearValue.DepthStencil.Stencil = 0;
-
-	D3D12_RESOURCE_DESC desc{};
-	desc.Alignment = 0;
-	desc.DepthOrArraySize = 1;
-	desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-	desc.Format = format;
-	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	desc.MipLevels = 1;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-	desc.Width = width;
-	desc.Height = height;
-
-	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	HR(pGraphics->GetDevice()->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&desc,
-		D3D12_RESOURCE_STATE_DEPTH_WRITE,
-		&clearValue,
-		IID_PPV_ARGS(&m_pResource)));
-
-	m_CurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = GetDepthFormat(format);
-	srvDesc.Texture2D.MipLevels = 1;
-	srvDesc.Texture2D.MostDetailedMip = 0;
-	srvDesc.Texture2D.PlaneSlice = 0;
-	srvDesc.Texture2D.ResourceMinLODClamp = 0;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-
-	/*m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);*/
-
-	m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-	pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, nullptr, m_Srv);
 }
 
 DXGI_FORMAT GraphicsTexture::GetDepthFormat(DXGI_FORMAT format)
