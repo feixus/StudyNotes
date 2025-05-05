@@ -143,7 +143,7 @@ void DynamicDescriptorAllocator::ReleaseUsedHeaps(uint64_t fenceValue)
     ReleaseHeap();
     for (ID3D12DescriptorHeap* pHeap : m_UsedDescriptorHeaps)
     {
-        m_FreeDescriptors.emplace(fenceValue, pHeap);
+        m_FreeDescriptors[m_Type].emplace(fenceValue, pHeap);
     }
     m_UsedDescriptorHeaps.clear();
 }
@@ -164,10 +164,10 @@ uint32_t DynamicDescriptorAllocator::GetRequiredSpace()
 
 ID3D12DescriptorHeap* DynamicDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-    if (m_FreeDescriptors.size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors.front().first))
+    if (m_FreeDescriptors[m_Type].size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors[m_Type].front().first))
     {
-        ID3D12DescriptorHeap* pHeap = m_FreeDescriptors.front().second;
-        m_FreeDescriptors.pop();
+        ID3D12DescriptorHeap* pHeap = m_FreeDescriptors[m_Type].front().second;
+        m_FreeDescriptors[m_Type].pop();
         return pHeap;
     }
 
