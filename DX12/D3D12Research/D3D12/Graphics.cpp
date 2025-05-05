@@ -41,6 +41,7 @@ void Graphics::Update()
 	{
 		Vector4 LightPosition;
 		Matrix LightViewProjection;
+		Matrix ViewInverse;
 	} frameData;
 
 	frameData.LightPosition = Vector4(cos(GameTimer::GameTime() / 5.0f), 2, sin(GameTimer::GameTime() / 5.0f), 0) * 800;
@@ -66,9 +67,9 @@ void Graphics::Update()
 	movement *= GameTimer::DeltaTime() * 200.0f;
 	m_CameraPosition += movement;
 
-	Matrix cameraMatrix = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
+	frameData.ViewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
 	Matrix cameraView;
-	cameraMatrix.Invert(cameraView);
+	frameData.ViewInverse.Invert(cameraView);
 	Matrix cameraProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 1.0f, 3000);
 	Matrix cameraViewProj = cameraView * cameraProj;
 
@@ -98,7 +99,7 @@ void Graphics::Update()
 		{
 			Matrix WorldViewProjection;
 		} ObjectData;
-		ObjectData.WorldViewProjection = frameData.LightViewProjection;
+		ObjectData.WorldViewProjection = Matrix::CreateScale(10, 10, 10) * frameData.LightViewProjection;
 
 		pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 		for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
@@ -140,7 +141,7 @@ void Graphics::Update()
 			Matrix WorldViewProjection;
 		} objectData;
 
-		objectData.World = XMMatrixIdentity();
+		objectData.World = Matrix::CreateScale(10, 10, 10);
 		objectData.WorldViewProjection = objectData.World * cameraViewProj;
 
 		pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
@@ -154,6 +155,14 @@ void Graphics::Update()
 			if (material.pDiffuseTexture)
 			{
 				pCommandContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture->GetSRV());
+			}
+			if (material.pNormalTexture)
+			{
+				pCommandContext->SetDynamicDescriptor(2, 1, material.pNormalTexture->GetSRV());
+			}
+			if (material.pSpecularTexture)
+			{
+				pCommandContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture->GetSRV());
 			}
 
 			pSubMesh->Draw(pCommandContext);
@@ -293,7 +302,7 @@ void Graphics::InitD3D()
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
 
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x160000);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x200000);
 	
 	// swap chain
 	CreateSwapchain();
@@ -437,7 +446,7 @@ void Graphics::InitializeAssets()
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
 	{
@@ -451,14 +460,14 @@ void Graphics::InitializeAssets()
 		m_pRootSignature = std::make_unique<RootSignature>(5);
 		m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 		m_pRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pRootSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 		m_pRootSignature->SetDescriptorTableSimple(4, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_SAMPLER_DESC samplerDesc{};
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 		m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -509,12 +518,12 @@ void Graphics::InitializeAssets()
 		m_pShadowPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<GraphicsTexture>();
-		m_pShadowMap->Create(this, 2048, 2048, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource);
+		m_pShadowMap->Create(this, 4096, 4096, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource);
 	}
 
 	// geometry
 	m_pMesh = std::make_unique<Mesh>();
-	m_pMesh->Load("Resources/sponza/sponza.obj", this, pCommandContext);
+	m_pMesh->Load("Resources/sponza/sponza.dae", this, pCommandContext);
 
 	pCommandContext->Execute(true);
 }

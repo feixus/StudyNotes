@@ -8,11 +8,15 @@ cbuffer PerFrameData : register(b1)
 {
     float4 LightPosition;
     float4x4 LightViewProjection;
+    float4x4 ViewInverse;
 }
 
+Texture2D myDiffuseTexture : register(t0);
+Texture2D myNormalTexture : register(t1);
+Texture2D mySpecularTexture : register(t2);
 SamplerState mySampler : register(s0);
-Texture2D myTexture : register(t0);
-Texture2D myShadowMap : register(t1);
+
+Texture2D myShadowMap : register(t3);
 SamplerComparisonState myShadowSampler : register(s1);
 
 struct VSInput
@@ -33,6 +37,26 @@ struct PSInput
     float4 wpos : TEXCOORD2;
 };
 
+float4 GetSpecularBlinnPhong(float3 viewDirection, float3 normal, float2 texCoord, float3 lightVector, float shininess)
+{
+    float3 reflectedLight = reflect(-lightVector, normal);
+    float specularStrength = dot(reflectedLight, -viewDirection);
+    return pow(saturate(specularStrength), shininess);
+}
+
+float3 CalculateNormal(float3 normal, float3 tangent, float2 texCoord, bool invertY)
+{
+    float3 binormal = normalize(cross(tangent, normal));
+    float3x3 normalMatrix = float3x3(tangent, binormal, normal);
+    float3 sampleNormal = myNormalTexture.Sample(mySampler, texCoord).rgb;
+    if (invertY)
+    {
+        sampleNormal.y = -sampleNormal.y;
+    }
+    sampleNormal = normalize(sampleNormal);
+    return mul(sampleNormal, normalMatrix);
+}
+
 PSInput VSMain(VSInput input)
 {
     PSInput result;
@@ -48,9 +72,14 @@ PSInput VSMain(VSInput input)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
+    float3 normal = CalculateNormal(normalize(input.normal), normalize(input.tangent), input.texCoord, true);
+    
     float3 lightDirection = normalize(LightPosition.xyz);
-    float diffuse = saturate(dot(lightDirection, input.normal));
-    float4 textureColor = myTexture.Sample(mySampler, input.texCoord);
+    float3 viewDirection = normalize(input.wpos.xyz - ViewInverse[3].xyz);
+    float4 specular = GetSpecularBlinnPhong(viewDirection, normal, input.texCoord, lightDirection, 8.0f);
+    
+    float diffuse = saturate(dot(lightDirection, normal));
+    float4 textureColor = myDiffuseTexture.Sample(mySampler, input.texCoord);
     
     // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
     input.lpos.xyz /= input.lpos.w;
@@ -63,19 +92,19 @@ float4 PSMain(PSInput input) : SV_TARGET
     float dx = 1.0f / width;
     float dy = 1.0f / height;
     
-    float diff = 0;
+    float shadowFactor = 0;
     int kernelSize = 3;
     int hKernel = (kernelSize - 1) / 2;
     for (int x = -hKernel; x <= hKernel; x++)
     {
         for (int y = -hKernel; y <= hKernel; y++)
         {
-            diff += myShadowMap.SampleCmpLevelZero(myShadowSampler, input.lpos.xy + float2(dx * x, dy * y), input.lpos.z);
+            shadowFactor += myShadowMap.SampleCmpLevelZero(myShadowSampler, input.lpos.xy + float2(dx * x, dy * y), input.lpos.z);
         }
     }
    
-    diff /= kernelSize * kernelSize;
-    diff = saturate(diff) + 1 - 0.8f;
+    shadowFactor /= kernelSize * kernelSize;
+    shadowFactor = saturate(shadowFactor);
 
-    return textureColor * diffuse * diff ;
+    return shadowFactor * saturate(specular + textureColor * diffuse);
 }

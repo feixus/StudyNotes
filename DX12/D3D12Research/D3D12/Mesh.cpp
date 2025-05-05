@@ -28,27 +28,50 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32_t i = 0; i < pScene->mNumMaterials; ++i)
 	{
-		aiString diffusePath;
-		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &diffusePath);
+		aiString path;
+		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
 
 		Material& m = m_Materials[i];
 		if (ret == aiReturn_SUCCESS)
 		{
-			std::filesystem::path texturePath = diffusePath.C_Str();
+			std::filesystem::path texturePath = path.C_Str();
+			texturePath = texturePath.replace_extension("png");
+			if (texturePath.is_absolute() || texturePath.has_root_path())
+			{
+				texturePath = texturePath.relative_path();
+			}
 			texturePath = dirPath / texturePath;
 			m.pDiffuseTexture = std::make_unique<GraphicsTexture>();
 			m.pDiffuseTexture->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
 		}
 
-		/*aiString normalPath;
-		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_HEIGHT, 0, &normalPath);
+		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_NORMALS, 0, &path);
 		if (ret == aiReturn_SUCCESS)
 		{
-			std::filesystem::path texturePath = normalPath.C_Str();
+			std::filesystem::path texturePath = path.C_Str();
+			texturePath = texturePath.replace_extension("png");
+			if (texturePath.is_absolute() || texturePath.has_root_path())
+			{
+				texturePath = texturePath.relative_path();
+			}
 			texturePath = dirPath / texturePath;
 			m.pNormalTexture = std::make_unique<GraphicsTexture>();
 			m.pNormalTexture->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
-		}*/
+		}
+
+		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_SPECULAR, 0, &path);
+		if (ret == aiReturn_SUCCESS)
+		{
+			std::filesystem::path texturePath = path.C_Str();
+			texturePath = texturePath.replace_extension("png");
+			if (texturePath.is_absolute() || texturePath.has_root_path())
+			{
+				texturePath = texturePath.relative_path();
+			}
+			texturePath = dirPath / texturePath;
+			m.pSpecularTexture = std::make_unique<GraphicsTexture>();
+			m.pSpecularTexture->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
+		}
 
 		pContext->ExecuteAndReset(true);
 	}
