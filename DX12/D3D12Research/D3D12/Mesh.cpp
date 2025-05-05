@@ -25,53 +25,33 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 	std::filesystem::path filePath(pFilePath);
 	std::filesystem::path dirPath = filePath.parent_path();
 
+	auto loadTexture = [pGraphics, pContext](std::filesystem::path basePath, aiMaterial* pMaterial, aiTextureType type)
+	{
+		std::unique_ptr<GraphicsTexture> pTex;
+		aiString path;
+		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
+		if (ret == aiReturn_SUCCESS)
+		{ 
+			std::filesystem::path texturePath = path.C_Str();
+			texturePath = texturePath.replace_extension("png");
+			if (texturePath.is_absolute() || texturePath.has_root_path())
+			{
+				texturePath = texturePath.relative_path();
+			}
+			texturePath = basePath / texturePath;
+			pTex = std::make_unique<GraphicsTexture>();
+			pTex->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
+		}
+		return pTex;
+	};
+
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32_t i = 0; i < pScene->mNumMaterials; ++i)
 	{
-		aiString path;
-		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
-
 		Material& m = m_Materials[i];
-		if (ret == aiReturn_SUCCESS)
-		{
-			std::filesystem::path texturePath = path.C_Str();
-			texturePath = texturePath.replace_extension("png");
-			if (texturePath.is_absolute() || texturePath.has_root_path())
-			{
-				texturePath = texturePath.relative_path();
-			}
-			texturePath = dirPath / texturePath;
-			m.pDiffuseTexture = std::make_unique<GraphicsTexture>();
-			m.pDiffuseTexture->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
-		}
-
-		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_NORMALS, 0, &path);
-		if (ret == aiReturn_SUCCESS)
-		{
-			std::filesystem::path texturePath = path.C_Str();
-			texturePath = texturePath.replace_extension("png");
-			if (texturePath.is_absolute() || texturePath.has_root_path())
-			{
-				texturePath = texturePath.relative_path();
-			}
-			texturePath = dirPath / texturePath;
-			m.pNormalTexture = std::make_unique<GraphicsTexture>();
-			m.pNormalTexture->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
-		}
-
-		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_SPECULAR, 0, &path);
-		if (ret == aiReturn_SUCCESS)
-		{
-			std::filesystem::path texturePath = path.C_Str();
-			texturePath = texturePath.replace_extension("png");
-			if (texturePath.is_absolute() || texturePath.has_root_path())
-			{
-				texturePath = texturePath.relative_path();
-			}
-			texturePath = dirPath / texturePath;
-			m.pSpecularTexture = std::make_unique<GraphicsTexture>();
-			m.pSpecularTexture->Create(pGraphics, pContext, texturePath.string().c_str(), TextureUsage::ShaderResource);
-		}
+		m.pDiffuseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_DIFFUSE);
+		m.pNormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMALS);
+		m.pSpecularTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_SPECULAR);
 
 		pContext->ExecuteAndReset(true);
 	}
@@ -87,6 +67,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 		Vector2 TexCoord;
 		Vector3 Normal;
 		Vector3 Tangent;
+		Vector3 Bitangent;
 	};
 
 	std::vector<Vertex> vertices(pMesh->mNumVertices);
@@ -101,6 +82,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 		if (pMesh->HasTangentsAndBitangents())
 		{
 			vertex.Tangent = *reinterpret_cast<Vector3*>(&pMesh->mTangents[i]);
+			vertex.Bitangent = *reinterpret_cast<Vector3*>(&pMesh->mBitangents[i]);
 		}
 	}
 

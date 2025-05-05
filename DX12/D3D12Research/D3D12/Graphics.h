@@ -94,6 +94,8 @@ private:
 	uint32_t m_CurrentBackBufferIndex = 0;
 	std::array<UINT64, FRAME_COUNT> m_FenceValues = {};
 
+	std::unique_ptr<GraphicsTexture> m_pDummyTexture;
+
 	std::unique_ptr<Mesh> m_pMesh;
 
 	std::unique_ptr<RootSignature> m_pRootSignature;
