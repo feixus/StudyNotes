@@ -54,11 +54,16 @@ public:
 private:
 	uint64_t GetFenceToWaitFor();
 
-	void InitD3D(HWND hWnd);
+	void InitD3D();
 	void InitializeAssets();
-	void CreateSwapchain(HWND hWnd);
+	void CreateSwapchain();
 
 	void UpdateImGui();
+
+	Vector3 m_CameraPosition;
+	Quaternion m_CameraRotation;
+
+	HWND m_pWindow{};
 
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;

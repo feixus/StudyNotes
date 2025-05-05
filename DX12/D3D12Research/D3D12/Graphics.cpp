@@ -6,13 +6,14 @@
 #include "DescriptorAllocator.h"
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
+#include "External/imgui/imgui.h"
 #include "GraphicsResource.h"
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "Shader.h"
 #include "Mesh.h"
+#include "Input.h"
 
-#include "External/imgui/imgui.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height):
 	m_WindowWidth(width), m_WindowHeight(height)
@@ -25,8 +26,13 @@ Graphics::~Graphics()
 
 void Graphics::Initialize(HWND hWnd)
 {
-	InitD3D(hWnd);
+	m_pWindow = hWnd;
+
+	InitD3D();
 	InitializeAssets();
+
+	m_CameraPosition = Vector3(0, 1200, -150);
+	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 }
 
 void Graphics::Update()
@@ -37,9 +43,34 @@ void Graphics::Update()
 		Matrix LightViewProjection;
 	} frameData;
 
-	frameData.LightPosition = Vector4(cos(GameTimer::GameTime()), 2, sin(GameTimer::GameTime()), 0) * 500;
+	frameData.LightPosition = Vector4(cos(GameTimer::GameTime() / 5.0f), 2, sin(GameTimer::GameTime() / 5.0f), 0) * 800;
 	frameData.LightViewProjection = XMMatrixLookAtLH(frameData.LightPosition, Vector3(0, 0, 0), Vector3(0, 1, 0)) 
-							* XMMatrixOrthographicLH(m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight(), 0.01f, 2000);
+							* XMMatrixOrthographicLH(m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight(), 1.0f, 3000);
+
+	if (Input::Instance().IsMouseDown(VK_LBUTTON))
+	{
+		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
+		Quaternion yr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * GameTimer::DeltaTime() * 0.1f, 0, 0);
+		Quaternion pr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * GameTimer::DeltaTime() * 0.1f, 0);
+		m_CameraRotation = pr * m_CameraRotation * yr;
+	}
+
+	Vector3 movement;
+	movement.x -= (int)Input::Instance().IsKeyDown('A');
+	movement.x += (int)Input::Instance().IsKeyDown('D');
+	movement.z -= (int)Input::Instance().IsKeyDown('S');
+	movement.z += (int)Input::Instance().IsKeyDown('W');
+	movement = Vector3::Transform(movement, m_CameraRotation);
+	movement.y -= (int)Input::Instance().IsKeyDown('Q');
+	movement.y += (int)Input::Instance().IsKeyDown('E');
+	movement *= GameTimer::DeltaTime() * 200.0f;
+	m_CameraPosition += movement;
+
+	Matrix cameraMatrix = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
+	Matrix cameraView;
+	cameraMatrix.Invert(cameraView);
+	Matrix cameraProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 1.0f, 3000);
+	Matrix cameraViewProj = cameraView * cameraProj;
 
 	m_pImGuiRenderer->NewFrame();
 
@@ -109,11 +140,8 @@ void Graphics::Update()
 			Matrix WorldViewProjection;
 		} objectData;
 
-		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 2000);
-		Matrix view = XMMatrixLookAtLH(Vector3(400, 100, 0), Vector3(0, 0, 0), Vector3(0, 1, 0));
-		
-		objectData.World = Matrix::CreateTranslation(0, 0, 0);
-		objectData.WorldViewProjection = objectData.World * view * proj;
+		objectData.World = XMMatrixIdentity();
+		objectData.WorldViewProjection = objectData.World * cameraViewProj;
 
 		pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 		pCommandContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
@@ -172,7 +200,7 @@ uint64_t Graphics::GetFenceToWaitFor()
 	return (m_CurrentBackBufferIndex + (FRAME_COUNT - 1)) % FRAME_COUNT;
 }
 
-void Graphics::InitD3D(HWND hWnd)
+void Graphics::InitD3D()
 {
 	UINT dxgiFactoryFlags = 0;
 
@@ -267,13 +295,13 @@ void Graphics::InitD3D(HWND hWnd)
 	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x160000);
 	
 	// swap chain
-	CreateSwapchain(hWnd);
+	CreateSwapchain();
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 }
 
-void Graphics::CreateSwapchain(HWND hWnd)
+void Graphics::CreateSwapchain()
 {
 	m_pSwapchain.Reset();
 
@@ -300,7 +328,7 @@ void Graphics::CreateSwapchain(HWND hWnd)
 
 	HR(m_pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-		hWnd,
+		m_pWindow,
 		&swapchainDesc,
 		&fsDesc,
 		nullptr,

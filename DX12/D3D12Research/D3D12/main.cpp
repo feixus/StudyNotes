@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Graphics.h"
+#include "Input.h"
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
@@ -30,6 +31,7 @@ public:
 			}
 			else
 			{
+				Input::Instance().Update();
 				GameTimer::Tick();
 				m_pGraphics->Update();
 			}
@@ -93,7 +95,12 @@ private:
 
 		ShowWindow(m_Hwnd, SW_SHOWDEFAULT);
 
-		if (!UpdateWindow(m_Hwnd)) return;
+		if (!UpdateWindow(m_Hwnd))
+		{
+			return;
+		}
+
+		Input::Instance().SetWindow(m_Hwnd);
 	}
 
 
@@ -146,11 +153,49 @@ private:
 		}
 		return 0;
 		case WM_KEYUP:
+		{
+			Input::Instance().UpdateKey(wParam, false);
 			if (wParam == VK_ESCAPE)
 			{
 				PostQuitMessage(0);
 			}
 			return 0;
+		}
+		case WM_KEYDOWN:
+		{
+			Input::Instance().UpdateKey(wParam, true);
+			return 0;
+		}
+		case WM_LBUTTONDOWN:
+		{
+			Input::Instance().UpdateMouseKey(VK_LBUTTON, true);
+			return 0;
+		}
+		case WM_LBUTTONUP:
+		{
+			Input::Instance().UpdateMouseKey(VK_LBUTTON, false);
+			return 0;
+		}
+		case WM_MBUTTONDOWN:
+		{
+			Input::Instance().UpdateMouseKey(VK_MBUTTON, true);
+			return 0;
+		}
+		case WM_MBUTTONUP:
+		{
+			Input::Instance().UpdateMouseKey(VK_MBUTTON, false);
+			return 0;
+		}
+		case WM_RBUTTONDOWN:
+		{
+			Input::Instance().UpdateMouseKey(VK_RBUTTON, true);
+			return 0;
+		}
+		case WM_RBUTTONUP:
+		{
+			Input::Instance().UpdateMouseKey(VK_RBUTTON, false);
+			return 0;
+		}
 		case WM_DESTROY:
 			PostQuitMessage(0);
 			return 0;
