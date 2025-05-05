@@ -31,6 +31,8 @@ void Graphics::Initialize(HWND hWnd)
 	InitD3D();
 	InitializeAssets();
 
+	m_FrameTimes.resize(256);
+
 	m_CameraPosition = Vector3(0, 1200, -150);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 }
@@ -349,16 +351,22 @@ void Graphics::CreateSwapchain()
 
 void Graphics::UpdateImGui()
 {
-	//ImGui::ShowDemoWindow();
-	ImGui::SetNextWindowPos(ImVec2((float)GetWindowWidth(), 0), 0, ImVec2(1, 0));
-	ImGui::Begin("Debug Info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
-	ImGui::SameLine(100);
-	ImGui::Text("FPS: %.1f", GameTimer::DeltaTime());
-	ImGui::End();
-
+	for (int i = 1; i < m_FrameTimes.size(); i++)
+	{
+		m_FrameTimes[i - 1] = m_FrameTimes[i];
+	}
+	m_FrameTimes[m_FrameTimes.size() - 1] = GameTimer::DeltaTime();
+	
+	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
+	ImGui::SetNextWindowSize(ImVec2(250, m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr,
 		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
+	ImGui::SameLine(100);
+	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
+
+	ImGui::PlotLines("Frametime", m_FrameTimes.data(), m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
 
 	ImGui::BeginTabBar("GpuStatBar");
 	ImGui::BeginTabItem("Descriptor Heaps");
@@ -368,16 +376,16 @@ void Graphics::UpdateImGui()
 		switch (pAllocator->GetType())
 		{
 		case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
-			ImGui::Text("CBV_SRV_UAV");
-			break;
-		case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
-			ImGui::Text("RTV");
-			break;
-		case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
-			ImGui::Text("DSV");
+			ImGui::TextWrapped("CBV_SRV_UAV");
 			break;
 		case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
-			ImGui::Text("Sampler");
+			ImGui::TextWrapped("Sampler");
+			break;
+		case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
+			ImGui::TextWrapped("RTV");
+			break;
+		case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
+			ImGui::TextWrapped("DSV");
 			break;
 		default:
 			break;

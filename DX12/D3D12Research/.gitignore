@@ -1,9 +1,10 @@
 .vs/
 Debug/
 Build
-packages/
+
 *.sln
 *.vcxproj
 *.filters
 *.user
 *.vscode
+imgui.ini
