@@ -91,10 +91,8 @@ private:
 	uint32_t m_WindowHeight;
 
 	// synchronization objects
-	uint32_t m_CurrentBackBufferIndex = 0;
-	std::array<UINT64, FRAME_COUNT> m_FenceValues = {};
-
-	std::unique_ptr<GraphicsTexture> m_pDummyTexture;
+	uint32_t m_CurrentBackBufferIndex{0};
+	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
 	std::unique_ptr<Mesh> m_pMesh;
 
@@ -105,5 +103,5 @@ private:
 	std::unique_ptr<RootSignature> m_pShadowRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE m_ShadowMapSampler;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_ShadowMapSampler{};
 };

@@ -154,7 +154,7 @@ private:
 		return 0;
 		case WM_KEYUP:
 		{
-			Input::Instance().UpdateKey(wParam, false);
+			Input::Instance().UpdateKey((uint32_t)wParam, false);
 			if (wParam == VK_ESCAPE)
 			{
 				PostQuitMessage(0);
@@ -163,7 +163,7 @@ private:
 		}
 		case WM_KEYDOWN:
 		{
-			Input::Instance().UpdateKey(wParam, true);
+			Input::Instance().UpdateKey((uint32_t)wParam, true);
 			return 0;
 		}
 		case WM_LBUTTONDOWN:

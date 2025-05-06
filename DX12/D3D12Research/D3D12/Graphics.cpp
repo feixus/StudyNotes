@@ -86,8 +86,8 @@ void Graphics::Update()
 		pCommandContext->SetPipelineState(m_pShadowPipelineStateObject.get());
 		pCommandContext->SetGraphicsRootSignature(m_pShadowRootSignature.get());
 
-		pCommandContext->SetViewport(FloatRect(0, 0, m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight()));
-		pCommandContext->SetScissorRect(FloatRect(0, 0, m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight()));
+		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
+		pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
 
 		pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		pCommandContext->SetRenderTargets(nullptr, m_pShadowMap->GetDSV());
@@ -155,9 +155,9 @@ void Graphics::Update()
 			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
 			const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
 
-			pCommandContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV() : m_pDummyTexture->GetSRV());
-			pCommandContext->SetDynamicDescriptor(2, 1, material.pNormalTexture ? material.pNormalTexture->GetSRV() : m_pDummyTexture->GetSRV());
-			pCommandContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture ? material.pSpecularTexture->GetSRV() : m_pDummyTexture->GetSRV());
+			pCommandContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture->GetSRV());
+			pCommandContext->SetDynamicDescriptor(2, 1, material.pNormalTexture->GetSRV());
+			pCommandContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture->GetSRV());
 
 			pSubMesh->Draw(pCommandContext);
 		}
@@ -350,7 +350,7 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_FrameTimes.size() - 1] = GameTimer::DeltaTime();
 	
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(250, m_WindowHeight));
+	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr,
 		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -358,7 +358,7 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(100);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 
-	ImGui::PlotLines("Frametime", m_FrameTimes.data(), m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
+	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
 
 	ImGui::BeginTabBar("GpuStatBar");
 	ImGui::BeginTabItem("Descriptor Heaps");
@@ -525,9 +525,6 @@ void Graphics::InitializeAssets()
 	// geometry
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, pCommandContext);
-
-	m_pDummyTexture = std::make_unique<GraphicsTexture>();
-	m_pDummyTexture->Create(this, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource);
 
 	pCommandContext->Execute(true);
 }
