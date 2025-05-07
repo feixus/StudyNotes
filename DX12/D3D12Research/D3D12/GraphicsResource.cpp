@@ -123,6 +123,10 @@ void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FO
 	if ((usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
 	{
 		m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		if (m_SampleCount > 1)
+		{
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+		}
 		pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 	}
 	if ((usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
