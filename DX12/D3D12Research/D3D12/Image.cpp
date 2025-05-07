@@ -121,7 +121,7 @@ const uint8_t* Image::GetData(int mipLevel) const
 	return m_Pixels.data() + offset;
 }
 
-MipLevelInfo Image::GetMipLevels(int mipLevel) const
+MipLevelInfo Image::GetMipLevelInfo(int mipLevel) const
 {
 	if (mipLevel >= m_MipLevels)
 	{

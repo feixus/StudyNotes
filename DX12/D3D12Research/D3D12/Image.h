@@ -54,8 +54,8 @@ public:
 
 	uint8_t* GetWritableData() { return m_Pixels.data(); }
 	const uint8_t* GetData(int mipLevel) const;
-
-	MipLevelInfo GetMipLevels(int mipLevel) const;
+	uint32_t GetTotalSize() const { return (uint32_t)m_Pixels.size(); }
+	MipLevelInfo GetMipLevelInfo(int mipLevel) const;
 	int GetMipLevels() const { return m_MipLevels; }
 	bool IsCompressed() const { return m_Format != ImageFormat::RGBA; }
 	ImageFormat GetFormat() const { return m_Format; }

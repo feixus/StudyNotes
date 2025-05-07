@@ -1,4 +1,5 @@
 #pragma once
+#include "Light.h"
 
 class CommandQueue;
 class CommandContext;
@@ -19,7 +20,7 @@ using namespace DirectX::SimpleMath;
 class Graphics
 {
 public:
-	Graphics(uint32_t width, uint32_t height);
+	Graphics(uint32_t width, uint32_t height, int sampleCount = 1);
 	~Graphics();
 
 	virtual void Initialize(HWND hWnd);
@@ -45,7 +46,11 @@ public:
 	bool IsFenceComplete(uint64_t fenceValue);
 
 	GraphicsTexture* GetDepthStencilView() const { return m_pDepthStencilBuffer.get(); }
-	GraphicsTexture* GetCurrentRenderTarget() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
+	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer(); }
+	GraphicsTexture* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
+
+	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
+	uint32_t GetMultiSampleQualityLevel(uint32_t msaa);
 
 	static const uint32_t FRAME_COUNT = 3;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -72,6 +77,10 @@ private:
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 
+	int m_SampleCount{1};
+	int m_SampleQuality{0};
+
+	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_MultiSampleRenderTargets;
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_RenderTargets;
 	std::unique_ptr<GraphicsTexture> m_pDepthStencilBuffer;
 
@@ -103,4 +112,6 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
+
+	std::vector<Light> m_Lights;
 };

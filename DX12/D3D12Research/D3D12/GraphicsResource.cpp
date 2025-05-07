@@ -41,9 +41,10 @@ void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32_t dat
 	pContext->InitializeBuffer(this, pData, dataSize);
 }
 
-void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage)
+void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount)
 {
 	m_Format = format;
+	m_SampleCount = sampleCount;
 
 	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
 	assert((usage & depthAndRt) != depthAndRt);
@@ -53,8 +54,6 @@ void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FO
 
 	D3D12_CLEAR_VALUE* pClearValue{};
 	D3D12_CLEAR_VALUE clearValue{};
-	clearValue.DepthStencil.Depth = 1;
-	clearValue.DepthStencil.Stencil = 0;
 	clearValue.Format = format;
 
 	D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -74,19 +73,24 @@ void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FO
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 		initState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		Color clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+		memcpy(clearValue.Color, &clearColor, sizeof(Color));
+		pClearValue = &clearValue;
 	}
 	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+		clearValue.DepthStencil.Depth = 1;
+		clearValue.DepthStencil.Stencil = 0;
 		pClearValue = &clearValue;
 		initState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 	}
 
 	desc.Format = format;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	desc.MipLevels = m_MipLevels;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
+	desc.MipLevels = (uint16_t)m_MipLevels;
+	desc.SampleDesc.Count = m_SampleCount;
+	desc.SampleDesc.Quality = pGraphics->GetMultiSampleQualityLevel(m_SampleCount);
 
 	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	HR(pGraphics->GetDevice()->CreateCommittedResource(
@@ -146,19 +150,31 @@ void GraphicsTexture::Create(Graphics* pGraphics, CommandContext* pContext, cons
 		m_Width = img.GetWidth();
 		m_Height = img.GetHeight();
 		m_Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), false);
-		m_MipLevels = 1;
-		MipLevelInfo mipLevelInfo;
-		img.GetSurfaceInfo(m_Width, m_Height, 1, 0, mipLevelInfo);
+		m_MipLevels = img.GetMipLevels();
 
-		Create(pGraphics, m_Width, m_Height, m_Format, usage);
-		SetData(pContext, img.GetData(0), mipLevelInfo.DataSize);
+		std::vector<D3D12_SUBRESOURCE_DATA> subresources(m_MipLevels);
+		for (int i = 0; i < m_MipLevels; i++)
+		{
+			D3D12_SUBRESOURCE_DATA& data = subresources[i];
+			MipLevelInfo mipLevelInfo = img.GetMipLevelInfo(i);
+			data.pData = img.GetData(i);
+			data.RowPitch = mipLevelInfo.RowSize;
+			data.SlicePitch = mipLevelInfo.RowSize * mipLevelInfo.Height;
+		}
+
+		Create(pGraphics, m_Width, m_Height, m_Format, usage, 1);
+		pContext->InitializeTexture(this, subresources.data(), m_MipLevels);
 		pContext->ExecuteAndReset(true);
 	}
 }
 
 void GraphicsTexture::SetData(CommandContext* pContext, const void* pData, uint32_t dataSize)
 {
-	pContext->InitializeTexture(this, pData, dataSize);
+	D3D12_SUBRESOURCE_DATA data;
+	data.pData = pData;
+	data.RowPitch = GetRowDataSize(m_Width);
+	data.SlicePitch = data.RowPitch * m_Height;
+	pContext->InitializeTexture(this, &data, 1);
 }
 
 void GraphicsTexture::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture)

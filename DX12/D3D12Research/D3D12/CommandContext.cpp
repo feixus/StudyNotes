@@ -85,23 +85,14 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
 }
 
-void CommandContext::InitializeTexture(GraphicsTexture* pResource, const void* pData, uint32_t dataSize)
+void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int subresourceCount)
 {
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(dataSize, 512);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
+	uint32_t allocationSize = (uint32_t)GetRequiredIntermediateSize(pResource->GetResource(), 0, subresourceCount);
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(allocationSize, 512);
+
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
-
-	int subResource = D3D12CalcSubresource(0, 0, 0, 1, 0);
-	D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
-	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
-	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, subResource, 1, 0, &layout, nullptr, nullptr, nullptr);
-	layout.Offset = allocation.Offset;
-
-	auto pDst = CD3DX12_TEXTURE_COPY_LOCATION(pResource->GetResource(), 0);
-	auto pSrc = CD3DX12_TEXTURE_COPY_LOCATION(allocation.pBackingResource, layout);
-	m_pCommandList->CopyTextureRegion(&pDst, 0, 0, 0, &pSrc, nullptr);
-
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
+	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource, 0, 0, subresourceCount, pSubresources);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
 }
 
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)

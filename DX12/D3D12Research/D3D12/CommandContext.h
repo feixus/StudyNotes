@@ -40,7 +40,7 @@ public:
 
 	DynamicAllocation AllocateUploadMemory(uint32_t size);
 	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint32_t dataSize);
-	void InitializeTexture(GraphicsTexture* pResource, const void* pData, uint32_t dataSize);
+	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int subresourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }

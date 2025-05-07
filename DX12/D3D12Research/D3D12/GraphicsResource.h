@@ -53,7 +53,7 @@ class GraphicsTexture : public GraphicsResource
 {
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
-	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage);
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
 	void SetData(CommandContext* pContext, const void* pData, uint32_t dataSize);
 
 	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
@@ -65,11 +65,13 @@ public:
 
 	int GetWidth() const { return m_Width; }
 	int GetHeight() const { return m_Height; }
+	int GetMipLevels() const { return m_MipLevels; }
+	int GetRowDataSize(unsigned int width) const;
 
 private:
 	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
-	int GetRowDataSize(unsigned int width) const;
 
+	int m_SampleCount{1};
 	int m_Width{0};
 	int m_Height{0};
 	DXGI_FORMAT m_Format{};

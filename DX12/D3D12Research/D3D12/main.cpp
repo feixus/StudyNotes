@@ -16,7 +16,7 @@ public:
 	{
 		MakeWindow();
 
-		m_pGraphics = std::make_unique<Graphics>(gWindowWidth, gWindowHeight);
+		m_pGraphics = std::make_unique<Graphics>(gWindowWidth, gWindowHeight, 1);
 		m_pGraphics->Initialize(m_Hwnd);
 
 		GameTimer::Reset();

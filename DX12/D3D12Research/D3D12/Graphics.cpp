@@ -14,58 +14,21 @@
 #include "Mesh.h"
 #include "Input.h"
 
-
-#pragma pack(push)
-#pragma pack(16)
-
-struct Light
-{
-	int Enabled;
-	Vector3 Position;
-	Vector3 Direction;
-	float Intensity;
-	Vector4 Color;
-	float Range;
-	float SpotLightAngle;
-	float Attenuation;
-	uint32_t Type;
-
-	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
-	{
-		Light light;
-		light.Enabled = true;
-		light.Position = position;
-		light.Direction = direction;
-		light.Intensity = intensity;
-		light.Color = color;
-		light.Type = 0;
-		return light;
-	}
-
-	static Light Point(const Vector3& position, float radius, float intensity = 1.0f, float attenuation = 0.5f, const Vector4& color = Vector4(1, 1, 1, 1))
-	{
-		Light light;
-		light.Enabled = true;
-		light.Position = position;
-		light.Range = radius;
-		light.Intensity = intensity;
-		light.Color = color;
-		light.Type = 1;
-		light.Attenuation = attenuation;
-		return light;
-	}
-		
-};
-
-#pragma pack(pop)
-
-Graphics::Graphics(uint32_t width, uint32_t height):
-	m_WindowWidth(width), m_WindowHeight(height)
+Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
+	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
 }
 
 Graphics::~Graphics()
 {
+}
+
+float RandomRange(float min, float max)
+{
+	float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+	float diff = max - min;
+	float r = random * diff;
+	return min + r;
 }
 
 void Graphics::Initialize(HWND hWnd)
@@ -79,30 +42,31 @@ void Graphics::Initialize(HWND hWnd)
 
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
+
+	m_Lights.resize(20);
+	for (int i = 0; i < m_Lights.size(); i++)
+	{
+		Vector4 color = Vector4(RandomRange(0, 1), RandomRange(0, 1), RandomRange(0, 1), 1);
+		color.Normalize(color);
+		m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(0, 400), RandomRange(-200, 200)), 120.0f, 1.0f, 0.5f, color);
+	}
 }
 
 void Graphics::Update()
 {
-	Vector3 mainLightPosition = Vector3(cos(GameTimer::GameTime() / 5.0f), 1.5f, sin(GameTimer::GameTime() / 5.0f)) * 80;
-	Vector3 mainLightDirection;
-	mainLightPosition.Normalize(mainLightDirection);
-	mainLightDirection *= -1;
-
-	std::vector<Light> lights = {
-		Light::Directional(mainLightPosition, mainLightDirection),
-		Light::Point(Vector3(-100, 20, 0), 50.0f, 1.0f, 0.5f, Vector4(1, 0, 0, 1)),
-		Light::Point(Vector3(0, 20, 0), 50.0f, 1.0f, 0.5f, Vector4(0, 0, 1, 1)),
-		Light::Point(Vector3(100, 70, 50), 50.0f, 1.0f, 0.5f, Vector4(0, 1, 1, 1)),
-		Light::Point(Vector3(100, 70, -50), 50.0f, 1.0f, 0.5f, Vector4(1, 1, 0, 1)),
-	};
-
 	struct PerFrameData
 	{
 		Matrix LightViewProjection;
 		Matrix ViewInverse;
 	} frameData;
 
-	frameData.LightViewProjection = XMMatrixLookAtLH(lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) 
+	Vector3 mainLightPosition = Vector3(cos(GameTimer::GameTime() / 5.0f), 1.5f, sin(GameTimer::GameTime() / 5.0f)) * 80;
+	Vector3 mainLightDirection;
+	mainLightPosition.Normalize(mainLightDirection);
+	mainLightDirection *= -1;
+	m_Lights[0] = Light::Directional(mainLightPosition, mainLightDirection);
+
+	frameData.LightViewProjection = XMMatrixLookAtLH(m_Lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0))
 							* XMMatrixOrthographicLH(512, 512, 5.0f, 200);
 
 	if (Input::Instance().IsMouseDown(VK_LBUTTON))
@@ -169,7 +133,6 @@ void Graphics::Update()
 		pCommandContext->Execute(false);
 	}
 
-	
 	// 3D
 	{
 		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -181,9 +144,9 @@ void Graphics::Update()
 		pCommandContext->SetViewport(m_Viewport);
 		pCommandContext->SetScissorRect(m_Viewport);
 	
-		pCommandContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+		pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 		
-		DirectX::SimpleMath::Color clearColor{ 0.1f, 0.1f, 0.1f, 1.0f };
+		DirectX::SimpleMath::Color clearColor{ 0.f, 0.f, 0.f, 1.0f };
 		pCommandContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);
 		pCommandContext->ClearDepth(GetDepthStencilView()->GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
@@ -203,7 +166,7 @@ void Graphics::Update()
 
 		pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 		pCommandContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-		pCommandContext->SetDynamicConstantBufferView(2, lights.data(), sizeof(Light) * lights.size());
+		pCommandContext->SetDynamicConstantBufferView(2, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
 		pCommandContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
 		for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 		{
@@ -234,7 +197,13 @@ void Graphics::Update()
 	pCommandContext->MarkBegin(L"Present");
 	// present
 	{
-		pCommandContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
+		if (m_SampleCount > 1)
+		{
+			pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE, false);
+			pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RESOLVE_DEST, true);
+			pCommandContext->GetCommandList()->ResolveSubresource(GetCurrentBackbuffer()->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
+		}
+		pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT, true);
 	}
 	pCommandContext->MarkEnd();
 
@@ -338,8 +307,9 @@ void Graphics::InitD3D()
 	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
 	qualityLevels.Format = RENDER_TARGET_FORMAT;
 	qualityLevels.NumQualityLevels = 0;
-	qualityLevels.SampleCount = 1;
+	qualityLevels.SampleCount = m_SampleCount;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
+	m_SampleQuality = qualityLevels.NumQualityLevels - 1;
 
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
@@ -374,6 +344,7 @@ void Graphics::CreateSwapchain()
 	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 	swapchainDesc.SampleDesc.Count = 1;  // must set for msaa >= 1, not 0
+	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapchainDesc.Stereo = false;
 
@@ -482,10 +453,16 @@ void Graphics::OnResize(int width, int height)
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_RenderTargets[i] = std::make_unique<GraphicsTexture>();
 		m_RenderTargets[i]->CreateForSwapChain(this, pResource);
+
+		if (m_SampleCount > 1)
+		{
+			m_MultiSampleRenderTargets[i] = std::make_unique<GraphicsTexture>();
+			m_MultiSampleRenderTargets[i]->Create(this, m_WindowWidth, m_WindowHeight, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount);
+		}
 	}
 
 	m_pDepthStencilBuffer = std::make_unique<GraphicsTexture>();
-	m_pDepthStencilBuffer->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil);
+	m_pDepthStencilBuffer->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_SampleCount);
 
 	m_Viewport.Left = 0;
 	m_Viewport.Top = 0;
@@ -526,6 +503,7 @@ void Graphics::InitializeAssets()
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
 		m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -535,7 +513,7 @@ void Graphics::InitializeAssets()
 
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		samplerDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
+		samplerDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
 		m_pRootSignature->AddStaticSampler(2, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -551,7 +529,7 @@ void Graphics::InitializeAssets()
 		m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 		m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DXGI_FORMAT_D24_UNORM_S8_UINT, 1, 0);
+		m_pPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DXGI_FORMAT_D24_UNORM_S8_UINT, m_SampleCount, m_SampleQuality);
 		m_pPipelineStateObject->Finalize(m_pDevice.Get());
 	}
 
@@ -580,7 +558,7 @@ void Graphics::InitializeAssets()
 		m_pShadowPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<GraphicsTexture>();
-		m_pShadowMap->Create(this, 4096, 4096, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource);
+		m_pShadowMap->Create(this, 4096, 4096, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount);
 	}
 
 	// geometry
@@ -668,5 +646,15 @@ bool Graphics::IsFenceComplete(uint64_t fenceValue)
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
 	CommandQueue* pQueue = GetCommandQueue(type);
 	return pQueue->IsFenceComplete(fenceValue);
+}
+
+uint32_t Graphics::GetMultiSampleQualityLevel(uint32_t msaa)
+{
+	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
+	qualityLevels.Format = RENDER_TARGET_FORMAT;
+	qualityLevels.SampleCount = msaa;
+	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
+	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
+	return qualityLevels.NumQualityLevels - 1;
 }
 
