@@ -16,15 +16,22 @@ public:
 	static bool IsPaused() { return m_IsStopped; }
 	static int Ticks() { return m_Ticks; }
 
-private:
-	inline static double m_SecondsPerCount{ 0.0f };
-	inline static double m_DeltaTime{ 0.0f };
+	static void CounterBegin();
+	static double CounterEnd();
 
-	inline static __int64 m_BaseTime{ 0 };
-	inline static __int64 m_PausedTime{ 0 };
+private:
+	inline static double m_SecondsPerCount{0.0f};
+	inline static double m_DeltaTime{0.0f};
+
+	inline static __int64 m_BaseTime{0};
+	inline static __int64 m_PausedTime{0};
 	inline static __int64 m_StopTime{0};
 	inline static __int64 m_PrevTime{0};
 	inline static __int64 m_CurrTime{0};
+
+	inline static double m_SecondsPerCountInCounter{0.0f};
+	inline static __int64 m_CounterBeginTime{0};
+	inline static __int64 m_CounterEndTime{0};
 
 	inline static bool m_IsStopped{false};
 

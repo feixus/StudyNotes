@@ -60,6 +60,7 @@ private:
 
 	void UpdateImGui();
 
+	double m_LoadSponzaTime{0.0f};
 	std::vector<float> m_FrameTimes;
 
 	Vector3 m_CameraPosition;
@@ -102,6 +103,4 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE m_ShadowMapSampler{};
 };

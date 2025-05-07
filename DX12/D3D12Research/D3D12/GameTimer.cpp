@@ -85,3 +85,19 @@ void GameTimer::Tick()
 		m_DeltaTime = 0.0f;
 	}
 }
+
+void GameTimer::CounterBegin()
+{
+	__int64 countsPerSec;
+	QueryPerformanceFrequency((LARGE_INTEGER*)&countsPerSec);
+	m_SecondsPerCountInCounter = 1.0f / (double)countsPerSec;
+
+	QueryPerformanceCounter((LARGE_INTEGER*)&m_CounterBeginTime);
+}
+
+double GameTimer::CounterEnd()
+{
+	QueryPerformanceCounter((LARGE_INTEGER*)&m_CounterEndTime);
+
+	return (m_CounterEndTime - m_CounterBeginTime) * m_SecondsPerCountInCounter;
+}

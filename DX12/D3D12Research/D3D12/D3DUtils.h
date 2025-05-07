@@ -1,6 +1,11 @@
 #pragma once
 
-#include "filesystem"
+#include <filesystem>
+#include <fstream>
+#include <vector>
+#include <cstddef>
+#include <stdexcept>
+#include <string>
 
 #define HR(hr) \
 LogHRESULT(hr)
@@ -82,17 +87,29 @@ static Microsoft::WRL::ComPtr<ID3D12Resource> CreateDefaultBuffer(
 	return defaultBuffer;
 }
 
+/**
+ * @brief Reads a file into a byte vector
+ * @param filePath Path to the file to read
+ * @param mode File open mode (default: std::ios::ate for reading from end)
+ * @return std::vector<std::byte> containing the file contents
+ * @throws std::runtime_error if file cannot be opened or read
+ */
 static std::vector<std::byte> ReadFile(const std::filesystem::path& filePath, std::ios_base::openmode mode = std::ios::ate)
 {
-	if (!std::filesystem::exists(filePath))
+	if (filePath.empty())
 	{
-		throw std::runtime_error("Files does not exist: " + filePath.string());
+		throw std::runtime_error("File path is empty");
 	}
 
-	std::ifstream file(filePath, mode);
-	if (!file.is_open())
+	if (!std::filesystem::exists(filePath))
 	{
-		throw std::runtime_error("Files does not exist: " + filePath.string());
+		throw std::runtime_error("File does not exist: " + filePath.string());
+	}
+
+	std::ifstream file(filePath, mode | std::ios::binary);
+	if (!file)
+	{
+		throw std::runtime_error("Failed to open file: " + filePath.string());
 	}
 
 	const auto size = static_cast<size_t>(file.tellg());
@@ -103,7 +120,11 @@ static std::vector<std::byte> ReadFile(const std::filesystem::path& filePath, st
 
 	std::vector<std::byte> buffer(size);
 	file.seekg(0);
-	file.read(reinterpret_cast<char*>(buffer.data()), size);
+	
+	if (!file.read(reinterpret_cast<char*>(buffer.data()), size))
+	{
+		throw std::runtime_error("Failed to read file: " + filePath.string());
+	}
 
 	return buffer;
 }

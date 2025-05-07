@@ -34,7 +34,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 		if (ret == aiReturn_SUCCESS)
 		{ 
 			std::filesystem::path texturePath = path.C_Str();
-			texturePath = texturePath.replace_extension("png");
 			if (texturePath.is_absolute() || texturePath.has_root_path())
 			{
 				texturePath = texturePath.relative_path();

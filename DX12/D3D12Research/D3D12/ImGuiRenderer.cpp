@@ -78,10 +78,11 @@ void ImGuiRenderer::CreatePipeline()
 	m_pRootSignature->Finalize(m_pGraphics->GetDevice(), rootSignatureFlags);
 
 	// input layout
-	std::vector<D3D12_INPUT_ELEMENT_DESC> elementDesc;
-	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	std::vector<D3D12_INPUT_ELEMENT_DESC> elementDesc = {
+		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
 
 	// pipeline state
 	m_pPipelineStateObject = std::make_unique<GraphicsPipelineState>();
@@ -90,7 +91,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineStateObject->SetDepthEnable(true);
 	m_pPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 	m_pPipelineStateObject->SetInputLayout(elementDesc.data(), (uint32_t)elementDesc.size());
-	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D24_UNORM_S8_UINT, 1, 0);
+	m_pPipelineStateObject->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, 1, 0);
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());

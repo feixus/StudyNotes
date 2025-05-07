@@ -54,7 +54,7 @@ class GraphicsTexture : public GraphicsResource
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
 	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage);
-	void SetData(CommandContext* pContext, void* pData, uint32_t dataSize);
+	void SetData(CommandContext* pContext, const void* pData, uint32_t dataSize);
 
 	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
 
@@ -68,9 +68,12 @@ public:
 
 private:
 	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
+	int GetRowDataSize(unsigned int width) const;
 
 	int m_Width{0};
 	int m_Height{0};
+	DXGI_FORMAT m_Format{};
+	int m_MipLevels{1};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv{};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv{};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Uav{};

@@ -73,7 +73,7 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableT
         for (uint32_t i = 0; i < rangeSize; i++)
         {
             sourceRangeSizes[sourceRangeCount] = 1;
-            sourceRanges[sourceRangeCount] = *entry.TableStart;
+            sourceRanges[sourceRangeCount] = entry.TableStart[i];
             ++sourceRangeCount;
         }
 
