@@ -59,6 +59,9 @@ public:
 private:
 	uint64_t GetFenceToWaitFor();
 
+	void BeginFrame();
+	void EndFrame(uint64_t fenceValue);
+
 	void InitD3D();
 	void InitializeAssets();
 	void CreateSwapchain();

@@ -43,6 +43,11 @@ void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32_t dat
 
 void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount)
 {
+	if (m_pResource)
+	{
+		m_pResource->Release();
+	}
+
 	m_Format = format;
 	m_SampleCount = sampleCount;
 
@@ -122,7 +127,10 @@ void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FO
 
 	if ((usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
 	{
-		m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		if (m_Srv.ptr == 0)
+		{
+			m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		}
 		if (m_SampleCount > 1)
 		{
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
@@ -131,17 +139,26 @@ void GraphicsTexture::Create(Graphics* pGraphics, int width, int height, DXGI_FO
 	}
 	if ((usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
 	{
-		m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		if (m_Uav.ptr == 0)
+		{
+			m_Uav = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		}
 		pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, nullptr, m_Uav);
 	}
 	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
 	{
-		m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		if (m_Rtv.ptr == 0)
+		{
+			m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		}
 		pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
 	}
 	else if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
 	{
-		m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		if (m_Rtv.ptr == 0)
+		{
+			m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		}
 		pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, nullptr, m_Rtv);
 	}
 }

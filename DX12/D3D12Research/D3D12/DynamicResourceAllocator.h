@@ -20,6 +20,10 @@ public:
 	DynamicAllocation Allocate(int size, int alignment = 256);
 	void Free(uint64_t fenceValue);
 
+	void ResetAllocationCounter() { m_TotalMemoryAllocation = 0; }
+	uint64_t GetTotalMemoryAllocation() const { return m_TotalMemoryAllocation; }
+	uint64_t GetTotalMemoryAllocationPeak() const { return m_TotalMemoryAllocationPeak; }
+
 private:
 	ComPtr<ID3D12Resource> CreateResource(bool gpuVisible, int size, void** pMappedData);
 
@@ -30,5 +34,8 @@ private:
 	int m_CurrentOffset{ 0 };
 	int m_Size{ 0 };
 	void* m_pMappedMemory{ nullptr };
+
+	uint64_t m_TotalMemoryAllocationPeak{ 0 };
+	uint64_t m_TotalMemoryAllocation{ 0 };
 };
 

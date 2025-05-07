@@ -94,8 +94,7 @@ void Graphics::Update()
 	Matrix cameraProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 1.0f, 300);
 	Matrix cameraViewProj = cameraView * cameraProj;
 
-	m_pImGuiRenderer->NewFrame();
-
+	BeginFrame();
 	uint64_t nextFenceValue = 0;
 
 	// shadow map
@@ -208,13 +207,7 @@ void Graphics::Update()
 	pCommandContext->MarkEnd();
 
 	nextFenceValue = pCommandContext->Execute(false);
-
-	uint64_t waitFenceIdx = GetFenceToWaitFor();
-	WaitForFence(m_FenceValues[waitFenceIdx]);
-	m_FenceValues[waitFenceIdx] = nextFenceValue;
-
-	m_pSwapchain->Present(1, 0);
-	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
+	EndFrame(nextFenceValue);
 }
 
 void Graphics::Shutdown()
@@ -226,6 +219,23 @@ void Graphics::Shutdown()
 uint64_t Graphics::GetFenceToWaitFor()
 {
 	return (m_CurrentBackBufferIndex + (FRAME_COUNT - 1)) % FRAME_COUNT;
+}
+
+void Graphics::BeginFrame()
+{
+	m_pImGuiRenderer->NewFrame();
+}
+
+void Graphics::EndFrame(uint64_t fenceValue)
+{
+	uint64_t waitFenceIdx = GetFenceToWaitFor();
+	WaitForFence(m_FenceValues[waitFenceIdx]);
+	m_FenceValues[waitFenceIdx] = fenceValue;
+
+	m_pSwapchain->Present(1, 0);
+	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
+
+	m_pDynamicCpuVisibleAllocator->ResetAllocationCounter();
 }
 
 void Graphics::InitD3D()
@@ -321,7 +331,7 @@ void Graphics::InitD3D()
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
 
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x400000);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x20000);
 	
 	// swap chain
 	CreateSwapchain();
@@ -365,6 +375,16 @@ void Graphics::CreateSwapchain()
 		&pSwapChain));
 
 	pSwapChain.As(&m_pSwapchain);
+
+	for (int i = 0; i < FRAME_COUNT; i++)
+	{
+		m_RenderTargets[i] = std::make_unique<GraphicsTexture>();
+		if (m_SampleCount > 1)
+		{
+			m_MultiSampleRenderTargets[i] = std::make_unique<GraphicsTexture>();
+		}
+	}
+	m_pDepthStencilBuffer = std::make_unique<GraphicsTexture>();
 }
 
 void Graphics::UpdateImGui()
@@ -389,36 +409,47 @@ void Graphics::UpdateImGui()
 	ImGui::Text("SponzaTime: %.1f", m_LoadSponzaTime);
 
 	ImGui::BeginTabBar("GpuStatBar");
-	ImGui::BeginTabItem("Descriptor Heaps");
-	ImGui::Text("Used CPU Descriptor Heaps");
-	for (const auto& pAllocator : m_DescriptorHeaps)
+	if (ImGui::BeginTabItem("Descriptor Heaps"))
 	{
-		switch (pAllocator->GetType())
+		ImGui::Text("Used CPU Descriptor Heaps");
+
+		for (const auto& pAllocator : m_DescriptorHeaps)
 		{
-		case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
-			ImGui::TextWrapped("CBV_SRV_UAV");
-			break;
-		case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
-			ImGui::TextWrapped("Sampler");
-			break;
-		case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
-			ImGui::TextWrapped("RTV");
-			break;
-		case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
-			ImGui::TextWrapped("DSV");
-			break;
-		default:
-			break;
+			switch (pAllocator->GetType())
+			{
+			case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
+				ImGui::TextWrapped("CBV_SRV_UAV");
+				break;
+			case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
+				ImGui::TextWrapped("Sampler");
+				break;
+			case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
+				ImGui::TextWrapped("RTV");
+				break;
+			case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
+				ImGui::TextWrapped("DSV");
+				break;
+			default:
+				break;
+			}
+
+			uint32_t totalDescriptors = pAllocator->GetHeapCount() * DescriptorAllocator::DESCRIPTORS_PER_HEAP;
+			uint32_t usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
+			std::stringstream str;
+			str << usedDescriptors << "/" << totalDescriptors;
+			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
 		}
 
-		uint32_t totalDescriptors = pAllocator->GetHeapCount() * DescriptorAllocator::DESCRIPTORS_PER_HEAP;
-		uint32_t usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
-		std::stringstream str;
-		str << usedDescriptors << "/" << totalDescriptors;
-		ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
+		ImGui::EndTabItem();
 	}
 
-	ImGui::EndTabItem();
+	if (ImGui::BeginTabItem("Memory"))
+	{
+		ImGui::Text("Used Dynamic Memory: %d KB", m_pDynamicCpuVisibleAllocator->GetTotalMemoryAllocation() / 1024);
+		ImGui::Text("Peak Dynamic Memory: %d KB", m_pDynamicCpuVisibleAllocator->GetTotalMemoryAllocationPeak() / 1024);
+		ImGui::EndTabItem();
+	}
+
 	ImGui::EndTabBar();
 	ImGui::End();
 }
@@ -432,9 +463,9 @@ void Graphics::OnResize(int width, int height)
 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
-		m_RenderTargets[i].reset();
+		m_RenderTargets[i]->Release();
 	}
-	m_pDepthStencilBuffer.reset();
+	m_pDepthStencilBuffer->Release();
 
 	// resize the buffers
 	HR(m_pSwapchain->ResizeBuffers(
@@ -451,17 +482,14 @@ void Graphics::OnResize(int width, int height)
 	{
 		ID3D12Resource* pResource = nullptr;
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-		m_RenderTargets[i] = std::make_unique<GraphicsTexture>();
 		m_RenderTargets[i]->CreateForSwapChain(this, pResource);
 
 		if (m_SampleCount > 1)
 		{
-			m_MultiSampleRenderTargets[i] = std::make_unique<GraphicsTexture>();
 			m_MultiSampleRenderTargets[i]->Create(this, m_WindowWidth, m_WindowHeight, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount);
 		}
 	}
 
-	m_pDepthStencilBuffer = std::make_unique<GraphicsTexture>();
 	m_pDepthStencilBuffer->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_SampleCount);
 
 	m_Viewport.Left = 0;

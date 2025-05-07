@@ -111,54 +111,17 @@ private:
 			// resize the window
 		case WM_SIZE:
 		{
-			uint32_t windowWidth = LOWORD(lParam);
-			uint32_t windowHeight = HIWORD(lParam);
-			if (m_pGraphics && m_pGraphics->GetDevice())
+			int windowWidth = LOWORD(lParam);
+			int windowHeight = HIWORD(lParam);
+			if (m_pGraphics && windowWidth > 0 && windowHeight > 0)
 			{
-				if (wParam == SIZE_MINIMIZED)
-				{
-					mMinimized = true;
-					mMaximized = false;
-				}
-				else if (wParam == SIZE_MAXIMIZED)
-				{
-					mMinimized = false;
-					mMaximized = true;
-					m_pGraphics->OnResize(windowWidth, windowHeight);
-				}
-				else if (wParam == SIZE_RESTORED)
-				{
-					// restoring from minimized state
-					if (mMinimized)
-					{
-						mMinimized = false;
-						m_pGraphics->OnResize(windowWidth, windowHeight);
-					}
-					// restoring from maximized state
-					else if (mMaximized)
-					{
-						mMaximized = false;
-						m_pGraphics->OnResize(windowWidth, windowHeight);
-					}
-					else if (mResizing)
-					{
-
-					}
-					else  // api call such as SetWindowPos/ mSwapchain->SetFullscreenState
-					{
-						m_pGraphics->OnResize(windowWidth, windowHeight);
-					}
-				}
+				m_pGraphics->OnResize(windowWidth, windowHeight);
 			}
+			return 0;
 		}
-		return 0;
 		case WM_KEYUP:
 		{
 			Input::Instance().UpdateKey((uint32_t)wParam, false);
-			if (wParam == VK_ESCAPE)
-			{
-				PostQuitMessage(0);
-			}
 			return 0;
 		}
 		case WM_KEYDOWN:
