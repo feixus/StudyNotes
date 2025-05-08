@@ -4,7 +4,7 @@
 #include "Graphics.h"
 #include "Image.h"
 
-void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisible)
+void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisible, bool unorderedAccess)
 {
 	m_Size = size;
 
@@ -12,7 +12,7 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisibl
 	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	desc.Alignment = 0;
 	desc.DepthOrArraySize = 1;
-	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	desc.Flags = unorderedAccess ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
 	desc.Width = size;
 	desc.Height = 1;
 	desc.Format = DXGI_FORMAT_UNKNOWN;
@@ -306,4 +306,65 @@ int GraphicsTexture::GetRowDataSize(unsigned int width) const
  		return 0;
         
     }
+}
+
+void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible)
+{
+	m_Size = elementCount * elementStride;
+
+	D3D12_RESOURCE_DESC desc{};
+	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	desc.Alignment = 0;
+	desc.DepthOrArraySize = 1;
+	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	desc.Width = m_Size;
+	desc.Height = 1;
+	desc.Format = DXGI_FORMAT_UNKNOWN;
+	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	desc.MipLevels = 1;
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+
+	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
+
+	HR(pGraphics->GetDevice()->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&desc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&m_pResource)));
+
+	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+	uavDesc.Buffer.CounterOffsetInBytes = 0;
+	uavDesc.Buffer.NumElements = elementCount;
+	uavDesc.Buffer.StructureByteStride = elementStride;
+	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+	uavDesc.Buffer.FirstElement = 0;
+	uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+
+	if (m_Uav.ptr == 0)
+	{
+		m_Uav = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	}
+	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, m_Uav);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = elementCount;
+	srvDesc.Buffer.StructureByteStride = elementStride;
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+	if (m_Srv.ptr == 0)
+	{
+		m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	}
+	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
+	
 }

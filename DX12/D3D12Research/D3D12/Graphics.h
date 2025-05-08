@@ -13,6 +13,7 @@ class GraphicsPipelineState;
 class ComputePipelineState;
 class GraphicsTexture;
 class Mesh;
+class StructuredBuffer;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -115,6 +116,18 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
+
+	std::unique_ptr<RootSignature> m_pComputeGenerateFrustumsRootSignature;
+	std::unique_ptr<ComputePipelineState> m_pComputeGenerateFrustumsPipeline;
+	std::unique_ptr<StructuredBuffer> m_pFrustumBuffer;
+	int m_FrustumCountX{0};
+	int m_FrustumCountY{0};
+
+	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
+	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
+	std::unique_ptr<GraphicsTexture> m_pLightGrid;
 
 	std::vector<Light> m_Lights;
 };

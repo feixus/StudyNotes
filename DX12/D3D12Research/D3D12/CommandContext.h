@@ -27,7 +27,6 @@ public:
 	void FlushResourceBarriers();
 	
 	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
-	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
 
@@ -75,6 +74,8 @@ class GraphicsCommandContext : public CommandContext
 public:
 	GraphicsCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator);
 
+	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
+
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
@@ -101,6 +102,8 @@ class ComputeCommandContext : public CommandContext
 {
 public:
 	ComputeCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator);
+
+	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 
 	void SetPipelineState(ComputePipelineState* pPipelineState);
 

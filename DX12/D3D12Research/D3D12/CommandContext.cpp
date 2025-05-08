@@ -68,6 +68,8 @@ uint64_t CommandContext::ExecuteAndReset(bool wait)
 	
 	m_pCommandList->Reset(m_pAllocator, nullptr);
 
+	m_CurrentDescriptorHeaps = {};
+
 	return fenceValue;
 }
 
@@ -147,13 +149,6 @@ void CommandContext::FlushResourceBarriers()
 void CommandContext::SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants)
 {
 	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
-}
-
-void CommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize)
-{
-	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
-	m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
 void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData)
@@ -252,6 +247,13 @@ void CommandContext::MarkEnd()
 GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator)
 	: CommandContext(pGraphics, pCommandlist, pAllocator, D3D12_COMMAND_LIST_TYPE_DIRECT)
 {
+}
+
+void GraphicsCommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize)
+{
+	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
 void GraphicsCommandContext::Draw(int vertexStart, int vertexCount)
@@ -357,6 +359,13 @@ void GraphicsCommandContext::SetGraphicsRootConstants(int rootIndex, uint32_t co
 ComputeCommandContext::ComputeCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator)
 	: CommandContext(pGraphics, pCommandlist, pAllocator, D3D12_COMMAND_LIST_TYPE_COMPUTE)
 {
+}
+
+void ComputeCommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize)
+{
+	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
 void ComputeCommandContext::SetPipelineState(ComputePipelineState* pPipelineState)
