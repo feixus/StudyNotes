@@ -199,7 +199,6 @@ private:
 };
 
 //int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-//int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 int main()
 {
 	std::cout << "hello dx12" << std::endl;

@@ -39,7 +39,22 @@
 9.  Stupid Spherical Harmonics (SH) Tricks  
 
 10. randomized algorithms: Monte Carlo(eg. Monte Carlo integration) and Las Vegas(eg. quickSort)
-   
+
+11. shadow depth map  
+	CSM to alleviate perspective aliasing and projective aliasing.  
+	Depth bias or slope scaled depth bias to mitigate shadow acne and erroneous self-shadowing.  
+	tightly fitting the light's projection to the view frustum increses the shadow map coverage.  
+	https://learn.microsoft.com/en-us/windows/win32/dxtecharts/common-techniques-to-improve-shadow-depth-maps
+	
+	depth precision(reverse-Z)
+    https://developer.nvidia.com/content/depth-precision-visualized
+	
+12. computer shader  
+	DX12: thread->thread group->dispatch, SV_GroupID/SV_GroupThreadID/SV_DispatchThreadID/SV_GroupIndex, the max numThreads is 1024. 
+	https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-numthreads  
+	https://www.stefanpijnacker.nl/article/compute-with-directx12-part-1/  
+	https://logins.github.io/graphics/2020/10/31/D3D12ComputeShaders.html  
+	
    
 
 

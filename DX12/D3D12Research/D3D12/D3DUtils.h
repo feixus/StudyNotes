@@ -126,6 +126,7 @@ static std::vector<std::byte> ReadFile(const std::filesystem::path& filePath, st
 		throw std::runtime_error("Failed to read file: " + filePath.string());
 	}
 
+	file.close();
 	return buffer;
 }
 

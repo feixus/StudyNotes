@@ -1,3 +1,6 @@
+#include "Common.hlsl"
+#include "Constants.hlsl"
+
 cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 {
     float4x4 cWorld;
@@ -10,22 +13,9 @@ cbuffer PerFrameData : register(b1)
     float4x4 cViewInverse;
 }
 
-struct Light
-{
-    int Enabled;
-	float3 Position;
-	float3 Direction;
-	float Intensity;
-	float4 Color;
-	float Range;
-	float SpotLightAngle;
-	float Attenuation;
-	uint Type;
-};
-
 cbuffer LightData : register(b2)
 {
-    Light cLights[20];
+    Light cLights[LIGHT_COUNT];
 }
 
 Texture2D myDiffuseTexture : register(t0);
@@ -38,6 +28,11 @@ Texture2D mySpecularTexture : register(t2);
 
 Texture2D myShadowMapTexture : register(t3);
 SamplerComparisonState myShadowMapSampler : register(s2);
+
+#ifdef FORWARD_PLUS
+Texture2D<uint2> tLightGrid : register(t4);
+StructuredBuffer<uint> tLightIndexList : register(t5);
+#endif
 
 struct VSInput
 {
@@ -115,36 +110,58 @@ LightResult DoDirectionalLight(Light light, float3 normal, float3 viewDirection)
     return result;
 }
 
-LightResult DoLight(float3 worldPosition, float3 normal, float3 viewDirection, float3 shadowFactor)
+LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3 viewDirection, float shadowFactor)
 {
+#ifdef FORWARD_PLUS
+    uint2 tileIndex = uint2(floor(position.xy / BLOCK_SIZE));
+    uint startOffset = tLightGrid[tileIndex].x;
+    uint lightCount = tLightGrid[tileIndex].y;
+#else
+    uint lightCount = LIGHT_COUNT;
+#endif
+
     LightResult totalResult = (LightResult)0;
 
-    for (int i = 1; i < 20; i++)
+    for (int i = 0; i < lightCount; i++)
     {
-        if (cLights[i].Enabled == 0)
+#ifdef FORWARD_PLUS
+        uint lightIndex = tLightIndexList[startOffset + i];
+        Light light = cLights[lightIndex];
+#else
+        Light light = cLights[i];
+#endif
+
+        if (light.Enabled == 0)
         {
             continue;
         }
 
-        if (cLights[i].Type != 0 && distance(worldPosition, cLights[i].Position) > cLights[i].Range)
+        if (light.Type != 0 && distance(worldPosition, light.Position) > light.Range)
         {
             continue;
         }
 
         LightResult result;
 
-        switch(cLights[i].Type)
+        switch(light.Type)
         {
         case 0:
-        {
-            result = DoDirectionalLight(cLights[i], normal, viewDirection);
-        }
-        break;
+            result = DoDirectionalLight(light, normal, viewDirection);
+            break;
         case 1:
-        {
-            result = DoPointLight(cLights[i], worldPosition, normal, viewDirection);
+            result = DoPointLight(light, worldPosition, normal, viewDirection);
+            break;
+        default:
+            result.Diffuse = float4(1, 0, 1, 1);
+            result.Specular = float4(0, 0, 0, 1);
+            break;
         }
-        break;
+
+        // directional light
+        if (i == 0)
+        {
+            result.Diffuse *= shadowFactor;
+            result.Specular = shadowFactor > 0 ? result.Specular : float4(0, 0, 0, 0);
         }
         
         totalResult.Diffuse += result.Diffuse;
@@ -216,16 +233,7 @@ float4 PSMain(PSInput input) : SV_TARGET
    
     shadowFactor /= kernelSize * kernelSize;
 
-    LightResult mainLight = DoDirectionalLight(cLights[0], input.normal, viewDirection);
-    mainLight.Diffuse *= shadowFactor;
-    if (shadowFactor == 0)
-    {
-        mainLight.Specular *= 0.0f;
-    }
-
-    LightResult lightResults = DoLight(input.wpos.xyz, input.normal, viewDirection, shadowFactor);
-    lightResults.Diffuse += mainLight.Diffuse;
-    lightResults.Specular += mainLight.Specular;
+    LightResult lightResults = DoLight(input.position, input.wpos.xyz, input.normal, viewDirection, shadowFactor);
 
     float4 specularSample = mySpecularTexture.Sample(myDiffuseSampler, input.texCoord);
     lightResults.Specular *= specularSample;

@@ -310,6 +310,11 @@ int GraphicsTexture::GetRowDataSize(unsigned int width) const
 
 void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible)
 {
+	if (m_pResource)
+	{
+		m_pResource->Release();
+	}
+
 	m_Size = elementCount * elementStride;
 
 	D3D12_RESOURCE_DESC desc{};
