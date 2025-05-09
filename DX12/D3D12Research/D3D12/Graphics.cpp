@@ -164,8 +164,8 @@ void Graphics::Update()
 
 		Data.CameraView = cameraView;
 		Data.NumThreadGroups[0] = m_FrustumCountX;
-		Data.NumThreadGroups[2] = m_FrustumCountY;
-		Data.NumThreadGroups[1] = 1;
+		Data.NumThreadGroups[1] = m_FrustumCountY;
+		Data.NumThreadGroups[2] = 1;
 
 		pCommandContext->SetDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
 		pCommandContext->SetDynamicConstantBufferView(1, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());

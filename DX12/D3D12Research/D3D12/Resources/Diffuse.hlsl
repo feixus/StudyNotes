@@ -1,5 +1,5 @@
-#include "Common.hlsl"
 #include "Constants.hlsl"
+#include "Common.hlsl"
 
 cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 {
@@ -29,7 +29,7 @@ Texture2D mySpecularTexture : register(t2);
 Texture2D myShadowMapTexture : register(t3);
 SamplerComparisonState myShadowMapSampler : register(s2);
 
-#ifdef FORWARD_PLUS
+#if FORWARD_PLUS
 Texture2D<uint2> tLightGrid : register(t4);
 StructuredBuffer<uint> tLightIndexList : register(t5);
 #endif
@@ -112,7 +112,7 @@ LightResult DoDirectionalLight(Light light, float3 normal, float3 viewDirection)
 
 LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3 viewDirection, float shadowFactor)
 {
-#ifdef FORWARD_PLUS
+#if FORWARD_PLUS
     uint2 tileIndex = uint2(floor(position.xy / BLOCK_SIZE));
     uint startOffset = tLightGrid[tileIndex].x;
     uint lightCount = tLightGrid[tileIndex].y;
@@ -124,7 +124,7 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 
     for (int i = 0; i < lightCount; i++)
     {
-#ifdef FORWARD_PLUS
+#if FORWARD_PLUS
         uint lightIndex = tLightIndexList[startOffset + i];
         Light light = cLights[lightIndex];
 #else
@@ -232,7 +232,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     }
    
     shadowFactor /= kernelSize * kernelSize;
-
+    
     LightResult lightResults = DoLight(input.position, input.wpos.xyz, input.normal, viewDirection, shadowFactor);
 
     float4 specularSample = mySpecularTexture.Sample(myDiffuseSampler, input.texCoord);

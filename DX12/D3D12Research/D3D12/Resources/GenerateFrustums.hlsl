@@ -39,10 +39,10 @@ void CSMain(CS_INPUT input)
 	}
 
 	Frustum frustum;
-    frustum.Left = CalculatePlane(eyePos, viewSpace[2].xyz, viewSpace[0].xyz);
-    frustum.Right = CalculatePlane(eyePos, viewSpace[1].xyz, viewSpace[3].xyz);
-    frustum.Top = CalculatePlane(eyePos, viewSpace[0].xyz, viewSpace[1].xyz);
-    frustum.Bottom = CalculatePlane(eyePos, viewSpace[3].xyz, viewSpace[2].xyz);
+    frustum.Left = CalculatePlane(eyePos, viewSpace[2], viewSpace[0]);
+    frustum.Right = CalculatePlane(eyePos, viewSpace[1], viewSpace[3]);
+    frustum.Top = CalculatePlane(eyePos, viewSpace[0], viewSpace[1]);
+    frustum.Bottom = CalculatePlane(eyePos, viewSpace[3], viewSpace[2]);
 
 	uint arrayIndex = input.DispatchThreadId.x + (input.DispatchThreadId.y * cNumThreads.x);
 	uOutFrustums[arrayIndex] = frustum;

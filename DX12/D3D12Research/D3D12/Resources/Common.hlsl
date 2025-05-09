@@ -59,18 +59,15 @@ bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float dept
     {
         inside = false;
     }
-
-    if (SphereOutsidePlane(sphere, frustum.Right))
+    else if (SphereOutsidePlane(sphere, frustum.Right))
     {
         inside = false;
     }
-
-    if (SphereOutsidePlane(sphere, frustum.Top))
+    else if (SphereOutsidePlane(sphere, frustum.Top))
     {
         inside = false;
     }
-
-    if (SphereOutsidePlane(sphere, frustum.Bottom))
+    else if (SphereOutsidePlane(sphere, frustum.Bottom))
     {
         inside = false;
     }
@@ -81,7 +78,7 @@ bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float dept
 
 float4 ClipToView(float4 clip, float4x4 projectionInverse)
 {
-	float4 view = mul(projectionInverse, clip);
+    float4 view = mul(clip, projectionInverse);
 	// homegeneous coordinate to cartesion coordinate by perspective projection
 	view /= view.w;
 	return view;
