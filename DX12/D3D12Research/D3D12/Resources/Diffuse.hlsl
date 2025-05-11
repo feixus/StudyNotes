@@ -34,6 +34,12 @@ Texture2D<uint2> tLightGrid : register(t4);
 StructuredBuffer<uint> tLightIndexList : register(t5);
 #endif
 
+struct LightResult
+{
+    float4 Diffuse;
+    float4 Specular;
+};
+
 struct VSInput
 {
     float3 position : POSITION;
@@ -54,23 +60,17 @@ struct PSInput
     float4 wpos : TEXCOORD3;
 };
 
-struct LightResult
-{
-    float4 Diffuse;
-    float4 Specular;
-};
-
-float4 GetSpecularBlinnPhong(float3 viewDirection, float3 normal, float3 lightVector, float shininess)
+float GetSpecularBlinnPhong(float3 viewDirection, float3 normal, float3 lightVector, float shininess)
 {
     float3 halfway = normalize(lightVector - viewDirection);
-    float4 specularStrength = dot(halfway, normal);
+    float specularStrength = dot(halfway, normal);
     return pow(saturate(specularStrength), shininess);
 }
 
-float4 GetSpecularPhong(float3 viewDirection, float3 normal, float3 lightVector, float shininess)
+float GetSpecularPhong(float3 viewDirection, float3 normal, float3 lightVector, float shininess)
 {
     float3 reflectedLight = reflect(-lightVector, normal);
-    float4 specularStrength = dot(reflectedLight, -viewDirection);
+    float specularStrength = dot(reflectedLight, -viewDirection);
     return pow(saturate(specularStrength), shininess);
 }
 
@@ -106,7 +106,7 @@ LightResult DoDirectionalLight(Light light, float3 normal, float3 viewDirection)
 {
     LightResult result;
     result.Diffuse = light.Intensity * DoDiffuse(light, normal, -light.Direction);
-    result.Specular = DoSpecular(light, normal, -light.Direction, viewDirection);
+    result.Specular = light.Intensity * DoSpecular(light, normal, -light.Direction, viewDirection);
     return result;
 }
 
@@ -124,8 +124,9 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 
     for (uint i = 0; i < lightCount; i++)
     {
+        uint lightIndex = i;
 #if FORWARD_PLUS
-        uint lightIndex = tLightIndexList[startOffset + i];
+        lightIndex = tLightIndexList[startOffset + i];
         Light light = cLights[lightIndex];
 #else
         Light light = cLights[i];
@@ -158,7 +159,7 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
         }
 
         // directional light
-        if (i == 0)
+        if (lightIndex == 0)
         {
             result.Diffuse *= shadowFactor;
             result.Specular = shadowFactor > 0 ? result.Specular : float4(0, 0, 0, 0);

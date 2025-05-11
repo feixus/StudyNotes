@@ -27,10 +27,10 @@ void CSMain(CS_INPUT input)
 
 	// compute the 4 corner points on the far clipping plane to use as the frustum vertices 
 	float4 screenSpace[4];
-	screenSpace[0] = float4( input.DispatchThreadId.xy * BLOCK_SIZE, 1.0f, 1.0f);
-	screenSpace[1] = float4( float2(input.DispatchThreadId.x + 1, input.DispatchThreadId.y ) * BLOCK_SIZE, 1.0f, 1.0f);
-	screenSpace[2] = float4( float2(input.DispatchThreadId.x, input.DispatchThreadId.y + 1) * BLOCK_SIZE, 1.0f, 1.0f);
-	screenSpace[3] = float4( float2(input.DispatchThreadId.x + 1, input.DispatchThreadId.y + 1) * BLOCK_SIZE, 1.0f, 1.0f);
+	screenSpace[0] = float4(input.DispatchThreadId.xy * BLOCK_SIZE, 1.0f, 1.0f);
+	screenSpace[1] = float4(float2(input.DispatchThreadId.x + 1, input.DispatchThreadId.y ) * BLOCK_SIZE, 1.0f, 1.0f);
+	screenSpace[2] = float4(float2(input.DispatchThreadId.x, input.DispatchThreadId.y + 1) * BLOCK_SIZE, 1.0f, 1.0f);
+	screenSpace[3] = float4(float2(input.DispatchThreadId.x + 1, input.DispatchThreadId.y + 1) * BLOCK_SIZE, 1.0f, 1.0f);
 
 	float3 viewSpace[4];
 	for (int i = 0; i < 4; i++)

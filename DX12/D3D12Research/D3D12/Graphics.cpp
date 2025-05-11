@@ -116,7 +116,7 @@ void Graphics::Update()
 	{
 		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		pCommandContext->MarkBegin(L"Depth Prepass");
-		pCommandContext->InsertResourceBarrier(m_pDepthPrepassTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, false);
+		pCommandContext->InsertResourceBarrier(m_pDepthPrepassTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		pCommandContext->SetPipelineState(m_pShadowPipelineStateObject.get());
 		pCommandContext->SetGraphicsRootSignature(m_pShadowRootSignature.get());
 
