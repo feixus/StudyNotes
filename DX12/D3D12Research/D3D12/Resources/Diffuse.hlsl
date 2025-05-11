@@ -122,7 +122,7 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 
     LightResult totalResult = (LightResult)0;
 
-    for (int i = 0; i < lightCount; i++)
+    for (uint i = 0; i < lightCount; i++)
     {
 #if FORWARD_PLUS
         uint lightIndex = tLightIndexList[startOffset + i];

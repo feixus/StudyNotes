@@ -31,8 +31,8 @@ public:
 private:
 	void UpdateMousePosition();
 
-	std::array<char, 256> m_KeyStates{};
-	std::array<char, 5> m_MouseStates{};
+	std::array<KeyState, 256> m_KeyStates{};
+	std::array<KeyState, 5> m_MouseStates{};
 
 	Input() = default;
 

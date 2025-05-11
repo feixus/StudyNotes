@@ -73,7 +73,7 @@ class GraphicsTexture : public GraphicsResource
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
 	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
-	void SetData(CommandContext* pContext, const void* pData, uint32_t dataSize);
+	void SetData(CommandContext* pContext, const void* pData);
 
 	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
 

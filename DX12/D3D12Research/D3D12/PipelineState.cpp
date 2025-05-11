@@ -36,7 +36,7 @@ void GraphicsPipelineState::Finalize(ID3D12Device* pDevice)
 	pDevice->CreateGraphicsPipelineState(&m_Desc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf()));
 }
 
-void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage)
+void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alphaToCoverage*/)
 {
     D3D12_RENDER_TARGET_BLEND_DESC& desc = m_Desc.BlendState.RenderTarget[0];
     desc.RenderTargetWriteMask = 0xf;
@@ -137,7 +137,7 @@ void GraphicsPipelineState::SetDepthTest(const D3D12_COMPARISON_FUNC func)
 	m_Desc.DepthStencilState.DepthFunc = func;
 }
 
-void GraphicsPipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, uint32_t stencilRef, uint8_t compareMask, uint8_t writeMask)
+void GraphicsPipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, uint32_t /*stencilRef*/, uint8_t compareMask, uint8_t writeMask)
 {
 	m_Desc.DepthStencilState.StencilEnable = stencilEnabled;
 	m_Desc.DepthStencilState.FrontFace.StencilFunc = mode;
@@ -149,11 +149,11 @@ void GraphicsPipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON
 	m_Desc.DepthStencilState.BackFace = m_Desc.DepthStencilState.FrontFace;
 }
 
-void GraphicsPipelineState::SetScissorEnabled(bool enabled)
+void GraphicsPipelineState::SetScissorEnabled(bool /*enabled*/)
 {
 }
 
-void GraphicsPipelineState::SetMultisampleEnabled(bool enabled)
+void GraphicsPipelineState::SetMultisampleEnabled(bool /*enabled*/)
 {
 }
 
@@ -172,7 +172,7 @@ void GraphicsPipelineState::SetLineAntialias(bool lineAntialias)
 	m_Desc.RasterizerState.AntialiasedLineEnable = lineAntialias;
 }
 
-void GraphicsPipelineState::SetDepthBias(float depthBias, float depthBiasClamp, float slopeScaledDepthBias)
+void GraphicsPipelineState::SetDepthBias(int depthBias, float depthBiasClamp, float slopeScaledDepthBias)
 {
     // final depth = depthFromInterpolation + (slopeScaledDepthBias * max(abs(dz/dx), abs(dz/dy))) + depthBias * r. (r is the 1/2^n, such as 1/16777216 for 24-bit)
     m_Desc.RasterizerState.SlopeScaledDepthBias = slopeScaledDepthBias;

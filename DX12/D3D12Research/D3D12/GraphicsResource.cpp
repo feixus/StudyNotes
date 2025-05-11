@@ -189,7 +189,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, CommandContext* pContext, cons
 	}
 }
 
-void GraphicsTexture::SetData(CommandContext* pContext, const void* pData, uint32_t dataSize)
+void GraphicsTexture::SetData(CommandContext* pContext, const void* pData)
 {
 	D3D12_SUBRESOURCE_DATA data;
 	data.pData = pData;

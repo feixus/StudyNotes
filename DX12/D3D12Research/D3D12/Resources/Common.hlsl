@@ -42,35 +42,19 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 	return plane;
 }
 
-bool SphereOutsidePlane(Sphere sphere, Plane plane)
+bool SphereBehindPlane(Sphere sphere, Plane plane)
 {
     return dot(plane.Normal, sphere.Position) + sphere.Radius < plane.DistanceToOrigin;
 }
 
 bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
 {
-    bool inside = true;
-    // if (sphere.Center.z - sphere.Radius < depthNear || sphere.Center.z + sphere.Radius ? depthFar)
-    // {
-    //     inside = false;
-    // }
-
-    if (SphereOutsidePlane(sphere, frustum.Left))
-    {
-        inside = false;
-    }
-    else if (SphereOutsidePlane(sphere, frustum.Right))
-    {
-        inside = false;
-    }
-    else if (SphereOutsidePlane(sphere, frustum.Top))
-    {
-        inside = false;
-    }
-    else if (SphereOutsidePlane(sphere, frustum.Bottom))
-    {
-        inside = false;
-    }
+    bool inside = sphere.Position.z + sphere.Radius > depthNear && sphere.Position.z - sphere.Radius < depthFar;
+    
+	inside = inside ? !SphereBehindPlane(sphere, frustum.Left) : false;
+    inside = inside ? !SphereBehindPlane(sphere, frustum.Right) : false;
+    inside = inside ? !SphereBehindPlane(sphere, frustum.Top) : false;
+    inside = inside ? !SphereBehindPlane(sphere, frustum.Bottom) : false;
 
     return inside;
 }

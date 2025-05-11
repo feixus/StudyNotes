@@ -55,7 +55,7 @@ void ImGuiRenderer::InitializeImGui()
 	m_pFontTexture = std::make_unique<GraphicsTexture>();
 	m_pFontTexture->Create(m_pGraphics, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource, 1);
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
+	m_pFontTexture->SetData(pContext, pPixels);
 	io.Fonts->SetTexID(m_pFontTexture->GetSRV().ptr);
 
 	pContext->Execute(true);
@@ -129,9 +129,7 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 	context.SetViewport(FloatRect(0, 0, (float)width, (float)height), 0, 1);
 	context.SetScissorRect(FloatRect(0, 0, (float)width, (float)height));
 
-	auto rtv = m_pGraphics->GetCurrentRenderTarget()->GetRTV();
-	auto dsv = m_pGraphics->GetDepthStencilView()->GetDSV();
-	context.SetRenderTargets(&rtv, dsv);
+	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTarget()->GetRTV(), m_pGraphics->GetDepthStencilView()->GetDSV());
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{
