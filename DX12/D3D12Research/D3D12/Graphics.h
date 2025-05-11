@@ -46,7 +46,8 @@ public:
 
 	bool IsFenceComplete(uint64_t fenceValue);
 
-	GraphicsTexture* GetDepthStencilView() const { return m_pDepthStencilBuffer.get(); }
+	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
+	GraphicsTexture* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer(); }
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
@@ -88,7 +89,6 @@ private:
 
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_MultiSampleRenderTargets;
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_RenderTargets;
-	std::unique_ptr<GraphicsTexture> m_pDepthStencilBuffer;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
@@ -123,15 +123,17 @@ private:
 	std::unique_ptr<ComputePipelineState> m_pComputeGenerateFrustumsPipeline;
 	std::unique_ptr<StructuredBuffer> m_pFrustumBuffer;
 	bool m_FrustumDirty = true;
-	int m_FrustumCountX{0};
-	int m_FrustumCountY{0};
 
 	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
 	std::unique_ptr<GraphicsTexture> m_pLightGrid;
-	std::unique_ptr<GraphicsTexture> m_pDepthPrepassTexture;
+
+	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
+	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
+	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
+	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 
 	std::vector<Light> m_Lights;
 };

@@ -31,6 +31,7 @@ struct Material
     std::unique_ptr<GraphicsTexture> pNormalTexture;
     std::unique_ptr<GraphicsTexture> pSpecularTexture;
     std::unique_ptr<GraphicsTexture> pAlphaTexture;
+    bool IsTransparent;
 };
 
 class Mesh

@@ -129,7 +129,7 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 	context.SetViewport(FloatRect(0, 0, (float)width, (float)height), 0, 1);
 	context.SetScissorRect(FloatRect(0, 0, (float)width, (float)height));
 
-	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTarget()->GetRTV(), m_pGraphics->GetDepthStencilView()->GetDSV());
+	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTarget()->GetRTV(), m_pGraphics->GetDepthStencil()->GetDSV());
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{
