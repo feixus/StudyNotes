@@ -1,5 +1,6 @@
 #include "Constants.hlsl"
 #include "Common.hlsl"
+#include "Lighting.hlsl"
 
 cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 {
@@ -34,12 +35,6 @@ Texture2D<uint2> tLightGrid : register(t4);
 StructuredBuffer<uint> tLightIndexList : register(t5);
 #endif
 
-struct LightResult
-{
-    float4 Diffuse;
-    float4 Specular;
-};
-
 struct VSInput
 {
     float3 position : POSITION;
@@ -59,56 +54,6 @@ struct PSInput
     float4 lpos : TEXCOORD2;
     float4 wpos : TEXCOORD3;
 };
-
-float GetSpecularBlinnPhong(float3 viewDirection, float3 normal, float3 lightVector, float shininess)
-{
-    float3 halfway = normalize(lightVector - viewDirection);
-    float specularStrength = dot(halfway, normal);
-    return pow(saturate(specularStrength), shininess);
-}
-
-float GetSpecularPhong(float3 viewDirection, float3 normal, float3 lightVector, float shininess)
-{
-    float3 reflectedLight = reflect(-lightVector, normal);
-    float specularStrength = dot(reflectedLight, -viewDirection);
-    return pow(saturate(specularStrength), shininess);
-}
-
-float4 DoDiffuse(Light light, float3 normal, float3 lightVector)
-{
-    return light.Color * max(dot(normal, lightVector), 0);
-}
-
-float4 DoSpecular(Light light, float3 normal, float3 lightVector, float3 viewDirection)
-{
-    return light.Color * GetSpecularBlinnPhong(viewDirection, normal, lightVector, 15.0f);
-}
-
-float DoAttenuation(Light light, float distance)
-{
-    return 1.0f - smoothstep(light.Range * light.Attenuation, light.Range, distance);
-}
-
-LightResult DoPointLight(Light light, float3 worldPosition, float3 normal, float3 viewDirection)
-{
-    LightResult result;
-    float3 L = light.Position - worldPosition;
-    float distance = length(L);
-    L = L / distance;
-
-    float attenuation = DoAttenuation(light, distance);
-    result.Diffuse = DoDiffuse(light, normal, L) * attenuation;
-    result.Specular = DoSpecular(light, normal, L, viewDirection) * attenuation;
-    return result;
-}
-
-LightResult DoDirectionalLight(Light light, float3 normal, float3 viewDirection)
-{
-    LightResult result;
-    result.Diffuse = light.Intensity * DoDiffuse(light, normal, -light.Direction);
-    result.Specular = light.Intensity * DoSpecular(light, normal, -light.Direction, viewDirection);
-    return result;
-}
 
 LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3 viewDirection, float shadowFactor)
 {
@@ -130,7 +75,6 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
         Light light = cLights[lightIndex];
 #else
         Light light = cLights[i];
-#endif
 
         if (light.Enabled == 0)
         {
@@ -141,16 +85,20 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
         {
             continue;
         }
+#endif
 
         LightResult result;
 
         switch(light.Type)
         {
-        case 0:
+        case LIGHT_DIRECTIONAL:
             result = DoDirectionalLight(light, normal, viewDirection);
             break;
-        case 1:
+        case LIGHT_POINT:
             result = DoPointLight(light, worldPosition, normal, viewDirection);
+            break;
+        case LIGHT_SPOT:
+            result = DoSpotLight(light, worldPosition, normal, viewDirection);
             break;
         default:
             result.Diffuse = float4(1, 0, 1, 1);

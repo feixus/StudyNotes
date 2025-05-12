@@ -31,6 +31,14 @@ struct Sphere
 	float Radius;
 };
 
+struct Cone
+{
+	float3 Tip;
+	float Height;
+	float3 Direction;
+	float Radius;
+};
+
 Plane CalculatePlane(float3 a, float3 b, float3 c)
 {
 	float3 v0 = b - a;
@@ -41,24 +49,6 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 	plane.DistanceToOrigin = dot(plane.Normal, a);
 	return plane;
 }
-
-bool SphereBehindPlane(Sphere sphere, Plane plane)
-{
-    return dot(plane.Normal, sphere.Position) + sphere.Radius < plane.DistanceToOrigin;
-}
-
-bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
-{
-    bool inside = sphere.Position.z + sphere.Radius > depthNear && sphere.Position.z - sphere.Radius < depthFar;
-    
-	inside = inside ? !SphereBehindPlane(sphere, frustum.Left) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Right) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Top) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Bottom) : false;
-
-    return inside;
-}
-
 
 float4 ClipToView(float4 clip, float4x4 projectionInverse)
 {

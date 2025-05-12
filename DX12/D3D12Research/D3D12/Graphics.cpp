@@ -49,14 +49,14 @@ void Graphics::Initialize(HWND hWnd)
 		Vector4 color = Vector4(RandomRange(0, 1), RandomRange(0, 1), RandomRange(0, 1), 1);
 		color.Normalize(color);
 
-		int type = rand() % 1;
+		int type = rand() % 2;
 		if (type == 0)
 		{
 			m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(10, 50), RandomRange(-200, 200)), 20.0f, 1.0f, 0.5f, color);
 		}
 		else
 		{
-			m_Lights[i] = Light::Cone(Vector3(RandomRange(-200, 200), RandomRange(20, 60), RandomRange(-200, 200)), 40.0f, Vector3(0, -1, 0), 60.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Cone(Vector3(RandomRange(-200, 200), RandomRange(60, 100), RandomRange(-200, 200)), 40.0f, Vector3(0, -1, 0), 60.0f, 1.0f, 0.5f, color);
 		}
 	}
 }
