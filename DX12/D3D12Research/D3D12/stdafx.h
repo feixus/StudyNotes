@@ -29,6 +29,7 @@
 #include "GameTimer.h"
 #include "BitField.h"
 #include "MathTypes.h"
+#include "MathHelp.h"
 
 using namespace std;
 using Microsoft::WRL::ComPtr;

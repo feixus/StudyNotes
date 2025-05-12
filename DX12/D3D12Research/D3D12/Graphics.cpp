@@ -23,14 +23,6 @@ Graphics::~Graphics()
 {
 }
 
-float RandomRange(float min, float max)
-{
-	float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-	float diff = max - min;
-	float r = random * diff;
-	return min + r;
-}
-
 void Graphics::Initialize(HWND hWnd)
 {
 	m_pWindow = hWnd;
@@ -46,17 +38,17 @@ void Graphics::Initialize(HWND hWnd)
 	m_Lights.resize(MAX_LIGHT_COUNT);
 	for (int i = 0; i < m_Lights.size(); i++)
 	{
-		Vector4 color = Vector4(RandomRange(0, 1), RandomRange(0, 1), RandomRange(0, 1), 1);
+		Vector4 color = Vector4(Math::RandomRange(0.f, 1.f), Math::RandomRange(0.f, 1.f), Math::RandomRange(0.f, 1.f), 1);
 		color.Normalize(color);
 
 		int type = rand() % 2;
 		if (type == 0)
 		{
-			m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(0, 50), RandomRange(-200, 200)), RandomRange(15.0f, 35.0f), 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(Vector3(Math::RandomRange(-200.f, 200.f), Math::RandomRange(10.f, 50.f), Math::RandomRange(-200.f, 200.f)), 15.0f, 1.0f, 0.5f, color);
 		}
 		else
 		{
-			m_Lights[i] = Light::Cone(Vector3(RandomRange(-200, 200), RandomRange(60, 100), RandomRange(-200, 200)), 40.0f, Vector3(0, -1, 0), 60.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Cone(Vector3(Math::RandomRange(-200.f, 200.f), Math::RandomRange(60.f, 100.f), Math::RandomRange(-200.f, 200.f)), 40.0f, Math::RandVector(), 60.0f, 1.0f, 0.5f, color);
 		}
 	}
 }
