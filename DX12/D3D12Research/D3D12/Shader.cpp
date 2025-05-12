@@ -45,18 +45,31 @@ private:
 	std::unordered_map<const void*, std::unique_ptr<std::vector<char>>> activeBuffers;
 };
 
-bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoint)
+bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
 {
+	uint32_t compileFlags = D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 #if defined(_DEBUG)
 	// shader debugging
-	uint32_t compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+	compileFlags |= (D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_PREFER_FLOW_CONTROL);
 #else
-	uint32_t compileFlags = 0;
+	compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
 
-	compileFlags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
-
 	std::vector<std::byte> data = ReadFile(pFilePath);
+
+	std::vector<D3D_SHADER_MACRO> shaderDefines;
+	for (const std::string& define : defines)
+	{
+		D3D_SHADER_MACRO m;
+		m.Name = define.c_str();
+		m.Definition = "1";
+		shaderDefines.push_back(m);
+	}
+
+	D3D_SHADER_MACRO endMacro;
+	endMacro.Name = nullptr;
+	endMacro.Definition = nullptr;
+	shaderDefines.push_back(endMacro);
 
 	std::string shaderModel = "";
 	switch (shaderType)
@@ -80,7 +93,7 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 	D3DInclude extraInclude(filePath.substr(0, filePath.rfind('/') + 1));
 
 	ComPtr<ID3DBlob> pErrorBlob;
-	D3DCompile2(data.data(), data.size(), nullptr, nullptr, &extraInclude, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompile2(data.data(), data.size(), nullptr, shaderDefines.data(), &extraInclude, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		std::wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());

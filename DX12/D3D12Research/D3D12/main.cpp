@@ -31,9 +31,9 @@ public:
 			}
 			else
 			{
-				Input::Instance().Update();
 				GameTimer::Tick();
 				m_pGraphics->Update();
+				Input::Instance().Update();
 			}
 		}
 

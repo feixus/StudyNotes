@@ -68,17 +68,17 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
     LightResult totalResult = (LightResult)0;
 
 #if DEBUG_VISUALIZE
-    totalResult.Diffuse = (float)max(lightCount - 1, 0) / 10.0f;
+    totalResult.Diffuse = (float)max(lightCount, 0) / 50.0f;
     return totalResult;
 #endif
 
     for (uint i = 0; i < lightCount; i++)
     {
-        uint lightIndex = i;
 #if FORWARD_PLUS
-        lightIndex = tLightIndexList[startOffset + i];
+        uint lightIndex = tLightIndexList[startOffset + i];
         Light light = cLights[lightIndex];
 #else
+        uint lightIndex = i;
         Light light = cLights[i];
 
         if (light.Enabled == 0)

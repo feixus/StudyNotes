@@ -71,23 +71,14 @@ DEFINE_ENUM_FLAG_OPERATORS(TextureUsage)
 class GraphicsTexture : public GraphicsResource
 {
 public:
-	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
-	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
-	void SetData(CommandContext* pContext, const void* pData);
-
-	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() { return m_Rtv; }
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() { return m_Rtv; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() { return m_Srv; }
-	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() { return m_Uav; }
+	int GetRowDataSize(unsigned int width) const;
 
 	int GetWidth() const { return m_Width; }
 	int GetHeight() const { return m_Height; }
 	int GetMipLevels() const { return m_MipLevels; }
-	int GetRowDataSize(unsigned int width) const;
 
-private:
+protected:
 	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
 
 	int m_SampleCount{1};
@@ -95,7 +86,43 @@ private:
 	int m_Height{0};
 	DXGI_FORMAT m_Format{};
 	int m_MipLevels{1};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv{};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv{};
+};
+
+class GraphicsTexture2D : public GraphicsTexture
+{
+public:
+	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
+	void SetData(CommandContext* pContext, const void* pData);
+	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() { return m_Rtv; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() { return m_Rtv; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() { return m_Uav; }
+
+private:
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv{};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Uav{};
+};
+
+enum class CubeMapFace
+{
+	POSITIVE_X = 0,
+	NEGATIVE_X,
+	POSITIVE_Y,
+	NEGATIVE_Y,
+	POSITIVE_Z,
+	NEGATIVE_Z,
+	MAX
+};
+
+class GraphicsTextureCube : public GraphicsTexture
+{
+public:
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
+	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(CubeMapFace face) { return m_Rtv[(int)face]; }
+	
+private:
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv[8]{};
 };

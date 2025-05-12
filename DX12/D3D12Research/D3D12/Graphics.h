@@ -11,7 +11,7 @@ class GraphicsResource;
 class RootSignature;
 class GraphicsPipelineState;
 class ComputePipelineState;
-class GraphicsTexture;
+class GraphicsTexture2D;
 class Mesh;
 class StructuredBuffer;
 
@@ -46,10 +46,10 @@ public:
 
 	bool IsFenceComplete(uint64_t fenceValue);
 
-	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
-	GraphicsTexture* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
-	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer(); }
-	GraphicsTexture* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
+	GraphicsTexture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
+	GraphicsTexture2D* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
+	GraphicsTexture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer(); }
+	GraphicsTexture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 	uint32_t GetMultiSampleQualityLevel(uint32_t msaa);
@@ -58,11 +58,9 @@ public:
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
-	static const int MAX_LIGHT_COUNT = 1024;
+	static const int MAX_LIGHT_COUNT = 512;
 
 private:
-	uint64_t GetFenceToWaitFor();
-
 	void BeginFrame();
 	void EndFrame(uint64_t fenceValue);
 
@@ -87,8 +85,8 @@ private:
 	int m_SampleCount{1};
 	int m_SampleQuality{0};
 
-	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_MultiSampleRenderTargets;
-	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_RenderTargets;
+	std::array<std::unique_ptr<GraphicsTexture2D>, FRAME_COUNT> m_MultiSampleRenderTargets;
+	std::array<std::unique_ptr<GraphicsTexture2D>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
@@ -114,8 +112,10 @@ private:
 
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
+	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObjectDebug;
+	bool m_UseDebugView = false;
 
-	std::unique_ptr<GraphicsTexture> m_pShadowMap;
+	std::unique_ptr<GraphicsTexture2D> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
 
@@ -123,12 +123,12 @@ private:
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
-	std::unique_ptr<GraphicsTexture> m_pLightGrid;
+	std::unique_ptr<GraphicsTexture2D> m_pLightGrid;
 
 	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
-	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
-	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
+	std::unique_ptr<GraphicsTexture2D> m_pDepthStencil;
+	std::unique_ptr<GraphicsTexture2D> m_pResolveDepthStencil;
 
 	std::vector<Light> m_Lights;
 };

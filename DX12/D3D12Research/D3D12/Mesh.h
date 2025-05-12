@@ -2,7 +2,7 @@
 
 class Graphics;
 class GraphicsBuffer;
-class GraphicsTexture;
+class GraphicsTexture2D;
 class GraphicsCommandContext;
 struct aiMesh;
 class Mesh;
@@ -27,10 +27,10 @@ private:
 
 struct Material
 {
-    std::unique_ptr<GraphicsTexture> pDiffuseTexture;
-    std::unique_ptr<GraphicsTexture> pNormalTexture;
-    std::unique_ptr<GraphicsTexture> pSpecularTexture;
-    std::unique_ptr<GraphicsTexture> pAlphaTexture;
+    std::unique_ptr<GraphicsTexture2D> pDiffuseTexture;
+    std::unique_ptr<GraphicsTexture2D> pNormalTexture;
+    std::unique_ptr<GraphicsTexture2D> pSpecularTexture;
+    std::unique_ptr<GraphicsTexture2D> pAlphaTexture;
     bool IsTransparent;
 };
 
