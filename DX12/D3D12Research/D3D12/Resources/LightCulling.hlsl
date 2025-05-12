@@ -6,6 +6,7 @@ cbuffer ShaderParameters : register(b0)
 	float4x4 cView;
 	uint4 cNumThreadGroups;
     float4x4 cProjectionInverse;
+    float2 cScreenDimensions;
 }
 
 cbuffer LightData : register(b1)
@@ -13,8 +14,7 @@ cbuffer LightData : register(b1)
     Light cLights[LIGHT_COUNT];
 }
 
-StructuredBuffer<Frustum> tInFrustums : register(t0);
-Texture2D tDepthTexture : register(t1);
+Texture2D tDepthTexture : register(t0);
 RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uLightIndexList : register(u1);
 RWTexture2D<uint2> uOutLightGrid : register(u2);
@@ -22,6 +22,7 @@ RWTexture2D<uint2> uOutLightGrid : register(u2);
 groupshared uint MinDepth;
 groupshared uint MaxDepth;
 groupshared Frustum GroupFrustum;
+groupshared AABB GroupAABB;
 groupshared uint LightCount;
 groupshared uint LightIndexStartOffset;
 groupshared uint LightList[1024];
@@ -89,6 +90,13 @@ bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float dept
     return inside;
 }
 
+bool SphereInAABB(Sphere sphere, AABB aabb)
+{
+    float3 distance = max(0, abs(aabb.Center - sphere.Position) - aabb.Extents);
+    float distanceSquared = dot(distance, distance);
+    return distanceSquared < sphere.Radius * sphere.Radius;
+}
+
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
@@ -104,7 +112,6 @@ void CSMain(CS_INPUT input)
         MinDepth = 0xffffffff;
         MaxDepth = 0;
         LightCount = 0;
-        GroupFrustum = tInFrustums[input.GroupId.x + input.GroupId.y * cNumThreadGroups.x];
     }
     
     // wait for thread 0 to finish with initializing the groupshared data
@@ -119,6 +126,31 @@ void CSMain(CS_INPUT input)
     
     float fMinDepth = asfloat(MinDepth);
     float fMaxDepth = asfloat(MaxDepth);
+
+    // generate the frustum and AABB for the threadgroup
+    if (input.GroupIndex == 0)
+    {
+        float3 viewSpace[8];
+        viewSpace[0] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensions, cProjectionInverse).xyz;
+        viewSpace[1] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensions, cProjectionInverse).xyz;
+        viewSpace[2] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensions, cProjectionInverse).xyz;
+        viewSpace[3] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensions, cProjectionInverse).xyz;
+        viewSpace[4] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensions, cProjectionInverse).xyz;
+        viewSpace[5] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensions, cProjectionInverse).xyz;
+        viewSpace[6] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensions, cProjectionInverse).xyz;
+        viewSpace[7] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensions, cProjectionInverse).xyz;
+
+        GroupFrustum.Left = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
+        GroupFrustum.Right = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
+        GroupFrustum.Top = CalculatePlane(float3(0, 0, 0), viewSpace[4], viewSpace[5]);
+        GroupFrustum.Bottom = CalculatePlane(float3(0, 0, 0), viewSpace[7], viewSpace[6]);
+
+        float3 minAABB = min(viewSpace[0], min(viewSpace[1], min(viewSpace[2], min(viewSpace[3], min(viewSpace[4], min(viewSpace[5], min(viewSpace[6], viewSpace[7])))))));
+        float3 maxAABB = max(viewSpace[0], max(viewSpace[1], max(viewSpace[2], max(viewSpace[3], max(viewSpace[4], max(viewSpace[5], max(viewSpace[6], viewSpace[7])))))));
+        AABBFromMinMax(GroupAABB, minAABB, maxAABB);
+    }
+
+    GroupMemoryBarrierWithGroupSync();
     
     // convert depth values to view space
     float minDepthVS = ClipToView(float4(0, 0, fMinDepth, 1), cProjectionInverse).z;
@@ -139,27 +171,34 @@ void CSMain(CS_INPUT input)
             switch (light.Type)
             {
                 case LIGHT_DIRECTIONAL:
+                {
                     AddLight(i);
+
                     break;
+                }
                 case LIGHT_POINT:
+                {
                     Sphere sphere;
                     sphere.Radius = light.Range;
                     sphere.Position = mul(float4(light.Position.xyz, 1), cView).xyz;
-                    // need the light position in view space
+
                     if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
                     {
-                        if (!SphereBehindPlane(sphere, minPlane))
+                        if (!SphereInAABB(sphere, GroupAABB))
                         {
                             AddLight(i);
                         }
                     }
                     break;
+                }
                 case LIGHT_SPOT:
+                {
                     Cone cone;
                     cone.Radius = tan(radians(light.SpotLightAngle)) * light.Range;
                     cone.Direction = mul(light.Direction, (float3x3)cView);
                     cone.Tip = mul(float4(light.Position, 1.0f), cView).xyz;
                     cone.Height = light.Range;
+
                     if (ConeInFrustum(cone, GroupFrustum, nearClipVS, maxDepthVS))
                     {
                         if (!ConeBehindPlane(cone, minPlane))
@@ -168,6 +207,7 @@ void CSMain(CS_INPUT input)
                         }
                     }
                     break;
+                }
             }
         }
     }

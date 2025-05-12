@@ -39,6 +39,12 @@ struct Cone
 	float Radius;
 };
 
+struct AABB
+{
+	float3 Center;
+	float3 Extents;
+};
+
 Plane CalculatePlane(float3 a, float3 b, float3 c)
 {
 	float3 v0 = b - a;
@@ -48,6 +54,20 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 	plane.Normal = normalize(cross(v1, v0));
 	plane.DistanceToOrigin = dot(plane.Normal, a);
 	return plane;
+}
+
+void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
+{
+	aabb.Center = (minimum + maximum) * 0.5f;
+	aabb.Extents = abs(maximum - aabb.Center);
+}
+
+float3 HUEtoRGB(in float H)
+{
+	float R = abs(H * 6 - 3) - 1;
+	float G = 2 - abs(H * 6 - 2);
+	float B = 2 - abs(H * 6 - 4);
+	return float3(R, G, B);
 }
 
 float4 ClipToView(float4 clip, float4x4 projectionInverse)

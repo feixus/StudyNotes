@@ -67,6 +67,11 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 
     LightResult totalResult = (LightResult)0;
 
+#if DEBUG_VISUALIZE
+    totalResult.Diffuse = (float)max(lightCount - 1, 0) / 10.0f;
+    return totalResult;
+#endif
+
     for (uint i = 0; i < lightCount; i++)
     {
         uint lightIndex = i;
@@ -186,7 +191,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     float4 specularSample = mySpecularTexture.Sample(myDiffuseSampler, input.texCoord);
     lightResults.Specular *= specularSample;
+#if !DEBUG_VISUALIZE
     lightResults.Diffuse *= diffuseSample;
+#endif
 
     return saturate(lightResults.Diffuse + lightResults.Specular);
 }

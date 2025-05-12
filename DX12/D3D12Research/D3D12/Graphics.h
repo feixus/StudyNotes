@@ -58,7 +58,7 @@ public:
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
-	static const int MAX_LIGHT_COUNT = 512;
+	static const int MAX_LIGHT_COUNT = 1024;
 
 private:
 	uint64_t GetFenceToWaitFor();
@@ -118,11 +118,6 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
-
-	std::unique_ptr<RootSignature> m_pComputeGenerateFrustumsRootSignature;
-	std::unique_ptr<ComputePipelineState> m_pComputeGenerateFrustumsPipeline;
-	std::unique_ptr<StructuredBuffer> m_pFrustumBuffer;
-	bool m_FrustumDirty = true;
 
 	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;

@@ -52,7 +52,7 @@ void Graphics::Initialize(HWND hWnd)
 		int type = rand() % 2;
 		if (type == 0)
 		{
-			m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(10, 50), RandomRange(-200, 200)), 20.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(0, 50), RandomRange(-200, 200)), RandomRange(15.0f, 35.0f), 1.0f, 0.5f, color);
 		}
 		else
 		{
@@ -163,48 +163,6 @@ void Graphics::Update()
 		depthPrepassFence = pCommandContext->Execute(false);
 	}
 
-	// frustum generation
-	if (m_FrustumDirty)
-	{
-		m_FrustumDirty = false;
-		ComputeCommandContext* pCommandContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-		pCommandContext->MarkBegin(L"Frustum Generation");
-		pCommandContext->SetPipelineState(m_pComputeGenerateFrustumsPipeline.get());
-		pCommandContext->SetComputeRootSignature(m_pComputeGenerateFrustumsRootSignature.get());
-
-#pragma pack(push)
-#pragma pack(16)
-		struct ShaderParameters
-		{
-			Matrix ProjectionInverse;
-			Vector2 ScreenDimensions;
-			Vector2 padding;
-			uint32_t NumThreadGroups[4]{};
-			uint32_t NumThreads[4]{};
-		} Data;
-#pragma pack(pop)
-
-		int frustumCountX = (int)ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
-		int frustumCountY = (int)ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
-
-		cameraProj.Invert(Data.ProjectionInverse);
-		Data.ScreenDimensions.x = (float)m_WindowWidth;
-		Data.ScreenDimensions.y = (float)m_WindowHeight;
-		Data.NumThreadGroups[0] = (uint32_t)ceil((float)frustumCountX / FORWARD_PLUS_BLOCK_SIZE);
-		Data.NumThreadGroups[1] = (uint32_t)ceil((float)frustumCountY / FORWARD_PLUS_BLOCK_SIZE);
-		Data.NumThreadGroups[2] = 1;
-		Data.NumThreads[0] = frustumCountX;
-		Data.NumThreads[1] = frustumCountY;
-		Data.NumThreads[2] = 1;
-
-		pCommandContext->SetDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
-		pCommandContext->SetDynamicDescriptor(1, 0, m_pFrustumBuffer->GetUAV());
-		
-		pCommandContext->Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
-		pCommandContext->MarkEnd();
-		pCommandContext->Execute(false);
-	}
-
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(clearLightIndexFence);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(depthPrepassFence);
 
@@ -222,6 +180,7 @@ void Graphics::Update()
 			Matrix CameraView;
 			uint32_t NumThreadGroups[4]{};
 			Matrix ProjectionInverse;
+			Vector2 ScreenDimensions;
 		} Data;
 
 #pragma pack(pop)
@@ -233,6 +192,8 @@ void Graphics::Update()
 		Data.NumThreadGroups[0] = frustumCountX;
 		Data.NumThreadGroups[1] = frustumCountY;
 		Data.NumThreadGroups[2] = 1;
+		Data.ScreenDimensions.x = (float)m_WindowWidth;
+		Data.ScreenDimensions.y = (float)m_WindowHeight;
 		cameraProj.Invert(Data.ProjectionInverse);
 
 		pCommandContext->SetDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
@@ -240,8 +201,7 @@ void Graphics::Update()
 		pCommandContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounterBuffer->GetUAV());
 		pCommandContext->SetDynamicDescriptor(2, 1, m_pLightIndexListBuffer->GetUAV());
 		pCommandContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
-		pCommandContext->SetDynamicDescriptor(3, 0, m_pFrustumBuffer->GetSRV());
-		pCommandContext->SetDynamicDescriptor(3, 1, GetResolveDepthStencil()->GetSRV());
+		pCommandContext->SetDynamicDescriptor(3, 0, GetResolveDepthStencil()->GetSRV());
 
 		pCommandContext->Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
 		pCommandContext->MarkEnd();
@@ -386,13 +346,12 @@ void Graphics::BeginFrame()
 
 void Graphics::EndFrame(uint64_t fenceValue)
 {
-	uint64_t waitFenceIdx = GetFenceToWaitFor();
-	WaitForFence(m_FenceValues[waitFenceIdx]);
-	m_FenceValues[waitFenceIdx] = fenceValue;
-
+	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
+	
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
-
+	
+	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	m_pDynamicCpuVisibleAllocator->ResetAllocationCounter();
 }
 
@@ -491,7 +450,6 @@ void Graphics::InitD3D()
 
 	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x400000);
 
-	m_pFrustumBuffer = std::make_unique<StructuredBuffer>();
 	m_pLightGrid = std::make_unique<GraphicsTexture>();
 
 	m_pDepthStencil = std::make_unique<GraphicsTexture>();
@@ -553,73 +511,6 @@ void Graphics::CreateSwapchain()
 	}
 }
 
-void Graphics::UpdateImGui()
-{
-	for (int i = 1; i < m_FrameTimes.size(); i++)
-	{
-		m_FrameTimes[i - 1] = m_FrameTimes[i];
-	}
-	m_FrameTimes[m_FrameTimes.size() - 1] = GameTimer::DeltaTime();
-	
-	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
-	ImGui::Begin("GPU Stats", nullptr,
-		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
-	ImGui::SameLine(100);
-	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
-
-	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
-
-	ImGui::Text("SponzaTime: %.1f", m_LoadSponzaTime);
-
-	ImGui::BeginTabBar("GpuStatBar");
-	if (ImGui::BeginTabItem("Descriptor Heaps"))
-	{
-		ImGui::Text("Used CPU Descriptor Heaps");
-
-		for (const auto& pAllocator : m_DescriptorHeaps)
-		{
-			switch (pAllocator->GetType())
-			{
-			case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
-				ImGui::TextWrapped("CBV_SRV_UAV");
-				break;
-			case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
-				ImGui::TextWrapped("Sampler");
-				break;
-			case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
-				ImGui::TextWrapped("RTV");
-				break;
-			case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
-				ImGui::TextWrapped("DSV");
-				break;
-			default:
-				break;
-			}
-
-			uint32_t totalDescriptors = pAllocator->GetHeapCount() * DescriptorAllocator::DESCRIPTORS_PER_HEAP;
-			uint32_t usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
-			std::stringstream str;
-			str << usedDescriptors << "/" << totalDescriptors;
-			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
-		}
-
-		ImGui::EndTabItem();
-	}
-
-	if (ImGui::BeginTabItem("Memory"))
-	{
-		ImGui::Text("Used Dynamic Memory: %d KB", m_pDynamicCpuVisibleAllocator->GetTotalMemoryAllocation() / 1024);
-		ImGui::Text("Peak Dynamic Memory: %d KB", m_pDynamicCpuVisibleAllocator->GetTotalMemoryAllocationPeak() / 1024);
-		ImGui::EndTabItem();
-	}
-
-	ImGui::EndTabBar();
-	ImGui::End();
-}
-
 void Graphics::OnResize(int width, int height)
 {
 	m_WindowWidth = width;
@@ -666,10 +557,8 @@ void Graphics::OnResize(int width, int height)
 		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount);
 	}
 
-	m_FrustumDirty = true;
 	int frustumCountX = (int)ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = (int)ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
-	m_pFrustumBuffer->Create(this, 64, frustumCountX * frustumCountY, false);
 
 	m_pLightGrid->Create(this, frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, 1);
 
@@ -799,25 +688,13 @@ void Graphics::InitializeAssets()
 
 	{
 		Shader computeShader;
-		computeShader.Load("Resources/GenerateFrustums.hlsl", Shader::Type::ComputeShader, "CSMain");
-
-		m_pComputeGenerateFrustumsRootSignature = std::make_unique<RootSignature>(2);
-		m_pComputeGenerateFrustumsRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeGenerateFrustumsRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeGenerateFrustumsRootSignature->Finalize(m_pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
-
-		m_pComputeGenerateFrustumsPipeline = std::make_unique<ComputePipelineState>();
-		m_pComputeGenerateFrustumsPipeline->SetRootSignature(m_pComputeGenerateFrustumsRootSignature->GetRootSignature());
-		m_pComputeGenerateFrustumsPipeline->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pComputeGenerateFrustumsPipeline->Finalize(m_pDevice.Get());
-
 		computeShader.Load("Resources/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
 
 		m_pComputeLightCullRootSignature = std::make_unique<RootSignature>(4);
 		m_pComputeLightCullRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pComputeLightCullRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
+		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pComputeLightCullRootSignature->Finalize(m_pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 		m_pComputeLightCullPipeline = std::make_unique<ComputePipelineState>();
@@ -838,6 +715,73 @@ void Graphics::InitializeAssets()
 	m_LoadSponzaTime = GameTimer::CounterEnd();
 
 	pCommandContext->Execute(true);
+}
+
+void Graphics::UpdateImGui()
+{
+	for (int i = 1; i < m_FrameTimes.size(); i++)
+	{
+		m_FrameTimes[i - 1] = m_FrameTimes[i];
+	}
+	m_FrameTimes[m_FrameTimes.size() - 1] = GameTimer::DeltaTime();
+	
+	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
+	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
+	ImGui::Begin("GPU Stats", nullptr,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
+	ImGui::SameLine(100);
+	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
+
+	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
+
+	ImGui::Text("SponzaTime: %.1f", m_LoadSponzaTime);
+
+	ImGui::BeginTabBar("GpuStatBar");
+	if (ImGui::BeginTabItem("Descriptor Heaps"))
+	{
+		ImGui::Text("Used CPU Descriptor Heaps");
+
+		for (const auto& pAllocator : m_DescriptorHeaps)
+		{
+			switch (pAllocator->GetType())
+			{
+			case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
+				ImGui::TextWrapped("CBV_SRV_UAV");
+				break;
+			case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
+				ImGui::TextWrapped("Sampler");
+				break;
+			case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
+				ImGui::TextWrapped("RTV");
+				break;
+			case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
+				ImGui::TextWrapped("DSV");
+				break;
+			default:
+				break;
+			}
+
+			uint32_t totalDescriptors = pAllocator->GetHeapCount() * DescriptorAllocator::DESCRIPTORS_PER_HEAP;
+			uint32_t usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
+			std::stringstream str;
+			str << usedDescriptors << "/" << totalDescriptors;
+			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
+		}
+
+		ImGui::EndTabItem();
+	}
+
+	if (ImGui::BeginTabItem("Memory"))
+	{
+		ImGui::Text("Used Dynamic Memory: %d KB", m_pDynamicCpuVisibleAllocator->GetTotalMemoryAllocation() / 1024);
+		ImGui::Text("Peak Dynamic Memory: %d KB", m_pDynamicCpuVisibleAllocator->GetTotalMemoryAllocationPeak() / 1024);
+		ImGui::EndTabItem();
+	}
+
+	ImGui::EndTabBar();
+	ImGui::End();
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
