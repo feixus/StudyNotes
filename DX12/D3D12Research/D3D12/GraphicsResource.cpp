@@ -4,6 +4,17 @@
 #include "Graphics.h"
 #include "Image.h"
 
+void GraphicsResource::SetName(const std::string& name)
+{
+#ifdef _DEBUG
+	if (m_pResource)
+	{
+		std::wstring n(name.begin(), name.end());
+		m_pResource->SetName(n.c_str());
+	}
+#endif
+}
+
 void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisible, bool unorderedAccess)
 {
 	m_Size = size;
@@ -438,15 +449,17 @@ void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint3
 	{
 		m_pResource->Release();
 	}
-
+	
 	m_Size = elementCount * elementStride;
+	const int alignment = 16;
+	int bufferSize = (m_Size + (alignment - 1)) & ~(alignment - 1);
 
 	D3D12_RESOURCE_DESC desc{};
 	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	desc.Alignment = 0;
 	desc.DepthOrArraySize = 1;
 	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	desc.Width = m_Size;
+	desc.Width = bufferSize;
 	desc.Height = 1;
 	desc.Format = DXGI_FORMAT_UNKNOWN;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -460,11 +473,11 @@ void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint3
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
 		nullptr,
 		IID_PPV_ARGS(&m_pResource)));
 
-	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
+	m_CurrentState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 	uavDesc.Buffer.CounterOffsetInBytes = 0;

@@ -25,7 +25,7 @@ void RootSignature::SetConstantBufferView(uint32_t rootIndex, uint32_t registerS
 {
     D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[rootIndex];
     rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameter.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+    rootParameter.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
     rootParameter.Descriptor.ShaderRegister = registerSlot;
     rootParameter.Descriptor.RegisterSpace = 0;
     rootParameter.ShaderVisibility = visibility;
@@ -34,8 +34,18 @@ void RootSignature::SetConstantBufferView(uint32_t rootIndex, uint32_t registerS
 void RootSignature::SetShaderResourceView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility)
 {
     D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[rootIndex];
-    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameter.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    rootParameter.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+    rootParameter.Descriptor.ShaderRegister = registerSlot;
+    rootParameter.Descriptor.RegisterSpace = 0;
+    rootParameter.ShaderVisibility = visibility;
+}
+
+void RootSignature::SetUnorderedAccessView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility)
+{
+    D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[rootIndex];
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    rootParameter.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
     rootParameter.Descriptor.ShaderRegister = registerSlot;
     rootParameter.Descriptor.RegisterSpace = 0;
     rootParameter.ShaderVisibility = visibility;
@@ -58,7 +68,7 @@ void RootSignature::SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIn
     range.BaseShaderRegister = startRegisterSlot;
     range.RegisterSpace = 0;
     range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-    range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+    range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE | D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 }
 
 void RootSignature::SetDescriptorTableSimple(uint32_t rootIndex, uint32_t startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, D3D12_SHADER_VISIBILITY visibility)

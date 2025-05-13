@@ -23,6 +23,8 @@ public:
 		}
 	}
 
+	void SetName(const std::string& name);
+
 	ID3D12Resource* GetResource() const { return m_pResource; }
 	ID3D12Resource** GetResourceAddressOf() { return &m_pResource; }
 	D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }

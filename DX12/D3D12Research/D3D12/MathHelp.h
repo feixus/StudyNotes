@@ -152,4 +152,9 @@ namespace Math
             return output;
         }
     };
+
+    inline int32_t RoundUp(float value)
+    {
+        return (int32_t)ceil(value);
+    }
 }

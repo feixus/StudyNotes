@@ -112,19 +112,8 @@ void Graphics::Update()
 
 	uint64_t nextFenceValue = 0;
 	uint64_t lightCullingFence = 0;
-	uint64_t clearLightIndexFence = 0;
 	uint64_t shadowsFence = 0;
 	uint64_t depthPrepassFence = 0;
-
-	// reset light index counter
-	{
-		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		pCommandContext->MarkBegin(L"Reset Light Index Counter");
-		uint32_t zero = 0;
-		m_pLightIndexCounterBuffer->SetData(pCommandContext, &zero, sizeof(uint32_t));
-		pCommandContext->MarkEnd();
-		clearLightIndexFence = pCommandContext->Execute(false);
-	}
 
 	// depth prepass
 	{
@@ -136,6 +125,7 @@ void Graphics::Update()
 		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 		pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 
+		pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		pCommandContext->SetDepthOnlyTarget(GetDepthStencil()->GetDSV());
 
 		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
@@ -160,20 +150,24 @@ void Graphics::Update()
 			pCommandContext->InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_RESOLVE_DEST, false);
 			pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE, true);
 			pCommandContext->GetCommandList()->ResolveSubresource(GetResolveDepthStencil()->GetResource(), 0, GetDepthStencil()->GetResource(), 0, DXGI_FORMAT_R24_UNORM_X8_TYPELESS);
-			pCommandContext->InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
-			pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		}
+		pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
 
 		pCommandContext->MarkEnd();
 		depthPrepassFence = pCommandContext->Execute(false);
 	}
 
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(clearLightIndexFence);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(depthPrepassFence);
 
 	// light culling
 	{
 		ComputeCommandContext* pCommandContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+
+		pCommandContext->MarkBegin(L"Reset Light Index Counter");
+		uint32_t zero = 0;
+		m_pLightIndexCounterBuffer->SetData(pCommandContext, &zero, sizeof(uint32_t));
+		pCommandContext->MarkEnd();
+
 		pCommandContext->MarkBegin(L"Light Culling");
 		pCommandContext->SetPipelineState(m_pComputeLightCullPipeline.get());
 		pCommandContext->SetComputeRootSignature(m_pComputeLightCullRootSignature.get());
@@ -191,8 +185,8 @@ void Graphics::Update()
 #pragma pack(pop)
 
 		Data.CameraView = cameraView;
-		Data.NumThreadGroups[0] = (int)ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
-		Data.NumThreadGroups[1] = (int)ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
+		Data.NumThreadGroups[0] = Math::RoundUp((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
+		Data.NumThreadGroups[1] = Math::RoundUp((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
 		Data.NumThreadGroups[2] = 1;
 		Data.ScreenDimensions.x = (float)m_WindowWidth;
 		Data.ScreenDimensions.y = (float)m_WindowHeight;
@@ -239,7 +233,6 @@ void Graphics::Update()
 			m_pMesh->GetMesh(i)->Draw(pCommandContext);
 		}
 
-		pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
 		pCommandContext->MarkEnd();
 		
 		shadowsFence = pCommandContext->Execute(false);
@@ -258,9 +251,11 @@ void Graphics::Update()
 		pCommandContext->SetViewport(m_Viewport);
 		pCommandContext->SetScissorRect(m_Viewport);
 	
-		pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, false);
+		pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
 		pCommandContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
-		pCommandContext->InsertResourceBarrier(m_pLightIndexListBuffer.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
+		pCommandContext->InsertResourceBarrier(m_pLightIndexListBuffer.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
+		pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, false);
+		pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 		
 		DirectX::SimpleMath::Color clearColor{ 0.f, 0.f, 0.f, 1.0f };
 		pCommandContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);

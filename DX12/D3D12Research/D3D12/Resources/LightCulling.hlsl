@@ -15,7 +15,7 @@ cbuffer LightData : register(b1)
 }
 
 Texture2D tDepthTexture : register(t0);
-RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
+globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uLightIndexList : register(u1);
 RWTexture2D<uint2> uOutLightGrid : register(u2);
 
@@ -43,7 +43,10 @@ void AddLight(uint lightIndex)
 {
     uint index;
     InterlockedAdd(LightCount, 1, index);
-    LightList[index] = lightIndex;
+    if (index < 1024)
+    {
+        LightList[index] = lightIndex;
+    }
 }
 
 bool SphereBehindPlane(Sphere sphere, Plane plane)
@@ -190,57 +193,56 @@ void CSMain(CS_INPUT input)
     GroupMemoryBarrierWithGroupSync();
 
     // perform the light culling
-    [loop]
     for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE * BLOCK_SIZE)
     {
         Light light = cLights[i];
         switch (light.Type)
         {
-            case LIGHT_DIRECTIONAL:
-            {
-                AddLight(i);
-                break;
-            }
-            case LIGHT_POINT:
-            {
-                Sphere sphere;
-                sphere.Radius = light.Range;
-                sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
+        case LIGHT_POINT:
+        {
+            Sphere sphere;
+            sphere.Radius = light.Range;
+            sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
 
-                if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
+            if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
+            {
+                if (SphereInAABB(sphere, GroupAABB))
                 {
-                    if (SphereInAABB(sphere, GroupAABB))
-                    {
 #if SPLITZ_CULLING
-                        if (CreateLightMask(minDepthVS, depthRange, sphere) & DepthMask)
+                    if (CreateLightMask(minDepthVS, depthRange, sphere) & DepthMask)
 #endif
-                        {
-                            AddLight(i);
-                        }
+                    {
+                        AddLight(i);
                     }
                 }
-                break;
             }
-            case LIGHT_SPOT:
-            {
-                Sphere sphere;
-                sphere.Radius = light.Range * 0.5f / pow(cos(radians(light.SpotLightAngle * 0.5f)), 2);
-                sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
+        }
+        break;
+        case LIGHT_SPOT:
+        {
+            Sphere sphere;
+            sphere.Radius = light.Range * 0.5f / pow(cos(radians(light.SpotLightAngle * 0.5f)), 2);
+            sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
 
-                if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
+            if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
+            {
+                if (SphereInAABB(sphere, GroupAABB))
                 {
-                    if (SphereInAABB(sphere, GroupAABB))
-                    {
 #if SPLITZ_CULLING
-                        if (CreateLightMask(minDepthVS, depthRange, sphere) & DepthMask)
+                    if (CreateLightMask(minDepthVS, depthRange, sphere) & DepthMask)
 #endif
-                        {
-                            AddLight(i);
-                        }
+                    {
+                        AddLight(i);
                     }
                 }
-                break;
             }
+        }
+        break;
+        case LIGHT_DIRECTIONAL:
+        {
+            AddLight(i);
+        }
+        break;
         }
     }
 
@@ -256,7 +258,6 @@ void CSMain(CS_INPUT input)
     GroupMemoryBarrierWithGroupSync();
 
     // distribute populating the light index light amonst threads in the thread group
-    [loop]
     for (uint j = input.GroupIndex; j < LightCount; j += BLOCK_SIZE * BLOCK_SIZE)
     {
         uLightIndexList[LightIndexStartOffset + j] = LightList[j];

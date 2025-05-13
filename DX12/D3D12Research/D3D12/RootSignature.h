@@ -14,6 +14,7 @@ public:
 	void SetRootConstants(uint32_t rootIndex, uint32_t registerSlot, uint32_t constantCount, D3D12_SHADER_VISIBILITY visibility);
 	void SetConstantBufferView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility);
 	void SetShaderResourceView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility);
+	void SetUnorderedAccessView(uint32_t rootIndex, uint32_t registerSlot, D3D12_SHADER_VISIBILITY visibility);
 	void SetDescriptorTable(uint32_t rootIndex, uint32_t rangeCount, D3D12_SHADER_VISIBILITY visibility);
 	void SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIndex, uint32_t startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count);
 	void SetDescriptorTableSimple(uint32_t rootIndex, uint32_t startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, D3D12_SHADER_VISIBILITY visibility);
