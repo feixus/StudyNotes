@@ -104,8 +104,11 @@ uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
     uint maskIndexStart = max(0, min(31, floor((fMin - depthRangeMin) * depthRange)));
     uint maskIndexEnd = max(0, min(31, floor((fMax - depthRangeMin) * depthRange)));
 
+    // set all 32 bits is 1
     uint mask = 0xFFFFFFFF;
+    // set all valid bits is 1 from indexStart to indexEnd, other is set 0
     mask >>= 31 - (maskIndexEnd - maskIndexStart);
+    // correct the origin position for valid bits
     mask <<= maskIndexStart;
     return mask;
 }
@@ -165,8 +168,6 @@ void CSMain(CS_INPUT input)
         float3 maxAABB = max(viewSpace[0], max(viewSpace[1], max(viewSpace[2], max(viewSpace[3], max(viewSpace[4], max(viewSpace[5], max(viewSpace[6], viewSpace[7])))))));
         AABBFromMinMax(GroupAABB, minAABB, maxAABB);
     }
-
-    GroupMemoryBarrierWithGroupSync();
     
     // convert depth values to view space
     float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensions, cProjectionInverse).z;
@@ -174,7 +175,8 @@ void CSMain(CS_INPUT input)
     float nearClipVS = ScreenToView(float4(0, 0, 0, 1), cScreenDimensions, cProjectionInverse).z;
 
 #if SPLITZ_CULLING
-    float depthVS = ScreenToView(float4(0, 0, depth, 1), cScreenDimensions, cProjectionInverse).z;
+    // save all the depth in a bitmask on the thread group
+    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensions, cProjectionInverse).z;
     float depthRange = 31.0f / (maxDepthVS - minDepthVS);
     uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
     InterlockedOr(DepthMask, 1 << cellIndex);
