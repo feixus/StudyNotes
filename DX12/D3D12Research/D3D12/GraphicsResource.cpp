@@ -96,7 +96,7 @@ void GraphicsTexture2D::Create(Graphics* pGraphics, int width, int height, DXGI_
 	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-		clearValue.DepthStencil.Depth = 1;
+		clearValue.DepthStencil.Depth = 0;
 		clearValue.DepthStencil.Stencil = 0;
 		pClearValue = &clearValue;
 		initState = D3D12_RESOURCE_STATE_DEPTH_WRITE;

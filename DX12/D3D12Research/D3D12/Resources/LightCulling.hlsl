@@ -143,8 +143,8 @@ void CSMain(CS_INPUT input)
     // wait for all the threads to finish
     GroupMemoryBarrierWithGroupSync();
     
-    float fMinDepth = asfloat(MinDepth);
-    float fMaxDepth = asfloat(MaxDepth);
+    float fMinDepth = asfloat(MaxDepth);
+    float fMaxDepth = asfloat(MinDepth);
 
     // generate the frustum and AABB for the threadgroup
     if (input.GroupIndex == 0)
@@ -172,7 +172,7 @@ void CSMain(CS_INPUT input)
     // convert depth values to view space
     float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensions, cProjectionInverse).z;
     float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cScreenDimensions, cProjectionInverse).z;
-    float nearClipVS = ScreenToView(float4(0, 0, 0, 1), cScreenDimensions, cProjectionInverse).z;
+    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cScreenDimensions, cProjectionInverse).z;
 
 #if SPLITZ_CULLING
     // save all the depth in a bitmask on the thread group
