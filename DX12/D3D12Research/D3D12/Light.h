@@ -5,15 +5,15 @@
 
 struct Light
 {
-	int Enabled{true};
 	Vector3 Position;
+	int Enabled{true};
 	Vector3 Direction;
+	uint32_t Type{0};
 	float Intensity{1.0f};
-	Vector4 Color;
 	float Range{1.0f};
 	float SpotLightAngle{0.0f};
 	float Attenuation{1.0f};
-	uint32_t Type{0};
+	Vector4 Color;
 
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
 	{

@@ -1,14 +1,15 @@
+//https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-packing-rules
 struct Light
 {
-    int Enabled;
 	float3 Position;
+    int Enabled;
 	float3 Direction;
+	int Type;
 	float Intensity;
-	float4 Color;
 	float Range;
 	float SpotLightAngle;
 	float Attenuation;
-	int Type;
+	float4 Color;
 };
 
 struct Plane

@@ -43,11 +43,11 @@ void Graphics::Initialize(HWND hWnd)
 		int type = rand() % 2;
 		if (type == 0)
 		{
-			m_Lights[i] = Light::Point(Vector3(Math::RandomRange(-140.f, 140.f), Math::RandomRange(0.f, 150.f), Math::RandomRange(-60.f, 60.f)), 25.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(Vector3(Math::RandomRange(-140.f, 140.f), Math::RandomRange(0.f, 150.f), Math::RandomRange(-60.f, 60.f)), 15.0f, 1.0f, 0.5f, color);
 		}
 		else
 		{
-			m_Lights[i] = Light::Cone(Vector3(Math::RandomRange(-140.f, 140.f), Math::RandomRange(20.f, 150.f), Math::RandomRange(-60.f, 60.f)), 35.0f, Math::RandVector(), 45.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Cone(Vector3(Math::RandomRange(-140.f, 140.f), Math::RandomRange(20.f, 150.f), Math::RandomRange(-60.f, 60.f)), 25.0f, Math::RandVector(), 45.0f, 1.0f, 0.5f, color);
 		}
 	}
 }
@@ -163,9 +163,10 @@ void Graphics::Update()
 	{
 		ComputeCommandContext* pCommandContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
-		pCommandContext->MarkBegin(L"Reset Light Index Counter");
+		pCommandContext->MarkBegin(L"Setup Light Data");
 		uint32_t zero = 0;
 		m_pLightIndexCounterBuffer->SetData(pCommandContext, &zero, sizeof(uint32_t));
+		m_pLightBuffer->SetData(pCommandContext, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
 		pCommandContext->MarkEnd();
 
 		pCommandContext->MarkBegin(L"Light Culling");
@@ -193,11 +194,11 @@ void Graphics::Update()
 		cameraProj.Invert(Data.ProjectionInverse);
 
 		pCommandContext->SetDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
-		pCommandContext->SetDynamicConstantBufferView(1, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
-		pCommandContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounterBuffer->GetUAV());
-		pCommandContext->SetDynamicDescriptor(2, 1, m_pLightIndexListBuffer->GetUAV());
-		pCommandContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
-		pCommandContext->SetDynamicDescriptor(3, 0, GetResolveDepthStencil()->GetSRV());
+		pCommandContext->SetDynamicDescriptor(1, 0, m_pLightIndexCounterBuffer->GetUAV());
+		pCommandContext->SetDynamicDescriptor(1, 1, m_pLightIndexListBuffer->GetUAV());
+		pCommandContext->SetDynamicDescriptor(1, 2, m_pLightGrid->GetUAV());
+		pCommandContext->SetDynamicDescriptor(2, 0, GetResolveDepthStencil()->GetSRV());
+		pCommandContext->SetDynamicDescriptor(2, 1, m_pLightBuffer->GetSRV());
 
 		pCommandContext->Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
 		pCommandContext->MarkEnd();
@@ -276,18 +277,18 @@ void Graphics::Update()
 
 		pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 		pCommandContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-		pCommandContext->SetDynamicConstantBufferView(2, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
-		pCommandContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
-		pCommandContext->SetDynamicDescriptor(4, 1, m_pLightGrid->GetSRV());
-		pCommandContext->SetDynamicDescriptor(4, 2, m_pLightIndexListBuffer->GetSRV());
+		pCommandContext->SetDynamicDescriptor(3, 0, m_pShadowMap->GetSRV());
+		pCommandContext->SetDynamicDescriptor(3, 1, m_pLightGrid->GetSRV());
+		pCommandContext->SetDynamicDescriptor(3, 2, m_pLightIndexListBuffer->GetSRV());
+		pCommandContext->SetDynamicDescriptor(3, 3, m_pLightBuffer->GetSRV());
 		for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 		{
 			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
 			const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
 
-			pCommandContext->SetDynamicDescriptor(3, 0, material.pDiffuseTexture->GetSRV());
-			pCommandContext->SetDynamicDescriptor(3, 1, material.pNormalTexture->GetSRV());
-			pCommandContext->SetDynamicDescriptor(3, 2, material.pSpecularTexture->GetSRV());
+			pCommandContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture->GetSRV());
+			pCommandContext->SetDynamicDescriptor(2, 1, material.pNormalTexture->GetSRV());
+			pCommandContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture->GetSRV());
 
 			pSubMesh->Draw(pCommandContext);
 		}
@@ -582,12 +583,11 @@ void Graphics::InitializeAssets()
 		pixelShader.Load("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		// root signature
-		m_pRootSignature = std::make_unique<RootSignature>(5);
+		m_pRootSignature = std::make_unique<RootSignature>(4);
 		m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 		m_pRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pRootSignature->SetConstantBufferView(2, 2, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pRootSignature->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pRootSignature->SetDescriptorTableSimple(4, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_SAMPLER_DESC samplerDesc{};
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -694,11 +694,10 @@ void Graphics::InitializeAssets()
 		Shader computeShader;
 		computeShader.Load("Resources/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
 
-		m_pComputeLightCullRootSignature = std::make_unique<RootSignature>(4);
+		m_pComputeLightCullRootSignature = std::make_unique<RootSignature>(3);
 		m_pComputeLightCullRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeLightCullRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
 		m_pComputeLightCullRootSignature->Finalize(m_pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 		m_pComputeLightCullPipeline = std::make_unique<ComputePipelineState>();
@@ -710,6 +709,9 @@ void Graphics::InitializeAssets()
 		m_pLightIndexCounterBuffer->Create(this, sizeof(uint32_t), 1, false);
 		m_pLightIndexListBuffer = std::make_unique<StructuredBuffer>();
 		m_pLightIndexListBuffer->Create(this, sizeof(uint32_t), 720000, false);
+
+		m_pLightBuffer = std::make_unique<StructuredBuffer>();
+		m_pLightBuffer->Create(this, sizeof(Light), MAX_LIGHT_COUNT, false);
 	}
 
 	// geometry

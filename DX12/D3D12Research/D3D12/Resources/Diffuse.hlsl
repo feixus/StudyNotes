@@ -14,11 +14,6 @@ cbuffer PerFrameData : register(b1)
     float4x4 cViewInverse;
 }
 
-cbuffer LightData : register(b2)
-{
-    Light cLights[LIGHT_COUNT];
-}
-
 Texture2D myDiffuseTexture : register(t0);
 SamplerState myDiffuseSampler : register(s0);
 
@@ -34,6 +29,8 @@ SamplerComparisonState myShadowMapSampler : register(s2);
 Texture2D<uint2> tLightGrid : register(t4);
 StructuredBuffer<uint> tLightIndexList : register(t5);
 #endif
+
+StructuredBuffer<Light> Lights : register(t6);
 
 struct VSInput
 {
@@ -76,10 +73,10 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
     {
 #if FORWARD_PLUS
         uint lightIndex = tLightIndexList[startOffset + i];
-        Light light = cLights[lightIndex];
+        Light light = Lights[lightIndex];
 #else
         uint lightIndex = i;
-        Light light = cLights[i];
+        Light light = Lights[i];
 
         if (light.Enabled == 0)
         {

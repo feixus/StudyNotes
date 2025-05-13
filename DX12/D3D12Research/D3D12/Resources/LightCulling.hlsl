@@ -9,10 +9,7 @@ cbuffer ShaderParameters : register(b0)
     float2 cScreenDimensions;
 }
 
-cbuffer LightData : register(b1)
-{
-    Light cLights[LIGHT_COUNT];
-}
+StructuredBuffer<Light> Lights : register(t1);
 
 Texture2D tDepthTexture : register(t0);
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
@@ -195,7 +192,7 @@ void CSMain(CS_INPUT input)
     // perform the light culling
     for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE * BLOCK_SIZE)
     {
-        Light light = cLights[i];
+        Light light = Lights[i];
         switch (light.Type)
         {
         case LIGHT_POINT:

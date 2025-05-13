@@ -58,7 +58,7 @@ public:
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
-	static const int MAX_LIGHT_COUNT = 512;
+	static const int MAX_LIGHT_COUNT = 2048;
 
 private:
 	void BeginFrame();
@@ -131,4 +131,5 @@ private:
 	std::unique_ptr<GraphicsTexture2D> m_pResolveDepthStencil;
 
 	std::vector<Light> m_Lights;
+	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
 };
