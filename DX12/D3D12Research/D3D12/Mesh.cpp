@@ -141,7 +141,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 	return pSubMesh;
 }
 
-void SubMesh::Draw(GraphicsCommandContext* pContext)
+void SubMesh::Draw(GraphicsCommandContext* pContext) const
 {
 	pContext->SetVertexBuffer(m_VertexBufferView);
 	pContext->SetIndexBuffer(m_IndexBufferView);

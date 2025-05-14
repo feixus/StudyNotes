@@ -152,10 +152,6 @@ PSInput VSMain(VSInput input)
 float4 PSMain(PSInput input) : SV_TARGET
 {
     float4 diffuseSample = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
-    if (diffuseSample.a <= 0.01f)
-    {
-        discard;
-    }
    
     float3 viewDirection = normalize(input.wpos.xyz - cViewInverse[3].xyz);
     float3 normal = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
@@ -191,5 +187,8 @@ float4 PSMain(PSInput input) : SV_TARGET
     lightResults.Diffuse *= diffuseSample;
 #endif
 
-    return saturate(lightResults.Diffuse + lightResults.Specular);
+    float4 color = saturate(lightResults.Diffuse + lightResults.Specular);
+    color.a = diffuseSample.a;
+
+    return color;
 }

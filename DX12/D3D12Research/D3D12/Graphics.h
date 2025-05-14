@@ -14,9 +14,15 @@ class ComputePipelineState;
 class GraphicsTexture2D;
 class Mesh;
 class StructuredBuffer;
+class SubMesh;
+struct Material;
 
-using namespace DirectX;
-using namespace DirectX::SimpleMath;
+struct Batch
+{
+	const SubMesh* pMesh;
+	const Material* pMaterial;
+	Matrix WorldMatrix;
+};
 
 class Graphics
 {
@@ -76,6 +82,8 @@ private:
 
 	void RandomizeLights();
 
+	void SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches);
+
 	double m_LoadSponzaTime{0.0f};
 	std::vector<float> m_FrameTimes;
 
@@ -113,10 +121,13 @@ private:
 	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
 	std::unique_ptr<Mesh> m_pMesh;
+	std::vector<Batch> m_OpaqueBatches;
+	std::vector<Batch> m_TransparentBatches;
 
 	// diffuse scene passes
 	std::unique_ptr<RootSignature> m_pDiffuseRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObject;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPipelineStateObject;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObjectDebug;
 	bool m_UseDebugView = false;
 
@@ -124,13 +135,17 @@ private:
 	std::unique_ptr<GraphicsTexture2D> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pShadowAlphaRootSignature;
+	std::unique_ptr<GraphicsPipelineState> m_pShadowAlphaPipelineStateObject;
 
 	// light culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
-	std::unique_ptr<GraphicsTexture2D> m_pLightGrid;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferOpaque;
+	std::unique_ptr<GraphicsTexture2D> m_pLightGridOpaque;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferTransparent;
+	std::unique_ptr<GraphicsTexture2D> m_pLightGridTransparent;
 
 	// depth prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
