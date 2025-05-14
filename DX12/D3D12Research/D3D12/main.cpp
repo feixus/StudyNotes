@@ -4,10 +4,7 @@
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
-
-bool mMaximized = false;
-bool mResizing = false;
-bool mMinimized = false;
+const int gMsaaSampleCount = 4;
 
 class ViewWrapper
 {
@@ -16,7 +13,7 @@ public:
 	{
 		MakeWindow();
 
-		m_pGraphics = std::make_unique<Graphics>(gWindowWidth, gWindowHeight, 4);
+		m_pGraphics = std::make_unique<Graphics>(gWindowWidth, gWindowHeight, gMsaaSampleCount);
 		m_pGraphics->Initialize(m_Hwnd);
 
 		GameTimer::Reset();

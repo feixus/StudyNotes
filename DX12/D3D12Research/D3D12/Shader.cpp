@@ -45,7 +45,7 @@ private:
 	std::unordered_map<const void*, std::unique_ptr<std::vector<char>>> activeBuffers;
 };
 
-bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
+Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
 {
 	uint32_t compileFlags = D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 #if defined(_DEBUG)
@@ -85,7 +85,7 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 		break;
 	case Type::MAX:
 	default:
-		return false;
+		return;
 	}
 	m_Type = shaderType;
 
@@ -98,10 +98,8 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 	{
 		std::wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
 		std::wcout << pFilePath << " --> " << errorMessage << std::endl;
-		return false;
+		return;
 	}
 
 	pErrorBlob.Reset();
-
-	return true;
 }

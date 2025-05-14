@@ -28,7 +28,7 @@ public:
 	virtual void Update();
 	virtual void Shutdown();
 
-	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
+	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	void OnResize(int width, int height);
 
 	void WaitForFence(uint64_t fenceValue);
@@ -54,10 +54,12 @@ public:
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 	uint32_t GetMultiSampleQualityLevel(uint32_t msaa);
 
+	// constants
 	static const uint32_t FRAME_COUNT = 3;
 	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;
-	static const int32_t MAX_LIGHT_COUNT = 10240;
 	static const int32_t DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
+	static const int32_t MAX_LIGHT_COUNT = 2048;
+	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -71,6 +73,8 @@ private:
 	void CreateSwapchain();
 
 	void UpdateImGui();
+
+	void RandomizeLights();
 
 	double m_LoadSponzaTime{0.0f};
 	std::vector<float> m_FrameTimes;
@@ -101,8 +105,6 @@ private:
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 
-	FloatRect m_Viewport;
-	FloatRect m_ScissorRect;
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
 
@@ -112,28 +114,35 @@ private:
 
 	std::unique_ptr<Mesh> m_pMesh;
 
-	std::unique_ptr<RootSignature> m_pRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
-	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObjectDebug;
+	// diffuse scene passes
+	std::unique_ptr<RootSignature> m_pDiffuseRootSignature;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObject;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObjectDebug;
 	bool m_UseDebugView = false;
 
+	// directional light shadow mapping
 	std::unique_ptr<GraphicsTexture2D> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
 
+	// light culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
 	std::unique_ptr<GraphicsTexture2D> m_pLightGrid;
 
+	// depth prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
+
+	// MSAA depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pResolveDepthPipelineStateObject;
 	std::unique_ptr<GraphicsTexture2D> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture2D> m_pResolveDepthStencil;
 
+	// light data
 	std::vector<Light> m_Lights;
 	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
 };

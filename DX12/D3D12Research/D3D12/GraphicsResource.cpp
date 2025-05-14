@@ -45,11 +45,11 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisibl
 	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
-void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32_t dataSize)
+void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32_t dataSize, uint32_t offset)
 {
-	assert(m_Size == dataSize);
+	assert(dataSize + offset <= m_Size);
 	pContext->AllocateUploadMemory(dataSize);
-	pContext->InitializeBuffer(this, pData, dataSize);
+	pContext->InitializeBuffer(this, pData, dataSize, offset);
 }
 
 void GraphicsTexture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount)

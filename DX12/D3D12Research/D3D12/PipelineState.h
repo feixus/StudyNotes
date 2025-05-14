@@ -72,6 +72,7 @@ class ComputePipelineState : public PipelineState
 {
 public:
 	ComputePipelineState();
+	ComputePipelineState(const ComputePipelineState& other);
 
 	void Finalize(ID3D12Device* pDevice);
 

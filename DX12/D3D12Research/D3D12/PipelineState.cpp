@@ -213,6 +213,11 @@ ComputePipelineState::ComputePipelineState()
     m_Desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 }
 
+ComputePipelineState::ComputePipelineState(const ComputePipelineState& other)
+        : m_Desc(other.m_Desc)
+{
+}
+
 void ComputePipelineState::Finalize(ID3D12Device* pDevice)
 {
     pDevice->CreateComputePipelineState(&m_Desc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf()));

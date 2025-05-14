@@ -78,13 +78,13 @@ DynamicAllocation CommandContext::AllocateUploadMemory(uint32_t size)
 	return m_pGraphics->GetCpuVisibleAllocator()->Allocate(size);
 }
 
-void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint32_t dataSize)
+void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint32_t dataSize, uint32_t offset)
 {
 	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
-	m_pCommandList->CopyBufferRegion(pResource->GetResource(), 0, allocation.pBackingResource, allocation.Offset, dataSize);
+	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource, allocation.Offset, dataSize);
 	InsertResourceBarrier(pResource, previousState, true);
 }
 
