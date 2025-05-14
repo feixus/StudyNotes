@@ -55,11 +55,12 @@ public:
 	uint32_t GetMultiSampleQualityLevel(uint32_t msaa);
 
 	static const uint32_t FRAME_COUNT = 3;
+	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;
+	static const int32_t MAX_LIGHT_COUNT = 10240;
+	static const int32_t DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
-	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
-	static const int MAX_LIGHT_COUNT = 2048;
 
 private:
 	void BeginFrame();
@@ -128,6 +129,8 @@ private:
 
 	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pResolveDepthRootSignature;
+	std::unique_ptr<ComputePipelineState> m_pResolveDepthPipelineStateObject;
 	std::unique_ptr<GraphicsTexture2D> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture2D> m_pResolveDepthStencil;
 
