@@ -84,3 +84,40 @@ float4 ScreenToView(float4 screen, float2 screenDimensions, float4x4 projectionI
 	float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
 	return ClipToView(clip, projectionInverse);
 }
+
+// emulates sampling a textureCube
+// mapping a 3D direction vector to a 2D coordinate on one of the cube map faces.
+//| Index | Face | Axis | Positive |
+//| ----- | ---- | ---- | -------- |
+//| 0     | +X   | `+X` | Right    |
+//| 1     | -X   | `-X` | Left     |
+//| 2     | +Y   | `+Y` | Top      |
+//| 3     | -Y   | `-Y` | Bottom   |
+//| 4     | +Z   | `+Z` | Front    |
+//| 5     | -Z   | `-Z` | Back     |
+float2 sampleCube(const float3 v, out float faceIndex)
+{
+    float3 vAbs = abs(v);
+    float ma;
+    float2 uv;
+	if (vAbs.z >= vAbs.x && vAbs.z >= vAbs.y)
+	{
+		faceIndex = v.z < 0.0 ? 5.0 : 4.0;
+		ma = 0.5 / vAbs.z;
+		uv = float2(v.z < 0.0 ? -v.x : v.x, -v.y);
+	}
+	else if (vAbs.y >= vAbs.x)
+	{
+		faceIndex = v.y < 0.0 ? 3.0 : 2.0;
+		ma = 0.5 / vAbs.y;
+		uv = float2(v.x, v.y < 0.0 ? -v.z : v.z);
+	}
+	else
+	{
+		faceIndex = v.x < 0.0 ? 1.0 : 0.0;
+		ma = 0.5 / vAbs.x;
+		uv = float2(v.x < 0.0 ? -v.z : v.z, -v.y);
+	}
+
+	return uv * ma + 0.5;
+}
