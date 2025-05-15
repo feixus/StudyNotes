@@ -153,6 +153,6 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     float4 color = saturate(lightResults.Diffuse + lightResults.Specular);
     color.a = diffuseSample.a;
-
+    
     return color;
 }

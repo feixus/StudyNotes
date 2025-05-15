@@ -55,6 +55,34 @@ LightResult DoPointLight(Light light, float3 worldPosition, float3 normal, float
     return result;
 }
 
+float DoShadowFactor(Light light, float3 worldPosition)
+{
+    // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
+    float4 lightPos = mul(float4(worldPosition, 1), cLightViewProjection[light.ShadowIndex]);
+    lightPos.xyz /= lightPos.w;
+    lightPos.x = lightPos.x / 2.0f + 0.5f;
+    lightPos.y = lightPos.y / -2.0f + 0.5f;
+    lightPos.z += 0.0001f;
+    
+    float shadowFactor = 0;
+    int kernelSize = PCF_KERNEL_SIZE;
+    int hKernel = (kernelSize - 1) / 2;
+        
+    float2 shadowMapStart = cShadowMapOffsets[light.ShadowIndex].xy;
+    float normalizeShadowMapSize = cShadowMapOffsets[light.ShadowIndex].z;
+        
+    for (int x = -hKernel; x <= hKernel; x++)
+    {
+        for (int y = -hKernel; y <= hKernel; y++)
+        {
+            float2 texCoord = shadowMapStart + lightPos.xy * normalizeShadowMapSize + float2(SHADOWMAP_DX * x, SHADOWMAP_DX * y);
+            shadowFactor += tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z);
+        }
+    }
+    shadowFactor /= kernelSize * kernelSize;
+    return shadowFactor;
+}
+
 LightResult DoDirectionalLight(Light light, float3 worldPosition, float3 normal, float3 viewDirection)
 {
     LightResult result;
@@ -63,30 +91,7 @@ LightResult DoDirectionalLight(Light light, float3 worldPosition, float3 normal,
     
     if (light.ShadowIndex != -1)
     {
-        // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
-        float4 lightPos = mul(float4(worldPosition, 1), cLightViewProjection[light.ShadowIndex]);
-        lightPos.xyz /= lightPos.w;
-        lightPos.x = lightPos.x / 2.0f + 0.5f;
-        lightPos.y = lightPos.y / -2.0f + 0.5f;
-        lightPos.z += 0.0001f;
-    
-        float shadowFactor = 0;
-        int kernelSize = 3;
-        int hKernel = (kernelSize - 1) / 2;
-        
-        float2 shadowMapStart = cShadowMapOffsets[light.ShadowIndex].xy;
-        float normalizeShadowMapSize = cShadowMapOffsets[light.ShadowIndex].z;
-        
-        for (int x = -hKernel; x <= hKernel; x++)
-        {
-            for (int y = -hKernel; y <= hKernel; y++)
-            {
-                float2 texCoord = shadowMapStart + lightPos.xy * normalizeShadowMapSize + float2(SHADOWMAP_DX * x, SHADOWMAP_DX * y);
-                shadowFactor += tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z);
-            }
-        }
-        shadowFactor /= kernelSize * kernelSize;
-        
+        float shadowFactor = DoShadowFactor(light, worldPosition);
         result.Diffuse *= shadowFactor;
         result.Specular *= shadowFactor;
     }
@@ -113,30 +118,7 @@ LightResult DoSpotLight(Light light, float3 worldPosition, float3 normal, float3
     
     if (light.ShadowIndex != -1)
     {
-        // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
-        float4 lightPos = mul(float4(worldPosition, 1), cLightViewProjection[light.ShadowIndex]);
-        lightPos.xyz /= lightPos.w;
-        lightPos.x = lightPos.x / 2.0f + 0.5f;
-        lightPos.y = lightPos.y / -2.0f + 0.5f;
-        lightPos.z += 0.0001f;
-    
-        float shadowFactor = 0;
-        int kernelSize = 3;
-        int hKernel = (kernelSize - 1) / 2;
-        
-        float2 shadowMapStart = cShadowMapOffsets[light.ShadowIndex].xy;
-        float normalizeShadowMapSize = cShadowMapOffsets[light.ShadowIndex].z;
-        
-        for (int x = -hKernel; x <= hKernel; x++)
-        {
-            for (int y = -hKernel; y <= hKernel; y++)
-            {
-                float2 texCoord = shadowMapStart + lightPos.xy * normalizeShadowMapSize + float2(SHADOWMAP_DX * x, SHADOWMAP_DX * y);
-                shadowFactor += tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z);
-            }
-        }
-        shadowFactor /= kernelSize * kernelSize;
-        
+        float shadowFactor = DoShadowFactor(light, worldPosition);
         result.Diffuse *= shadowFactor;
         result.Specular *= shadowFactor;
     }
