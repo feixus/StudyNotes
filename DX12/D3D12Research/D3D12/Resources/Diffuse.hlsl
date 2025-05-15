@@ -10,7 +10,6 @@ cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 
 cbuffer PerFrameData : register(b1)
 {
-    float4x4 cLightViewProjection;
     float4x4 cViewInverse;
 }
 
@@ -21,9 +20,6 @@ Texture2D myNormalTexture : register(t1);
 SamplerState myNormalSampler : register(s1);
 
 Texture2D mySpecularTexture : register(t2);
-
-Texture2D myShadowMapTexture : register(t3);
-SamplerComparisonState myShadowMapSampler : register(s2);
 
 #if FORWARD_PLUS
 Texture2D<uint2> tLightGrid : register(t4);
@@ -48,11 +44,10 @@ struct PSInput
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
     float3 bitangent : TEXCOORD1;
-    float4 lpos : TEXCOORD2;
-    float4 wpos : TEXCOORD3;
+    float4 worldPosition : TEXCOORD2;
 };
 
-LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3 viewDirection, float shadowFactor)
+LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3 viewDirection)
 {
 #if FORWARD_PLUS
     uint2 tileIndex = uint2(floor(position.xy / BLOCK_SIZE));
@@ -94,7 +89,7 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
         switch(light.Type)
         {
         case LIGHT_DIRECTIONAL:
-            result = DoDirectionalLight(light, normal, viewDirection);
+            result = DoDirectionalLight(light, worldPosition, normal, viewDirection);
             break;
         case LIGHT_POINT:
             result = DoPointLight(light, worldPosition, normal, viewDirection);
@@ -106,13 +101,6 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
             result.Diffuse = float4(1, 0, 1, 1);
             result.Specular = float4(0, 0, 0, 1);
             break;
-        }
-
-        // directional light
-        if (lightIndex == 0)
-        {
-            result.Diffuse *= shadowFactor;
-            result.Specular = shadowFactor > 0 ? result.Specular : float4(0, 0, 0, 0);
         }
         
         totalResult.Diffuse += result.Diffuse;
@@ -144,8 +132,7 @@ PSInput VSMain(VSInput input)
     result.normal = normalize(mul(input.normal, (float3x3)cWorld));
     result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
     result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
-    result.lpos = mul(float4(input.position, 1.0f), mul(cWorld, cLightViewProjection));
-    result.wpos = mul(float4(input.position, 1.0f), cWorld);
+    result.worldPosition = mul(float4(input.position, 1.0f), cWorld);
     return result;
 }
 
@@ -153,33 +140,10 @@ float4 PSMain(PSInput input) : SV_TARGET
 {
     float4 diffuseSample = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
    
-    float3 viewDirection = normalize(input.wpos.xyz - cViewInverse[3].xyz);
+    float3 viewDirection = normalize(input.worldPosition.xyz - cViewInverse[3].xyz);
     float3 normal = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
     
-    // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
-    input.lpos.xyz /= input.lpos.w;
-    input.lpos.x = input.lpos.x / 2.0f + 0.5f;
-    input.lpos.y = input.lpos.y / -2.0f + 0.5f;
-    
-    int width, height;
-    myShadowMapTexture.GetDimensions(width, height);
-    float dx = 1.0f / width;
-    float dy = 1.0f / height;
-    
-    float shadowFactor = 0;
-    int kernelSize = 3;
-    int hKernel = (kernelSize - 1) / 2;
-    for (int x = -hKernel; x <= hKernel; x++)
-    {
-        for (int y = -hKernel; y <= hKernel; y++)
-        {
-            shadowFactor += myShadowMapTexture.SampleCmpLevelZero(myShadowMapSampler, input.lpos.xy + float2(dx * x, dy * y), input.lpos.z);
-        }
-    }
-   
-    shadowFactor /= kernelSize * kernelSize;
-    
-    LightResult lightResults = DoLight(input.position, input.wpos.xyz, input.normal, viewDirection, shadowFactor);
+    LightResult lightResults = DoLight(input.position, input.worldPosition.xyz, input.normal, viewDirection);
 
     float4 specularSample = mySpecularTexture.Sample(myDiffuseSampler, input.texCoord);
     lightResults.Specular *= specularSample;
