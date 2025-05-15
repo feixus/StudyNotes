@@ -27,6 +27,11 @@ void Graphics::Initialize(HWND hWnd)
 {
 	m_pWindow = hWnd;
 
+	Shader::AddGlobalShaderDefine("LIGHT_COUNT", std::to_string(MAX_LIGHT_COUNT));
+	Shader::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
+	Shader::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
+	Shader::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(3));
+
 	InitD3D();
 	InitializeAssets();
 
@@ -71,56 +76,55 @@ void Graphics::Update()
 	movement *= GameTimer::DeltaTime() * 20.0f;
 	m_CameraPosition += movement;
 
+	// set main light position
+	m_Lights[0].Position = Vector3(cos(GameTimer::GameTime() / 5.0f), 1.5f, sin(GameTimer::GameTime() / 5.0f)) * 120;
+	m_Lights[0].Position.Normalize(m_Lights[0].Direction);
+	m_Lights[0].Direction *= -1;
+
 	SortBatchesBackToFront(m_CameraPosition, m_TransparentBatches);
 
-	// light movement
-	/*for (Light& l : m_Lights)
-	{
-		l.Position += Vector3::Down * GameTimer::DeltaTime() * 5.0f;
-		if (l.Position.y < 0)
-		{
-			l.Position.y = 150;
-		}
-	}*/
-
-	// setup per-frame constant data
+	// per frame constants
+	////////////////////////////////////
 	struct PerFrameData
 	{
-		Matrix LightViewProjection;
 		Matrix ViewInverse;
 	} frameData;
 
-	// setup the directional light
-	Light& mainLight = m_Lights[0];
-	Vector3 mainLightPosition = Vector3(cos(GameTimer::GameTime() / 5.0f), 1.5f, sin(GameTimer::GameTime() / 5.0f)) * 120;
-	Vector3 mainLightDirection;
-	mainLightPosition.Normalize(mainLightDirection);
-	mainLightDirection *= -1;
-	mainLight = Light::Directional(mainLightPosition, mainLightDirection);
-
-	switch (mainLight.LightType)
-	{
-	case Light::Type::Directional:
-		frameData.LightViewProjection = XMMatrixLookAtLH(mainLight.Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 100000.0f, 0.1f);
-		break;
-	case Light::Type::Spot:
-		frameData.LightViewProjection = XMMatrixLookAtLH(mainLight.Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(mainLight.SpotLightAngle, 1.0f, 100000.0f, 0.1f);
-		break;
-	case Light::Type::Point:
-	default:
-		// point light shadows not supported
-		assert(false);
-		break;
-	}
-
-	// per-frame data
+	// camera constants
 	frameData.ViewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
 
-	// camera constants
 	Matrix cameraView;
 	frameData.ViewInverse.Invert(cameraView);
 	Matrix cameraProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
 	Matrix cameraViewProj = cameraView * cameraProj;
+
+	// shadow map partitioning
+	//////////////////////////////////
+	struct LightData
+	{
+		Matrix LightViewProjections[8];
+		Vector4 ShadowMapOffsets[8];
+	} lightData;
+
+	// main directional
+	int lightIndex = 0;
+	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3::Up) * XMMatrixOrthographicLH(512, 512, 1000.f, 0.1f);
+	lightData.ShadowMapOffsets[lightIndex] = Vector4(0.f, 0.f, 0.75f, 0);
+
+	// spot A
+	++lightIndex;
+	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
+	lightData.ShadowMapOffsets[lightIndex] = Vector4(0.75f, 0.f, 0.25f, 0);
+
+	// spot B
+	++lightIndex;
+	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
+	lightData.ShadowMapOffsets[lightIndex] = Vector4(0.75f, 0.25f, 0.25f, 0);
+
+	// spot C
+	++lightIndex;
+	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
+	lightData.ShadowMapOffsets[lightIndex] = Vector4(0.75f, 0.5f, 0.25f, 0);
 
 	////////////////////////////////
 	// Rendering Begin
@@ -247,8 +251,8 @@ void Graphics::Update()
 		lightCullingFence = pCommandContext->Execute(false);
 	}
 
-	// 4. directional shadow mapping
-	//  - currently just rendering a directional light depth texture using the first light in the light buffer
+	// 4. single target shadow mapping
+	//  - render shadow maps for directional and spot lights
 	//  - renders the scene depth onto a separate depth buffer from the light's view
 	{
 		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
@@ -839,7 +843,7 @@ void Graphics::InitializeAssets()
 		}
 
 		m_pShadowMap = std::make_unique<GraphicsTexture2D>();
-		m_pShadowMap->Create(this, DIRECTIONAL_SHADOW_MAP_SIZE, DIRECTIONAL_SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
+		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 
 	// depth prepass
@@ -1016,7 +1020,27 @@ void Graphics::RandomizeLights()
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
 	m_Lights.resize(MAX_LIGHT_COUNT);
-	for (int i = 0; i < m_Lights.size(); i++)
+
+	int lightIndex = 0;
+	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 120;
+	Vector3 mainLightPosition = Vector3(cos(GameTimer::GameTime() / 5.0f), 1.5f, sin(GameTimer::GameTime() / 5.0f)) * 120;
+	Vector3 mainLightDirection;
+	mainLightPosition.Normalize(mainLightDirection);
+	mainLightDirection *= -1;
+	m_Lights[lightIndex] = Light::Directional(mainLightPosition, mainLightDirection);
+	m_Lights[lightIndex].ShadowIndex = lightIndex;
+	++lightIndex;
+	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Right, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
+	m_Lights[lightIndex].ShadowIndex = lightIndex;
+	++lightIndex;
+	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Forward, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
+	m_Lights[lightIndex].ShadowIndex = lightIndex;
+	++lightIndex;
+	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Backward, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
+	m_Lights[lightIndex].ShadowIndex = lightIndex;
+
+	int randomLightsStartIndex = lightIndex + 1;
+	for (int i = randomLightsStartIndex; i < m_Lights.size(); i++)
 	{
 		Vector4 color(Math::RandomRange(0.f, 1.f), Math::RandomRange(0.f, 1.f), Math::RandomRange(0.f, 1.f), 1);
 
@@ -1044,7 +1068,8 @@ void Graphics::RandomizeLights()
 		}
 	}
 
-	std::sort(m_Lights.begin(), m_Lights.end(), [](const Light& a, const Light b) { return (int)a.LightType < (int)b.LightType; });
+	// a bit weird
+	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light b) { return (int)a.LightType < (int)b.LightType; });
 }
 
 void Graphics::SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches)

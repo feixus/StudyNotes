@@ -66,6 +66,14 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 		shaderDefines.push_back(m);
 	}
 
+	for (const auto& define : m_GlobalShaderDefines)
+	{
+		D3D_SHADER_MACRO m;
+		m.Name = define.first.c_str();
+		m.Definition = define.second.c_str();
+		shaderDefines.push_back(m);
+	}
+
 	D3D_SHADER_MACRO endMacro;
 	endMacro.Name = nullptr;
 	endMacro.Definition = nullptr;
@@ -102,4 +110,9 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 	}
 
 	pErrorBlob.Reset();
+}
+
+void Shader::AddGlobalShaderDefine(const std::string& name, const std::string& value)
+{
+	m_GlobalShaderDefines.emplace_back(name, value);
 }
