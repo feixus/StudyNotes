@@ -63,7 +63,7 @@ public:
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
 	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;
-	static const int32_t DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
+	static const int32_t DIRECTIONAL_SHADOW_MAP_SIZE = 4096;
 	static const int32_t MAX_LIGHT_COUNT = 2048;
 	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;

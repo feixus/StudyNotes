@@ -10,6 +10,10 @@ class RootSignature;
 class GraphicsPipelineState;
 class ComputePipelineState;
 
+class GraphicsCommandContext;
+class ComputeCommandContext;
+class CopyCommandContext;
+
 class CommandContext
 {
 public:
@@ -19,14 +23,10 @@ public:
 	void Reset();
 	uint64_t Execute(bool wait);
 	uint64_t ExecuteAndReset(bool wait);
-
-	void SetGraphicsRootSignature(RootSignature* pRootSignature);
-	void SetComputeRootSignature(RootSignature* pRootSignature);
 	
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
 	void FlushResourceBarriers();
 	
-	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
 
@@ -42,6 +42,10 @@ public:
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int subresourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
+	GraphicsCommandContext* AsGraphicsContext();
+	ComputeCommandContext* AsComputeContext();
+	CopyCommandContext* AsCopyContext();
+
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	void MarkBegin(const wchar_t* pName);
@@ -55,7 +59,6 @@ protected:
 
 	std::unique_ptr<DynamicDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
 	std::unique_ptr<DynamicDescriptorAllocator> m_pSamplerDescriptorAllocator;
-
 
 	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_CurrentDescriptorHeaps{};
 
@@ -73,6 +76,11 @@ class GraphicsCommandContext : public CommandContext
 {
 public:
 	GraphicsCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator);
+
+	void SetRootSignature(RootSignature* pRootSignature);
+	void SetPipelineState(GraphicsPipelineState* pPipelineState);
+
+	void SetRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 
 	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 
@@ -94,20 +102,29 @@ public:
 
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
-
-	void SetPipelineState(GraphicsPipelineState* pPipelineState);
-
-	void SetGraphicsRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 };
 
 class ComputeCommandContext : public CommandContext
 {
 public:
 	ComputeCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator);
+	
+	void SetRootSignature(RootSignature* pRootSignature);
+	void SetPipelineState(ComputePipelineState* pPipelineState);
+
+	void SetRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 
 	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 
-	void SetPipelineState(ComputePipelineState* pPipelineState);
-
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 };
+
+class CopyCommandContext : public CommandContext
+{
+public:
+	CopyCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator);
+};
+
+static_assert(sizeof(GraphicsCommandContext) == sizeof(CommandContext), "should not have extra member variables!");
+static_assert(sizeof(ComputeCommandContext) == sizeof(CommandContext), "should not have extra member variables!");
+static_assert(sizeof(CopyCommandContext) == sizeof(CommandContext), "should not have extra member variables!");

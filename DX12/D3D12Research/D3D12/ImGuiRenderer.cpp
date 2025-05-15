@@ -117,7 +117,7 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 	}
 
 	context.SetPipelineState(m_pPipelineStateObject.get());
-	context.SetGraphicsRootSignature(m_pRootSignature.get());
+	context.SetRootSignature(m_pRootSignature.get());
 
 	uint32_t width = m_pGraphics->GetWindowWidth();
 	uint32_t height = m_pGraphics->GetWindowHeight();

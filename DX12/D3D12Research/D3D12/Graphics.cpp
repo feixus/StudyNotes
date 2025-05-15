@@ -122,7 +122,7 @@ void Graphics::Update()
 	// - optimization that prevents wasteful lighting calculations during the base pass
 	// - required for light culling
 	{
-		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
 		pCommandContext->MarkBegin(L"Depth Prepass");
 
 		pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
@@ -141,7 +141,7 @@ void Graphics::Update()
 		ObjectData.WorldViewProjection = cameraViewProj;
 
 		pCommandContext->SetPipelineState(m_pDepthPrepassPipelineStateObject.get());
-		pCommandContext->SetGraphicsRootSignature(m_pDepthPrepassRootSignature.get());
+		pCommandContext->SetRootSignature(m_pDepthPrepassRootSignature.get());
 		pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		for (const Batch& b : m_OpaqueBatches)
 		{
@@ -163,10 +163,10 @@ void Graphics::Update()
 	//  - if MSAA is enabled, run a compute shader to resolve the depth buffer
 	if (m_SampleCount > 1)
 	{
-		ComputeCommandContext* pCommandContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		ComputeCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE)->AsComputeContext();
 		pCommandContext->MarkBegin(L"Depth Resolve");
 
-		pCommandContext->SetComputeRootSignature(m_pResolveDepthRootSignature.get());
+		pCommandContext->SetRootSignature(m_pResolveDepthRootSignature.get());
 		pCommandContext->SetPipelineState(m_pResolveDepthPipelineStateObject.get());
 
 		pCommandContext->SetDynamicDescriptor(0, 0, GetResolveDepthStencil()->GetUAV());
@@ -190,7 +190,7 @@ void Graphics::Update()
 	//  - outputs a: - Texture2D containing a count and an offset of lights per tile.
 	//								- uint[] index buffer to indicate what are visible in each tile
 	{
-		ComputeCommandContext* pCommandContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		ComputeCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE)->AsComputeContext();
 		pCommandContext->MarkBegin(L"Light Culling");
 
 		pCommandContext->MarkBegin(L"Setup Light Data");
@@ -200,7 +200,7 @@ void Graphics::Update()
 		pCommandContext->MarkEnd();
 
 		pCommandContext->SetPipelineState(m_pComputeLightCullPipeline.get());
-		pCommandContext->SetComputeRootSignature(m_pComputeLightCullRootSignature.get());
+		pCommandContext->SetRootSignature(m_pComputeLightCullRootSignature.get());
 
 		struct ShaderParameter
 		{
@@ -237,7 +237,7 @@ void Graphics::Update()
 	//  - currently just rendering a directional light depth texture using the first light in the light buffer
 	//  - renders the scene depth onto a separate depth buffer from the light's view
 	{
-		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
 		pCommandContext->MarkBegin(L"Shadows");
 
 		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
@@ -260,7 +260,7 @@ void Graphics::Update()
 		{
 			pCommandContext->MarkBegin(L"Opaque");
 			pCommandContext->SetPipelineState(m_pShadowPipelineStateObject.get());
-			pCommandContext->SetGraphicsRootSignature(m_pShadowRootSignature.get());
+			pCommandContext->SetRootSignature(m_pShadowRootSignature.get());
 
 			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 			for (const Batch& b : m_OpaqueBatches)
@@ -274,7 +274,7 @@ void Graphics::Update()
 		{
 			pCommandContext->MarkBegin(L"Transparent");
 			pCommandContext->SetPipelineState(m_pShadowAlphaPipelineStateObject.get());
-			pCommandContext->SetGraphicsRootSignature(m_pShadowAlphaRootSignature.get());
+			pCommandContext->SetRootSignature(m_pShadowAlphaRootSignature.get());
 
 			pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 			for (const Batch& b : m_TransparentBatches)
@@ -294,7 +294,7 @@ void Graphics::Update()
 	// 5. base pass
 	//  - render the scene using the shadow mapping result and the light culling buffers
 	{
-		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
 		pCommandContext->MarkBegin(L"Base Pass");
 
 		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -326,7 +326,7 @@ void Graphics::Update()
 		{
 			pCommandContext->MarkBegin(L"Opaque");
 			pCommandContext->SetPipelineState(m_UseDebugView ? m_pDiffusePipelineStateObjectDebug.get() : m_pDiffusePipelineStateObject.get());
-			pCommandContext->SetGraphicsRootSignature(m_pDiffuseRootSignature.get());
+			pCommandContext->SetRootSignature(m_pDiffuseRootSignature.get());
 
 			pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 			pCommandContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
@@ -350,7 +350,7 @@ void Graphics::Update()
 		{
 			pCommandContext->MarkBegin(L"Transparent");
 			pCommandContext->SetPipelineState(m_UseDebugView ? m_pDiffusePipelineStateObjectDebug.get() : m_pDiffuseAlphaPipelineStateObject.get());
-			pCommandContext->SetGraphicsRootSignature(m_pDiffuseRootSignature.get());
+			pCommandContext->SetRootSignature(m_pDiffuseRootSignature.get());
 
 			pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 			pCommandContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
@@ -381,7 +381,7 @@ void Graphics::Update()
 	}
 
 	{
-		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
 		pCommandContext->MarkBegin(L"UI");
 
 		// 6. UI
@@ -526,7 +526,7 @@ void Graphics::InitD3D()
 	// create all the required command queues
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	//m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 	//m_CommandQueues[D3D12_COMMAND_LIST_TYPE_BUNDLE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_BUNDLE);
 
 	// allocate descriptor heaps pool
@@ -736,6 +736,7 @@ void Graphics::InitializeAssets()
 			m_pDiffuseAlphaPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 			m_pDiffuseAlphaPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			m_pDiffuseAlphaPipelineStateObject->SetDepthWrite(false);
+			m_pDiffuseAlphaPipelineStateObject->SetBlendMode(BlendMode::ALPHA, false);
 			m_pDiffuseAlphaPipelineStateObject->Finalize(m_pDevice.Get());
 		}
 
@@ -899,7 +900,7 @@ void Graphics::InitializeAssets()
 
 	// geometry
 	{
-		GraphicsCommandContext* pCommandContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		CopyCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsCopyContext();
 		
 		GameTimer::CounterBegin();
 		m_pMesh = std::make_unique<Mesh>();
@@ -1062,7 +1063,7 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
 		m_CommandLists.push_back(std::move(pCommandList));
-		
+
 		switch (type)
 		{
 		case D3D12_COMMAND_LIST_TYPE_DIRECT:
@@ -1071,6 +1072,9 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 			break;
 		case D3D12_COMMAND_LIST_TYPE_COMPUTE:
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<ComputeCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
+			break;
+		case D3D12_COMMAND_LIST_TYPE_COPY:
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CopyCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
 			break;
 		default:
 			assert(false);

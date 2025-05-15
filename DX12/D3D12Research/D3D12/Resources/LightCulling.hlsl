@@ -1,6 +1,8 @@
 #include "Common.hlsl"
 #include "Constants.hlsl"
 
+#define MAX_LIGHTS_PER_TILE 256
+
 cbuffer ShaderParameters : register(b0)
 {
 	float4x4 cView;
@@ -26,11 +28,11 @@ groupshared AABB GroupAABB;
 
 groupshared uint OpaqueLightCount;
 groupshared uint OpaqueLightIndexStartOffset;
-groupshared uint OpaqueLightList[1024];
+groupshared uint OpaqueLightList[MAX_LIGHTS_PER_TILE];
 
 groupshared uint TransparentLightCount;
 groupshared uint TransparentLightIndexStartOffset;
-groupshared uint TransparentLightList[1024];
+groupshared uint TransparentLightList[MAX_LIGHTS_PER_TILE];
 
 #if SPLITZ_CULLING
 groupshared uint DepthMask;
