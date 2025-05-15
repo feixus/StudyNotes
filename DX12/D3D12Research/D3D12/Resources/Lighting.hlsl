@@ -20,12 +20,12 @@ float GetSpecularPhong(float3 viewDirection, float3 normal, float3 lightVector, 
 
 float4 DoDiffuse(Light light, float3 normal, float3 lightVector)
 {
-    return light.Color * max(dot(normal, lightVector), 0);
+    return float4(light.Color.rgb * max(dot(normal, lightVector), 0), 1);
 }
 
 float4 DoSpecular(Light light, float3 normal, float3 lightVector, float3 viewDirection)
 {
-    return light.Color * GetSpecularBlinnPhong(viewDirection, normal, lightVector, 15.0f);
+    return float4(light.Color.rgb * GetSpecularBlinnPhong(viewDirection, normal, lightVector, 15.0f), 1);
 }
 
 float DoAttenuation(Light light, float distance)
@@ -49,8 +49,8 @@ LightResult DoPointLight(Light light, float3 worldPosition, float3 normal, float
 LightResult DoDirectionalLight(Light light, float3 normal, float3 viewDirection)
 {
     LightResult result;
-    result.Diffuse = light.Intensity * DoDiffuse(light, normal, -light.Direction);
-    result.Specular = light.Intensity * DoSpecular(light, normal, -light.Direction, viewDirection);
+    result.Diffuse = light.Color.w * DoDiffuse(light, normal, -light.Direction);
+    result.Specular = light.Color.w * DoSpecular(light, normal, -light.Direction, viewDirection);
     return result;
 }
 
@@ -68,7 +68,7 @@ LightResult DoSpotLight(Light light, float3 worldPosition, float3 normal, float3
 
     float attenuation = DoAttenuation(light, distance);
 
-    result.Diffuse = light.Intensity * attenuation * spotIntensity * DoDiffuse(light, normal, L);
-    result.Specular = light.Intensity * attenuation * spotIntensity * DoSpecular(light, normal, L, viewDirection);
+    result.Diffuse = light.Color.w * attenuation * spotIntensity * DoDiffuse(light, normal, L);
+    result.Specular = light.Color.w * attenuation * spotIntensity * DoSpecular(light, normal, L, viewDirection);
     return result;
 }
