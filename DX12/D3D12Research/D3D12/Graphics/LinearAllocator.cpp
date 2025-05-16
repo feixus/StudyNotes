@@ -5,8 +5,8 @@
 LinearAllocator::LinearAllocator(Graphics* pGraphics)
 {
 	m_PagesManagers.reserve(2);
-	m_PagesManagers[0] = make_unique<LinearAllocatorPageManager>(pGraphics, LinearAllocationType::GpuExclusive);
-	m_PagesManagers[1] = make_unique<LinearAllocatorPageManager>(pGraphics, LinearAllocationType::CpuWrite);
+	m_PagesManagers[0] = std::make_unique<LinearAllocatorPageManager>(pGraphics, LinearAllocationType::GpuExclusive);
+	m_PagesManagers[1] = std::make_unique<LinearAllocatorPageManager>(pGraphics, LinearAllocationType::CpuWrite);
 }
 
 LinearAllocator::~LinearAllocator()

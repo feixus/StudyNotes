@@ -11,7 +11,7 @@
 #include "PipelineState.h"
 #include "Shader.h"
 #include "Mesh.h"
-#include "Input.h"
+#include "Core/Input.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)

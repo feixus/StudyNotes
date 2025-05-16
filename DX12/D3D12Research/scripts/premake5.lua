@@ -1,92 +1,68 @@
--- Engine name and root path
-engineName = "D3D12"
-ROOT = "../"
+require "externals"
 
-workspace (engineName)
+ENGINE_NAME = "D3D12"
+ROOT = "../"
+SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
+
+workspace (ENGINE_NAME)
     basedir (ROOT)
     configurations { "Debug", "Release" }
     platforms { "x64" }
-    startproject (engineName)
+    startproject (ENGINE_NAME)
     language "C++"
 	cppdialect "C++20"
-    defines { "_CONSOLE", "THREADING", "PLATFORM_WINDOWS" }
+    defines { "_CONSOLE" }
+    symbols ("On")
+	kind ("ConsoleApp")
+    characterset ("MBCS")
 
-    -- Platform-specific defines
     filter "platforms:x64"
-        defines { "x64", "_AMD64_" }
+		defines {"x64"}
+		architecture ("x64")
 
-    -- Configuration-specific settings
-    filter "configurations:Debug"
-        defines { "_DEBUG" }
-        symbols "On"
-        warnings "Extra"
+	filter "configurations:Debug"
+		defines { "_DEBUG" }
+		optimize ("Off")
 
-    filter "configurations:Release"
-        defines { "RELEASE" }
-        optimize "Speed"
-        flags { "No64BitChecks" }
+	filter "configurations:Release"
+		defines { "RELEASE" }
+		optimize ("Full")
 
-    -- Reset filter
-    filter {}
-	   --kind "WindowedApp"
-       kind "ConsoleApp"
-
-project (engineName)
-    location (ROOT .. engineName)
-    targetdir (ROOT .. "Build/" .. engineName .. "_%{platform}_%{cfg.buildcfg}")
-    objdir (ROOT .. "Build/Intermediate/%{prj.name}_%{platform}_%{cfg.buildcfg}")
+project (ENGINE_NAME)
+    location (ROOT .. ENGINE_NAME)
+    targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
+	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
 
     -- Precompiled header
     pchheader "stdafx.h"
-    pchsource (ROOT .. engineName .. "/stdafx.cpp")
+    pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
+    includedirs { "$(ProjectDir)" }
+
+	SetPlatformDefines()
 
     -- Windows SDK & toolset (Visual Studio only)
-    filter "action:vs*"
+    filter {"system:windows", "action:vs*"}
         systemversion "10.0.22621.0"
         toolset "v143"
+    filter {}
 
-	-- API base option logic
-    defines { "PLATFORM_WINDOWS" }
 
     -- Files to include
     files {
-        ROOT .. "**.h",
-        ROOT .. "**.hpp",
-        ROOT .. "**.cpp",
-        ROOT .. "**.inl",
-        ROOT .. "**.c",
-        ROOT .. "**.natvis",
+        SOURCE_DIR .. "**.h",
+        SOURCE_DIR .. "**.hpp",
+        SOURCE_DIR .. "**.cpp",
+        SOURCE_DIR .. "**.inl",
+        SOURCE_DIR .. "**.c",
+        SOURCE_DIR .. "**.natvis",
     }
 
-    -- Include directories
-    includedirs {
-        "$(ProjectDir)",
+    filter ("files:" .. SOURCE_DIR .. "External/**")
+			flags { "NoPCH" }
+	filter {}
 
-        ROOT .. engineName .. "/External/Assimp/include",
-        ROOT .. engineName .. "/External/Pix/include",
-    }
-
-	-- Disable PCH for specific files
-	filter { "files:**/External/**" }
-    flags { "NoPCH" }
-
-	filter { "platforms:x64" }
-		libdirs { 
-            ROOT .. engineName .. "/External/Assimp/lib/x64",
-            ROOT .. engineName .. "/External/Pix/lib",
-        }
-		postbuildcommands {
-			'copy "$(ProjectDir)External\\Assimp\\bin\\x64\\assimp-vc143-mt.dll" "$(OutDir)"',
-            'copy "$(ProjectDir)External\\Pix\\bin\\WinPixEventRuntime.dll" "$(OutDir)"',
-		}
-	
-	-- Libraries to link
-    links {
-        "dxgi",
-        "d3dcompiler",
-
-        "assimp-vc143-mt",
-        "WinPixEventRuntime",
-    }
-
-    filter {}
+    ---- External libraries ----
+	AddAssimp()
+	filter "system:Windows"
+		AddD3D12()
+		AddPix()

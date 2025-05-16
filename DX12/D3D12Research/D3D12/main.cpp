@@ -1,6 +1,6 @@
 #include "stdafx.h"
-#include "Graphics.h"
-#include "Input.h"
+#include "Graphics/Graphics.h"
+#include "Core/Input.h"
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
@@ -42,7 +42,7 @@ public:
 private:
 	void MakeWindow()
 	{
-		WNDCLASSW wc;
+		WNDCLASS wc;
 
 		wc.hInstance = GetModuleHandle(nullptr);
 		wc.cbClsExtra = 0;
@@ -51,7 +51,7 @@ private:
 		wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 		wc.lpfnWndProc = WndProcStatic;
 		wc.style = CS_HREDRAW | CS_VREDRAW;
-		wc.lpszClassName = L"wndClass";
+		wc.lpszClassName = TEXT("wndClass");
 		wc.lpszMenuName = nullptr;
 		wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
 
@@ -74,9 +74,9 @@ private:
 		int x = (displayWidth - windowWidth) / 2;
 		int y = (displayHeight - windowHeight) / 2;
 
-		m_Hwnd = CreateWindowEx(0,
-			L"wndClass",
-			L"Hello World DX12",
+		m_Hwnd = CreateWindow(
+			TEXT("wndClass"),
+			TEXT("Hello World DX12"),
 			windowStyle,
 			x,
 			y,

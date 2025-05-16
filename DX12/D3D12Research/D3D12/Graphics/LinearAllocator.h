@@ -73,10 +73,10 @@ private:
 	static const int CPU_PAGE_SIZE = 0x10000;
 	static const int GPU_PAGE_SIZE = 0x20000;
 
-	vector<unique_ptr<LinearAllocationPage>> m_PagePool;
-	queue<LinearAllocationPage*> m_AvailablePages;
-	queue<std::pair<UINT64, LinearAllocationPage*>> m_RetiredPages;
-	queue<std::pair<UINT64, LinearAllocationPage*>> m_DeletionQueue;
+	std::vector<std::unique_ptr<LinearAllocationPage>> m_PagePool;
+	std::queue<LinearAllocationPage*> m_AvailablePages;
+	std::queue<std::pair<UINT64, LinearAllocationPage*>> m_RetiredPages;
+	std::queue<std::pair<UINT64, LinearAllocationPage*>> m_DeletionQueue;
 
 	LinearAllocationType m_Type = LinearAllocationType::CpuWrite;
 };
@@ -94,7 +94,7 @@ private:
 	unsigned int m_CurrentOffset = 0;
 	unsigned int m_PageSize = 0;
 
-	vector<unique_ptr<LinearAllocatorPageManager>> m_PagesManagers;
+	std::vector<std::unique_ptr<LinearAllocatorPageManager>> m_PagesManagers;
 };
 
 

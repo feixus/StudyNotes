@@ -2,7 +2,7 @@
 #include "GraphicsResource.h"
 #include "CommandContext.h"
 #include "Graphics.h"
-#include "Image.h"
+#include "Content/Image.h"
 
 void GraphicsResource::SetName(const std::string& name)
 {

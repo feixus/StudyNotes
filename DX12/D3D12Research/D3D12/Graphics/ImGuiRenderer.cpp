@@ -8,7 +8,7 @@
 #include "PipelineState.h"
 #include "GraphicsResource.h"
 #include "DescriptorAllocator.h"
-#include "Input.h"
+#include "Core/Input.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
