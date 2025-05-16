@@ -15,6 +15,7 @@ public:
 	{
 		VertexShader,
 		PixelShader,
+		GeometryShader,
 		ComputeShader,
 		MAX
 	};

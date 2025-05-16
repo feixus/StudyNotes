@@ -31,6 +31,7 @@ void Graphics::Initialize(HWND hWnd)
 	Shader::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
 	Shader::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
 	Shader::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(3));
+	Shader::AddGlobalShaderDefine("MAX_SHADOW_CASTERS", std::to_string(MAX_SHADOW_CASTERS));
 
 	InitD3D();
 	InitializeAssets();
@@ -102,29 +103,29 @@ void Graphics::Update()
 	//////////////////////////////////
 	struct LightData
 	{
-		Matrix LightViewProjections[8];
-		Vector4 ShadowMapOffsets[8];
+		Matrix LightViewProjections[MAX_SHADOW_CASTERS];
+		Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 	} lightData;
 
 	// main directional
-	int lightIndex = 0;
-	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3::Up) * XMMatrixOrthographicLH(512, 512, 1000.f, 0.1f);
-	lightData.ShadowMapOffsets[lightIndex] = Vector4(0.f, 0.f, 0.75f, 0);
+	m_ShadowCasters = 0;
+	lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixOrthographicLH(512, 512, 1000.f, 0.1f);
+	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.f, 0.75f, 0);
 
 	// spot A
-	++lightIndex;
-	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
-	lightData.ShadowMapOffsets[lightIndex] = Vector4(0.75f, 0.f, 0.25f, 0);
+	++m_ShadowCasters;
+	lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
+	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.75f, 0.f, 0.25f, 0);
 
 	// spot B
-	++lightIndex;
-	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
-	lightData.ShadowMapOffsets[lightIndex] = Vector4(0.75f, 0.25f, 0.25f, 0);
+	++m_ShadowCasters;
+	lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
+	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.75f, 0.25f, 0.25f, 0);
 
 	// spot C
-	++lightIndex;
-	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
-	lightData.ShadowMapOffsets[lightIndex] = Vector4(0.75f, 0.5f, 0.25f, 0);
+	++m_ShadowCasters;
+	lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
+	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.75f, 0.5f, 0.25f, 0);
 
 	////////////////////////////////
 	// Rendering Begin
@@ -250,9 +251,10 @@ void Graphics::Update()
 		lightCullingFence = pCommandContext->Execute(false);
 	}
 
-	// 4. single target shadow mapping
+	// 4. shadow mapping
 	//  - render shadow maps for directional and spot lights
 	//  - renders the scene depth onto a separate depth buffer from the light's view
+	if (m_ShadowCasters > 0)
 	{
 		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
 		pCommandContext->MarkBegin(L"Shadows");
@@ -267,54 +269,52 @@ void Graphics::Update()
 
 		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		for (const Light& l : m_Lights)
+		for (int i = 0; i < m_ShadowCasters; ++i)
 		{
-			if (l.ShadowIndex != -1 && (l.LightType == Light::Type::Directional || l.LightType == Light::Type::Spot))
+			const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
+			FloatRect viewport;
+			viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
+			viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
+			viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
+			viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
+			pCommandContext->SetViewport(viewport);
+			pCommandContext->SetScissorRect(viewport);
+
+			struct PerObjectData
 			{
-				const Vector4& shadowOffset = lightData.ShadowMapOffsets[l.ShadowIndex];
-				FloatRect viewport;
-				viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
-				viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
-				viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
-				viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
-				pCommandContext->SetViewport(viewport);
-				pCommandContext->SetScissorRect(viewport);
+				Matrix WorldViewProjection;
+			} ObjectData;
+			ObjectData.WorldViewProjection = lightData.LightViewProjections[i];
 
-				struct PerObjectData
+			// opaque
+			{
+				pCommandContext->MarkBegin(L"Opaque");
+				pCommandContext->SetPipelineState(m_pShadowPipelineStateObject.get());
+				pCommandContext->SetRootSignature(m_pShadowRootSignature.get());
+
+				pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
+				for (const Batch& b : m_OpaqueBatches)
 				{
-					Matrix WorldViewProjection;
-				} ObjectData;
-				ObjectData.WorldViewProjection = lightData.LightViewProjections[l.ShadowIndex];
-
-				// opaque
-				{
-					pCommandContext->MarkBegin(L"Opaque");
-					pCommandContext->SetPipelineState(m_pShadowPipelineStateObject.get());
-					pCommandContext->SetRootSignature(m_pShadowRootSignature.get());
-
-					pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-					for (const Batch& b : m_OpaqueBatches)
-					{
-						b.pMesh->Draw(pCommandContext);
-					}
-					pCommandContext->MarkEnd();
+					b.pMesh->Draw(pCommandContext);
 				}
-
-				// transparent
-				{
-					pCommandContext->MarkBegin(L"Transparent");
-					pCommandContext->SetPipelineState(m_pShadowAlphaPipelineStateObject.get());
-					pCommandContext->SetRootSignature(m_pShadowAlphaRootSignature.get());
-
-					pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-					for (const Batch& b : m_TransparentBatches)
-					{
-						pCommandContext->SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-						b.pMesh->Draw(pCommandContext);
-					}
-					pCommandContext->MarkEnd();
-				}
+				pCommandContext->MarkEnd();
 			}
+
+			// transparent
+			{
+				pCommandContext->MarkBegin(L"Transparent");
+				pCommandContext->SetPipelineState(m_pShadowAlphaPipelineStateObject.get());
+				pCommandContext->SetRootSignature(m_pShadowAlphaRootSignature.get());
+
+				pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
+				for (const Batch& b : m_TransparentBatches)
+				{
+					pCommandContext->SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+					b.pMesh->Draw(pCommandContext);
+				}
+				pCommandContext->MarkEnd();
+			}
+			
 		}
 
 		pCommandContext->MarkEnd();
