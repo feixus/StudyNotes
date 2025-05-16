@@ -15,11 +15,13 @@ class SubMesh
 public:
     void Draw(GraphicsCommandContext* pContext) const;
     int GetMaterialId() const { return m_MaterialId; }
+    const BoundingBox& GetBounds() const { return m_Bounds; }
 
 private:
     int m_MaterialId{};
     int m_IndexCount{};
     int m_VertexCount{};
+    BoundingBox m_Bounds;
     std::unique_ptr<GraphicsBuffer> m_pVertexBuffer;
     std::unique_ptr<GraphicsBuffer> m_pIndexBuffer;
     D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView{};

@@ -31,6 +31,8 @@
 #include "MathTypes.h"
 #include "MathHelp.h"
 
+#include "External/Imgui/imgui.h"
+
 using namespace std;
 using Microsoft::WRL::ComPtr;
 

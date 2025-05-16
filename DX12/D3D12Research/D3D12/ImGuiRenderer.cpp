@@ -2,7 +2,6 @@
 #include "ImGuiRenderer.h"
 #include "CommandContext.h"
 #include "D3DUtils.h"
-#include "External/imgui/imgui.h"
 #include "Graphics.h"
 #include "Shader.h"
 #include "RootSignature.h"

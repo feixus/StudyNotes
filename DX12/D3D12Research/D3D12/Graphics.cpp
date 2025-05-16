@@ -6,7 +6,6 @@
 #include "DescriptorAllocator.h"
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
-#include "External/imgui/imgui.h"
 #include "GraphicsResource.h"
 #include "RootSignature.h"
 #include "PipelineState.h"
@@ -300,6 +299,7 @@ void Graphics::Update()
 
 		for (int i = 0; i < m_ShadowCasters; ++i)
 		{
+			pCommandContext->MarkBegin(L"Light View");
 			const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
 			FloatRect viewport;
 			viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
@@ -343,7 +343,7 @@ void Graphics::Update()
 				}
 				pCommandContext->MarkEnd();
 			}
-			
+			pCommandContext->MarkEnd();
 		}
 
 		pCommandContext->MarkEnd();
@@ -800,6 +800,7 @@ void Graphics::InitializeAssets()
 			m_pDiffuseAlphaPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 			m_pDiffuseAlphaPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 			m_pDiffuseAlphaPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+			m_pDiffuseAlphaPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 			m_pDiffuseAlphaPipelineStateObject->SetDepthWrite(false);
 			m_pDiffuseAlphaPipelineStateObject->SetBlendMode(BlendMode::ALPHA, false);
 			m_pDiffuseAlphaPipelineStateObject->Finalize(m_pDevice.Get());
@@ -1123,8 +1124,8 @@ void Graphics::RandomizeLights()
 void Graphics::SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches)
 {
 	std::sort(batches.begin(), batches.end(), [cameraPosition](const Batch& a, const Batch& b) {
-		float aDist = Vector3::DistanceSquared(a.WorldMatrix.Translation(), cameraPosition);
-		float bDist = Vector3::DistanceSquared(b.WorldMatrix.Translation(), cameraPosition);
+		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, cameraPosition);
+		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, cameraPosition);
 		return aDist > bDist;
 	});
 }
