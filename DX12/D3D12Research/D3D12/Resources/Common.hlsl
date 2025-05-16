@@ -95,7 +95,7 @@ float4 ScreenToView(float4 screen, float2 screenDimensions, float4x4 projectionI
 //| 3     | -Y   | `-Y` | Bottom   |
 //| 4     | +Z   | `+Z` | Front    |
 //| 5     | -Z   | `-Z` | Back     |
-float2 sampleCube(const float3 v, out float faceIndex)
+float2 SampleCube(const float3 v, out float faceIndex)
 {
     float3 vAbs = abs(v);
     float ma;
@@ -120,4 +120,23 @@ float2 sampleCube(const float3 v, out float faceIndex)
 	}
 
 	return uv * ma + 0.5;
+}
+
+float GetCubeFaceIndex(const float3 v)
+{
+    float3 vAbs = abs(v);
+    float faceIndex = 0;
+    if (vAbs.z >= vAbs.x && vAbs.z >= vAbs.y)
+    {
+        faceIndex = v.z < 0.0 ? 5.0 : 4.0;
+    }
+    else if (vAbs.y >= vAbs.x)
+    {
+        faceIndex = v.y < 0.0 ? 3.0 : 2.0;
+    }
+    else
+    {
+        faceIndex = v.x < 0.0 ? 1.0 : 0.0;
+    }
+    return faceIndex;
 }
