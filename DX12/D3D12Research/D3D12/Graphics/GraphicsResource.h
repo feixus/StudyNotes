@@ -25,14 +25,14 @@ public:
 
 	void SetName(const std::string& name);
 
-	ID3D12Resource* GetResource() const { return m_pResource; }
+	ID3D12Resource* GetResource() const { return m_pResource.Get(); }
 	ID3D12Resource** GetResourceAddressOf() { return &m_pResource; }
 	D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
 	D3D12_RESOURCE_STATES GetResourceState() const { return m_CurrentState; }
 	void SetResourceState(D3D12_RESOURCE_STATES state) { m_CurrentState = state; }
 
 protected:
-	ID3D12Resource* m_pResource {};
+	ComPtr<ID3D12Resource> m_pResource {};
 	D3D12_RESOURCE_STATES m_CurrentState {};
 };
 
