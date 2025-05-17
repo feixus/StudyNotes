@@ -3,10 +3,11 @@
 #include "Graphics.h"
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
-#include "GraphicsResource.h"
 #include "DynamicDescriptorAllocator.h"
 #include "PipelineState.h"
 #include "RootSignature.h"
+#include "GraphicsTexture.h"
+#include "GraphicsBuffer.h"
 
 #if _DEBUG
 #include <pix3.h>
@@ -133,7 +134,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 			FlushResourceBarriers();
 		}
 
-		pBuffer->SetResourceState(state);
+		pBuffer->m_CurrentState = state;
 	}
 }
 

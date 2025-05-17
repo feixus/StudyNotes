@@ -3,7 +3,8 @@
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
-#include "GraphicsResource.h"
+#include "GraphicsTexture.h"
+#include "GraphicsBuffer.h"
 #include "CommandContext.h"
 #include "Graphics.h"
 
@@ -27,7 +28,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	auto loadTexture = [pGraphics, pContext](std::filesystem::path basePath, aiMaterial* pMaterial, aiTextureType type)
 	{
-		std::unique_ptr<GraphicsTexture2D> pTex = std::make_unique<GraphicsTexture2D>();
+		std::unique_ptr<GraphicsTexture2D> pTex = std::make_unique<GraphicsTexture2D>(pGraphics->GetDevice());
 
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);

@@ -13,7 +13,7 @@ struct Light
 	Vector3 Position;
 	int Enabled{true};
 	Vector3 Direction;
-	Type LightType;
+	Type LightType{};
 	Vector4 Color;
 	float Range{1.f};
 	float SpotLightAngle{0.f};

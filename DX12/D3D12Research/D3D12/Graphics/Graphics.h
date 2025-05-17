@@ -45,7 +45,7 @@ public:
 	void FreeCommandList(CommandContext* pCommandContext);
 
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	int32_t GetWindowWidth() const { return m_WindowWidth; }
 	int32_t GetWindowHeight() const { return m_WindowHeight; }

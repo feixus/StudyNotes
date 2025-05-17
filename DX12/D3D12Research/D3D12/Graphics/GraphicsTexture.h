@@ -59,12 +59,12 @@ public:
 protected:
 	void Create_Internal(Graphics* pGraphics, TextureDimension dimension, int width, int height, int depthOrArraySize, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv{};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Uav{};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv{};
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{D3D12_DEFAULT};
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv{D3D12_DEFAULT};
 	DXGI_FORMAT m_Format{};
 
-	TextureDimension m_Dimension;
+	TextureDimension m_Dimension{};
 	int m_SampleCount{1};
 	int m_Width{0};
 	int m_Height{0};
@@ -82,7 +82,7 @@ public:
 	GraphicsTexture2D(ID3D12Device* pDevice);
 
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
-	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1);
 	void SetData(CommandContext* pContext, const void* pData);
 	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
 };

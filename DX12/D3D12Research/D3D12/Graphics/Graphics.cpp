@@ -6,7 +6,8 @@
 #include "DescriptorAllocator.h"
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
-#include "GraphicsResource.h"
+#include "GraphicsTexture.h"
+#include "GraphicsBuffer.h"
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "Shader.h"
@@ -608,21 +609,21 @@ void Graphics::InitD3D()
 	// create the textures but don't create the resources themselves yet. 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
-		m_RenderTargets[i] = std::make_unique<GraphicsTexture2D>();
+		m_RenderTargets[i] = std::make_unique<GraphicsTexture2D>(m_pDevice.Get());
 	}
-	m_pDepthStencil = std::make_unique<GraphicsTexture2D>();
+	m_pDepthStencil = std::make_unique<GraphicsTexture2D>(m_pDevice.Get());
 
 	if (m_SampleCount > 1)
 	{
-		m_pResolveDepthStencil = std::make_unique<GraphicsTexture2D>();
+		m_pResolveDepthStencil = std::make_unique<GraphicsTexture2D>(m_pDevice.Get());
 		for (int i = 0; i < FRAME_COUNT; i++)
 		{
-			m_MultiSampleRenderTargets[i] = std::make_unique<GraphicsTexture2D>();
+			m_MultiSampleRenderTargets[i] = std::make_unique<GraphicsTexture2D>(m_pDevice.Get());
 		}
 	}
 
-	m_pLightGridOpaque = std::make_unique<GraphicsTexture2D>();
-	m_pLightGridTransparent = std::make_unique<GraphicsTexture2D>();
+	m_pLightGridOpaque = std::make_unique<GraphicsTexture2D>(m_pDevice.Get());
+	m_pLightGridTransparent = std::make_unique<GraphicsTexture2D>(m_pDevice.Get());
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
@@ -672,7 +673,7 @@ void Graphics::OnResize(int width, int height)
 	m_WindowHeight = height;
 
 	IdleGPU();
-
+	
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
 		m_RenderTargets[i]->Release();
@@ -693,7 +694,7 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
 		ID3D12Resource* pResource = nullptr;
-		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+ 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_RenderTargets[i]->CreateForSwapChain(this, pResource);
 
 		if (m_SampleCount > 1)
@@ -890,7 +891,7 @@ void Graphics::InitializeAssets()
 			m_pShadowAlphaPipelineStateObject->Finalize(m_pDevice.Get());
 		}
 
-		m_pShadowMap = std::make_unique<GraphicsTexture2D>();
+		m_pShadowMap = std::make_unique<GraphicsTexture2D>(m_pDevice.Get());
 		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 
@@ -1175,9 +1176,10 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 	}
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
+D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-	return m_DescriptorHeaps[type]->AllocateDescriptor();
+	assert((int)type < m_DescriptorHeaps.size());
+	return m_DescriptorHeaps[type]->AllocateDescriptors(count);
 }
 
 void Graphics::WaitForFence(uint64_t fenceValue)
