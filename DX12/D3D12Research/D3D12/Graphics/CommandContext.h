@@ -72,6 +72,9 @@ public:
 	virtual uint64_t Execute(bool wait) override;
 	virtual uint64_t ExecuteAndReset(bool wait) override;
 
+	void ClearUavUInt(GraphicsBuffer* pBuffer, uint32_t values[4]);
+	void ClearUavUFloat(GraphicsBuffer* pBuffer, float values[4]);
+
 	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void SetComputePipelineState(ComputePipelineState* pPipelineState);
 	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);

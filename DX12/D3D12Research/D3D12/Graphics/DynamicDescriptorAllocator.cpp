@@ -10,6 +10,13 @@ DynamicDescriptorAllocator::DynamicDescriptorAllocator(Graphics* pGraphics, Comp
     m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
+DescriptorHandle DynamicDescriptorAllocator::AllocateTransientDescriptor(int count)
+{
+    GetHeap();
+    assert(HasSpace(count));
+    return Allocate(count);
+}
+
 void DynamicDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
 {
     assert(m_RootDescriptorMask.GetBit(rootIndex));

@@ -10,9 +10,12 @@
 #define HR(hr) \
 LogHRESULT(hr)
 
-static bool LogHRESULT(HRESULT hr)
+inline bool LogHRESULT(HRESULT hr)
 {
-	if (SUCCEEDED(hr)) return true;
+	if (SUCCEEDED(hr))
+	{
+		return true;
+	}
 
 	WCHAR* errorMsg;
 	if (FormatMessageA(

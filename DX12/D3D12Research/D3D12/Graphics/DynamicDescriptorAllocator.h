@@ -19,6 +19,8 @@ public:
 	DynamicDescriptorAllocator(Graphics* pGraphics, ComputeCommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
 	~DynamicDescriptorAllocator() = default;
 
+    DescriptorHandle AllocateTransientDescriptor(int count);
+
     void SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
     void UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType);
 

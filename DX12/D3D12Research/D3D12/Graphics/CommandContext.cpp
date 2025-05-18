@@ -9,7 +9,7 @@
 #include "GraphicsTexture.h"
 #include "GraphicsBuffer.h"
 
-#if _DEBUG
+#ifdef _DEBUG
 #include <pix3.h>
 #endif
 
@@ -82,7 +82,7 @@ uint64_t CommandContext::ExecuteAndReset(bool wait)
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate)
 {
-	if (pBuffer->GetResourceState() != state)
+	if ((state & pBuffer->GetResourceState()) != state)
 	{
 		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 		{
@@ -397,6 +397,20 @@ uint64_t ComputeCommandContext::ExecuteAndReset(bool wait)
 	uint64_t fenceValue = CommandContext::ExecuteAndReset(wait);
 	m_CurrentDescriptorHeaps = {};
 	return fenceValue;
+}
+
+void ComputeCommandContext::ClearUavUInt(GraphicsBuffer* pBuffer, uint32_t values[4])
+{
+	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
+	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pBuffer->GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), pBuffer->GetUAV(), pBuffer->GetResource(), values, 0, nullptr);
+}
+
+void ComputeCommandContext::ClearUavUFloat(GraphicsBuffer* pBuffer, float values[4])
+{
+	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
+	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pBuffer->GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), pBuffer->GetUAV(), pBuffer->GetResource(), values, 0, nullptr);
 }
 
 void ComputeCommandContext::SetComputePipelineState(ComputePipelineState* pPipelineState)
