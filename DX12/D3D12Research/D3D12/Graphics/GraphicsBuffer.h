@@ -4,27 +4,84 @@
 class CommandContext;
 class Graphics;
 
+enum class BufferUsage
+{
+	Default				= 0,
+	Dynamic				= 1 << 0,
+	UnorderedAccess		= 1 << 1,
+	ShaderResource		= 1 << 2
+};
+DEFINE_ENUM_FLAG_OPERATORS(BufferUsage)
+
 class GraphicsBuffer : public GraphicsResource
 {
 public:
-	void Create(ID3D12Device* pDevice, uint32_t size, bool cpuVisible = false);
+	void Create(Graphics* pGraphics, uint32_t size, bool cpuVisible = false);
 	void SetData(CommandContext* pContext, void* pData, uint32_t dataSize, uint32_t offset = 0);
 
-	uint32_t GetSize() const { return m_Size; }
+	inline uint32_t GetSize() const { return m_ElementStride * m_ElementCount; }
+	inline uint32_t GetStride() const { return m_ElementStride; }
+	inline uint32_t GetElementCount() const { return m_ElementCount; }
+
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return m_Srv; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const { return m_Uav; }
 
 protected:
-	uint32_t m_Size{0};
+	virtual void CreateViews(ID3D12Device* pDevice) = 0;
+
+	void CreateInternal(ID3D12Device* pDevice, uint32_t elementStride, uint32_t elementCount, BufferUsage usage);
+
+	uint32_t m_ElementStride;
+	uint32_t m_ElementCount;
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv{ D3D12_DEFAULT };
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{ D3D12_DEFAULT };
+
+	void* m_pMappedData;
 };
 
 class StructuredBuffer : public GraphicsBuffer
 {
 public:
+	StructuredBuffer(Graphics* pGraphics);
 	void Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible = false);
+	virtual void CreateViews(ID3D12Device* pDevice) override;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return m_Srv; }
-	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const { return m_Uav; }
+	GraphicsResource* GetCounter() const { return m_pCounter.get(); }
 
 private:
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv{};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Uav{};
+	std::unique_ptr<GraphicsResource> m_pCounter;
+};
+
+class ByteAddressBuffer : public GraphicsBuffer
+{
+public:
+	ByteAddressBuffer(Graphics* pGraphics);
+	void Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible = false);
+	virtual void CreateViews(ID3D12Device* pDevice) override;
+};
+
+class VertexBuffer : public GraphicsBuffer
+{
+public:
+	void Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible = false);
+	virtual void CreateViews(ID3D12Device* pDevice) override;
+
+	inline const D3D12_VERTEX_BUFFER_VIEW GetView() const { return m_View; }
+
+private:
+	D3D12_VERTEX_BUFFER_VIEW m_View;
+};
+
+class IndexBuffer : public GraphicsBuffer
+{
+public:
+	void Create(Graphics* pGraphics, bool smallIndices, uint32_t elementCount, bool cpuVisible = false);
+	virtual void CreateViews(ID3D12Device* pDevice) override;
+
+	inline const D3D12_INDEX_BUFFER_VIEW GetView() const { return m_View; }
+
+private:
+	bool m_SmallIndices{ false };
+	D3D12_INDEX_BUFFER_VIEW m_View;
 };

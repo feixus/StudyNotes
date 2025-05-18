@@ -113,14 +113,14 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 		{
 			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
-			assert((currentState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) != 0);
-			assert((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) != 0);
+			assert((currentState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == currentState);
+			assert((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
 		}
 		else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
 		{
 			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
-			assert((currentState & VALID_COPY_QUEUE_RESOURCE_STATES) != 0);
-			assert((state & VALID_COPY_QUEUE_RESOURCE_STATES) != 0);
+			assert((currentState & VALID_COPY_QUEUE_RESOURCE_STATES) == currentState);
+			assert((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
 		}
 
 		m_QueueBarriers[m_NumQueueBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -258,6 +258,11 @@ void CommandContext::MarkEnd()
 }
 
 
+void CommandContext::SetName(const char* pName)
+{
+	SetD3DObjectName(m_pCommandList, pName);
+}
+
 GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator)
 	: CommandContext(pGraphics, pCommandlist, pAllocator, D3D12_COMMAND_LIST_TYPE_DIRECT)
 {
@@ -343,19 +348,26 @@ void GraphicsCommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void GraphicsCommandContext::SetVertexBuffer(D3D12_VERTEX_BUFFER_VIEW pVertexBufferView)
+void GraphicsCommandContext::SetVertexBuffer(VertexBuffer* pVertexBuffer)
 {
-	SetVertexBuffers(&pVertexBufferView, 1);
+	SetVertexBuffers(pVertexBuffer, 1);
 }
 
-void GraphicsCommandContext::SetVertexBuffers(D3D12_VERTEX_BUFFER_VIEW* pBuffers, int bufferCount)
+void GraphicsCommandContext::SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount)
 {
-	m_pCommandList->IASetVertexBuffers(0, bufferCount, pBuffers);
+	assert(bufferCount <= 4);
+	std::array<D3D12_VERTEX_BUFFER_VIEW, 4> views{};
+	for (int i = 0; i < bufferCount; ++i)
+	{
+		views[i] = pVertexBuffers->GetView();
+	}
+	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
 }
 
-void GraphicsCommandContext::SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView)
+void GraphicsCommandContext::SetIndexBuffer(IndexBuffer* pIndexBuffer)
 {
-	m_pCommandList->IASetIndexBuffer(&indexBufferView);
+	const D3D12_INDEX_BUFFER_VIEW view = pIndexBuffer->GetView();
+	m_pCommandList->IASetIndexBuffer(&view);
 }
 
 void GraphicsCommandContext::SetViewport(const FloatRect& rect, float minDepth, float maxDepth)

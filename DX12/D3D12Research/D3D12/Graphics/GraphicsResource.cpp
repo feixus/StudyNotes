@@ -28,11 +28,18 @@ void GraphicsResource::Release()
 
 void GraphicsResource::SetName(const char* pName)
 {
-	if (m_pResource)
+	SetD3DObjectName(m_pResource, pName);
+}
+
+void GraphicsResource::PrintRefCount(std::string_view prefix)
+{
+	if (!m_pResource)
 	{
-		wchar_t name[256];
-		size_t written = 0;
-		mbstowcs_s(&written, name, pName, 256);
-		m_pResource->SetName(name);
+		return;
 	}
+
+	ULONG refCount = m_pResource->AddRef();
+	m_pResource->Release();
+
+	std::cout << prefix << " Reference Count: " << refCount << std::endl;
 }

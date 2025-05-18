@@ -103,7 +103,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-	m_pPipelineStateObject->Finalize(m_pGraphics->GetDevice());
+	m_pPipelineStateObject->Finalize("ImGui Pipeline", m_pGraphics->GetDevice());
 }
 
 void ImGuiRenderer::Render(GraphicsCommandContext& context)

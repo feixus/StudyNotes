@@ -63,7 +63,7 @@ public:
 	void SetPixelShader(const void* pByteCode, uint32_t byteCodeLength);
 	void SetGeometryShader(const void* pByteCode, uint32_t byteCodeLength);
 
-	void Finalize(ID3D12Device* pDevice);
+	void Finalize(const char* pName, ID3D12Device* pDevice);
 
 private:
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_Desc{};
@@ -75,7 +75,7 @@ public:
 	ComputePipelineState();
 	ComputePipelineState(const ComputePipelineState& other);
 
-	void Finalize(ID3D12Device* pDevice);
+	void Finalize(const char* pName, ID3D12Device* pDevice);
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature);
 	void SetComputeShader(const void* pByteCode, uint32_t byteCodeLength);

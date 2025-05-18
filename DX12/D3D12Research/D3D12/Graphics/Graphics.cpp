@@ -696,21 +696,26 @@ void Graphics::OnResize(int width, int height)
 		ID3D12Resource* pResource = nullptr;
  		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_RenderTargets[i]->CreateForSwapChain(this, pResource);
+		m_RenderTargets[i]->SetName("RenderTarget");
 
 		if (m_SampleCount > 1)
 		{
 			m_MultiSampleRenderTargets[i]->Create(this, m_WindowWidth, m_WindowHeight, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount);
+			m_MultiSampleRenderTargets[i]->SetName("Multisample RenderTarget");
 		}
 	}
 
 	if (m_SampleCount > 1)
 	{
 		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount);
+		m_pDepthStencil->SetName("Depth Stencil");
 		m_pResolveDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1);
+		m_pResolveDepthStencil->SetName("Resolve Depth Stencil");
 	}
 	else
 	{
 		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount);
+		m_pDepthStencil->SetName("Depth Stencil");
 	}
 
 	int frustumCountX = (int)ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
@@ -789,7 +794,7 @@ void Graphics::InitializeAssets()
 			m_pDiffusePipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 			m_pDiffusePipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			m_pDiffusePipelineStateObject->SetDepthWrite(false);
-			m_pDiffusePipelineStateObject->Finalize(m_pDevice.Get());
+			m_pDiffusePipelineStateObject->Finalize("Diffuse (Opaque) Pipeline", m_pDevice.Get());
 		}
 
 		// transparent
@@ -804,7 +809,7 @@ void Graphics::InitializeAssets()
 			m_pDiffuseAlphaPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 			m_pDiffuseAlphaPipelineStateObject->SetDepthWrite(false);
 			m_pDiffuseAlphaPipelineStateObject->SetBlendMode(BlendMode::ALPHA, false);
-			m_pDiffuseAlphaPipelineStateObject->Finalize(m_pDevice.Get());
+			m_pDiffuseAlphaPipelineStateObject->Finalize("Diffuse (Alpha) Pipeline", m_pDevice.Get());
 		}
 
 		// debug version
@@ -819,7 +824,7 @@ void Graphics::InitializeAssets()
 			m_pDiffusePipelineStateObjectDebug->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 			m_pDiffusePipelineStateObjectDebug->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			m_pDiffusePipelineStateObjectDebug->SetDepthWrite(false);
-			m_pDiffusePipelineStateObjectDebug->Finalize(m_pDevice.Get());
+			m_pDiffusePipelineStateObjectDebug->Finalize("Diffuse (Debug) Pipeline", m_pDevice.Get());
 		}
 	}
 
@@ -850,7 +855,7 @@ void Graphics::InitializeAssets()
 			m_pShadowPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 			m_pShadowPipelineStateObject->SetDepthBias(-1, -5.f, -4.f);
 			m_pShadowPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			m_pShadowPipelineStateObject->Finalize(m_pDevice.Get());
+			m_pShadowPipelineStateObject->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
 		}
 
 		// transparent
@@ -888,7 +893,7 @@ void Graphics::InitializeAssets()
 			m_pShadowAlphaPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 			m_pShadowAlphaPipelineStateObject->SetDepthBias(0, 0.f, 0.f);
 			m_pShadowAlphaPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			m_pShadowAlphaPipelineStateObject->Finalize(m_pDevice.Get());
+			m_pShadowAlphaPipelineStateObject->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
 		}
 
 		m_pShadowMap = std::make_unique<GraphicsTexture2D>(m_pDevice.Get());
@@ -918,7 +923,7 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pDepthPrepassPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pDepthPrepassPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pDepthPrepassPipelineStateObject->Finalize(m_pDevice.Get());
+		m_pDepthPrepassPipelineStateObject->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
 	}
 
 	// depth resolve
@@ -936,7 +941,7 @@ void Graphics::InitializeAssets()
 		m_pResolveDepthPipelineStateObject = std::make_unique<ComputePipelineState>();
 		m_pResolveDepthPipelineStateObject->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pResolveDepthPipelineStateObject->SetRootSignature(m_pResolveDepthRootSignature->GetRootSignature());
-		m_pResolveDepthPipelineStateObject->Finalize(m_pDevice.Get());
+		m_pResolveDepthPipelineStateObject->Finalize("Resolve Depth Pipeline", m_pDevice.Get());
 	}
 
 	// light culling
@@ -953,15 +958,15 @@ void Graphics::InitializeAssets()
 		m_pComputeLightCullPipeline = std::make_unique<ComputePipelineState>();
 		m_pComputeLightCullPipeline->SetRootSignature(m_pComputeLightCullRootSignature->GetRootSignature());
 		m_pComputeLightCullPipeline->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pComputeLightCullPipeline->Finalize(m_pDevice.Get());
+		m_pComputeLightCullPipeline->Finalize("Compute Light Culling Pipeline", m_pDevice.Get());
 
-		m_pLightIndexCounter = std::make_unique<StructuredBuffer>();
+		m_pLightIndexCounter = std::make_unique<StructuredBuffer>(this);
 		m_pLightIndexCounter->Create(this, sizeof(uint32_t), 2);
-		m_pLightIndexListBufferOpaque = std::make_unique<StructuredBuffer>();
+		m_pLightIndexListBufferOpaque = std::make_unique<StructuredBuffer>(this);
 		m_pLightIndexListBufferOpaque->Create(this, sizeof(uint32_t), MAX_LIGHT_DENSITY);
-		m_pLightIndexListBufferTransparent = std::make_unique<StructuredBuffer>();
+		m_pLightIndexListBufferTransparent = std::make_unique<StructuredBuffer>(this);
 		m_pLightIndexListBufferTransparent->Create(this, sizeof(uint32_t), MAX_LIGHT_DENSITY);
-		m_pLightBuffer = std::make_unique<StructuredBuffer>();
+		m_pLightBuffer = std::make_unique<StructuredBuffer>(this);
 		m_pLightBuffer->Create(this, sizeof(Light), MAX_LIGHT_COUNT, false);
 	}
 
@@ -1159,13 +1164,15 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		{
 		case D3D12_COMMAND_LIST_TYPE_DIRECT:
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<GraphicsCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
-
+			m_CommandListPool[typeIndex].back()->SetName("Pooled Graphics Command Context");
 			break;
 		case D3D12_COMMAND_LIST_TYPE_COMPUTE:
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<ComputeCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
+			m_CommandListPool[typeIndex].back()->SetName("Pooled Compute Command Context");
 			break;
 		case D3D12_COMMAND_LIST_TYPE_COPY:
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CopyCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
+			m_CommandListPool[typeIndex].back()->SetName("Pooled Copy Command Context");
 			break;
 		default:
 			assert(false);

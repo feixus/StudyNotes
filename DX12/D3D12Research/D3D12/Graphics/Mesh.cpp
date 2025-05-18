@@ -19,7 +19,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	for (uint32_t i = 0; i < pScene->mNumMeshes; ++i)
 	{
-		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], pGraphics->GetDevice(), pContext));
+		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], pGraphics, pContext));
 		pContext->ExecuteAndReset(true);
 	}
 
@@ -76,7 +76,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	return true;
 }
 
-std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, CommandContext* pContext)
+std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, CommandContext* pContext)
 {
 	struct Vertex
 	{
@@ -118,25 +118,17 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Co
 
 	{
 		uint32_t size = (uint32_t)vertices.size() * sizeof(Vertex);
-		pSubMesh->m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
-		pSubMesh->m_pVertexBuffer->Create(pDevice, size, false);
+		pSubMesh->m_pVertexBuffer = std::make_unique<VertexBuffer>();
+		pSubMesh->m_pVertexBuffer->Create(pGraphics, sizeof(Vertex), (uint32_t)vertices.size(), false);
 		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
-
-		pSubMesh->m_VertexBufferView.BufferLocation = pSubMesh->m_pVertexBuffer->GetGpuHandle();
-		pSubMesh->m_VertexBufferView.SizeInBytes = size;
-		pSubMesh->m_VertexBufferView.StrideInBytes = sizeof(Vertex);
 	}
 
 	{
 		uint32_t size = sizeof(uint32_t) * (uint32_t)indices.size();
 		pSubMesh->m_IndexCount = (int)indices.size();
-		pSubMesh->m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
-		pSubMesh->m_pIndexBuffer->Create(pDevice, size, false);
+		pSubMesh->m_pIndexBuffer = std::make_unique<IndexBuffer>();
+		pSubMesh->m_pIndexBuffer->Create(pGraphics, false, (uint32_t)indices.size(), false);
 		pSubMesh->m_pIndexBuffer->SetData(pContext, indices.data(), size);
-
-		pSubMesh->m_IndexBufferView.BufferLocation = pSubMesh->m_pIndexBuffer->GetGpuHandle();
-		pSubMesh->m_IndexBufferView.SizeInBytes = size;
-		pSubMesh->m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	}
 
 	pSubMesh->m_MaterialId = pMesh->mMaterialIndex;
@@ -146,8 +138,8 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Co
 
 void SubMesh::Draw(GraphicsCommandContext* pContext) const
 {
-	pContext->SetVertexBuffer(m_VertexBufferView);
-	pContext->SetIndexBuffer(m_IndexBufferView);
+	pContext->SetVertexBuffer(m_pVertexBuffer.get());
+	pContext->SetIndexBuffer(m_pIndexBuffer.get());
 	pContext->DrawIndexed(m_IndexCount, 0, 0);
 }
 
