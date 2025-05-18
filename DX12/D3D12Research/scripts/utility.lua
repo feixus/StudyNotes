@@ -24,3 +24,16 @@ function AddAssimp()
 	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Assimp\\bin\\x64\\assimp-vc143-mt.dll\" \"$(OutDir)\"") }
 	links { "assimp-vc143-mt" }
 end
+
+newaction {
+	trigger     = "clean",
+	description = "Remove all binaries and generated files",
+
+	execute = function()
+		os.rmdir("../Build")
+		os.rmdir("../ipch")
+		os.rmdir("../.vs")
+		os.remove("../*.sln")
+		os.remove(SOURCE_DIR .. "*.vcxproj.*")
+	end
+}

@@ -73,7 +73,7 @@ void ImGuiRenderer::CreatePipeline()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	m_pRootSignature = std::make_unique<RootSignature>(2);
+	m_pRootSignature = std::make_unique<RootSignature>();
 	m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 	m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
@@ -83,7 +83,7 @@ void ImGuiRenderer::CreatePipeline()
 	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
-	m_pRootSignature->Finalize(m_pGraphics->GetDevice(), rootSignatureFlags);
+	m_pRootSignature->Finalize("ImGui", m_pGraphics->GetDevice(), rootSignatureFlags);
 
 	// input layout
 	std::vector<D3D12_INPUT_ELEMENT_DESC> elementDesc = {
@@ -94,7 +94,7 @@ void ImGuiRenderer::CreatePipeline()
 
 	// pipeline state
 	m_pPipelineStateObject = std::make_unique<GraphicsPipelineState>();
-	m_pPipelineStateObject->SetBlendMode(BlendMode::ALPHA, false);
+	m_pPipelineStateObject->SetBlendMode(BlendMode::Alpha, false);
 	m_pPipelineStateObject->SetDepthWrite(false);
 	m_pPipelineStateObject->SetDepthEnable(false);
 	m_pPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);

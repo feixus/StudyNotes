@@ -18,7 +18,6 @@ GraphicsResource::~GraphicsResource()
 
 void GraphicsResource::Release()
 {
-	//m_pResource.Reset();
 	if (m_pResource)
 	{
 		m_pResource->Release();

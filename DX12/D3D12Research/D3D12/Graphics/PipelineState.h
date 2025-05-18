@@ -4,16 +4,16 @@ class Shader;
 
 enum class BlendMode : uint8_t
 {
-	REPLACE = 0,
-	ADD,
-	MULTIPLY,
-	ALPHA,
-	ADDALPHA,
-	PREMULALPHA,
-	INVDESTALPHA,
-	SUBTRACT,
-	SUBTRACTALPHA,
-	UNDEFINED,
+	Replace = 0,
+	Add,
+	Multiply,
+	Alpha,
+	AddAlpha,
+	PreMultiplyAlpha,
+	InverseDestinationAlpha,
+	Subtract,
+	SubtractAlpha,
+	Undefined,
 };
 
 

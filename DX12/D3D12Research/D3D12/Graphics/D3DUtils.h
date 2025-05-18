@@ -14,13 +14,14 @@ static bool LogHRESULT(HRESULT hr)
 {
 	if (SUCCEEDED(hr)) return true;
 
-	CHAR* errorMsg;
+	WCHAR* errorMsg;
 	if (FormatMessageA(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
 		nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(LPSTR)&errorMsg, 0, nullptr) != 0)
 	{
-		std::cout << "Error: " << errorMsg << std::endl;
+		OutputDebugStringW(errorMsg);
+		std::wcout << L"Error: " << errorMsg << std::endl;
 	}
 
 	__debugbreak();

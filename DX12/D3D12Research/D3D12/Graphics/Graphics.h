@@ -19,8 +19,8 @@ struct Material;
 
 struct Batch
 {
-	const SubMesh* pMesh;
-	const Material* pMaterial;
+	const SubMesh* pMesh{};
+	const Material* pMaterial{};
 	Matrix WorldMatrix;
 };
 
@@ -126,21 +126,21 @@ private:
 	std::vector<Batch> m_TransparentBatches;
 
 	// diffuse scene passes
-	std::unique_ptr<RootSignature> m_pDiffuseRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObject;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPipelineStateObject;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObjectDebug;
+	std::unique_ptr<RootSignature> m_pDiffuseRS;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPSO;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSODebug;
 	bool m_UseDebugView = false;
 
 	// directional light shadow mapping
 	std::unique_ptr<GraphicsTexture2D> m_pShadowMap;
-	std::unique_ptr<RootSignature> m_pShadowRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pShadowPipelineStateObject;
-	std::unique_ptr<RootSignature> m_pShadowAlphaRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pShadowAlphaPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pShadowRS;
+	std::unique_ptr<GraphicsPipelineState> m_pShadowPSO;
+	std::unique_ptr<RootSignature> m_pShadowAlphaRS;
+	std::unique_ptr<GraphicsPipelineState> m_pShadowAlphaPSO;
 
 	// light culling
-	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
+	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferOpaque;
@@ -149,12 +149,12 @@ private:
 	std::unique_ptr<GraphicsTexture2D> m_pLightGridTransparent;
 
 	// depth prepass
-	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
+	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPSO;
 
 	// MSAA depth resolve
-	std::unique_ptr<RootSignature> m_pResolveDepthRootSignature;
-	std::unique_ptr<ComputePipelineState> m_pResolveDepthPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pResolveDepthRS;
+	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
 	std::unique_ptr<GraphicsTexture2D> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture2D> m_pResolveDepthStencil;
 

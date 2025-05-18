@@ -5,7 +5,7 @@
 #include "Graphics.h"
 
 GraphicsTexture::GraphicsTexture(ID3D12Device* pDevice)
-			: m_Width(0), m_Height(0), m_DepthOrArraySize(0), m_Format(DXGI_FORMAT_UNKNOWN), m_MipLevels(1)
+			: m_Width(0), m_Height(0), m_DepthOrArraySize(0), m_Format(DXGI_FORMAT_UNKNOWN), m_MipLevels(1), m_Dimension(TextureDimension::Texture2D), m_IsArray(false)
 {
 	m_SrvUavDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_RtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -514,6 +514,8 @@ void GraphicsTexture2D::SetData(CommandContext* pContext, const void* pData)
 
 void GraphicsTexture2D::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture)
 {
+	Release();
+
 	m_pResource = pTexture;
 	m_CurrentState = D3D12_RESOURCE_STATE_PRESENT;
 

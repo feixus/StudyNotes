@@ -200,7 +200,7 @@ public:
 
     bool MostSignificantBit(uint32_t* pIndex) const
     {
-        for (uint32_t i = Elements() - 1; i >= 0; --i)
+        for (int32_t i = (int)Elements() - 1; i >= 0; --i)
         {
             if (BitOperations::MostSignificantBit(Data[i], pIndex) == true)
             {

@@ -20,6 +20,6 @@ public:
 	void PrintRefCount(std::string_view prefix);
 
 protected:
-	ID3D12Resource* m_pResource;	// when use ComPtr, the render target created from swap chain, reference counter is confusing
+	ID3D12Resource* m_pResource{nullptr};	// when use ComPtr, the render target created from swap chain, reference counter is confusing
 	D3D12_RESOURCE_STATES m_CurrentState;
 };
