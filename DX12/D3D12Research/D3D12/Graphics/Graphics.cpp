@@ -170,7 +170,7 @@ void Graphics::Update()
 	// - optimization that prevents wasteful lighting calculations during the base pass
 	// - required for light culling
 	{
-		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
+		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 		pCommandContext->MarkBegin(L"Depth Prepass");
 
 		pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
@@ -187,8 +187,8 @@ void Graphics::Update()
 		} ObjectData;
 		ObjectData.WorldViewProjection = cameraViewProj;
 
-		pCommandContext->SetPipelineState(m_pDepthPrepassPipelineStateObject.get());
-		pCommandContext->SetRootSignature(m_pDepthPrepassRootSignature.get());
+		pCommandContext->SetGraphicsPipelineState(m_pDepthPrepassPipelineStateObject.get());
+		pCommandContext->SetGraphicsRootSignature(m_pDepthPrepassRootSignature.get());
 		pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		for (const Batch& b : m_OpaqueBatches)
 		{
@@ -210,11 +210,11 @@ void Graphics::Update()
 	//  - if MSAA is enabled, run a compute shader to resolve the depth buffer
 	if (m_SampleCount > 1)
 	{
-		ComputeCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE)->AsComputeContext();
+		ComputeCommandContext* pCommandContext = static_cast<ComputeCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE));
 		pCommandContext->MarkBegin(L"Depth Resolve");
 
-		pCommandContext->SetRootSignature(m_pResolveDepthRootSignature.get());
-		pCommandContext->SetPipelineState(m_pResolveDepthPipelineStateObject.get());
+		pCommandContext->SetComputeRootSignature(m_pResolveDepthRootSignature.get());
+		pCommandContext->SetComputePipelineState(m_pResolveDepthPipelineStateObject.get());
 
 		pCommandContext->SetDynamicDescriptor(0, 0, GetResolveDepthStencil()->GetUAV());
 		pCommandContext->SetDynamicDescriptor(1, 0, GetDepthStencil()->GetSRV());
@@ -237,7 +237,7 @@ void Graphics::Update()
 	//  - outputs a: - Texture2D containing a count and an offset of lights per tile.
 	//								- uint[] index buffer to indicate what are visible in each tile
 	{
-		ComputeCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE)->AsComputeContext();
+		ComputeCommandContext* pCommandContext = static_cast<ComputeCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE));
 		pCommandContext->MarkBegin(L"Light Culling");
 
 		pCommandContext->MarkBegin(L"Setup Light Data");
@@ -246,8 +246,8 @@ void Graphics::Update()
 		m_pLightBuffer->SetData(pCommandContext, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
 		pCommandContext->MarkEnd();
 
-		pCommandContext->SetPipelineState(m_pComputeLightCullPipeline.get());
-		pCommandContext->SetRootSignature(m_pComputeLightCullRootSignature.get());
+		pCommandContext->SetComputePipelineState(m_pComputeLightCullPipeline.get());
+		pCommandContext->SetComputeRootSignature(m_pComputeLightCullRootSignature.get());
 
 		struct ShaderParameter
 		{
@@ -265,7 +265,7 @@ void Graphics::Update()
 		Data.ScreenDimensions.y = (float)m_WindowHeight;
 		cameraProj.Invert(Data.ProjectionInverse);
 
-		pCommandContext->SetDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
+		pCommandContext->SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
 		pCommandContext->SetDynamicDescriptor(1, 0, m_pLightIndexCounter->GetUAV());
 		pCommandContext->SetDynamicDescriptor(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
 		pCommandContext->SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetUAV());
@@ -285,7 +285,7 @@ void Graphics::Update()
 	//  - renders the scene depth onto a separate depth buffer from the light's view
 	if (m_ShadowCasters > 0)
 	{
-		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
+		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 		pCommandContext->MarkBegin(L"Shadows");
 
 		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
@@ -319,8 +319,8 @@ void Graphics::Update()
 			// opaque
 			{
 				pCommandContext->MarkBegin(L"Opaque");
-				pCommandContext->SetPipelineState(m_pShadowPipelineStateObject.get());
-				pCommandContext->SetRootSignature(m_pShadowRootSignature.get());
+				pCommandContext->SetGraphicsPipelineState(m_pShadowPipelineStateObject.get());
+				pCommandContext->SetGraphicsRootSignature(m_pShadowRootSignature.get());
 
 				pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 				for (const Batch& b : m_OpaqueBatches)
@@ -333,8 +333,8 @@ void Graphics::Update()
 			// transparent
 			{
 				pCommandContext->MarkBegin(L"Transparent");
-				pCommandContext->SetPipelineState(m_pShadowAlphaPipelineStateObject.get());
-				pCommandContext->SetRootSignature(m_pShadowAlphaRootSignature.get());
+				pCommandContext->SetGraphicsPipelineState(m_pShadowAlphaPipelineStateObject.get());
+				pCommandContext->SetGraphicsRootSignature(m_pShadowAlphaRootSignature.get());
 
 				pCommandContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 				for (const Batch& b : m_TransparentBatches)
@@ -357,7 +357,7 @@ void Graphics::Update()
 	// 5. base pass
 	//  - render the scene using the shadow mapping result and the light culling buffers
 	{
-		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
+		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 		pCommandContext->MarkBegin(L"Base Pass");
 
 		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -388,8 +388,8 @@ void Graphics::Update()
 		// opaque
 		{
 			pCommandContext->MarkBegin(L"Opaque");
-			pCommandContext->SetPipelineState(m_UseDebugView ? m_pDiffusePipelineStateObjectDebug.get() : m_pDiffusePipelineStateObject.get());
-			pCommandContext->SetRootSignature(m_pDiffuseRootSignature.get());
+			pCommandContext->SetGraphicsPipelineState(m_UseDebugView ? m_pDiffusePipelineStateObjectDebug.get() : m_pDiffusePipelineStateObject.get());
+			pCommandContext->SetGraphicsRootSignature(m_pDiffuseRootSignature.get());
 
 			pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 			pCommandContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
@@ -413,8 +413,8 @@ void Graphics::Update()
 		// transparent
 		{
 			pCommandContext->MarkBegin(L"Transparent");
-			pCommandContext->SetPipelineState(m_UseDebugView ? m_pDiffusePipelineStateObjectDebug.get() : m_pDiffuseAlphaPipelineStateObject.get());
-			pCommandContext->SetRootSignature(m_pDiffuseRootSignature.get());
+			pCommandContext->SetGraphicsPipelineState(m_UseDebugView ? m_pDiffusePipelineStateObjectDebug.get() : m_pDiffuseAlphaPipelineStateObject.get());
+			pCommandContext->SetGraphicsRootSignature(m_pDiffuseRootSignature.get());
 
 			pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 			pCommandContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
@@ -446,7 +446,7 @@ void Graphics::Update()
 	}
 
 	{
-		GraphicsCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
+		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 		pCommandContext->MarkBegin(L"UI");
 
 		// 6. UI
@@ -972,7 +972,7 @@ void Graphics::InitializeAssets()
 
 	// geometry
 	{
-		CopyCommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsCopyContext();
+		CopyCommandContext* pCommandContext = static_cast<CopyCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY));
 		
 		GameTimer::CounterBegin();
 		m_pMesh = std::make_unique<Mesh>();

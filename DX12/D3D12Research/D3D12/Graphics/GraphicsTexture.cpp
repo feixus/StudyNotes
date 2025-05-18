@@ -486,7 +486,7 @@ void GraphicsTexture2D::Create(Graphics* pGraphics, CommandContext* pContext, co
 		}
 
 		Create(pGraphics, m_Width, m_Height, m_Format, usage, 1);
-		pContext->InitializeTexture(this, subresources.data(), m_MipLevels);
+		pContext->InitializeTexture(this, subresources.data(), 0, m_MipLevels);
 		pContext->ExecuteAndReset(true);
 	}
 }
@@ -509,7 +509,7 @@ void GraphicsTexture2D::SetData(CommandContext* pContext, const void* pData)
 	data.pData = pData;
 	data.RowPitch = GetRowDataSize(m_Format, m_Width);
 	data.SlicePitch = data.RowPitch * m_Height;
-	pContext->InitializeTexture(this, &data, 1);
+	pContext->InitializeTexture(this, &data, 0, 1);
 }
 
 void GraphicsTexture2D::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture)
