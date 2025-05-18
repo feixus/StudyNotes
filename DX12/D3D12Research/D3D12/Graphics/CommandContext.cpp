@@ -27,6 +27,7 @@ constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON |
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator)
 {
+	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 }
 
 CommandContext::~CommandContext()
@@ -48,15 +49,15 @@ uint64_t CommandContext::Execute(bool wait)
 	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
 	uint64_t fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
 	
-	pQueue->FreeAllocator(fenceValue, m_pAllocator);
-	m_pAllocator = nullptr;
-
-	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
-
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
 	}
+
+	m_DynamicAllocator->Free(fenceValue);
+
+	pQueue->FreeAllocator(fenceValue, m_pAllocator);
+	m_pAllocator = nullptr;
 
 	m_pGraphics->FreeCommandList(this);
 
@@ -69,12 +70,12 @@ uint64_t CommandContext::ExecuteAndReset(bool wait)
 	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
 	uint64_t fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
 
-	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
 	}
 	
+	m_DynamicAllocator->Free(fenceValue);
 	m_pCommandList->Reset(m_pAllocator, nullptr);
 
 	return fenceValue;
@@ -82,7 +83,7 @@ uint64_t CommandContext::ExecuteAndReset(bool wait)
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate)
 {
-	if ((state & pBuffer->GetResourceState()) != state)
+	if (pBuffer->GetResourceState() != state)
 	{
 		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 		{
@@ -121,28 +122,23 @@ void CommandContext::FlushResourceBarriers()
 	}
 }
 
-DynamicAllocation CommandContext::AllocateUploadMemory(uint32_t size)
-{
-	return m_pGraphics->GetCpuVisibleAllocator()->Allocate(size);
-}
-
 void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint32_t dataSize, uint32_t offset)
 {
-	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
-	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource, allocation.Offset, dataSize);
+	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
 	InsertResourceBarrier(pResource, previousState, true);
 }
 
 void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount)
 {
 	uint64_t allocationSize = (uint32_t)GetRequiredIntermediateSize(pResource->GetResource(), (UINT)firstSubresource, (UINT)subresourceCount);
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate((uint32_t)allocationSize, 512);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32_t)allocationSize, 512);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
-	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource, allocation.Offset, firstSubresource, subresourceCount, pSubresources);
+	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubresource, subresourceCount, pSubresources);
 	InsertResourceBarrier(pResource, previousState, true);
 }
 
@@ -203,7 +199,7 @@ void GraphicsCommandContext::SetGraphicsPipelineState(GraphicsPipelineState* pPi
 
 void GraphicsCommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize)
 {
-	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
@@ -212,7 +208,7 @@ void GraphicsCommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCo
 {
 	assert(m_CurrentContext == CommandListContext::Graphics);
 	int bufferSize = elementCount * elementSize;
-	DynamicAllocation allocation = AllocateUploadMemory(bufferSize);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 
 	D3D12_VERTEX_BUFFER_VIEW view = {};
@@ -226,7 +222,7 @@ void GraphicsCommandContext::SetDynamicIndexBuffer(int elementCount, void* pData
 {
 	assert(m_CurrentContext == CommandListContext::Graphics);
 	int bufferSize = elementCount * sizeof(uint32_t);
-	DynamicAllocation allocation = AllocateUploadMemory(bufferSize);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 
 	D3D12_INDEX_BUFFER_VIEW view = {};
@@ -440,7 +436,7 @@ void ComputeCommandContext::SetComputeRootConstants(int rootIndex, uint32_t coun
 void ComputeCommandContext::SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize)
 {
 	assert(m_CurrentContext == CommandListContext::Compute);
-	DynamicAllocation allocation = AllocateUploadMemory(dataSize);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }

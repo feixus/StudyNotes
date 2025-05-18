@@ -1,41 +1,55 @@
 #pragma once
 
 class Graphics;
+class GraphicsBuffer;
 
 struct DynamicAllocation
 {
-	ID3D12Resource* pBackingResource{ nullptr };
+	GraphicsBuffer* pBackingResource{ nullptr };
 	D3D12_GPU_VIRTUAL_ADDRESS GpuHandle{ 0 };
 	int Offset{ 0 };
 	int Size{ 0 };
 	void* pMappedMemory{ nullptr };
 };
 
+using AllocationPage = GraphicsBuffer;
+
+class DynamicAllocationManager
+{
+public:
+	DynamicAllocationManager(Graphics* pGraphics);
+	~DynamicAllocationManager();
+
+	AllocationPage* AllocatePage(uint64_t size);
+	AllocationPage* CreateNewPage(uint64_t size);
+
+	void FreePages(uint64_t fenceValue, const std::vector<AllocationPage*> pPages);
+	void FreeLargePages(uint64_t fenceValue, const std::vector<AllocationPage*> pLargePages);
+
+private:
+	Graphics* m_pGraphics;
+	std::mutex m_PageMutex;
+	std::vector<std::unique_ptr<AllocationPage>> m_Pages;
+	std::queue<std::pair<uint64_t, AllocationPage*>> m_FreedPages;
+	std::queue<std::pair<uint64_t, std::unique_ptr<AllocationPage>>> m_DeleteQueue;
+};
+
 class DynamicResourceAllocator
 {
 public:
-	DynamicResourceAllocator(Graphics* pDevice, bool gpuVisible, int size);
-	~DynamicResourceAllocator() = default;
-
-	DynamicAllocation Allocate(int size, int alignment = 256);
+	DynamicResourceAllocator(DynamicAllocationManager* pPageManager);
+	
+	DynamicAllocation Allocate(uint64_t size, int alignment = 256);
 	void Free(uint64_t fenceValue);
 
-	void ResetAllocationCounter() { m_TotalMemoryAllocation = 0; }
-	uint64_t GetTotalMemoryAllocation() const { return m_TotalMemoryAllocation; }
-	uint64_t GetTotalMemoryAllocationPeak() const { return m_TotalMemoryAllocationPeak; }
-
 private:
-	ComPtr<ID3D12Resource> CreateResource(bool gpuVisible, int size, void** pMappedData);
+	constexpr static uint64_t PAGE_SIZE = 0xFFFF;
 
-	Graphics* m_pGraphics;
-	ComPtr<ID3D12Resource> m_pBackingResource;
-	std::vector<ComPtr<ID3D12Resource>> m_LargeResources;
-	std::queue<std::pair<uint64_t, uint32_t>> m_FenceOffsets;
+	DynamicAllocationManager* m_pPageManager;
+
+	AllocationPage* m_pCurrentPage{ nullptr };
 	int m_CurrentOffset{ 0 };
-	int m_Size{ 0 };
-	void* m_pMappedMemory{ nullptr };
-
-	uint64_t m_TotalMemoryAllocationPeak{ 0 };
-	uint64_t m_TotalMemoryAllocation{ 0 };
+	std::vector<AllocationPage*> m_UsedPages;
+	std::vector<AllocationPage*> m_UsedLargePages;
 };
 
