@@ -116,7 +116,7 @@ public:
 
 	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData);
-	void SetDynamicIndexBuffer(int elementCount, void* pData);
+	void SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices = false);
 
 	void SetDepthOnlyTarget(D3D12_CPU_DESCRIPTOR_HANDLE dsv);
 	void SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);
