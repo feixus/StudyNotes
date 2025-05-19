@@ -38,7 +38,7 @@ enum class CubeMapFace
 class GraphicsTexture : public GraphicsResource
 {
 public:
-	GraphicsTexture(ID3D12Device* pDevice);
+	GraphicsTexture();
 
 	int GetWidth() const { return m_Width; }
 	int GetHeight() const { return m_Height; }
@@ -80,17 +80,20 @@ protected:
 class GraphicsTexture2D : public GraphicsTexture
 {
 public:
-	GraphicsTexture2D(ID3D12Device* pDevice);
-
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
 	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1);
 	void SetData(CommandContext* pContext, const void* pData);
 	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
 };
 
+class GraphicsTexture3D : public GraphicsTexture
+{
+public:
+	void Create(Graphics* pGraphics, int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage);
+};
+
 class GraphicsTextureCube : public GraphicsTexture
 {
 public:
-	GraphicsTextureCube(ID3D12Device* pDevice);
 	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1);
 };

@@ -4,11 +4,9 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 
-GraphicsTexture::GraphicsTexture(ID3D12Device* pDevice)
+GraphicsTexture::GraphicsTexture()
 			: m_Width(0), m_Height(0), m_DepthOrArraySize(0), m_Format(DXGI_FORMAT_UNKNOWN), m_MipLevels(1), m_Dimension(TextureDimension::Texture2D), m_IsArray(false)
 {
-	m_SrvUavDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_RtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetRTV(int subResource) const
@@ -37,6 +35,9 @@ void GraphicsTexture::Create_Internal(Graphics* pGraphics, TextureDimension dime
 	assert((usage & depthAndRt) != depthAndRt);
 
 	Release();
+
+	m_SrvUavDescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_RtvDescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	m_Width = width;
 	m_Height = height;
@@ -460,11 +461,6 @@ int GraphicsTexture::GetRowDataSize(DXGI_FORMAT format, unsigned int width)
 	}
 }
 
-GraphicsTexture2D::GraphicsTexture2D(ID3D12Device* pDevice)
-	:GraphicsTexture(pDevice)
-{
-}
-
 void GraphicsTexture2D::Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage)
 {
 	Image img;
@@ -528,11 +524,6 @@ void GraphicsTexture2D::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* 
 	pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
 }
 
-GraphicsTextureCube::GraphicsTextureCube(ID3D12Device* pDevice)
-	: GraphicsTexture(pDevice)
-{
-}
-
 void GraphicsTextureCube::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize)
 {
 	if (arraySize != -1)
@@ -545,3 +536,7 @@ void GraphicsTextureCube::Create(Graphics* pGraphics, int width, int height, DXG
 	}
 }
 
+void GraphicsTexture3D::Create(Graphics* pGraphics, int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage)
+{
+	Create_Internal(pGraphics, TextureDimension::Texture3D, width, height, depth, format, usage, 1);
+}

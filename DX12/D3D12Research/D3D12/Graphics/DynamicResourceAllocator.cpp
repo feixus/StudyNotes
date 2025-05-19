@@ -89,8 +89,7 @@ AllocationPage* DynamicAllocationManager::AllocatePage(size_t size)
 AllocationPage* DynamicAllocationManager::CreateNewPage(size_t size)
 {
 	AllocationPage* pNewPage = new AllocationPage();
-	pNewPage->Create(m_pGraphics, size, 1, true);
-	pNewPage->Map();
+	pNewPage->Create(m_pGraphics, size);
 	return pNewPage;
 }
 
@@ -116,4 +115,10 @@ void DynamicAllocationManager::FreeLargePages(uint64_t fenceValue, const std::ve
 	{
 		m_DeleteQueue.emplace(fenceValue, pPage);
 	}
+}
+
+void AllocationPage::Create(Graphics* pGraphics, uint64_t size)
+{
+	GraphicsBuffer::Create(pGraphics, size, 1, true);
+	m_pMappedData = Map();
 }

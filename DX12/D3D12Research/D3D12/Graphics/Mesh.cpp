@@ -28,7 +28,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	auto loadTexture = [pGraphics, pContext](std::filesystem::path basePath, aiMaterial* pMaterial, aiTextureType type)
 	{
-		std::unique_ptr<GraphicsTexture2D> pTex = std::make_unique<GraphicsTexture2D>(pGraphics->GetDevice());
+		std::unique_ptr<GraphicsTexture2D> pTex = std::make_unique<GraphicsTexture2D>();
 
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);

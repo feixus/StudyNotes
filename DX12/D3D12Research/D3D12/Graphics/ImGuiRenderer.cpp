@@ -51,7 +51,7 @@ void ImGuiRenderer::InitializeImGui()
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
 
-	m_pFontTexture = std::make_unique<GraphicsTexture2D>(m_pGraphics->GetDevice());
+	m_pFontTexture = std::make_unique<GraphicsTexture2D>();
 	m_pFontTexture->Create(m_pGraphics, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource, 1);
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels);

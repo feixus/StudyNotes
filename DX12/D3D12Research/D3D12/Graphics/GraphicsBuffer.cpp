@@ -10,14 +10,9 @@ void GraphicsBuffer::Create(Graphics* pGraphics, uint64_t elementCount, uint32_t
 	m_ElementCount = elementCount;
 	m_ElementStride = elementStride;
 
-	const int alignment = 16;
-	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
-
-	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
-
 	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON;
 	
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
 	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
 	HR(pGraphics->GetDevice()->CreateCommittedResource(
 		&heapProps,
@@ -41,20 +36,17 @@ void* GraphicsBuffer::Map(uint32_t subResource /*= 0*/, uint64_t readFrom /*= 0*
 	assert(m_pResource);
 
 	CD3DX12_RANGE range(readFrom, readTo);
-	m_pResource->Map(subResource, &range, &m_pMappedData);
-	return m_pMappedData;
+	void* pMappedData = nullptr;
+	m_pResource->Map(subResource, &range, &pMappedData);
+	return pMappedData;
 }
 
 void GraphicsBuffer::UnMap(uint32_t subResource /*= 0*/, uint64_t writeFrom /*= 0*/, uint64_t writeTo /*= 0*/)
 {
-	if (m_pMappedData)
-	{
-		assert(m_pResource);
+	assert(m_pResource);
 
-		CD3DX12_RANGE range(writeFrom, writeTo);
-		m_pResource->Unmap(subResource, &range);
-		m_pMappedData = nullptr;
-	}
+	CD3DX12_RANGE range(writeFrom, writeTo);
+	m_pResource->Unmap(subResource, &range);
 }
 
 StructuredBuffer::StructuredBuffer(Graphics* pGraphics)
@@ -70,14 +62,9 @@ void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint6
 	m_ElementCount = elementCount;
 	m_ElementStride = elementStride;
 
-	const int alignment = 16;
-	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
-
-	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
-
 	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
 	HR(pGraphics->GetDevice()->CreateCommittedResource(
 		&heapProps,
@@ -141,14 +128,9 @@ void ByteAddressBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint
 	m_ElementCount = elementCount;
 	m_ElementStride = elementStride;
 
-	const int alignment = 16;
-	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
-
-	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
-
 	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
 	HR(pGraphics->GetDevice()->CreateCommittedResource(
 		&heapProps,
@@ -186,6 +168,11 @@ void ByteAddressBuffer::CreateViews(ID3D12Device* pDevice)
 	pDevice->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 }
 
+void VertexBuffer::Create(Graphics* pGraphics, uint64_t elementCount, uint32_t elementStride, bool cpuVisible)
+{
+	GraphicsBuffer::Create(pGraphics, elementCount, elementStride, cpuVisible);
+}
+
 void VertexBuffer::CreateViews(ID3D12Device* pDevice)
 {
 	m_View.BufferLocation = GetGpuHandle();
@@ -211,14 +198,9 @@ void ReadbackBuffer::Create(Graphics* pGraphics, uint64_t size)
 	m_ElementCount = size;
 	m_ElementStride = 1;
 
-	const int alignment = 16;
-	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
-
-	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
-
 	m_CurrentState = D3D12_RESOURCE_STATE_COPY_DEST;
 
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
 	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
 	HR(pGraphics->GetDevice()->CreateCommittedResource(
 		&heapProps,

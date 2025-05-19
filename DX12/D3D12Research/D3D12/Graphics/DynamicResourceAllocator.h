@@ -1,7 +1,7 @@
 #pragma once
+#include "GraphicsBuffer.h"
 
 class Graphics;
-class GraphicsBuffer;
 
 struct DynamicAllocation
 {
@@ -12,7 +12,15 @@ struct DynamicAllocation
 	void* pMappedMemory{ nullptr };
 };
 
-using AllocationPage = GraphicsBuffer;
+class AllocationPage : public GraphicsBuffer
+{
+public:
+	void Create(Graphics* pGraphics, uint64_t size);
+	inline void* GetMappedData() const { return m_pMappedData; }
+
+private:
+	void* m_pMappedData{nullptr};
+};
 
 class DynamicAllocationManager
 {
