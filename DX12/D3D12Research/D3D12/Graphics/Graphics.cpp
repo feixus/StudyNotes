@@ -497,15 +497,16 @@ void Graphics::BeginFrame()
 
 void Graphics::EndFrame(uint64_t fenceValue)
 {
-	// this also gets me confused
-	// the 'm_CurrentBackBufferIndex' is the frame that just got queued so we set the fence value on that frame
+	// the top third(triple buffer) is not need wait, just record the every frame fenceValue.
+	// the 'm_CurrentBackBufferIndex' is always in the new buffer frame
 	// we present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame
 
+	m_pGraphicsProfiler->BeginReadback(m_CurrentBackBufferIndex);
 	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	m_pGraphicsProfiler->Readback(m_CurrentBackBufferIndex);
+	m_pGraphicsProfiler->EndReadBack(m_CurrentBackBufferIndex);
 }
 
 void Graphics::InitD3D()
