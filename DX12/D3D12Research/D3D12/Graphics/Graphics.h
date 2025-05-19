@@ -14,6 +14,7 @@ class GraphicsTexture2D;
 class Mesh;
 class StructuredBuffer;
 class SubMesh;
+class GraphicsProfiler;
 struct Material;
 
 struct Batch
@@ -64,7 +65,7 @@ public:
 	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;
 	static const int32_t MAX_SHADOW_CASTERS = 8;
 	static const int32_t SHADOW_MAP_SIZE = 4096;
-	static const int32_t MAX_LIGHT_COUNT = 1024;
+	static const int32_t MAX_LIGHT_COUNT = 2048;
 	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -104,6 +105,8 @@ private:
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
+
+	std::unique_ptr<GraphicsProfiler> m_pGraphicsProfiler;
 
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;

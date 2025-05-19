@@ -13,6 +13,7 @@
 #include "Shader.h"
 #include "Mesh.h"
 #include "Core/Input.h"
+#include "Graphics/GraphicsProfiler.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -358,6 +359,7 @@ void Graphics::Update()
 	//  - render the scene using the shadow mapping result and the light culling buffers
 	{
 		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+		m_pGraphicsProfiler->Begin(*pCommandContext);
 		pCommandContext->MarkBegin(L"Base Pass");
 
 		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -442,6 +444,7 @@ void Graphics::Update()
 		pCommandContext->InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
 		pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
+		m_pGraphicsProfiler->End(*pCommandContext);
 		pCommandContext->Execute(false);
 	}
 
@@ -502,6 +505,7 @@ void Graphics::EndFrame(uint64_t fenceValue)
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
+	m_pGraphicsProfiler->Readback(m_CurrentBackBufferIndex);
 }
 
 void Graphics::InitD3D()
@@ -601,6 +605,7 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
+	m_pGraphicsProfiler = std::make_unique<GraphicsProfiler>(this);
 
 	// swap chain
 	CreateSwapchain();

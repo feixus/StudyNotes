@@ -9,7 +9,8 @@ enum class BufferUsage
 	Default				= 0,
 	Dynamic				= 1 << 0,
 	UnorderedAccess		= 1 << 1,
-	ShaderResource		= 1 << 2
+	ShaderResource		= 1 << 2,
+	ReadBack			= 1 << 3,
 };
 DEFINE_ENUM_FLAG_OPERATORS(BufferUsage)
 
@@ -89,5 +90,17 @@ public:
 
 private:
 	bool m_SmallIndices{ false };
+	D3D12_INDEX_BUFFER_VIEW m_View;
+};
+
+// first create a buffer with D3D12_HEAP_TYPE_READBUFFER.
+// copy data from GPU buffer to readback buffer via CopyResource/CopyBufferRegion
+// execute and wait for GPU to finish
+// Map and access data on CPU
+class ReadbackBuffer : public GraphicsBuffer
+{
+public:
+	void Create(Graphics* pGraphics, uint64_t size);
+private:
 	D3D12_INDEX_BUFFER_VIEW m_View;
 };
