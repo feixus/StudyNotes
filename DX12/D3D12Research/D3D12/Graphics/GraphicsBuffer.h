@@ -4,20 +4,10 @@
 class CommandContext;
 class Graphics;
 
-enum class BufferUsage
-{
-	Default				= 0,
-	Dynamic				= 1 << 0,
-	UnorderedAccess		= 1 << 1,
-	ShaderResource		= 1 << 2,
-	ReadBack			= 1 << 3,
-};
-DEFINE_ENUM_FLAG_OPERATORS(BufferUsage)
-
 class GraphicsBuffer : public GraphicsResource
 {
 public:
-	void Create(Graphics* pGraphics, uint64_t size, bool cpuVisible = false);
+	void Create(Graphics* pGraphics, uint64_t elementCount, uint32_t elementStride, bool cpuVisible);
 	void SetData(CommandContext* pContext, void* pData, uint64_t dataSize, uint32_t offset = 0);
 
 	void* Map(uint32_t subResource = 0, uint64_t readFrom = 0, uint64_t readTo = 0);
@@ -34,17 +24,13 @@ public:
 protected:
 	virtual void CreateViews(ID3D12Device* pDevice) {};
 
-	void CreateInternal(ID3D12Device* pDevice, uint32_t elementStride, uint64_t elementCount, BufferUsage usage);
-
 	uint32_t m_ElementStride{ 0 };
 	uint64_t m_ElementCount{ 0 };
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv{ D3D12_DEFAULT };
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{ D3D12_DEFAULT };
 
-private:
-	void* m_pMappedData;
-	BufferUsage m_Usage = BufferUsage::Default;
+	void* m_pMappedData{nullptr};
 };
 
 class StructuredBuffer : public GraphicsBuffer
@@ -71,7 +57,6 @@ public:
 class VertexBuffer : public GraphicsBuffer
 {
 public:
-	void Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, bool cpuVisible = false);
 	virtual void CreateViews(ID3D12Device* pDevice) override;
 
 	inline const D3D12_VERTEX_BUFFER_VIEW GetView() const { return m_View; }
@@ -83,7 +68,7 @@ private:
 class IndexBuffer : public GraphicsBuffer
 {
 public:
-	void Create(Graphics* pGraphics, bool smallIndices, uint64_t elementCount, bool cpuVisible = false);
+	void Create(Graphics* pGraphics, bool smallIndices, uint32_t elementCount, bool cpuVisible = false);
 	virtual void CreateViews(ID3D12Device* pDevice) override;
 
 	inline const D3D12_INDEX_BUFFER_VIEW GetView() const { return m_View; }
