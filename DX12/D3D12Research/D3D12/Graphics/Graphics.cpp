@@ -172,7 +172,7 @@ void Graphics::Update()
 	// - required for light culling
 	{
 		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
-		pCommandContext->MarkBegin(L"Depth Prepass");
+		pCommandContext->MarkBegin("Depth Prepass");
 
 		pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		pCommandContext->SetDepthOnlyTarget(GetDepthStencil()->GetDSV());
@@ -212,7 +212,7 @@ void Graphics::Update()
 	if (m_SampleCount > 1)
 	{
 		ComputeCommandContext* pCommandContext = static_cast<ComputeCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE));
-		pCommandContext->MarkBegin(L"Depth Resolve");
+		pCommandContext->MarkBegin("Depth Resolve");
 
 		pCommandContext->SetComputeRootSignature(m_pResolveDepthRS.get());
 		pCommandContext->SetComputePipelineState(m_pResolveDepthPSO.get());
@@ -239,9 +239,9 @@ void Graphics::Update()
 	//								- uint[] index buffer to indicate what are visible in each tile
 	{
 		ComputeCommandContext* pCommandContext = static_cast<ComputeCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE));
-		pCommandContext->MarkBegin(L"Light Culling");
+		pCommandContext->MarkBegin("Light Culling");
 
-		pCommandContext->MarkBegin(L"Setup Light Data");
+		pCommandContext->MarkBegin("Setup Light Data");
 		uint32_t zero[] = { 0, 0 };
 		m_pLightIndexCounter->SetData(pCommandContext, &zero, sizeof(uint32_t) * 2);
 		m_pLightBuffer->SetData(pCommandContext, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
@@ -287,7 +287,7 @@ void Graphics::Update()
 	if (m_ShadowCasters > 0)
 	{
 		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
-		pCommandContext->MarkBegin(L"Shadows");
+		pCommandContext->MarkBegin("Shadows");
 
 		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
 		pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
@@ -301,7 +301,7 @@ void Graphics::Update()
 
 		for (int i = 0; i < m_ShadowCasters; ++i)
 		{
-			pCommandContext->MarkBegin(L"Light View");
+			pCommandContext->MarkBegin("Light View");
 			const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
 			FloatRect viewport;
 			viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
@@ -319,7 +319,7 @@ void Graphics::Update()
 
 			// opaque
 			{
-				pCommandContext->MarkBegin(L"Opaque");
+				pCommandContext->MarkBegin("Opaque");
 				pCommandContext->SetGraphicsPipelineState(m_pShadowPSO.get());
 				pCommandContext->SetGraphicsRootSignature(m_pShadowRS.get());
 
@@ -333,7 +333,7 @@ void Graphics::Update()
 
 			// transparent
 			{
-				pCommandContext->MarkBegin(L"Transparent");
+				pCommandContext->MarkBegin("Transparent");
 				pCommandContext->SetGraphicsPipelineState(m_pShadowAlphaPSO.get());
 				pCommandContext->SetGraphicsRootSignature(m_pShadowAlphaRS.get());
 
@@ -359,8 +359,7 @@ void Graphics::Update()
 	//  - render the scene using the shadow mapping result and the light culling buffers
 	{
 		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
-		m_pGraphicsProfiler->Begin(*pCommandContext);
-		pCommandContext->MarkBegin(L"Base Pass");
+		pCommandContext->MarkBegin("Base Pass");
 
 		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 		pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -389,7 +388,7 @@ void Graphics::Update()
 
 		// opaque
 		{
-			pCommandContext->MarkBegin(L"Opaque");
+			pCommandContext->MarkBegin("Opaque");
 			pCommandContext->SetGraphicsPipelineState(m_UseDebugView ? m_pDiffusePSODebug.get() : m_pDiffusePSO.get());
 			pCommandContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
 
@@ -414,7 +413,7 @@ void Graphics::Update()
 
 		// transparent
 		{
-			pCommandContext->MarkBegin(L"Transparent");
+			pCommandContext->MarkBegin("Transparent");
 			pCommandContext->SetGraphicsPipelineState(m_UseDebugView ? m_pDiffusePSODebug.get() : m_pDiffuseAlphaPSO.get());
 			pCommandContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
 
@@ -444,13 +443,12 @@ void Graphics::Update()
 		pCommandContext->InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
 		pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
-		m_pGraphicsProfiler->End(*pCommandContext);
 		pCommandContext->Execute(false);
 	}
 
 	{
 		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
-		pCommandContext->MarkBegin(L"UI");
+		pCommandContext->MarkBegin("UI");
 
 		// 6. UI
 		//  - ImGui render, pretty straight forward
@@ -460,7 +458,7 @@ void Graphics::Update()
 		}
 		pCommandContext->MarkEnd();
 
-		pCommandContext->MarkBegin(L"Present");
+		pCommandContext->MarkBegin("Present");
 		// 7. MSAA render target resolve
 		//  - we have to resolve a MSAA render target ourselves.
 		{
@@ -501,12 +499,12 @@ void Graphics::EndFrame(uint64_t fenceValue)
 	// the 'm_CurrentBackBufferIndex' is always in the new buffer frame
 	// we present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame
 
-	m_pGraphicsProfiler->BeginReadback(m_CurrentBackBufferIndex);
+	GraphicsProfiler::Instance()->BeginReadback(m_CurrentBackBufferIndex);
 	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	m_pGraphicsProfiler->EndReadBack(m_CurrentBackBufferIndex);
+	GraphicsProfiler::Instance()->EndReadBack(m_CurrentBackBufferIndex);
 }
 
 void Graphics::InitD3D()
@@ -606,7 +604,7 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	m_pGraphicsProfiler = std::make_unique<GraphicsProfiler>(this);
+	GraphicsProfiler::Instance()->Initialize(this);
 
 	// swap chain
 	CreateSwapchain();

@@ -8,6 +8,7 @@
 #include "RootSignature.h"
 #include "GraphicsTexture.h"
 #include "GraphicsBuffer.h"
+#include "GraphicsProfiler.h"
 
 #ifdef _DEBUG
 #include <pix3.h>
@@ -142,17 +143,25 @@ void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESO
 	InsertResourceBarrier(pResource, previousState, true);
 }
 
-void CommandContext::MarkBegin(const wchar_t* pName)
+void CommandContext::MarkBegin(const char* pName)
 {
 #ifdef _DEBUG
-	::PIXBeginEvent(m_pCommandList, 0, pName);
+	wchar_t name[256];
+	size_t written = 0;
+	mbstowcs_s(&written, name, pName, 256);
+	::PIXBeginEvent(m_pCommandList, 0, name);
+
+	GraphicsProfiler::Instance()->Begin(pName, *this);
 #endif
 }
 
-void CommandContext::MarkEvent(const wchar_t* pName)
+void CommandContext::MarkEvent(const char* pName)
 {
 #ifdef _DEBUG
-	::PIXSetMarker(m_pCommandList, 0, pName);
+	wchar_t name[256];
+	size_t written = 0;
+	mbstowcs_s(&written, name, pName, 256);
+	::PIXSetMarker(m_pCommandList, 0, name);
 #endif
 }
 
@@ -160,6 +169,7 @@ void CommandContext::MarkEnd()
 {
 #ifdef _DEBUG
 	::PIXEndEvent(m_pCommandList);
+	GraphicsProfiler::Instance()->End(*this);
 #endif
 }
 
