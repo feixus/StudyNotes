@@ -24,7 +24,7 @@ void* GraphicsBuffer::Map(uint32_t subResource /*= 0*/, uint64_t readFrom /*= 0*
 	return m_pMappedData;
 }
 
-void* GraphicsBuffer::UnMap(uint32_t subResource /*= 0*/, uint64_t writeFrom /*= 0*/, uint64_t writeTo /*= 0*/)
+void GraphicsBuffer::UnMap(uint32_t subResource /*= 0*/, uint64_t writeFrom /*= 0*/, uint64_t writeTo /*= 0*/)
 {
 	if (m_pMappedData)
 	{
@@ -163,7 +163,7 @@ void ByteAddressBuffer::CreateViews(ID3D12Device* pDevice)
 	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 	srvDesc.Buffer.FirstElement = 0;
-	srvDesc.Buffer.NumElements = m_ElementCount;
+	srvDesc.Buffer.NumElements = (uint32_t)m_ElementCount;
 	srvDesc.Buffer.StructureByteStride = m_ElementStride;
 	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
 
@@ -183,7 +183,7 @@ void VertexBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint64_t 
 void VertexBuffer::CreateViews(ID3D12Device* pDevice)
 {
 	m_View.BufferLocation = GetGpuHandle();
-	m_View.SizeInBytes = (uint64_t)GetSize();
+	m_View.SizeInBytes = (uint32_t)GetSize();
 	m_View.StrideInBytes = GetStride();
 }
 
@@ -201,6 +201,6 @@ void IndexBuffer::Create(Graphics* pGraphics, bool smallIndices, uint64_t elemen
 void IndexBuffer::CreateViews(ID3D12Device* pDevice)
 {
 	m_View.BufferLocation = GetGpuHandle();
-	m_View.SizeInBytes = (uint64_t)GetSize();
+	m_View.SizeInBytes = (uint32_t)GetSize();
 	m_View.Format = m_SmallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 }

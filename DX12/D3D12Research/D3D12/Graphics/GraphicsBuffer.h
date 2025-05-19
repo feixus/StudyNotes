@@ -20,7 +20,7 @@ public:
 	void SetData(CommandContext* pContext, void* pData, uint64_t dataSize, uint32_t offset = 0);
 
 	void* Map(uint32_t subResource = 0, uint64_t readFrom = 0, uint64_t readTo = 0);
-	void* UnMap(uint32_t subResource = 0, uint64_t writeFrom = 0, uint64_t writeTo = 0);
+	void UnMap(uint32_t subResource = 0, uint64_t writeFrom = 0, uint64_t writeTo = 0);
 	
 	inline void* GetMappedData() const { return m_pMappedData; }
 	inline uint64_t GetSize() const { return m_ElementStride * m_ElementCount; }

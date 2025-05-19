@@ -4,10 +4,9 @@
 class CommandQueue;
 class CommandContext;
 class DescriptorAllocator;
-class DynamicResourceAllocator;
+class DynamicAllocationManager;
 class ImGuiRenderer;
 class GraphicsBuffer;
-class GraphicsResource;
 class RootSignature;
 class GraphicsPipelineState;
 class ComputePipelineState;
@@ -44,7 +43,7 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandContext);
 
-	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
+	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	int32_t GetWindowWidth() const { return m_WindowWidth; }
@@ -104,7 +103,7 @@ private:
 	std::array<std::unique_ptr<GraphicsTexture2D>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
-	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
+	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;

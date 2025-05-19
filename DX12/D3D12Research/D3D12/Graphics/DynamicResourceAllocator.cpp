@@ -16,7 +16,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(uint64_t size, int alignmen
 
 	if (bufferSize > PAGE_SIZE)
 	{
-		AllocationPage* pPage = m_pPageManager->CreateNewPage((bufferSize);
+		AllocationPage* pPage = m_pPageManager->CreateNewPage(bufferSize);
 		m_UsedLargePages.push_back(pPage);
 
 		allocation.Offset = 0;
