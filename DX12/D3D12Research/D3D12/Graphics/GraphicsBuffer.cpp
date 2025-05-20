@@ -22,7 +22,7 @@ void GraphicsBuffer::Create(Graphics* pGraphics, uint64_t elementCount, uint32_t
 		nullptr,
 		IID_PPV_ARGS(&m_pResource)));
 
-	CreateViews(pGraphics->GetDevice());
+	CreateViews(pGraphics);
 }
 
 void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint64_t dataSize, uint32_t offset)
@@ -65,19 +65,11 @@ void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint6
 	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
-	HR(pGraphics->GetDevice()->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&desc,
-		m_CurrentState,
-		nullptr,
-		IID_PPV_ARGS(&m_pResource)));
-
-	CreateViews(pGraphics->GetDevice());
+	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
+	CreateViews(pGraphics);
 }
 
-void StructuredBuffer::CreateViews(ID3D12Device* pDevice)
+void StructuredBuffer::CreateViews(Graphics* pGraphics)
 {
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 	uavDesc.Buffer.CounterOffsetInBytes = 0;
@@ -91,17 +83,10 @@ void StructuredBuffer::CreateViews(ID3D12Device* pDevice)
 	// structured buffer with counters
 	ID3D12Resource* pCounterResource = nullptr;
 	D3D12_RESOURCE_DESC counterDesc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	D3D12_HEAP_PROPERTIES counterProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	HR(pDevice->CreateCommittedResource(
-		&counterProps,
-		D3D12_HEAP_FLAG_NONE,
-		&counterDesc,
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-		nullptr,
-		IID_PPV_ARGS(&pCounterResource)));
+	pCounterResource = pGraphics->CreateResource(counterDesc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT);
 	m_pCounter = std::make_unique<GraphicsResource>(pCounterResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-	pDevice->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, m_Uav);
+	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, pCounterResource, &uavDesc, m_Uav);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -112,7 +97,7 @@ void StructuredBuffer::CreateViews(ID3D12Device* pDevice)
 	srvDesc.Buffer.StructureByteStride = m_ElementStride;
 	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-	pDevice->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
+	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 }
 
 ByteAddressBuffer::ByteAddressBuffer(Graphics* pGraphics)
@@ -131,19 +116,12 @@ void ByteAddressBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint
 	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
-	HR(pGraphics->GetDevice()->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&desc,
-		m_CurrentState,
-		nullptr,
-		IID_PPV_ARGS(&m_pResource)));
+	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
 
-	CreateViews(pGraphics->GetDevice());
+	CreateViews(pGraphics);
 }
 
-void ByteAddressBuffer::CreateViews(ID3D12Device* pDevice)
+void ByteAddressBuffer::CreateViews(Graphics* pGraphics)
 {
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 	uavDesc.Buffer.CounterOffsetInBytes = 0;
@@ -154,8 +132,8 @@ void ByteAddressBuffer::CreateViews(ID3D12Device* pDevice)
 	uavDesc.Format = DXGI_FORMAT_UNKNOWN;
 	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 
-	pDevice->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, m_Uav);
-
+	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, m_Uav);
+	
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -165,7 +143,7 @@ void ByteAddressBuffer::CreateViews(ID3D12Device* pDevice)
 	srvDesc.Buffer.StructureByteStride = m_ElementStride;
 	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
 
-	pDevice->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
+	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 }
 
 void VertexBuffer::Create(Graphics* pGraphics, uint64_t elementCount, uint32_t elementStride, bool cpuVisible)
@@ -173,7 +151,7 @@ void VertexBuffer::Create(Graphics* pGraphics, uint64_t elementCount, uint32_t e
 	GraphicsBuffer::Create(pGraphics, elementCount, elementStride, cpuVisible);
 }
 
-void VertexBuffer::CreateViews(ID3D12Device* pDevice)
+void VertexBuffer::CreateViews(Graphics* pGraphics)
 {
 	m_View.BufferLocation = GetGpuHandle();
 	m_View.SizeInBytes = (uint32_t)GetSize();
@@ -186,7 +164,7 @@ void IndexBuffer::Create(Graphics* pGraphics, bool smallIndices, uint32_t elemen
 	GraphicsBuffer::Create(pGraphics, smallIndices ? 2 : 4, elementCount, cpuVisible);
 }
 
-void IndexBuffer::CreateViews(ID3D12Device* pDevice)
+void IndexBuffer::CreateViews(Graphics* pGraphics)
 {
 	m_View.BufferLocation = GetGpuHandle();
 	m_View.SizeInBytes = (uint32_t)GetSize();
@@ -201,12 +179,5 @@ void ReadbackBuffer::Create(Graphics* pGraphics, uint64_t size)
 	m_CurrentState = D3D12_RESOURCE_STATE_COPY_DEST;
 
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
-	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
-	HR(pGraphics->GetDevice()->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&desc,
-		m_CurrentState,
-		nullptr,
-		IID_PPV_ARGS(&m_pResource)));
+	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_READBACK);
 }

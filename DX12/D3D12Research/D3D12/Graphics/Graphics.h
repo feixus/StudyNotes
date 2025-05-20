@@ -60,6 +60,8 @@ public:
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 	uint32_t GetMultiSampleQualityLevel(uint32_t msaa);
 
+	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType);
+
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
 	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;

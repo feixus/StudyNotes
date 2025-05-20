@@ -40,10 +40,6 @@ public:
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
-	void MarkBegin(const char* pName);
-	void MarkEvent(const char* pName);
-	void MarkEnd();
-
 	void SetName(const char* pName);
 
 protected:
@@ -57,7 +53,7 @@ protected:
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList{};
 	ID3D12CommandAllocator* m_pAllocator{};
-	D3D12_COMMAND_LIST_TYPE m_Type;
+	D3D12_COMMAND_LIST_TYPE m_Type{};
 };
 
 class ComputeCommandContext : public CommandContext
