@@ -113,6 +113,7 @@ void Profiler::BeginReadback(int frameIndex)
 	}
 
 	std::cout << stream.str() << std::endl;
+	//E_LOG(LogType::Info, stream.str());
 	m_pCurrentBlock = m_pRootBlock.get();
 }
 

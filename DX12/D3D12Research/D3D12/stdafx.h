@@ -23,15 +23,15 @@
 #include <assert.h>
 #include <filesystem>
 
-#include "Graphics/D3DUtils.h"
 #include "Core/GameTimer.h"
 #include "Core/BitField.h"
 #include "Math/MathTypes.h"
 #include "Math/MathHelp.h"
 #include "External/Imgui/imgui.h"
+#include "Core/Console.h"
+#include "Graphics/D3DUtils.h"
 
 using Microsoft::WRL::ComPtr;
-
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 using namespace DirectX::Colors;

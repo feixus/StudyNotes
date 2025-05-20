@@ -195,10 +195,11 @@ private:
 	std::unique_ptr<Graphics> m_pGraphics;
 };
 
-//int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-int main()
+//int main()
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-	std::cout << "hello dx12" << std::endl;
+	Console::Startup();
+	E_LOG(LogType::Info, "Startup hello dx12");
 
 	ViewWrapper vw;
 	vw.Run();

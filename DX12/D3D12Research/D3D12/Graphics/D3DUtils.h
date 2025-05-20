@@ -23,8 +23,7 @@ inline bool LogHRESULT(HRESULT hr)
 		nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(LPSTR)&errorMsg, 0, nullptr) != 0)
 	{
-		OutputDebugString(errorMsg);
-		std::cout << "Error: " << errorMsg << std::endl;
+		E_LOG(LogType::Error, "Error: %s", errorMsg);
 	}
 
 	__debugbreak();

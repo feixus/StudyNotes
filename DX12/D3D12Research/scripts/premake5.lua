@@ -13,7 +13,8 @@ workspace (ENGINE_NAME)
 	cppdialect "C++20"
     defines { "_CONSOLE" }
     symbols ("On")
-	kind ("ConsoleApp")
+	-- kind ("ConsoleApp")
+	kind ("WindowedApp")
     characterset ("MBCS")
 
     filter "platforms:x64"

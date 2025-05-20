@@ -12,6 +12,12 @@ namespace Math
     constexpr float ToRadians = PI / 180.0f;
 
     template<typename T>
+    T AlignUp(T value, T alignment)
+    {
+        return (value + ((T)alignment - 1)) & ~((T)alignment - 1);
+    }
+
+    template<typename T>
     constexpr T Max(const T& a, const T& b)
     {
         return a > b ? a : b;

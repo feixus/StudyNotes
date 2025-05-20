@@ -509,6 +509,7 @@ void Graphics::EndFrame(uint64_t fenceValue)
 
 void Graphics::InitD3D()
 {
+	E_LOG(LogType::Info, "Graphics::InitD3D");
 	UINT dxgiFactoryFlags = 0;
 
 #ifdef _DEBUG
@@ -672,6 +673,7 @@ void Graphics::CreateSwapchain()
 
 void Graphics::OnResize(int width, int height)
 {
+	E_LOG(LogType::Info, "Graphics::OnResize()");
 	m_WindowWidth = width;
 	m_WindowHeight = height;
 
@@ -1060,6 +1062,35 @@ void Graphics::UpdateImGui()
 	}
 
 	ImGui::EndTabBar();
+	ImGui::End();
+
+	static bool showOutputLog = false;
+	ImGui::SetNextWindowPos(ImVec2(250, showOutputLog ? (float)m_WindowHeight - 200 : (float)m_WindowHeight - 20));
+	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 250, 200));
+	ImGui::SetNextWindowCollapsed(!showOutputLog);
+
+	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	for (const Console::LogEntry& entry : Console::GetHistory())
+	{
+		switch (entry.Type)
+		{
+		case LogType::VeryVerbose:
+		case LogType::Verbose:
+		case LogType::Info:
+			ImGui::TextColored(ImVec4(1, 1, 1, 1), "%s", entry.Message.c_str());
+			break;
+		case LogType::Warning:
+			ImGui::TextColored(ImVec4(1, 1, 0, 1), "%s", entry.Message.c_str());
+			break;
+		case LogType::Error:
+			ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", entry.Message.c_str());
+			break;
+		default:
+			break;
+		}
+	}
+
+	ImGui::SetScrollHereY(1.0f);
 	ImGui::End();
 }
 
