@@ -34,7 +34,6 @@ void ImGuiRenderer::NewFrame()
 	Vector2 mousePos = Input::Instance().GetMousePosition();
 	io.MousePos.x = mousePos.x;
 	io.MousePos.y = mousePos.y;
-	
 	ImGui::NewFrame();
 }
 

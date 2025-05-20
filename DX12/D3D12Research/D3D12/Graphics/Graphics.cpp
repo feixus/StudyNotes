@@ -14,6 +14,7 @@
 #include "Mesh.h"
 #include "Core/Input.h"
 #include "Profiler.h"
+#include "PersistentResourceAllocator.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -454,6 +455,7 @@ void Graphics::Update()
 		//  - ImGui render, pretty straight forward
 		{
 			UpdateImGui();
+			//ImGui::ShowDemoWindow();
 			m_pImGuiRenderer->Render(*pCommandContext);
 		}
 		Profiler::Instance()->End(pCommandContext);
@@ -605,6 +607,7 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
+	m_pPersistentAllocationManager = std::make_unique<PersistentResourceAllocator>(GetDevice());
 	Profiler::Instance()->Initialize(this);
 
 	// swap chain
@@ -1257,17 +1260,24 @@ uint32_t Graphics::GetMultiSampleQualityLevel(uint32_t msaa)
 	return qualityLevels.NumQualityLevels - 1;
 }
 
-ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType)
+ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue)
 {
 	ID3D12Resource* pResource;
-	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(heapType);
-	HR(m_pDevice->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&desc,
-		initialState,
-		nullptr,
-		IID_PPV_ARGS(&pResource)));
+	if (heapType == D3D12_HEAP_TYPE_DEFAULT)
+	{
+		pResource = m_pPersistentAllocationManager->CreateResource(desc, initialState, pClearValue);
+	}
+	else
+	{
+		D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(heapType);
+		HR(m_pDevice->CreateCommittedResource(
+			&heapProps,
+			D3D12_HEAP_FLAG_NONE,
+			&desc,
+			initialState,
+			nullptr,
+			IID_PPV_ARGS(&pResource)));
+	}
 
 	return pResource;
 }
