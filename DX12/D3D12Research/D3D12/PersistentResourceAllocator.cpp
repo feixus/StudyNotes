@@ -34,6 +34,7 @@ ID3D12Resource* PersistentResourceAllocatorHeap::CreateResource(const D3D12_RESO
 		clearVlaue,
 		IID_PPV_ARGS(&pResource)));
 
+	m_CurrentOffset = offset + info.SizeInBytes;
 	return pResource;
 }
 
@@ -49,7 +50,7 @@ PersistentResourceAllocator::PersistentResourceAllocator(ID3D12Device* pDevice)
 {
 	m_Allocators[(int)ResourceType::Buffer] = std::make_unique<PersistentResourceAllocatorHeap>(pDevice, D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS, 0x10000000);
 	m_Allocators[(int)ResourceType::Texture] = std::make_unique<PersistentResourceAllocatorHeap>(pDevice, D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 0x10000000);
-	m_Allocators[(int)ResourceType::RenderTarget] = std::make_unique<PersistentResourceAllocatorHeap>(pDevice, D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 0x80000000);
+	m_Allocators[(int)ResourceType::RenderTarget] = std::make_unique<PersistentResourceAllocatorHeap>(pDevice, D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 0x8000000);
 }
 
 ID3D12Resource* PersistentResourceAllocator::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_CLEAR_VALUE* clearValue)
