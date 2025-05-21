@@ -1029,8 +1029,7 @@ void Graphics::UpdateImGui()
 	ImGui::Text("LoadSponzaTime: %.1f", m_LoadSponzaTime);
 	ImGui::Text("Light Count: %d", MAX_LIGHT_COUNT);
 
-	ImGui::BeginTabBar("GpuStatBar");
-	if (ImGui::BeginTabItem("Descriptor Heaps"))
+	if (ImGui::TreeNodeEx("Descriptor Heaps", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Text("Used CPU Descriptor Heaps");
 
@@ -1061,10 +1060,40 @@ void Graphics::UpdateImGui()
 			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
 		}
 
-		ImGui::EndTabItem();
+		ImGui::TreePop();
 	}
 
-	ImGui::EndTabBar();
+	if (ImGui::TreeNodeEx("Persistent Resources", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		for (int i = 0; i < (int)ResourceType::MAX; i++)
+		{
+			ResourceType type = (ResourceType)i;
+			switch (type)
+			{
+			case ResourceType::Buffer:
+				ImGui::TextWrapped("Buffer");
+				break;
+			case ResourceType::Texture:
+				ImGui::TextWrapped("Texture");
+				break;
+			case ResourceType::RenderTarget:
+				ImGui::TextWrapped("Render Target/Depth Stencil");
+				break;
+			case ResourceType::MAX:
+			default:
+				break;
+			}
+
+			ImGui::Text("Heaps: %d", m_pPersistentAllocationManager->GetHeapCount(type));
+			float totalSize = m_pPersistentAllocationManager->GetTotalSize(type) / 0b100000000000000000000;
+			float usedSize = totalSize - m_pPersistentAllocationManager->GetRemainingSize(type) / 0b100000000000000000000;
+			std::stringstream str;
+			str << usedSize << "/" << totalSize;
+			ImGui::ProgressBar((float)usedSize / totalSize, ImVec2(-1, 0), str.str().c_str());
+		}
+		ImGui::TreePop();
+	}
+
 	ImGui::End();
 
 	static bool showOutputLog = false;
