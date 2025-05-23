@@ -3,6 +3,11 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 
+GraphicsBuffer::GraphicsBuffer(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
+	: GraphicsResource(pResource, state)
+{
+}
+
 void GraphicsBuffer::Create(Graphics* pGraphics, uint64_t elementCount, uint32_t elementStride, bool cpuVisible)
 {
 	Release();
@@ -81,12 +86,10 @@ void StructuredBuffer::CreateViews(Graphics* pGraphics)
 	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 
 	// structured buffer with counters
-	ID3D12Resource* pCounterResource = nullptr;
-	D3D12_RESOURCE_DESC counterDesc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	pCounterResource = pGraphics->CreateResource(counterDesc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT);
-	m_pCounter = std::make_unique<GraphicsResource>(pCounterResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	m_pCounter = std::make_unique<ByteAddressBuffer>(pGraphics);
+	m_pCounter->Create(pGraphics, 4, 1, false);
 
-	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, pCounterResource, &uavDesc, m_Uav);
+	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, m_pCounter->GetResource(), &uavDesc, m_Uav);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -108,11 +111,8 @@ ByteAddressBuffer::ByteAddressBuffer(Graphics* pGraphics)
 
 void ByteAddressBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, bool cpuVisible /*= false*/)
 {
-	assert(elementStride == 1);
-
 	m_ElementCount = elementCount;
 	m_ElementStride = elementStride;
-
 	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -125,22 +125,18 @@ void ByteAddressBuffer::CreateViews(Graphics* pGraphics)
 {
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 	uavDesc.Buffer.CounterOffsetInBytes = 0;
-	uavDesc.Buffer.FirstElement = 0;
 	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
 	uavDesc.Buffer.NumElements = (uint32_t)m_ElementCount;
-	uavDesc.Buffer.StructureByteStride = m_ElementStride;
-	uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+	uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
 	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 
 	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, m_Uav);
 	
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-	srvDesc.Buffer.FirstElement = 0;
 	srvDesc.Buffer.NumElements = (uint32_t)m_ElementCount;
-	srvDesc.Buffer.StructureByteStride = m_ElementStride;
 	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
 
 	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);

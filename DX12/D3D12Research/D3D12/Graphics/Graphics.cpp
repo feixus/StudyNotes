@@ -15,6 +15,7 @@
 #include "Core/Input.h"
 #include "Profiler.h"
 #include "PersistentResourceAllocator.h"
+#include "ClusteredForward.h"
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -44,6 +45,14 @@ void Graphics::Initialize(HWND hWnd)
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 
 	RandomizeLights();
+}
+
+Matrix Graphics::GetViewMatrix()
+{
+	Matrix viewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
+	Matrix cameraView;
+	viewInverse.Invert(cameraView);
+	return cameraView;
 }
 
 void Graphics::Update()
@@ -447,6 +456,13 @@ void Graphics::Update()
 		pCommandContext->Execute(false);
 	}
 
+	ClusteredForwardInputResource resources;
+	resources.pDepthPrepassBuffer = GetDepthStencil();
+	resources.pOpaqueBatches = &m_OpaqueBatches;
+	resources.pTransparentBatches = &m_TransparentBatches;
+	resources.pRenderTarget = GetCurrentRenderTarget();
+	m_pClusteredForward->Execute(resources);
+
 	{
 		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 		Profiler::Instance()->Begin("UI", pCommandContext);
@@ -632,6 +648,8 @@ void Graphics::InitD3D()
 	m_pLightGridOpaque = std::make_unique<GraphicsTexture2D>();
 	m_pLightGridTransparent = std::make_unique<GraphicsTexture2D>();
 
+	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
+
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
@@ -730,6 +748,8 @@ void Graphics::OnResize(int width, int height)
 	int frustumCountY = (int)ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
 	m_pLightGridOpaque->Create(this, frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, 1);
 	m_pLightGridTransparent->Create(this, frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, 1);
+
+	m_pClusteredForward->OnSwapchainCreated(width, height);
 }
 
 void Graphics::InitializeAssets()
@@ -756,8 +776,8 @@ void Graphics::InitializeAssets()
 	// diffuse passes
 	{
 		// shaders
-		Shader vertexShader("Resources/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain");
-		Shader pixelShader("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		// root signature
 		m_pDiffuseRS = std::make_unique<RootSignature>();
@@ -822,7 +842,7 @@ void Graphics::InitializeAssets()
 
 		// debug version
 		{
-			pixelShader = Shader("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "DEBUG_VISUALIZE" });
+			pixelShader = Shader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "DEBUG_VISUALIZE" });
 
 			m_pDiffusePSODebug = std::make_unique<GraphicsPipelineState>(*m_pDiffusePSO.get());
 			m_pDiffusePSODebug->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
@@ -841,7 +861,7 @@ void Graphics::InitializeAssets()
 	{
 		// opaque
 		{
-			Shader vertexShader("Resources/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain");
+			Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain");
 
 			// root signature
 			m_pShadowRS = std::make_unique<RootSignature>();
@@ -868,8 +888,8 @@ void Graphics::InitializeAssets()
 
 		// transparent
 		{
-			Shader vertexShader("Resources/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain", { "ALPHA_BLEND" });
-			Shader pixelShader("Resources/DepthOnly.hlsl", Shader::Type::PixelShader, "PSMain", { "ALPHA_BLEND" });
+			Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain", { "ALPHA_BLEND" });
+			Shader pixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::PixelShader, "PSMain", { "ALPHA_BLEND" });
 
 			// root signature
 			m_pShadowAlphaRS = std::make_unique<RootSignature>();
@@ -911,7 +931,7 @@ void Graphics::InitializeAssets()
 	// depth prepass
 	// simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader vertexShader("Resources/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain");
 
 		// root signature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>();
@@ -939,7 +959,7 @@ void Graphics::InitializeAssets()
 	// only required when the sample count > 1
 	if (m_SampleCount > 1)
 	{
-		Shader computeShader("Resources/ResolveDepth.hlsl", Shader::Type::ComputeShader, "CSMain");
+		Shader computeShader("Resources/Shaders/ResolveDepth.hlsl", Shader::Type::ComputeShader, "CSMain");
 
 		m_pResolveDepthRS = std::make_unique<RootSignature>();
 		m_pResolveDepthRS->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
@@ -955,7 +975,7 @@ void Graphics::InitializeAssets()
 	// light culling
 	// compute shader that required depth buffer and light data to place lights into tiles
 	{
-		Shader computeShader("Resources/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
+		Shader computeShader("Resources/Shaders/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
 
 		m_pComputeLightCullRS = std::make_unique<RootSignature>();
 		m_pComputeLightCullRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
@@ -1067,24 +1087,25 @@ void Graphics::UpdateImGui()
 	{
 		for (int i = 0; i < (int)ResourceType::MAX; i++)
 		{
+			const char* prefix = "";
 			ResourceType type = (ResourceType)i;
 			switch (type)
 			{
 			case ResourceType::Buffer:
-				ImGui::TextWrapped("Buffer");
+				prefix = "Buffer";
 				break;
 			case ResourceType::Texture:
-				ImGui::TextWrapped("Texture");
+				prefix = "Texture";
 				break;
 			case ResourceType::RenderTarget:
-				ImGui::TextWrapped("Render Target/Depth Stencil");
+				prefix = "RT/DS";
 				break;
 			case ResourceType::MAX:
 			default:
 				break;
 			}
 
-			ImGui::Text("Heaps: %d", m_pPersistentAllocationManager->GetHeapCount(type));
+			ImGui::Text("%s Heaps: %d", prefix, m_pPersistentAllocationManager->GetHeapCount(type));
 			float totalSize = m_pPersistentAllocationManager->GetTotalSize(type) / 0b100000000000000000000;
 			float usedSize = totalSize - m_pPersistentAllocationManager->GetRemainingSize(type) / 0b100000000000000000000;
 			std::stringstream str;
@@ -1304,7 +1325,7 @@ ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_
 			D3D12_HEAP_FLAG_NONE,
 			&desc,
 			initialState,
-			nullptr,
+			pClearValue,
 			IID_PPV_ARGS(&pResource)));
 	}
 

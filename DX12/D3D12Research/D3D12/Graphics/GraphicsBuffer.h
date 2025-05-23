@@ -7,6 +7,9 @@ class Graphics;
 class GraphicsBuffer : public GraphicsResource
 {
 public:
+	GraphicsBuffer() = default;
+	GraphicsBuffer(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+
 	void SetData(CommandContext* pContext, void* pData, uint64_t dataSize, uint32_t offset = 0);
 
 	void* Map(uint32_t subResource = 0, uint64_t readFrom = 0, uint64_t readTo = 0);
@@ -30,25 +33,27 @@ protected:
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{ D3D12_DEFAULT };
 };
 
-class StructuredBuffer : public GraphicsBuffer
-{
-public:
-	StructuredBuffer(Graphics* pGraphics);
-	void Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, bool cpuVisible = false);
-	virtual void CreateViews(Graphics* pGraphics) override;
-
-	GraphicsResource* GetCounter() const { return m_pCounter.get(); }
-
-private:
-	std::unique_ptr<GraphicsResource> m_pCounter;
-};
-
 class ByteAddressBuffer : public GraphicsBuffer
 {
 public:
 	ByteAddressBuffer(Graphics* pGraphics);
+
 	void Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, bool cpuVisible = false);
 	virtual void CreateViews(Graphics* pGraphics) override;
+};
+
+class StructuredBuffer : public GraphicsBuffer
+{
+public:
+	StructuredBuffer(Graphics* pGraphics);
+
+	void Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, bool cpuVisible = false);
+	virtual void CreateViews(Graphics* pGraphics) override;
+
+	ByteAddressBuffer* GetCounter() const { return m_pCounter.get(); }
+
+private:
+	std::unique_ptr<ByteAddressBuffer> m_pCounter;
 };
 
 class VertexBuffer : public GraphicsBuffer

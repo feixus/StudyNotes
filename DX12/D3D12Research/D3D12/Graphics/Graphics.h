@@ -16,6 +16,7 @@ class StructuredBuffer;
 class SubMesh;
 class GraphicsProfiler;
 class PersistentResourceAllocator;
+class ClusteredForward;
 struct Material;
 
 struct Batch
@@ -62,6 +63,8 @@ public:
 	uint32_t GetMultiSampleQualityLevel(uint32_t msaa);
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
+
+	Matrix GetViewMatrix();
 
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
@@ -135,6 +138,8 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPSO;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSODebug;
 	bool m_UseDebugView = false;
+
+	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 
 	// directional light shadow mapping
 	std::unique_ptr<GraphicsTexture2D> m_pShadowMap;
