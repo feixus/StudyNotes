@@ -36,6 +36,8 @@ void Profiler::Initialize(Graphics* pGraphics)
 
 	m_pRootBlock = std::make_unique<Block>();
 	m_pCurrentBlock = m_pRootBlock.get();
+
+	m_CurrentTimer = 0;
 }
 
 void Profiler::Begin(const char* pName, CommandContext* pContext)
@@ -45,7 +47,8 @@ void Profiler::Begin(const char* pName, CommandContext* pContext)
 
 	if (pContext)
 	{
-		pContext->GetCommandList()->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, pNewBlock->GpuTimer.GetTimerIndex() * 2);
+		int startIndex = pNewBlock->GpuTimer.GetTimerIndex() * 2;
+		pContext->GetCommandList()->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, startIndex);
 		m_pCurrentBlock->Children.push_back(std::move(pNewBlock));
 		m_pCurrentBlock = m_pCurrentBlock->Children.back().get();
 		
@@ -62,7 +65,8 @@ void Profiler::End(CommandContext* pContext)
 
 	if (pContext)
 	{
-		pContext->GetCommandList()->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, m_pCurrentBlock->GpuTimer.GetTimerIndex() * 2 + 1);
+		int endIndex = m_pCurrentBlock->GpuTimer.GetTimerIndex() * 2 + 1;
+		pContext->GetCommandList()->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, endIndex);
 		m_pCurrentBlock = m_pCurrentBlock->pParent;
 
 		::PIXEndEvent(pContext->GetCommandList());
@@ -71,10 +75,16 @@ void Profiler::End(CommandContext* pContext)
 
 void Profiler::BeginReadback(int frameIndex)
 {
+	GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	int startIndex = HEAP_SIZE * frameIndex * 2;
+	int numQueries = (m_CurrentTimer - m_LastFrameTimer) * 2;
+	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, startIndex, numQueries, m_pReadBackBuffer->GetResource(), startIndex * sizeof(uint64_t));
+	m_FenceValues[frameIndex] = pContext->Execute(false);
+
 	assert(m_pCurrentReadBackData == nullptr);
 	m_pGraphics->WaitForFence(m_FenceValues[frameIndex]);
 
-	m_pCurrentReadBackData = (uint64_t*)m_pReadBackBuffer->Map(0, 0, m_pReadBackBuffer->GetSize());
+   	m_pCurrentReadBackData = (uint64_t*)m_pReadBackBuffer->Map(0, 0, m_pReadBackBuffer->GetSize());
 
 	assert(m_pCurrentBlock == m_pRootBlock.get());
 	m_pCurrentBlock = m_pRootBlock->Children.front().get();
@@ -122,12 +132,8 @@ void Profiler::EndReadBack(int frameIndex)
 	m_pReadBackBuffer->UnMap();
 	m_pCurrentReadBackData = nullptr;
 
-	int offset = HEAP_SIZE * frameIndex * 2;
-	GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, offset, HEAP_SIZE * 2, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64_t));
-	m_FenceValues[frameIndex] = pContext->Execute(true);
-
-	m_CurrentTimer = HEAP_SIZE * frameIndex;
+	m_CurrentTimer = HEAP_SIZE* frameIndex;
+	m_LastFrameTimer = m_CurrentTimer;
 }
 
 int32_t Profiler::GetNextTimerIndex()
