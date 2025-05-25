@@ -1,11 +1,13 @@
 #pragma once
 #include "Graphics/Graphics.h"
+#include "Graphics/Light.h"
 
 class ComputePipelineState;
 class GraphicsPipelineState;
 class RootSignature;
 class StructuredBuffer;
 class GraphicsTexture;
+class ByteAddressBuffer;
 
 struct ClusteredForwardInputResource
 {
@@ -13,6 +15,7 @@ struct ClusteredForwardInputResource
     GraphicsTexture2D* pRenderTarget;
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
+    const std::vector<Light>* pLights;
 };
 
 class ClusteredForward
@@ -40,18 +43,26 @@ private:
     std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersPSO;
     std::unique_ptr<StructuredBuffer> m_pUniqueClusterBuffer;
 
-    std::unique_ptr<GraphicsTexture2D> m_pDebugTexture;
-
     // step 3: compact cluster list
     std::unique_ptr<RootSignature> m_pCompactClusterListRS;
     std::unique_ptr<ComputePipelineState> m_pCompactClusterListPSO;
     std::unique_ptr<StructuredBuffer> m_pActiveClusterListBuffer;
 
-    // step 4: light culling
+    // step 4: update Indirect Dispatch Buffer
+    std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
+	std::unique_ptr<ComputePipelineState> m_pUpdateIndirectArgumentsPSO;
+    std::unique_ptr<ByteAddressBuffer> m_pIndirectArguments;
+
+    // step 5: light culling
     std::unique_ptr<RootSignature> m_pLightCullingRS;
     std::unique_ptr<ComputePipelineState> m_pLightCullingPSO;
+    ComPtr<ID3D12CommandSignature> m_pLightCullingCommandSignature;;
+    std::unique_ptr<StructuredBuffer> m_pLights;
+    std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
+    std::unique_ptr<StructuredBuffer> m_pLightIndexGrid;
+    std::unique_ptr<StructuredBuffer> m_pLightGris;
 
-    // step 5: lighting
+    // step 6: lighting
     std::unique_ptr<RootSignature> m_pDiffuseRS;
     std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;
 };

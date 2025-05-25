@@ -17,7 +17,8 @@ constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON 
 													D3D12_RESOURCE_STATE_COPY_SOURCE;
 constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON |
 												 D3D12_RESOURCE_STATE_COPY_DEST | 
-												 D3D12_RESOURCE_STATE_COPY_SOURCE;													
+												 D3D12_RESOURCE_STATE_COPY_SOURCE |
+												 D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;													
 
 #pragma region BASE
 
@@ -345,6 +346,15 @@ void ComputeCommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY,
 	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
 	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
+}
+
+void ComputeCommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments)
+{
+	assert(m_CurrentContext == CommandListContext::Compute);
+	FlushResourceBarriers();
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
 void ComputeCommandContext::Reset()

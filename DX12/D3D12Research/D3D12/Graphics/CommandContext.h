@@ -62,7 +62,8 @@ public:
 	ComputeCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandlist, ID3D12CommandAllocator* pAllocator);
 	
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
-	
+	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments);
+
 	virtual void Reset() override;
 	virtual uint64_t Execute(bool wait) override;
 	virtual uint64_t ExecuteAndReset(bool wait) override;
