@@ -4,9 +4,6 @@ cbuffer LightData : register(b2)
     float4 cShadowMapOffsets[MAX_SHADOW_CASTERS];
 }
 
-Texture2D tShadowMapTexture : register(t3);
-SamplerComparisonState sShadowMapSampler : register(s2);
-
 struct LightResult
 {
     float4 Diffuse;
@@ -42,6 +39,11 @@ float DoAttenuation(Light light, float distance)
     return 1.0f - smoothstep(light.Range * light.Attenuation, light.Range, distance);
 }
 
+
+#ifdef SHADOW
+Texture2D tShadowMapTexture : register(t3);
+SamplerComparisonState sShadowMapSampler : register(s2);
+
 float DoShadow(float3 worldPosition, int shadowMapIndex)
 {
     // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
@@ -69,6 +71,8 @@ float DoShadow(float3 worldPosition, int shadowMapIndex)
     return shadowFactor / (PCF_KERNEL_SIZE * PCF_KERNEL_SIZE);
 }
 
+#endif
+
 LightResult DoPointLight(Light light, float3 worldPosition, float3 normal, float3 viewDirection)
 {
     LightResult result;
@@ -80,6 +84,7 @@ LightResult DoPointLight(Light light, float3 worldPosition, float3 normal, float
     result.Diffuse = DoDiffuse(light, normal, L) * attenuation;
     result.Specular = DoSpecular(light, normal, L, viewDirection) * attenuation;
     
+#ifdef SHADOW
     if (light.ShadowIndex != -1)
     {
         float3 vLight = normalize(worldPosition - light.Position);
@@ -89,7 +94,8 @@ LightResult DoPointLight(Light light, float3 worldPosition, float3 normal, float
         result.Diffuse *= shadowFactor;
         result.Specular *= shadowFactor;
     }
-    
+#endif
+
     return result;
 }
 
@@ -99,12 +105,14 @@ LightResult DoDirectionalLight(Light light, float3 worldPosition, float3 normal,
     result.Diffuse = light.Color.w * DoDiffuse(light, normal, -light.Direction);
     result.Specular = light.Color.w * DoSpecular(light, normal, -light.Direction, viewDirection);
     
+#ifdef SHADOW
     if (light.ShadowIndex != -1)
     {
         float shadowFactor = DoShadow(worldPosition, light.ShadowIndex);
         result.Diffuse *= shadowFactor;
         result.Specular *= shadowFactor;
     }
+#endif
     
     return result;
 }
@@ -125,13 +133,15 @@ LightResult DoSpotLight(Light light, float3 worldPosition, float3 normal, float3
 
     result.Diffuse = light.Color.w * attenuation * spotIntensity * DoDiffuse(light, normal, L);
     result.Specular = light.Color.w * attenuation * spotIntensity * DoSpecular(light, normal, L, viewDirection);
-    
+
+#ifdef SHADOW
     if (light.ShadowIndex != -1)
     {
         float shadowFactor = DoShadow(worldPosition, light.ShadowIndex);
         result.Diffuse *= shadowFactor;
         result.Specular *= shadowFactor;
     }
-    
+#endif
+
     return result;
 }

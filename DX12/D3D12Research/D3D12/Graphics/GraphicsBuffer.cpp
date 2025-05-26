@@ -30,7 +30,7 @@ void GraphicsBuffer::Create(Graphics* pGraphics, uint64_t elementCount, uint32_t
 	CreateViews(pGraphics);
 }
 
-void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint64_t dataSize, uint32_t offset)
+void GraphicsBuffer::SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint32_t offset)
 {
 	assert(dataSize + offset <= GetSize());
 	pContext->InitializeBuffer(this, pData, dataSize);

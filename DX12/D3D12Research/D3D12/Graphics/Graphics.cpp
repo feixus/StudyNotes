@@ -113,11 +113,7 @@ void Graphics::Update()
 
 	// shadow map partitioning
 	//////////////////////////////////
-	struct LightData
-	{
-		Matrix LightViewProjections[MAX_SHADOW_CASTERS];
-		Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
-	} lightData;
+	LightData lightData;
 
 	Matrix projection = XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, m_Lights[0].Range, 0.1f);
 
@@ -461,6 +457,9 @@ void Graphics::Update()
 	resources.pOpaqueBatches = &m_OpaqueBatches;
 	resources.pTransparentBatches = &m_TransparentBatches;
 	resources.pRenderTarget = GetCurrentRenderTarget();
+	resources.pLights = &m_Lights;
+	resources.pShadowMap = m_pShadowMap.get();
+	resources.pLightData = &lightData;
 	m_pClusteredForward->Execute(resources);
 
 	{

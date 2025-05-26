@@ -1,6 +1,3 @@
-#define BLOCK_SIZE 16
-#define LIGHT_COUNT 512
-
 #define LIGHT_DIRECTIONAL 0
 #define LIGHT_POINT 1
 #define LIGHT_SPOT 2
@@ -8,7 +5,7 @@
 struct AABB
 {
     float4 Min;
-    float4 MAX;
+    float4 Max;
 };
 
 struct Sphere
@@ -34,17 +31,16 @@ struct Light
 
 cbuffer ShaderParameters : register(b0)
 {
-    float4x4 cViews;
-    uint4 cNumThreadGroups;
+    float4x4 cView;
 }
 
-StructuredBuffer<Light> Lights : register(t1);
-StructuredBuffer<AABB> tClusterAABBs : register(t2);
-StructuredBuffer<uint> tActiveClusterIndices : register(t3);
+StructuredBuffer<Light> Lights : register(t0);
+StructuredBuffer<AABB> tClusterAABBs : register(t1);
+StructuredBuffer<uint> tActiveClusterIndices : register(t2);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uLightIndexList : register(u1);
-RWTexture1D<uint2> uOutLightGrid : register(u2);
+RWStructuredBuffer<uint2> uOutLightGrid : register(u2);
 
 groupshared AABB GroupAABB;
 groupshared uint LightCount;
@@ -94,9 +90,9 @@ struct CS_Input
 };
 
 [numthreads(BLOCK_SIZE, 1, 1)]
-void CS(CS_Input input)
+void LightCulling(CS_Input input)
 {
-    uint clusterIndex = tActiveClusterIndices[input.DispatchThreadID.x];
+    uint clusterIndex = tActiveClusterIndices[input.GroupID.x];
     
     if (input.GroupIndex == 0)
     {
@@ -106,7 +102,7 @@ void CS(CS_Input input)
 
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE)
     {
         Light light = Lights[i];
         switch (light.Type)
@@ -147,12 +143,12 @@ void CS(CS_Input input)
     if (input.GroupIndex == 0)
     {
         InterlockedAdd(uLightIndexCounter[0], LightCount, LightIndexStartOffset);
-        uOutLightGrid[input.GroupID.x] = uint2(LightIndexStartOffset, LightCount);
+        uOutLightGrid[clusterIndex] = uint2(LightIndexStartOffset, LightCount);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint j = input.GroupIndex; j < LightCount; j += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint j = input.GroupIndex; j < LightCount; j += BLOCK_SIZE)
     {
         uLightIndexList[LightIndexStartOffset + j] = LightList[j];
     }

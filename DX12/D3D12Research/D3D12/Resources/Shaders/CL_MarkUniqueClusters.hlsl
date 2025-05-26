@@ -39,20 +39,13 @@ PS_Input MarkClusters_VS(VS_Input input)
     return output;
 }
 
-float4 MarkClusters_PS(PS_Input input) : SV_Target
+void MarkClusters_PS(PS_Input input)
 {
     uint zSlice = GetSliceFromDepth(input.positionVS.z);
     uint2 clusterIndexXY = floor(input.position.xy / cClusterSize);
     uint clusterIndex1D = clusterIndexXY.x + clusterIndexXY.y * cClusterDimensions.x + zSlice * cClusterDimensions.x * cClusterDimensions.y;
-    if (clusterIndex1D > 3455)
-    {
-        return float4(0, 1, 0, 1);
-    }
 
     uUniqueCluster[clusterIndex1D] = 1;
-
-    float depthNormalized = (input.positionVS.z - cNearZ) / (cFarZ - cNearZ);
-    return float4(depthNormalized, depthNormalized, depthNormalized, 0);
 }
 
 

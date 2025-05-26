@@ -13,9 +13,11 @@ struct ClusteredForwardInputResource
 {
     GraphicsTexture2D* pDepthPrepassBuffer;
     GraphicsTexture2D* pRenderTarget;
+    GraphicsTexture2D* pShadowMap;
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
     const std::vector<Light>* pLights;
+	LightData* pLightData;
 };
 
 class ClusteredForward
@@ -60,7 +62,7 @@ private:
     std::unique_ptr<StructuredBuffer> m_pLights;
     std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
     std::unique_ptr<StructuredBuffer> m_pLightIndexGrid;
-    std::unique_ptr<StructuredBuffer> m_pLightGris;
+    std::unique_ptr<StructuredBuffer> m_pLightGrid;
 
     // step 6: lighting
     std::unique_ptr<RootSignature> m_pDiffuseRS;

@@ -26,6 +26,12 @@ struct Batch
 	Matrix WorldMatrix;
 };
 
+struct LightData
+{
+	Matrix LightViewProjections[8];
+	Vector4 ShadowMapOffsets[8];
+};
+
 class Graphics
 {
 public:
