@@ -348,12 +348,15 @@ void ComputeCommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY,
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
+// GPU-driven rendering
 void ComputeCommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments)
 {
 	assert(m_CurrentContext == CommandListContext::Compute);
 	FlushResourceBarriers();
 	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
 	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	// pCommandSignature: command type (dispatch or draw...)
+	// pArgumentBuffer: the parameters for command
 	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 

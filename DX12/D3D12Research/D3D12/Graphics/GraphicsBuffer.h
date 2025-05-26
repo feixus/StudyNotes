@@ -33,6 +33,9 @@ protected:
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{ D3D12_DEFAULT };
 };
 
+/*
+* raw buffer, can read arbitrary bytes at any offset, no predefined format.
+*/
 class ByteAddressBuffer : public GraphicsBuffer
 {
 public:
