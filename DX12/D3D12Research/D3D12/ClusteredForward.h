@@ -33,6 +33,14 @@ private:
 
     Graphics* m_pGraphics;
 
+	/* based on screen resolutions(eg.1080P), depth complexity(16~32 slices) and GPU performance tradeoff.
+    depth axis is sliced logarithmically or exponentially to account for non-linear depth distribution.
+    need adjust for diffrent platform or resolution ... */
+	uint32_t m_ClusterCountX{0};
+    uint32_t m_ClusterCountY{0};
+    uint32_t m_ClusterCountZ{0};
+    uint32_t m_MaxClusters{0};
+
     std::unique_ptr<GraphicsTexture2D> m_pHeatMapTexture;
 
     // step 1: AABB

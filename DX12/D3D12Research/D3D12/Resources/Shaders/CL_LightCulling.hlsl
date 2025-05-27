@@ -4,8 +4,8 @@
 
 struct AABB
 {
-    float4 Min;
-    float4 Max;
+    float4 Center;
+    float4 Extents;
 };
 
 struct Sphere
@@ -43,8 +43,10 @@ RWStructuredBuffer<uint> uLightIndexList : register(u1);
 RWStructuredBuffer<uint2> uOutLightGrid : register(u2);
 
 groupshared AABB GroupAABB;
+groupshared uint ClusterIndex;
+
+groupshared uint IndexStartOffset;
 groupshared uint LightCount;
-groupshared uint LightIndexStartOffset;
 groupshared uint LightList[MAX_LIGHTS_PER_TILE];
 
 void AddLight(uint lightIndex)
@@ -57,28 +59,10 @@ void AddLight(uint lightIndex)
     }
 }
 
-float SquaredDistPointAABB(float3 p, AABB aabb)
-{
-    float sqDist = 0.0f;
-    for (int i = 0; i < 3; i++)
-    {
-        float v = p[i];
-        if (v < aabb.Min[i])
-        {
-            sqDist += (aabb.Min[i] - v) * (aabb.Min[i] - v);
-        }
-        if (v > aabb.Max[i])
-        {
-            sqDist += (v - aabb.Max[i]) * (v - aabb.Max[i]);
-        }
-    }
-    return sqDist;
-}
-
 bool SphereInAABB(Sphere sphere, AABB aabb)
 {
-    float sqDist = SquaredDistPointAABB(sphere.Position, aabb);
-    return sqDist <= sphere.Radius * sphere.Radius;
+    float3 dist = max(0, abs(sphere.Position - aabb.Center.xyz) - aabb.Extents.xyz);
+    return dot(dist, dist) <= sphere.Radius * sphere.Radius;
 }
 
 struct CS_Input
@@ -89,20 +73,21 @@ struct CS_Input
     uint GroupIndex : SV_GroupIndex;
 };
 
-[numthreads(BLOCK_SIZE, 1, 1)]
+#define THREAD_COUNT 1024
+
+[numthreads(THREAD_COUNT, 1, 1)]
 void LightCulling(CS_Input input)
 {
-    uint clusterIndex = tActiveClusterIndices[input.GroupID.x];
-    
     if (input.GroupIndex == 0)
     {
         LightCount = 0;
-        GroupAABB = tClusterAABBs[clusterIndex];
+        ClusterIndex = tActiveClusterIndices[input.GroupID.x];
+        GroupAABB = tClusterAABBs[ClusterIndex];
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE)
+    for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += THREAD_COUNT)
     {
         Light light = Lights[i];
         switch (light.Type)
@@ -142,14 +127,14 @@ void LightCulling(CS_Input input)
 
     if (input.GroupIndex == 0)
     {
-        InterlockedAdd(uLightIndexCounter[0], LightCount, LightIndexStartOffset);
-        uOutLightGrid[clusterIndex] = uint2(LightIndexStartOffset, LightCount);
+        InterlockedAdd(uLightIndexCounter[0], LightCount, IndexStartOffset);
+        uOutLightGrid[ClusterIndex] = uint2(IndexStartOffset, LightCount);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint j = input.GroupIndex; j < LightCount; j += BLOCK_SIZE)
+    for (uint j = input.GroupIndex; j < LightCount; j += THREAD_COUNT)
     {
-        uLightIndexList[LightIndexStartOffset + j] = LightList[j];
+        uLightIndexList[IndexStartOffset + j] = LightList[j];
     }
 }

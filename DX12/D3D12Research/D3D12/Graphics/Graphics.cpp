@@ -120,7 +120,7 @@ void Graphics::Update()
 	m_ShadowCasters = 0;
 
 	// point light
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(-1.f, 0.f, 0.f), Vector3::Up) * projection;
+	/*lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(-1.f, 0.f, 0.f), Vector3::Up) * projection;
 	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.f, 0.25f, 0);
 	++m_ShadowCasters;
 
@@ -142,7 +142,7 @@ void Graphics::Update()
 
 	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.f, 0.f, 1.f), Vector3::Up) * projection;
 	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.25f, 0.25f, 0.25f, 0);
-	++m_ShadowCasters;
+	++m_ShadowCasters;*/
 
 	//// main directional
 	//lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixOrthographicLH(512, 512, 1000.f, 0.1f);
@@ -778,8 +778,8 @@ void Graphics::InitializeAssets()
 	// diffuse passes
 	{
 		// shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain");
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/});
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
 
 		// root signature
 		m_pDiffuseRS = std::make_unique<RootSignature>();
@@ -1137,8 +1137,8 @@ void Graphics::UpdateImGui()
 	ImGui::End();
 
 	static bool showOutputLog = true;
-	ImGui::SetNextWindowPos(ImVec2(250, showOutputLog ? (float)m_WindowHeight - 200 : (float)m_WindowHeight - 20));
-	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 250, 200));
+	ImGui::SetNextWindowPos(ImVec2(250, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
+	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 250, 250));
 	ImGui::SetNextWindowCollapsed(!showOutputLog);
 
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
@@ -1203,7 +1203,7 @@ void Graphics::RandomizeLights()
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(15.f, 25.f);
+		const float range = Math::RandomRange(7.f, 9.f);
 		const float angle = Math::RandomRange(30.f, 60.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;

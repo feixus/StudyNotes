@@ -83,7 +83,7 @@ public:
 	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;
 	static const int32_t MAX_SHADOW_CASTERS = 8;
 	static const int32_t SHADOW_MAP_SIZE = 4096;
-	static const int32_t MAX_LIGHT_COUNT = 2048;
+	static const int32_t MAX_LIGHT_COUNT = 8192;
 	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -140,7 +140,7 @@ private:
 	uint32_t m_CurrentBackBufferIndex{0};
 	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
-	RenderPath m_RenderPath = RenderPath::Tiled;
+	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;

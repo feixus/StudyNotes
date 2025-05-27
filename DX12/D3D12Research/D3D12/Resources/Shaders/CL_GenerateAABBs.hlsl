@@ -1,7 +1,7 @@
 struct AABB
 {
-    float4 Min;
-    float4 Max;
+    float4 Center;
+    float4 Extents;
 };
 
 cbuffer Parameters : register(b0)
@@ -65,7 +65,7 @@ void GenerateAABBs(CS_Input input)
     float3 bbMin = min(min(minPointNear, minPointFar), min(maxPointNear, maxPointFar));
     float3 bbMax = max(max(minPointNear, minPointFar), max(maxPointNear, maxPointFar));
 
-    uOutAABBs[clusterIndex1D].Min = float4(bbMin, 1.0f);
-    uOutAABBs[clusterIndex1D].Max = float4(bbMax, 1.0f);
+    uOutAABBs[clusterIndex1D].Center = float4((bbMin + bbMax) * 0.5f, 1.0f);
+    uOutAABBs[clusterIndex1D].Extents = float4(bbMax - uOutAABBs[clusterIndex1D].Center.xyz, 1.0f);
 }
 
