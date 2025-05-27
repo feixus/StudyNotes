@@ -9,6 +9,7 @@
 #include "Graphics/CommandQueue.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Light.h"
+#include "Graphics/Profiler.h"
 
 /*
 based on screen resolutions(eg.1080P), depth complexity(16~32 slices) and GPU performance tradeoff.
@@ -48,9 +49,14 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
     float farZ = 1000.0f;
     Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, screenDimensions.x / screenDimensions.y, nearZ, farZ);
 
+    float sliceMagicA = (float)cClusterDimensionsZ / log(farZ / nearZ);
+    float sliceMagicB = (float)cClusterDimensionsZ * log(nearZ) / log(farZ / nearZ);
+
     // create AABBs
     {
         ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+        Profiler::Instance()->Begin("Create AABBs", pContext);
+    
         pContext->SetComputePipelineState(m_pCreateAabbPSO.get());
         pContext->SetComputeRootSignature(m_pCreateAabbRS.get());
 
@@ -79,6 +85,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
         pContext->Dispatch(cClusterDimensionsX, cClusterDimensionsY, cClusterDimensionsZ);
 
+        Profiler::Instance()->End(pContext);
         uint64_t fence = pContext->Execute(false);
         m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
     }
@@ -86,9 +93,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
     // mark unique clusters
     {
         GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        Profiler::Instance()->Begin("Mark Unique Clusters", pContext);
 
         pContext->InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
-        pContext->InsertResourceBarrier(inputResource.pDepthPrepassBuffer, D3D12_RESOURCE_STATE_DEPTH_READ, false);
+        pContext->InsertResourceBarrier(inputResource.pDepthPrepassBuffer, D3D12_RESOURCE_STATE_DEPTH_READ, true);
 
         std::vector<uint32_t> zero(cMaxClusters);
         m_pUniqueClusterBuffer->SetData(pContext, zero.data(), sizeof(uint32_t) * zero.size());
@@ -130,6 +138,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             b.pMesh->Draw(pContext);
         }
 
+        Profiler::Instance()->End(pContext);
         uint64_t fence = pContext->Execute(false);
         m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWaitForFence(fence);
     }
@@ -137,6 +146,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
     // compact clusters
     {
         ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+        Profiler::Instance()->Begin("Compact Clusters", pContext);
+
         pContext->SetComputePipelineState(m_pCompactClusterListPSO.get());
         pContext->SetComputeRootSignature(m_pCompactClusterListRS.get());
 
@@ -148,13 +159,15 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
         pContext->Dispatch(cMaxClusters / 64, 1, 1);
         
+        Profiler::Instance()->End(pContext);
         pContext->Execute(false);
     }
 
     // update indirect arguments
     {
 		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-        
+        Profiler::Instance()->Begin("Update Indirect Arguments", pContext);
+
         pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
         pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
@@ -164,12 +177,15 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 		pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
 
         pContext->Dispatch(1, 1, 1);
+        Profiler::Instance()->End(pContext);
         pContext->Execute(false);
     }
 
     // light culling
     {
         ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+        Profiler::Instance()->Begin("Light Culling", pContext);
+
         pContext->SetComputePipelineState(m_pLightCullingPSO.get());
         pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
@@ -200,6 +216,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
         pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
 
+        Profiler::Instance()->End(pContext);
         uint64_t fence = pContext->Execute(false);
         m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
     }
@@ -207,6 +224,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
     // base pass
     {
 		GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        Profiler::Instance()->Begin("Lighting Pass", pContext);
 
         pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 		pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
@@ -237,6 +255,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             float NearZ;
             float FarZ;
             float ClusterSize[2];
+            float SliceMagicA;
+            float SliceMagicB;
         } frameData;
 
         Matrix view = m_pGraphics->GetViewMatrix();
@@ -250,6 +270,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         frameData.FarZ = farZ;
 		frameData.ClusterSize[0] = screenDimensions.x / cClusterDimensionsX;
 		frameData.ClusterSize[1] = screenDimensions.y / cClusterDimensionsY;
+        frameData.SliceMagicA = sliceMagicA;
+        frameData.SliceMagicB = sliceMagicB;
 
         objectData.World = XMMatrixIdentity();
         objectData.WorldView = objectData.World * view;
@@ -263,6 +285,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 		pContext->SetDynamicDescriptor(3, 0, m_pLightGrid->GetSRV());
 		pContext->SetDynamicDescriptor(3, 1, m_pLightIndexGrid->GetSRV());
 		pContext->SetDynamicDescriptor(3, 2, m_pLights->GetSRV());
+        pContext->SetDynamicDescriptor(4, 0, m_pHeatMapTexture->GetSRV());
 
 		for (const Batch& b : *inputResource.pOpaqueBatches)
 		{
@@ -275,6 +298,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
 		pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 		
+        Profiler::Instance()->End(pContext);
         pContext->Execute(false);
 	}
 }
@@ -296,6 +320,11 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32_t), cMaxClusters * 64);
 	m_pLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32_t), cMaxClusters);
+
+    CopyCommandContext* pCopyContext = (CopyCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+    m_pHeatMapTexture = std::make_unique<GraphicsTexture2D>();
+    m_pHeatMapTexture->Create(pGraphics, pCopyContext, "Resources/textures/HeatMap.png", TextureUsage::ShaderResource);
+    pCopyContext->Execute(true);
 }
 
 void ClusteredForward::SetupPipelines(Graphics* pGraphics)
@@ -414,8 +443,9 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pDiffuseRS = std::make_unique<RootSignature>();
 		m_pDiffuseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pDiffuseRS->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pDiffuseRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pDiffuseRS->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pDiffuseRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pDiffuseRS->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+        m_pDiffuseRS->SetDescriptorTableSimple(4, 6, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
 
         D3D12_SAMPLER_DESC samplerDesc{};
         samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;

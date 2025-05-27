@@ -1114,7 +1114,7 @@ void Graphics::UpdateImGui()
 
 	ImGui::End();
 
-	static bool showOutputLog = false;
+	static bool showOutputLog = true;
 	ImGui::SetNextWindowPos(ImVec2(250, showOutputLog ? (float)m_WindowHeight - 200 : (float)m_WindowHeight - 20));
 	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 250, 200));
 	ImGui::SetNextWindowCollapsed(!showOutputLog);

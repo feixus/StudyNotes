@@ -102,15 +102,14 @@ void Console::Log(const std::string& message, LogType type)
             break;
     }
 
-    stream << message;
-    const std::string logMessage = stream.str();
-    std::cout << logMessage << std::endl;
     if (consoleInstance->m_ConsoleHandle)
     {
+        stream << message;
+        std::cout << stream.str() << std::endl;
         SetConsoleTextAttribute(consoleInstance->m_ConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     }
 
-    consoleInstance->m_History.push_back({ logMessage, type });
+    consoleInstance->m_History.push_back({ message, type });
     if (consoleInstance->m_History.size() > 50)
     {
         consoleInstance->m_History.pop_front();
