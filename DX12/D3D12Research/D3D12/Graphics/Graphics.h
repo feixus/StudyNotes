@@ -32,6 +32,12 @@ struct LightData
 	Vector4 ShadowMapOffsets[8];
 };
 
+enum class RenderPath
+{
+	Tiled,
+	Clustered,
+};
+
 class Graphics
 {
 public:
@@ -133,6 +139,8 @@ private:
 	// synchronization objects
 	uint32_t m_CurrentBackBufferIndex{0};
 	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
+
+	RenderPath m_RenderPath = RenderPath::Tiled;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;

@@ -42,7 +42,8 @@ private:
 
     // step 2: mark unique clusters
     std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
-    std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersPSO;
+	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
+	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparentPSO;
     std::unique_ptr<StructuredBuffer> m_pUniqueClusterBuffer;
 
     // step 3: compact cluster list
@@ -66,5 +67,6 @@ private:
 
     // step 6: lighting
     std::unique_ptr<RootSignature> m_pDiffuseRS;
-    std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffuseTransparencyPSO;
 };
