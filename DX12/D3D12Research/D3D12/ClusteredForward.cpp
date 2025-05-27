@@ -96,10 +96,13 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         Profiler::Instance()->Begin("Mark Unique Clusters", pContext);
 
         pContext->InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
-        pContext->InsertResourceBarrier(inputResource.pDepthPrepassBuffer, D3D12_RESOURCE_STATE_DEPTH_READ, true);
+        pContext->InsertResourceBarrier(inputResource.pDepthPrepassBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
+        pContext->ClearDepth(inputResource.pDepthPrepassBuffer->GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
+        Profiler::Instance()->Begin("Update Data", pContext);
         std::vector<uint32_t> zero(cMaxClusters);
         m_pUniqueClusterBuffer->SetData(pContext, zero.data(), sizeof(uint32_t) * zero.size());
+        Profiler::Instance()->End(pContext);
 
         pContext->SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
         pContext->SetGraphicsPipelineState(m_pMarkUniqueClustersPSO.get());
@@ -112,18 +115,16 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         {
             Matrix WorldView;
             Matrix Projection;
-            Vector2 ScreenDimensions;
-            float NearZ;
-            float FarZ;
             uint32_t ClusterDimensions[4];
             float ClusterSize[2];
+            float SliceMagicA;
+            float SliceMagicB;
         } constantBuffer;
 
         constantBuffer.WorldView = m_pGraphics->GetViewMatrix();
         constantBuffer.Projection = projection;
-        constantBuffer.ScreenDimensions = screenDimensions;
-        constantBuffer.NearZ = nearZ;
-        constantBuffer.FarZ = farZ;
+        constantBuffer.SliceMagicA = sliceMagicA;
+        constantBuffer.SliceMagicB = sliceMagicB;
         constantBuffer.ClusterDimensions[0] = cClusterDimensionsX;
         constantBuffer.ClusterDimensions[1] = cClusterDimensionsY;
         constantBuffer.ClusterDimensions[2] = cClusterDimensionsZ;
@@ -191,13 +192,14 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
         pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
 
+        Profiler::Instance()->Begin("Update Data", pContext);
         uint32_t zero = 0;
         m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32_t));
         uint32_t zero2[64 * cMaxClusters];
         memset(zero2, 0, 64 * sizeof(uint32_t) * cMaxClusters);
         m_pLightIndexGrid->SetData(pContext, &zero2, 64 * cMaxClusters * sizeof(uint32_t));
-
         m_pLights->SetData(pContext, inputResource.pLights->data(), sizeof(Light) * inputResource.pLights->size(), 0);
+        Profiler::Instance()->End(pContext);
 
         struct ConstantBuffer
         {
@@ -226,29 +228,30 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 		GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
         Profiler::Instance()->Begin("Lighting Pass", pContext);
 
+		pContext->SetGraphicsPipelineState(m_pDiffusePSO.get());
+		pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
+
         pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 		pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 
         pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
 		pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
-        pContext->InsertResourceBarrier(inputResource.pDepthPrepassBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
         pContext->InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
         pContext->SetRenderTarget(inputResource.pRenderTarget->GetRTV(), inputResource.pDepthPrepassBuffer->GetDSV());
 		pContext->ClearRenderTarget(inputResource.pRenderTarget->GetRTV());
-        pContext->ClearDepth(inputResource.pDepthPrepassBuffer->GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
         pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         
         struct PerObjectData
         {
             Matrix World;
-            Matrix WorldViewProjection;
-            Matrix WorldView;
 		} objectData;
 
         struct PerFrameData
         {
+			Matrix View;
+			Matrix Projection;
             Matrix ViewInverse;
             uint32_t ClusterDimensions[4];
             Vector2 ScreenDimensions;
@@ -261,6 +264,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
         Matrix view = m_pGraphics->GetViewMatrix();
         view.Invert(frameData.ViewInverse);
+        frameData.View = view;
+        frameData.Projection = projection;
 		frameData.ClusterDimensions[0] = cClusterDimensionsX;
 		frameData.ClusterDimensions[1] = cClusterDimensionsY;
 		frameData.ClusterDimensions[2] = cClusterDimensionsZ;
@@ -273,14 +278,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         frameData.SliceMagicA = sliceMagicA;
         frameData.SliceMagicB = sliceMagicB;
 
-        objectData.World = XMMatrixIdentity();
-        objectData.WorldView = objectData.World * view;
-        objectData.WorldViewProjection = objectData.World * view * projection;
-
-        pContext->SetGraphicsPipelineState(m_pDiffusePSO.get());
-		pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
-
-		pContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 		pContext->SetDynamicDescriptor(3, 0, m_pLightGrid->GetSRV());
 		pContext->SetDynamicDescriptor(3, 1, m_pLightIndexGrid->GetSRV());
@@ -289,6 +286,9 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
 		for (const Batch& b : *inputResource.pOpaqueBatches)
 		{
+            objectData.World = XMMatrixIdentity();
+		    pContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+
 			pContext->SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 			pContext->SetDynamicDescriptor(2, 1, b.pMaterial->pNormalTexture->GetSRV());
 			pContext->SetDynamicDescriptor(2, 2, b.pMaterial->pSpecularTexture->GetSRV());
@@ -366,8 +366,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pMarkUniqueClustersPSO->SetBlendMode(BlendMode::Replace, false);
         m_pMarkUniqueClustersPSO->SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
         m_pMarkUniqueClustersPSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
-        m_pMarkUniqueClustersPSO->SetDepthWrite(false);
-        m_pMarkUniqueClustersPSO->SetDepthEnable(false);
         m_pMarkUniqueClustersPSO->Finalize("Mark Unique Clusters", pGraphics->GetDevice());
     }
 
@@ -468,7 +466,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pDiffusePSO->SetBlendMode(BlendMode::Replace, false);
         m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
         m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
-        m_pDiffusePSO->SetDepthWrite(true);
+        m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
         m_pDiffusePSO->Finalize("Diffuse", pGraphics->GetDevice());
     }
 }

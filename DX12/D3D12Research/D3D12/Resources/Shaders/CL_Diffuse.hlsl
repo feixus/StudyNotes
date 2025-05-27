@@ -5,12 +5,12 @@
 cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 {
     float4x4 cWorld;
-    float4x4 cWorldViewProjection;
-    float4x4 cWorldView;
 }
 
 cbuffer PerFrameData : register(b1)
 {
+    float4x4 cView;
+    float4x4 cProjection;
     float4x4 cViewInverse;
     uint4 cClusterDimensions;
     float2 cScreenDimensions;
@@ -33,28 +33,26 @@ struct VSInput
 struct PSInput
 {
     float4 position : SV_POSITION;
-    float4 vsPosition : POSITION_VS;
+    float4 positionVS : POSITION_VS;
+    float4 positionWS : POSITION_WS;
     float2 texCoord : TEXCOORD;
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
     float3 bitangent : TEXCOORD1;
-    float4 worldPosition : TEXCOORD2;
 };
 
 Texture2D myDiffuseTexture : register(t0);
-SamplerState myDiffuseSampler : register(s0);
-
 Texture2D myNormalTexture : register(t1);
+
+SamplerState myDiffuseSampler : register(s0);
 SamplerState myNormalSampler : register(s1);
 
 Texture2D mySpecularTexture : register(t2);
-
 StructuredBuffer<uint2> tLightGrid : register(t3);
 StructuredBuffer<uint> tLightIndexList : register(t4);
-
 StructuredBuffer<Light> Lights : register(t5);
-
 Texture2D tHeatMapTexture : register(t6);
+
 
 uint GetSliceFromDepth(float depth)
 {
@@ -127,13 +125,14 @@ PSInput Diffuse_VS(VSInput input)
 {
     PSInput result;
     
-    result.position = mul(float4(input.position, 1.0f), cWorldViewProjection);
+    result.positionWS = mul(float4(input.position, 1.0f), cWorld);
+    result.positionVS = mul(result.positionWS, cView);
+    result.position = mul(result.positionVS, cProjection);
     result.texCoord = input.texCoord;
     result.normal = normalize(mul(input.normal, (float3x3)cWorld));
     result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
     result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
-    result.worldPosition = mul(float4(input.position, 1.0f), cWorld);
-    result.vsPosition = mul(float4(input.position, 1.0f), cWorldView);
+
     return result;
 }
 
@@ -144,10 +143,10 @@ float4 Diffuse_PS(PSInput input) : SV_TARGET
 
     float4 diffuseSample = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
    
-    float3 viewDirection = normalize(input.worldPosition.xyz - cViewInverse[3].xyz);
+    float3 viewDirection = normalize(input.positionWS.xyz - cViewInverse[3].xyz);
     float3 normal = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
     
-    LightResult lightResults = DoLight(input.position, input.vsPosition, input.worldPosition.xyz, input.normal, viewDirection);
+    LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, input.normal, viewDirection);
 
     float4 specularSample = mySpecularTexture.Sample(myDiffuseSampler, input.texCoord);
     lightResults.Specular *= specularSample;
