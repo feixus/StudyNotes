@@ -86,8 +86,11 @@ void StructuredBuffer::CreateViews(Graphics* pGraphics)
 	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 
 	// structured buffer with counters
-	m_pCounter = std::make_unique<ByteAddressBuffer>(pGraphics);
-	m_pCounter->Create(pGraphics, 4, 1, false);
+	if (m_pCounter == nullptr)
+	{
+		m_pCounter = std::make_unique<ByteAddressBuffer>(pGraphics);
+		m_pCounter->Create(pGraphics, 4, 1, false);
+	}
 
 	pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, m_pCounter->GetResource(), &uavDesc, m_Uav);
 

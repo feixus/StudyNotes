@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer Data : register(b0)
 {
     float4x4 cViewProj;

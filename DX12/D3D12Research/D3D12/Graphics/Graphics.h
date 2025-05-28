@@ -79,7 +79,7 @@ public:
 	Matrix GetViewMatrix();
 
 	// constants
-	static const uint32_t FRAME_COUNT = 3;
+	static const uint32_t FRAME_COUNT = 2;
 	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;
 	static const int32_t MAX_SHADOW_CASTERS = 8;
 	static const int32_t SHADOW_MAP_SIZE = 4096;

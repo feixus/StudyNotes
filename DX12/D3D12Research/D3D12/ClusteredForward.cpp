@@ -12,6 +12,7 @@
 #include "Graphics/Profiler.h"
 
 static constexpr int cClusterSize = 64;
+static constexpr int cClusterCountZ = 32;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
     : m_pGraphics(pGraphics)
@@ -22,10 +23,9 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_ClusterCountX = (uint32_t)ceil(windowWidth / cClusterSize);
-	m_ClusterCountY = (uint32_t)ceil(windowHeight / cClusterSize);
-    m_ClusterCountZ = 32;
-    m_MaxClusters = m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ;
+	m_ClusterCountX = (uint32_t)ceil((float)windowWidth / cClusterSize);
+	m_ClusterCountY = (uint32_t)ceil((float)windowHeight / cClusterSize);
+    m_MaxClusters = m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
 
     struct AABB { Vector4 Min; Vector4 Max; };
     m_pAabbBuffer->Create(m_pGraphics, sizeof(AABB), m_MaxClusters, false);
@@ -57,12 +57,12 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 			Matrix ProjectionInverse;
 			Vector2 ScreenDimensions;
 			Vector2 ClusterSize;
-			int ClusterDimensions[3];
-			float NearZ;
-			float FarZ;
+			int ClusterDimensions[3]{};
+			float NearZ{0};
+			float FarZ{0};
 		} constantBuffer;
 
-		constantBuffer.ScreenDimensions = Vector2(windowWidth, windowHeight);
+		constantBuffer.ScreenDimensions = Vector2((float)windowWidth, (float)windowHeight);
 		constantBuffer.NearZ = nearZ;
 		constantBuffer.FarZ = farZ;
 		projection.Invert(constantBuffer.ProjectionInverse);
@@ -70,12 +70,12 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		constantBuffer.ClusterSize.y = cClusterSize;
 		constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 		constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
-		constantBuffer.ClusterDimensions[2] = m_ClusterCountZ;
+		constantBuffer.ClusterDimensions[2] = cClusterCountZ;
 
 		pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(constantBuffer));
 		pContext->SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetUAV());
 
-		pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, m_ClusterCountZ);
+		pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 
 		Profiler::Instance()->End(pContext);
 		uint64_t fence = pContext->Execute(true);
@@ -89,8 +89,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
     float farZ = 500.0f;
     Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, screenDimensions.x / screenDimensions.y, nearZ, farZ);
 
-    float sliceMagicA = (float)m_ClusterCountZ / log(farZ / nearZ);
-    float sliceMagicB = (float)m_ClusterCountZ * log(nearZ) / log(farZ / nearZ);
+    float sliceMagicA = (float)cClusterCountZ / log(farZ / nearZ);
+    float sliceMagicB = (float)cClusterCountZ * log(nearZ) / log(farZ / nearZ);
 
     // mark unique clusters
     {
@@ -117,10 +117,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         {
             Matrix WorldView;
             Matrix Projection;
-            uint32_t ClusterDimensions[4];
-            float ClusterSize[2];
-            float SliceMagicA;
-            float SliceMagicB;
+            uint32_t ClusterDimensions[4]{};
+            float ClusterSize[2]{};
+            float SliceMagicA{0};
+            float SliceMagicB{0};
         } constantBuffer;
 
         constantBuffer.WorldView = m_pGraphics->GetViewMatrix();
@@ -129,7 +129,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         constantBuffer.SliceMagicB = sliceMagicB;
         constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
         constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
-        constantBuffer.ClusterDimensions[2] = m_ClusterCountZ;
+        constantBuffer.ClusterDimensions[2] = cClusterCountZ;
         constantBuffer.ClusterDimensions[3] = 0;
         constantBuffer.ClusterSize[0] = cClusterSize;
         constantBuffer.ClusterSize[1] = cClusterSize;
@@ -259,13 +259,13 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			Matrix View;
 			Matrix Projection;
             Matrix ViewInverse;
-            uint32_t ClusterDimensions[4];
+            uint32_t ClusterDimensions[4]{};
             Vector2 ScreenDimensions;
-            float NearZ;
-            float FarZ;
-            float ClusterSize[2];
-            float SliceMagicA;
-            float SliceMagicB;
+            float NearZ{0};
+            float FarZ{0};
+            float ClusterSize[2]{};
+            float SliceMagicA{0};
+            float SliceMagicB{0};
         } frameData;
 
         Matrix view = m_pGraphics->GetViewMatrix();
@@ -274,7 +274,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         frameData.Projection = projection;
 		frameData.ClusterDimensions[0] = m_ClusterCountX;
 		frameData.ClusterDimensions[1] = m_ClusterCountY;
-		frameData.ClusterDimensions[2] = m_ClusterCountZ;
+		frameData.ClusterDimensions[2] = cClusterCountZ;
 		frameData.ClusterDimensions[3] = m_MaxClusters;
         frameData.ScreenDimensions = screenDimensions;
         frameData.NearZ = nearZ;

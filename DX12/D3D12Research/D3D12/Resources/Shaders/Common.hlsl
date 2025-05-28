@@ -1,3 +1,8 @@
+#ifndef H_COMMON
+#define H_COMMON
+
+#include "Constants.hlsl"
+
 //https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-packing-rules
 struct Light
 {
@@ -39,9 +44,59 @@ struct Cone
 
 struct AABB
 {
-	float3 Center;
-	float3 Extents;
+	float4 Center;
+	float4 Extents;
 };
+
+bool SphereInAABB(Sphere sphere, AABB aabb)
+{
+    float3 dist = max(0, abs(sphere.Position - aabb.Center.xyz) - aabb.Extents.xyz);
+    return dot(dist, dist) <= sphere.Radius * sphere.Radius;
+}
+
+bool SphereBehindPlane(Sphere sphere, Plane plane)
+{
+    return dot(plane.Normal, sphere.Position) + sphere.Radius < plane.DistanceToOrigin;
+}
+
+bool PointBehindPlane(float3 p, Plane plane)
+{
+    return dot(plane.Normal, p) < plane.DistanceToOrigin;
+}
+
+bool ConeBehindPlane(Cone cone, Plane plane)
+{
+    float3 furthestPointDir = cross(cross(plane.Normal, cone.Direction), cone.Direction);
+    float3 furthestPointOnCircle = cone.Tip + cone.Direction * cone.Height - furthestPointDir * cone.Radius;
+    return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(furthestPointOnCircle, plane);
+}
+
+bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
+{
+    Plane nearPlane, farPlane;
+    nearPlane.Normal = float3(0, 0, 1);
+    nearPlane.DistanceToOrigin = zNear;
+    farPlane.Normal = float3(0, 0, -1);
+    farPlane.DistanceToOrigin = -zFar;
+
+    bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
+    for (int i = 0; i < 4 && inside; ++i)
+    {
+        inside = !ConeBehindPlane(cone, frustum.Planes[i]);
+    }
+    return inside;
+}
+
+bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
+{
+    bool inside = sphere.Position.z + sphere.Radius > depthNear && sphere.Position.z - sphere.Radius < depthFar;
+    for (int i = 0; i < 4 && inside; ++i)
+    {
+        inside = !SphereBehindPlane(sphere, frustum.Planes[i]);
+    }
+
+    return inside;
+}
 
 Plane CalculatePlane(float3 a, float3 b, float3 c)
 {
@@ -56,8 +111,8 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 {
-	aabb.Center = (minimum + maximum) * 0.5f;
-	aabb.Extents = abs(maximum - aabb.Center);
+	aabb.Center = float4((minimum + maximum) * 0.5f, 0);
+	aabb.Extents = float4(maximum, 0) - aabb.Center;
 }
 
 float3 HUEtoRGB(in float H)
@@ -140,3 +195,5 @@ float GetCubeFaceIndex(const float3 v)
     }
     return faceIndex;
 }
+
+#endif

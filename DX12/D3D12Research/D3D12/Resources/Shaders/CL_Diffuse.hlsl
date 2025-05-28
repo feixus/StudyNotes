@@ -1,4 +1,3 @@
-#include "Constants.hlsl"
 #include "Common.hlsl"
 #include "Lighting.hlsl"
 

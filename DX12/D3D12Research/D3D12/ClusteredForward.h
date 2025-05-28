@@ -38,7 +38,6 @@ private:
     need adjust for diffrent platform or resolution ... */
 	uint32_t m_ClusterCountX{0};
     uint32_t m_ClusterCountY{0};
-    uint32_t m_ClusterCountZ{0};
     uint32_t m_MaxClusters{0};
 
     std::unique_ptr<GraphicsTexture2D> m_pHeatMapTexture;

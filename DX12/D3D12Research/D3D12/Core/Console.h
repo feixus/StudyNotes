@@ -42,7 +42,7 @@ public:
 private:
     void InitializeConsoleWindow();
 
-    char* m_ConvertBuffer;
+    char* m_ConvertBuffer{};
     const size_t m_ConvertBufferSize{4096};
     std::queue<LogEntry> m_MessageQueue;
     std::mutex m_QueueMutex;

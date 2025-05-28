@@ -1,8 +1,4 @@
-struct AABB
-{
-    float4 Center;
-    float4 Extents;
-};
+#include "Common.hlsl"
 
 cbuffer Parameters : register(b0)
 {

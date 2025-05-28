@@ -1125,7 +1125,7 @@ void Graphics::UpdateImGui()
 			}
 
 			ImGui::Text("%s Heaps: %d", prefix, m_pPersistentAllocationManager->GetHeapCount(type));
-			float totalSize = m_pPersistentAllocationManager->GetTotalSize(type) / 0b100000000000000000000;
+			float totalSize = (float)(m_pPersistentAllocationManager->GetTotalSize(type) / 0b100000000000000000000);
 			float usedSize = totalSize - m_pPersistentAllocationManager->GetRemainingSize(type) / 0b100000000000000000000;
 			std::stringstream str;
 			str << usedSize << "/" << totalSize;
