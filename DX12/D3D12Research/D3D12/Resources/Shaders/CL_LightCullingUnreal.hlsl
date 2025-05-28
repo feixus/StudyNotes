@@ -21,6 +21,7 @@ void AddLight(uint clusterIndex, uint lightIndex)
 {
     uint index;
     InterlockedAdd(uOutLightGrid[clusterIndex].y, 1, index);
+    uOutLightGrid[clusterIndex].x = clusterIndex * MAX_LIGHTS_PER_TILE;
     if (index < MAX_LIGHTS_PER_TILE)
     {
         uLightIndexList[clusterIndex * MAX_LIGHTS_PER_TILE + index] = lightIndex;
