@@ -72,6 +72,9 @@ private:
     std::unique_ptr<StructuredBuffer> m_pLightIndexGrid;
     std::unique_ptr<StructuredBuffer> m_pLightGrid;
 
+    // alternative light culling
+    std::unique_ptr<ComputePipelineState> m_pAlternativeLightCullingPSO;
+
     // step 6: lighting
     std::unique_ptr<RootSignature> m_pDiffuseRS;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;

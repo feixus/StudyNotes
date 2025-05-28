@@ -73,7 +73,7 @@ struct CS_Input
     uint GroupIndex : SV_GroupIndex;
 };
 
-#define THREAD_COUNT 1024
+#define THREAD_COUNT 512
 
 [numthreads(THREAD_COUNT, 1, 1)]
 void LightCulling(CS_Input input)

@@ -1069,6 +1069,9 @@ void Graphics::UpdateImGui()
 			return true;
 			}, nullptr, 2);
 		
+		extern bool gUseAlternativeLightCulling;
+		ImGui::Checkbox("Alternative Light Culling", &gUseAlternativeLightCulling);
+
 		ImGui::TreePop();
 	}
 
