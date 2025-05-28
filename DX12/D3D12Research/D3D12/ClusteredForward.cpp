@@ -42,7 +42,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 
 	float nearZ = 2.0f;
 	float farZ = 500.0f;
-	Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, windowWidth / windowHeight, nearZ, farZ);
+	Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)windowWidth / windowHeight, nearZ, farZ);
 
 	// create AABBs
 	{
