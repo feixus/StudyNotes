@@ -78,7 +78,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 
 		Profiler::Instance()->End(pContext);
-		uint64_t fence = pContext->Execute(true);
+		pContext->Execute(true);
 	}
 }
 
@@ -165,83 +165,80 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWaitForFence(fence);
     }
     
-    // compact clusters
     {
-        ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-        Profiler::Instance()->Begin("Compact Clusters", pContext);
-
-        pContext->SetComputePipelineState(m_pCompactClusterListPSO.get());
-        pContext->SetComputeRootSignature(m_pCompactClusterListRS.get());
-
-        uint32_t values[] = {0, 0, 0, 0};
-        pContext->ClearUavUInt(m_pActiveClusterListBuffer->GetCounter(), values);
-
-        pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusterBuffer->GetSRV());
-        pContext->SetDynamicDescriptor(1, 0, m_pActiveClusterListBuffer->GetUAV());
-
-        pContext->Dispatch((int)ceil(m_MaxClusters / 64), 1, 1);
-        
-        Profiler::Instance()->End(pContext);
-        pContext->Execute(false);
-    }
-
-    // update indirect arguments
-    {
-		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-        Profiler::Instance()->Begin("Update Indirect Arguments", pContext);
-
-        pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
-
-        pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
-		pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
-
-        pContext->SetDynamicDescriptor(0, 0, m_pActiveClusterListBuffer->GetCounter()->GetSRV());
-		pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
-
-        pContext->Dispatch(1, 1, 1);
-        Profiler::Instance()->End(pContext);
-        pContext->Execute(false);
-    }
-
-    // light culling
-    {
-        ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-        Profiler::Instance()->Begin("Light Culling", pContext);
-
-        pContext->SetComputePipelineState(m_pLightCullingPSO.get());
-        pContext->SetComputeRootSignature(m_pLightCullingRS.get());
-
-        pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
-
-        //Profiler::Instance()->Begin("Update Data", pContext);
-        uint32_t zero = 0;
-        m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32_t));
-        /*std::vector<uint32_t> zero2(64 * m_MaxClusters);
-        memset(zero2.data(), 0, sizeof(uint32_t) * zero2.size());
-        m_pLightIndexGrid->SetData(pContext, zero2.data(), zero2.size() * sizeof(uint32_t));*/
-        m_pLights->SetData(pContext, inputResource.pLights->data(), sizeof(Light) * inputResource.pLights->size(), 0);
-        //Profiler::Instance()->End(pContext);
-
-        struct ConstantBuffer
+        // compact clusters
         {
-            Matrix View;
-        } constantBuffer;
+            ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+            Profiler::Instance()->Begin("Compact Clusters", pContext);
 
-        constantBuffer.View = m_pGraphics->GetViewMatrix();
+            pContext->SetComputePipelineState(m_pCompactClusterListPSO.get());
+            pContext->SetComputeRootSignature(m_pCompactClusterListRS.get());
 
-        pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-        pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
-        pContext->SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
-        pContext->SetDynamicDescriptor(1, 2, m_pActiveClusterListBuffer->GetSRV());
-        pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
-        pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
-        pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+            uint32_t values[] = {0, 0, 0, 0};
+            pContext->ClearUavUInt(m_pActiveClusterListBuffer->GetCounter(), values);
 
-        pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+            pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusterBuffer->GetSRV());
+            pContext->SetDynamicDescriptor(1, 0, m_pActiveClusterListBuffer->GetUAV());
 
-        Profiler::Instance()->End(pContext);
-        uint64_t fence = pContext->Execute(false);
-        m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
+            pContext->Dispatch((int)ceil(m_MaxClusters / 64.f), 1, 1);
+        
+            Profiler::Instance()->End(pContext);
+            pContext->Execute(false);
+        }
+
+        // update indirect arguments
+        {
+		    ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+            Profiler::Instance()->Begin("Update Indirect Arguments", pContext);
+
+            pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
+
+            pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
+		    pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
+
+            pContext->SetDynamicDescriptor(0, 0, m_pActiveClusterListBuffer->GetCounter()->GetSRV());
+		    pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
+
+            pContext->Dispatch(1, 1, 1);
+            Profiler::Instance()->End(pContext);
+            pContext->Execute(false);
+        }
+
+        // light culling
+        {
+            ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+            Profiler::Instance()->Begin("Light Culling", pContext);
+
+            pContext->SetComputePipelineState(m_pLightCullingPSO.get());
+            pContext->SetComputeRootSignature(m_pLightCullingRS.get());
+
+            pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
+
+            uint32_t zero = 0;
+            m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32_t));
+            m_pLights->SetData(pContext, inputResource.pLights->data(), sizeof(Light) * inputResource.pLights->size(), 0);
+
+            struct ConstantBuffer
+            {
+                Matrix View;
+            } constantBuffer;
+
+            constantBuffer.View = m_pGraphics->GetViewMatrix();
+
+            pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+            pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+            pContext->SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
+            pContext->SetDynamicDescriptor(1, 2, m_pActiveClusterListBuffer->GetSRV());
+            pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
+            pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
+            pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+
+            pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+
+            Profiler::Instance()->End(pContext);
+            uint64_t fence = pContext->Execute(false);
+            m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
+        }
     }
 
     // base pass

@@ -39,8 +39,6 @@ void Graphics::Initialize(HWND hWnd)
 	InitD3D();
 	InitializeAssets();
 
-	m_FrameTimes.resize(64*3);
-
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 
@@ -57,6 +55,8 @@ Matrix Graphics::GetViewMatrix()
 
 void Graphics::Update()
 {
+	Profiler::Instance()->Begin("Update Game State");
+
 	// render forward+ tiles
 	if (Input::Instance().IsKeyPressed('P'))
 	{
@@ -162,6 +162,8 @@ void Graphics::Update()
 	//++m_ShadowCasters;
 	//lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
 	//lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.75f, 0.5f, 0.25f, 0);
+
+	Profiler::Instance()->End();
 
 	////////////////////////////////
 	// Rendering Begin
@@ -519,12 +521,13 @@ void Graphics::EndFrame(uint64_t fenceValue)
 	// the 'm_CurrentBackBufferIndex' is always in the new buffer frame
 	// we present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame
 
-	Profiler::Instance()->BeginReadback(m_CurrentBackBufferIndex);
+	++m_Frame;
+	Profiler::Instance()->BeginReadback(m_Frame);
 	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	Profiler::Instance()->EndReadBack(m_CurrentBackBufferIndex);
+	Profiler::Instance()->EndReadBack(m_Frame);
 }
 
 void Graphics::InitD3D()
@@ -1031,11 +1034,7 @@ void Graphics::InitializeAssets()
 
 void Graphics::UpdateImGui()
 {
-	for (int i = 1; i < m_FrameTimes.size(); i++)
-	{
-		m_FrameTimes[i - 1] = m_FrameTimes[i];
-	}
-	m_FrameTimes[m_FrameTimes.size() - 1] = GameTimer::DeltaTime();
+	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 	
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
@@ -1046,27 +1045,32 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(100);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 
-	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
+	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(200, 100));
 
 	ImGui::Text("LoadSponzaTime: %.1f", m_LoadSponzaTime);
 	ImGui::Text("Light Count: %d", MAX_LIGHT_COUNT);
 
-	ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
-		{
-			RenderPath path = (RenderPath)index;
-			switch (path)
+	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
 			{
-			case RenderPath::Tiled:
-				*outText = "Tiles";
-				break;
-			case RenderPath::Clustered:
-				*outText = "Clustered";
-				break;
-			default:
-				break;
-			}
-		return true;
-		}, nullptr, 2);
+				RenderPath path = (RenderPath)index;
+				switch (path)
+				{
+				case RenderPath::Tiled:
+					*outText = "Tiles";
+					break;
+				case RenderPath::Clustered:
+					*outText = "Clustered";
+					break;
+				default:
+					break;
+				}
+			return true;
+			}, nullptr, 2);
+		
+		ImGui::TreePop();
+	}
 
 	if (ImGui::TreeNodeEx("Descriptor Heaps", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -1137,33 +1141,50 @@ void Graphics::UpdateImGui()
 	ImGui::End();
 
 	static bool showOutputLog = true;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 	ImGui::SetNextWindowPos(ImVec2(250, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
-	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 250, 250));
+	ImGui::SetNextWindowSize(ImVec2(showOutputLog ? (float)(m_WindowWidth - 250) * 0.5f : (float)m_WindowWidth - 250, 250));
 	ImGui::SetNextWindowCollapsed(!showOutputLog);
 
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	for (const Console::LogEntry& entry : Console::GetHistory())
+	if (showOutputLog)
 	{
-		switch (entry.Type)
+		ImGui::SetScrollHereY(1.0f);
+		for (const Console::LogEntry& entry : Console::GetHistory())
 		{
-		case LogType::VeryVerbose:
-		case LogType::Verbose:
-		case LogType::Info:
-			ImGui::TextColored(ImVec4(1, 1, 1, 1), "%s", entry.Message.c_str());
-			break;
-		case LogType::Warning:
-			ImGui::TextColored(ImVec4(1, 1, 0, 1), "%s", entry.Message.c_str());
-			break;
-		case LogType::Error:
-			ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", entry.Message.c_str());
-			break;
-		default:
-			break;
+			switch (entry.Type)
+			{
+			case LogType::VeryVerbose:
+			case LogType::Verbose:
+			case LogType::Info:
+				ImGui::TextColored(ImVec4(1, 1, 1, 1), "%s", entry.Message.c_str());
+				break;
+			case LogType::Warning:
+				ImGui::TextColored(ImVec4(1, 1, 0, 1), "%s", entry.Message.c_str());
+				break;
+			case LogType::Error:
+				ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", entry.Message.c_str());
+				break;
+			default:
+				break;
+			}
 		}
 	}
 
-	ImGui::SetScrollHereY(1.0f);
 	ImGui::End();
+
+	if (showOutputLog)
+	{
+		ImGui::SetNextWindowPos(ImVec2(250 + (m_WindowWidth - 250) * 0.5f, showOutputLog ? m_WindowHeight - 250 : m_WindowHeight - 20));
+		ImGui::SetNextWindowSize(ImVec2((m_WindowWidth - 250) * 0.5f, 250));
+		ImGui::SetNextWindowCollapsed(!showOutputLog);
+		ImGui::Begin("Profiler", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+		ProfileNode* pRootNode = Profiler::Instance()->GetRootNode();
+		pRootNode->RenderImGui(m_Frame);
+		ImGui::End();
+	}
+
+	ImGui::PopStyleVar();
 }
 
 void Graphics::RandomizeLights()

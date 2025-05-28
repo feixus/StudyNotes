@@ -30,6 +30,7 @@
 #include "External/Imgui/imgui.h"
 #include "Core/Console.h"
 #include "Graphics/D3DUtils.h"
+#include "Core/StringHash.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;

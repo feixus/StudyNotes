@@ -4,7 +4,211 @@
 #include "CommandQueue.h"
 #include "GraphicsBuffer.h"
 
+#define USE_PIX
+#ifdef USE_PIX
 #include <pix3.h>
+#endif
+
+void CpuTimer::Begin()
+{
+	LARGE_INTEGER start;
+	QueryPerformanceCounter(&start);
+	m_StartTime = start.QuadPart;
+}
+
+void CpuTimer::End()
+{
+	LARGE_INTEGER end;
+	QueryPerformanceCounter(&end);
+	m_EndTime = end.QuadPart;
+}
+
+float CpuTimer::GetTime() const
+{
+	return (float)(m_EndTime - m_StartTime) * Profiler::Instance()->GetSecondsPerCpuTick() * 1000.0f;
+}
+
+GpuTimer::GpuTimer()
+{
+	m_TimerIndex = Profiler::Instance()->GetNextTimerIndex();
+}
+
+void GpuTimer::Begin(CommandContext* pContext)
+{
+	if (m_TimerIndex == -1)
+	{
+		m_TimerIndex = Profiler::Instance()->GetNextTimerIndex();
+	}
+	Profiler::Instance()->StartGpuTimer(pContext, m_TimerIndex);
+}
+
+void GpuTimer::End(CommandContext* pContext)
+{
+	Profiler::Instance()->StopGpuTimer(pContext, m_TimerIndex);
+}
+
+float GpuTimer::GetTime() const
+{
+	return Profiler::Instance()->GetGpuTime(m_TimerIndex);
+}
+
+void ProfileNode::StartTimer(CommandContext* pContext)
+{
+	m_CpuTimer.Begin();
+
+	if (pContext)
+	{
+		m_GpuTimer.Begin(pContext);
+
+#ifdef USE_PIX
+		::PIXBeginEvent(pContext->GetCommandList(), 0, m_Name);
+#endif
+	}
+}
+
+void ProfileNode::EndTimer(CommandContext* pContext)
+{
+	m_CpuTimer.End();
+	m_Processed = false;
+
+	if (pContext)
+	{
+		m_GpuTimer.End(pContext);
+
+#ifdef USE_PIX
+		::PIXEndEvent(pContext->GetCommandList());
+#endif
+	}
+}
+
+void ProfileNode::PopulateTimes(int frameIndex)
+{
+	if (m_Processed == false)
+	{
+		m_Processed = true;
+		m_LastProcessedFrame = frameIndex;
+		float cpuTime = m_CpuTimer.GetTime();
+		float gpuTime = m_GpuTimer.GetTime();
+		m_CpuTimeHistory.AddTime(frameIndex, cpuTime);
+		m_GpuTimeHistory.AddTime(frameIndex, gpuTime);
+
+		for (auto& child : m_Children)
+		{
+			child->PopulateTimes(frameIndex);
+		}
+	}
+}
+
+void ProfileNode::LogTimes(int frameIndex, void(*pLogFunction)(const char* pText), int depth, bool isRoot)
+{
+	if (frameIndex - m_LastProcessedFrame < 60)
+	{
+		if (isRoot)
+		{
+			E_LOG(LogType::Info, "Timings for frame: %d", frameIndex);
+			return;
+		}
+
+		std::stringstream stream;
+		for (int i = 0; i < depth; i++)
+		{
+			stream << "\t";
+		}
+		stream << "[" << m_Name << "] GPU: " << m_GpuTimeHistory.GetAverage() << " ms. CPU: " << m_CpuTimeHistory.GetAverage() << " ms" << std::endl;
+		pLogFunction(stream.str().c_str());
+
+		for (auto& child : m_Children)
+		{
+			child->LogTimes(frameIndex, pLogFunction, depth + 1, false);
+		}
+	}
+}
+
+void ProfileNode::RenderImGui(int frameIndex)
+{
+	ImGui::Spacing();
+	ImGui::Columns(3);
+
+	ImGui::PushID(ImGui::GetID(m_Name));
+	ImGui::Text("Event Name");
+	ImGui::NextColumn();
+	ImGui::Text("CPU Time");
+	ImGui::NextColumn();
+	ImGui::Text("GPU Time");
+	ImGui::NextColumn();
+
+	for (auto& pChild : m_Children)
+	{
+		pChild->RenderNodeImGui(frameIndex);
+	}
+
+	ImGui::PopID();
+	ImGui::Separator();
+}
+
+void ProfileNode::RenderNodeImGui(int frameIndex)
+{
+	if (frameIndex - m_LastProcessedFrame < 60)
+	{
+		ImGui::PushID(m_Hash);
+
+		bool expand = false;
+		if (m_Children.size() > 0)
+		{
+			expand = ImGui::TreeNode(m_Name);
+		}
+		else
+		{
+			ImGui::Bullet();
+			ImGui::Selectable(m_Name);
+		}
+
+		ImGui::NextColumn();
+
+		float time = m_CpuTimeHistory.GetAverage();
+		ImGui::Text("%8.5f ms", time);
+		ImGui::NextColumn();
+
+		time = m_GpuTimeHistory.GetAverage();
+		if (time > 0)
+		{
+			ImGui::Text("%8.5f ms", time);
+		}
+		else
+		{
+			ImGui::Text("N/A");
+		}
+		ImGui::NextColumn();
+
+		if (expand)
+		{
+			for (auto& pChild : m_Children)
+			{
+				pChild->RenderImGui(frameIndex);
+			}
+			ImGui::TreePop();
+		}
+
+		ImGui::PopID();
+	}
+}
+
+ProfileNode* ProfileNode::GetChild(const char* pName)
+{
+	StringHash hash(pName);
+	auto it = m_Map.find(hash);
+	if (it != m_Map.end())
+	{
+		return it->second;
+	}
+
+	std::unique_ptr<ProfileNode> pNewNode = std::make_unique<ProfileNode>(pName, hash, this);
+	m_Children.push_back(std::move(pNewNode));
+	ProfileNode* pNode = m_Children.back().get();
+	m_Map[hash] = pNode;
+	return pNode;
+}
+
 
 Profiler* Profiler::Instance()
 {
@@ -34,106 +238,67 @@ void Profiler::Initialize(Graphics* pGraphics)
 	QueryPerformanceFrequency(&cpuFrequency);
 	m_SecondsPerCpuTick = 1.0f / cpuFrequency.QuadPart;
 
-	m_pRootBlock = std::make_unique<Block>();
+	m_pRootBlock = std::make_unique<ProfileNode>("", StringHash(""), nullptr);
 	m_pCurrentBlock = m_pRootBlock.get();
-
-	m_CurrentTimer = 0;
 }
 
 void Profiler::Begin(const char* pName, CommandContext* pContext)
 {
-	std::unique_ptr<Block> pNewBlock = std::make_unique<Block>(pName, m_pCurrentBlock);
-	pNewBlock->CpuTimer.Begin();
-
-	if (pContext)
-	{
-		int startIndex = pNewBlock->GpuTimer.GetTimerIndex() * 2;
-		pContext->GetCommandList()->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, startIndex);
-		m_pCurrentBlock->Children.push_back(std::move(pNewBlock));
-		m_pCurrentBlock = m_pCurrentBlock->Children.back().get();
-		
-		wchar_t name[256];
-		size_t written = 0;
-		mbstowcs_s(&written, name, pName, 256);
-		::PIXBeginEvent(pContext->GetCommandList(), 0, name);
-	}
+	m_pCurrentBlock = m_pCurrentBlock->GetChild(pName);
+	m_pCurrentBlock->StartTimer(pContext);
 }
 
 void Profiler::End(CommandContext* pContext)
 {
-	m_pCurrentBlock->CpuTimer.End();
-
-	if (pContext)
-	{
-		int endIndex = m_pCurrentBlock->GpuTimer.GetTimerIndex() * 2 + 1;
-		pContext->GetCommandList()->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, endIndex);
-		m_pCurrentBlock = m_pCurrentBlock->pParent;
-
-		::PIXEndEvent(pContext->GetCommandList());
-	}
+	m_pCurrentBlock->EndTimer(pContext);
+	m_pCurrentBlock = m_pCurrentBlock->GetParent();
 }
 
 void Profiler::BeginReadback(int frameIndex)
 {
-	GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	int startIndex = HEAP_SIZE * frameIndex * 2;
-	int numQueries = (m_CurrentTimer - m_LastFrameTimer) * 2;
-	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, startIndex, numQueries, m_pReadBackBuffer->GetResource(), startIndex * sizeof(uint64_t));
-	m_FenceValues[frameIndex] = pContext->Execute(false);
+	int backBufferIndex = frameIndex % Graphics::FRAME_COUNT;
 
 	assert(m_pCurrentReadBackData == nullptr);
-	m_pGraphics->WaitForFence(m_FenceValues[frameIndex]);
+	m_pGraphics->WaitForFence(m_FenceValues[backBufferIndex]);
 
-   	m_pCurrentReadBackData = (uint64_t*)m_pReadBackBuffer->Map(0, 0, m_pReadBackBuffer->GetSize());
-
-	assert(m_pCurrentBlock == m_pRootBlock.get());
-	m_pCurrentBlock = m_pRootBlock->Children.front().get();
-	int depth = 0;
-	std::stringstream stream;
-	bool run = true;
-	while (run)
-	{
-		for (int i = 0; i < depth; i++)
-		{
-			stream << "\t";
-		}
-		stream << "[" << m_pCurrentBlock->Name << "] > GPU: " << m_pCurrentBlock->GpuTimer.GetTime(m_SecondsPerGpuTick) << " ms";
-
-		stream << "\t CPU: " << m_pCurrentBlock->CpuTimer.GetTime(m_SecondsPerCpuTick) << " ms" << std::endl;
-
-		while (m_pCurrentBlock->Children.size() == 0)
-		{
-			m_pCurrentBlock = m_pCurrentBlock->pParent;
-			if (m_pCurrentBlock == nullptr)
-			{
-				run = false;
-				break;
-			}
-			m_pCurrentBlock->Children.pop_front();
-			--depth;
-		}
-
-		if (!run)
-		{
-			break;
-		}
-
-		m_pCurrentBlock = m_pCurrentBlock->Children.front().get();
-		depth++;
-	}
-
-	//std::cout << stream.str() << std::endl;
-	E_LOG(LogType::Info, "%s", stream.str().c_str());
-	m_pCurrentBlock = m_pRootBlock.get();
+	m_pCurrentReadBackData = (uint64_t*)m_pReadBackBuffer->Map(0, 0, m_pReadBackBuffer->GetSize());
+	m_pCurrentBlock->PopulateTimes(frameIndex);
 }
 
 void Profiler::EndReadBack(int frameIndex)
 {
+	int backBufferIndex = frameIndex % Graphics::FRAME_COUNT;
+
 	m_pReadBackBuffer->UnMap();
 	m_pCurrentReadBackData = nullptr;
 
-	m_CurrentTimer = HEAP_SIZE* frameIndex;
-	m_LastFrameTimer = m_CurrentTimer;
+	int offset = HEAP_SIZE * backBufferIndex * 2;
+	m_pCurrentBlock->StartTimer(nullptr);
+	m_pCurrentBlock->EndTimer(nullptr);
+
+	GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, offset, HEAP_SIZE, m_pReadBackBuffer->GetResource(), offset);
+	m_FenceValues[backBufferIndex] = pContext->Execute(false);
+
+	m_CurrentTimer = HEAP_SIZE * backBufferIndex;
+}
+
+float Profiler::GetGpuTime(int timerIndex) const
+{
+	assert(m_pCurrentReadBackData != nullptr);
+	uint64_t start = m_pCurrentReadBackData[timerIndex * 2];
+	uint64_t end = m_pCurrentReadBackData[timerIndex * 2 + 1];
+	return (float)(end - start) * m_SecondsPerGpuTick * 1000.0f;
+}
+
+void Profiler::StartGpuTimer(CommandContext* pContext, int timerIndex)
+{
+	pContext->GetCommandList()->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2);
+}
+
+void Profiler::StopGpuTimer(CommandContext* pContext, int timerIndex)
+{
+	pContext->GetCommandList()->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2 + 1);
 }
 
 int32_t Profiler::GetNextTimerIndex()
@@ -141,46 +306,4 @@ int32_t Profiler::GetNextTimerIndex()
 	return m_CurrentTimer++;
 }
 
-void CpuTimer::Begin()
-{
-	LARGE_INTEGER start;
-	QueryPerformanceCounter(&start);
-	m_StartTime = start.QuadPart;
-}
 
-void CpuTimer::End()
-{
-	LARGE_INTEGER end;
-	QueryPerformanceCounter(&end);
-	m_EndTime = end.QuadPart;
-}
-
-float CpuTimer::GetTime(float ticksPerSecond) const
-{
-	return (float)(m_EndTime - m_StartTime) * ticksPerSecond * 1000.0f;
-}
-
-GpuTimer::GpuTimer()
-{
-	m_TimerIndex = Profiler::Instance()->GetNextTimerIndex();
-}
-
-void GpuTimer::Begin(const char* pName, CommandContext* pContext)
-{
-	Profiler::Instance()->Begin(pName, pContext);
-}
-
-void GpuTimer::End(CommandContext* pContext)
-{
-	Profiler::Instance()->End(pContext);
-}
-
-float GpuTimer::GetTime(float ticksPerSecond) const
-{
-	const uint64_t* pData = Profiler::Instance()->GetData();
-	assert(pData);
-
-	uint64_t start = pData[m_TimerIndex * 2];
-	uint64_t end = pData[m_TimerIndex * 2 + 1];
-	return (float)((end - start) * ticksPerSecond * 1000.0);
-}
