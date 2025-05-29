@@ -77,8 +77,8 @@ void GameTimer::Tick()
 	__int64 curTime;
 	QueryPerformanceCounter((LARGE_INTEGER*)&curTime);
 	m_DeltaTime = (curTime - m_PrevTime) * m_SecondsPerCount;
-	m_PrevTime = m_CurrTime;
 	m_CurrTime = curTime;
+	m_PrevTime = m_CurrTime;
 
 	if (m_DeltaTime < 0.0f)
 	{
