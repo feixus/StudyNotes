@@ -14,7 +14,7 @@
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
-bool gUseAlternativeLightCulling = true;
+bool gUseAlternativeLightCulling = false;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
     : m_pGraphics(pGraphics)
@@ -39,7 +39,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
     m_pActiveClusterListBuffer->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters, false);
     m_pActiveClusterListBuffer->SetName("Active Cluster List");
 
-    m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters * 256);
+    m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters * 32);
     m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32_t), m_MaxClusters);
 
 	float nearZ = 2.0f;
@@ -219,7 +219,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             Profiler::Instance()->Begin("Set Data", pContext);
 			uint32_t zero = 0;
 			m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32_t));
-			m_pLights->SetData(pContext, inputResource.pLights->data(), sizeof(Light)* inputResource.pLights->size(), 0);
             std::vector<char> zeros(2 * sizeof(uint32_t) * m_MaxClusters);
             m_pLightGrid->SetData(pContext, zeros.data(), sizeof(char) * zeros.size());
             Profiler::Instance()->End(pContext);
@@ -228,15 +227,17 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			{
 				Matrix View;
                 uint32_t ClusterDimensions[3]{};
+                int LightCount{0};
 			} constantBuffer;
 
             constantBuffer.View = m_pGraphics->GetViewMatrix();
 			constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 			constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
 			constantBuffer.ClusterDimensions[2] = cClusterCountZ;
+            constantBuffer.LightCount = inputResource.pLightBuffer->GetElementCount();
 
 			pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-			pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+			pContext->SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());
 			pContext->SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
 			pContext->SetDynamicDescriptor(1, 2, m_pActiveClusterListBuffer->GetSRV());
 			pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
@@ -244,7 +245,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
 
             pContext->Dispatch((int)ceil((float)m_ClusterCountX / 4), (int)ceil((float)m_ClusterCountY / 4), (int)ceil((float)cClusterCountZ / 4));
-            //pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
             
             Profiler::Instance()->End(pContext);
             uint64_t fence = pContext->Execute(false);
@@ -262,17 +262,18 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
             uint32_t zero = 0;
             m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32_t));
-            m_pLights->SetData(pContext, inputResource.pLights->data(), sizeof(Light) * inputResource.pLights->size(), 0);
 
             struct ConstantBuffer
             {
                 Matrix View;
+                int LightCount;
             } constantBuffer;
 
             constantBuffer.View = m_pGraphics->GetViewMatrix();
+            constantBuffer.LightCount = inputResource.pLightBuffer->GetElementCount();
 
             pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-            pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+            pContext->SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());
             pContext->SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
             pContext->SetDynamicDescriptor(1, 2, m_pActiveClusterListBuffer->GetSRV());
             pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
@@ -349,7 +350,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			pContext->SetDynamicDescriptor(3, 0, m_pLightGrid->GetSRV());
 			pContext->SetDynamicDescriptor(3, 1, m_pLightIndexGrid->GetSRV());
-			pContext->SetDynamicDescriptor(3, 2, m_pLights->GetSRV());
+			pContext->SetDynamicDescriptor(3, 2, inputResource.pLightBuffer->GetSRV());
 			pContext->SetDynamicDescriptor(4, 0, m_pHeatMapTexture->GetSRV());
 
 		    for (const Batch& b : *inputResource.pOpaqueBatches)
@@ -401,8 +402,6 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pIndirectArguments = std::make_unique<ByteAddressBuffer>(pGraphics);
     m_pIndirectArguments->Create(m_pGraphics, sizeof(uint32_t), 3, false);
 
-	m_pLights = std::make_unique<StructuredBuffer>(pGraphics);
-	m_pLights->Create(m_pGraphics, sizeof(Light), Graphics::MAX_LIGHT_COUNT);
 	m_pLightIndexCounter = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pLightIndexCounter->Create(m_pGraphics, sizeof(uint32_t), 1);
 	m_pLightIndexGrid = std::make_unique<StructuredBuffer>(pGraphics);

@@ -17,6 +17,9 @@
 #include "PersistentResourceAllocator.h"
 #include "ClusteredForward.h"
 
+bool gSortOpaqueMeshes = true;
+bool gSortTransparentMeshes = true;
+
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
@@ -30,7 +33,6 @@ void Graphics::Initialize(HWND hWnd)
 {
 	m_pWindow = hWnd;
 
-	Shader::AddGlobalShaderDefine("LIGHT_COUNT", std::to_string(MAX_LIGHT_COUNT));
 	Shader::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
 	Shader::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
 	Shader::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(5));
@@ -39,10 +41,10 @@ void Graphics::Initialize(HWND hWnd)
 	InitD3D();
 	InitializeAssets();
 
+	RandomizeLights(m_DesiredLightCount);
+
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
-
-	RandomizeLights();
 }
 
 Matrix Graphics::GetViewMatrix()
@@ -65,7 +67,7 @@ void Graphics::Update()
 
 	if (Input::Instance().IsKeyPressed('O'))
 	{
-		RandomizeLights();
+		RandomizeLights(m_DesiredLightCount);
 	}
 
 	// camera movement
@@ -88,19 +90,26 @@ void Graphics::Update()
 	movement *= GameTimer::DeltaTime() * 20.0f;
 	m_CameraPosition += movement;
 
-	// set main light position
-	/*m_Lights[0].Position = Vector3(cos(GameTimer::GameTime() / 5.0f), 1.5f, sin(GameTimer::GameTime() / 5.0f)) * 120;
-	m_Lights[0].Position.Normalize(m_Lights[0].Direction);
-	m_Lights[0].Direction *= -1;*/
 	m_Lights[0].Position = Vector3(cos(GameTimer::GameTime() / 20.f) * 70, 50, 0);
 
-	SortBatchesBackToFront(m_CameraPosition, m_TransparentBatches);
+	std::sort(m_TransparentBatches.begin(), m_TransparentBatches.end(), [this](const Batch& a, const Batch& b) {
+		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_CameraPosition);
+		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_CameraPosition);
+		return aDist > bDist;
+	});
+
+	std::sort(m_OpaqueBatches.begin(), m_OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
+		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_CameraPosition);
+		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_CameraPosition);
+		return aDist < bDist;
+	});
 
 	// per frame constants
 	////////////////////////////////////
 	struct PerFrameData
 	{
 		Matrix ViewInverse;
+		uint32_t LightCount;
 	} frameData;
 
 	// camera constants
@@ -108,6 +117,7 @@ void Graphics::Update()
 
 	Matrix cameraView;
 	frameData.ViewInverse.Invert(cameraView);
+	frameData.LightCount = (uint32_t)m_Lights.size();
 	Matrix cameraProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
 	Matrix cameraViewProj = cameraView * cameraProj;
 
@@ -176,6 +186,7 @@ void Graphics::Update()
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
+		Profiler::Instance()->Begin("Tiled Forward+");
 		// 1. depth prepass
 		// - depth only pass that renders the entire scene
 		// - optimization that prevents wasteful lighting calculations during the base pass
@@ -266,6 +277,7 @@ void Graphics::Update()
 				Matrix ProjectionInverse;
 				uint32_t NumThreadGroups[4]{};
 				Vector2 ScreenDimensions;
+				uint32_t LightCount;
 			} Data;
 
 			Data.CameraView = cameraView;
@@ -274,6 +286,7 @@ void Graphics::Update()
 			Data.NumThreadGroups[2] = 1;
 			Data.ScreenDimensions.x = (float)m_WindowWidth;
 			Data.ScreenDimensions.y = (float)m_WindowHeight;
+			Data.LightCount = (uint32_t)m_Lights.size();
 			cameraProj.Invert(Data.ProjectionInverse);
 
 			pCommandContext->SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
@@ -455,16 +468,19 @@ void Graphics::Update()
 
 			pCommandContext->Execute(false);
 		}
+		Profiler::Instance()->End();
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
+		Profiler::Instance()->Begin("Clustered Forward+");
 		ClusteredForwardInputResource resources;
 		resources.pDepthPrepassBuffer = GetDepthStencil();
 		resources.pOpaqueBatches = &m_OpaqueBatches;
 		resources.pTransparentBatches = &m_TransparentBatches;
 		resources.pRenderTarget = GetCurrentRenderTarget();
-		resources.pLights = &m_Lights;
+		resources.pLightBuffer = m_pLightBuffer.get();
 		m_pClusteredForward->Execute(resources);
+		Profiler::Instance()->End();
 	}
 
 	{
@@ -1000,7 +1016,6 @@ void Graphics::InitializeAssets()
 		m_pLightIndexListBufferTransparent = std::make_unique<StructuredBuffer>(this);
 		m_pLightIndexListBufferTransparent->Create(this, sizeof(uint32_t), MAX_LIGHT_DENSITY);
 		m_pLightBuffer = std::make_unique<StructuredBuffer>(this);
-		m_pLightBuffer->Create(this, sizeof(Light), MAX_LIGHT_COUNT, false);
 	}
 
 	// geometry
@@ -1048,7 +1063,7 @@ void Graphics::UpdateImGui()
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(200, 100));
 
 	ImGui::Text("LoadSponzaTime: %.1f", m_LoadSponzaTime);
-	ImGui::Text("Light Count: %d", MAX_LIGHT_COUNT);
+	ImGui::Text("Light Count: %d", m_Lights.size());
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -1071,6 +1086,13 @@ void Graphics::UpdateImGui()
 		
 		extern bool gUseAlternativeLightCulling;
 		ImGui::Checkbox("Alternative Light Culling", &gUseAlternativeLightCulling);
+
+		ImGui::Separator();
+		ImGui::SliderInt("Lights", &m_DesiredLightCount, 0, 16384);
+		if (ImGui::Button("Generate Lights"))
+		{
+			RandomizeLights(m_DesiredLightCount);
+		}
 
 		ImGui::TreePop();
 	}
@@ -1190,32 +1212,17 @@ void Graphics::UpdateImGui()
 	ImGui::PopStyleVar();
 }
 
-void Graphics::RandomizeLights()
+void Graphics::RandomizeLights(int count)
 {
+	m_Lights.resize(count);
+
 	BoundingBox sceneBounds;
 	sceneBounds.Center = Vector3(0, 70, 0);
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
-	m_Lights.resize(MAX_LIGHT_COUNT);
-
 	int lightIndex = 0;
 	m_Lights[lightIndex] = Light::Point(Vector3(0, 20, 0), 200);
 	m_Lights[lightIndex].ShadowIndex = lightIndex;
-	/*Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 120;
-	Vector3 mainLightDirection;
-	mainLightPosition.Normalize(mainLightDirection);
-	mainLightDirection *= -1;
-	m_Lights[lightIndex] = Light::Directional(mainLightPosition, mainLightDirection);
-	m_Lights[lightIndex].ShadowIndex = lightIndex;
-	++lightIndex;
-	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Right, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
-	m_Lights[lightIndex].ShadowIndex = lightIndex;
-	++lightIndex;
-	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Forward, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
-	m_Lights[lightIndex].ShadowIndex = lightIndex;
-	++lightIndex;
-	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Backward, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
-	m_Lights[lightIndex].ShadowIndex = lightIndex;*/
 
 	int randomLightsStartIndex = lightIndex + 1;
 	for (int i = randomLightsStartIndex; i < m_Lights.size(); i++)
@@ -1227,7 +1234,7 @@ void Graphics::RandomizeLights()
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(7.f, 9.f);
+		const float range = Math::RandomRange(7.f, 12.f);
 		const float angle = Math::RandomRange(30.f, 60.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;
@@ -1246,17 +1253,20 @@ void Graphics::RandomizeLights()
 		}
 	}
 
-	// a bit weird
 	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light b) { return (int)a.LightType < (int)b.LightType; });
+	
+	IdleGPU();
+	if (m_pLightBuffer->GetElementCount() != count)
+	{
+		m_pLightBuffer->Create(this, sizeof(Light), count);
+	}
+	GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
+	pContext->Execute(true);
 }
 
 void Graphics::SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches)
 {
-	std::sort(batches.begin(), batches.end(), [cameraPosition](const Batch& a, const Batch& b) {
-		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, cameraPosition);
-		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, cameraPosition);
-		return aDist > bDist;
-	});
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

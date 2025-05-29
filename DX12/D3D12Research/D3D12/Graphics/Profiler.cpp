@@ -89,8 +89,8 @@ void ProfileNode::PopulateTimes(int frameIndex)
 		m_LastProcessedFrame = frameIndex;
 		float cpuTime = m_CpuTimer.GetTime();
 		float gpuTime = m_GpuTimer.GetTime();
-		m_CpuTimeHistory.AddTime(frameIndex, cpuTime);
-		m_GpuTimeHistory.AddTime(frameIndex, gpuTime);
+		m_CpuTimeHistory.AddTime(cpuTime);
+		m_GpuTimeHistory.AddTime(gpuTime);
 
 		for (auto& child : m_Children)
 		{
@@ -155,7 +155,8 @@ void ProfileNode::RenderNodeImGui(int frameIndex)
 		bool expand = false;
 		if (m_Children.size() > 0)
 		{
-			expand = ImGui::TreeNode(m_Name);
+			//expand = ImGui::TreeNode(m_Name);
+			expand = ImGui::TreeNodeEx(m_Name, m_Children.size() > 2 ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None);
 		}
 		else
 		{
@@ -184,7 +185,7 @@ void ProfileNode::RenderNodeImGui(int frameIndex)
 		{
 			for (auto& pChild : m_Children)
 			{
-				pChild->RenderImGui(frameIndex);
+				pChild->RenderNodeImGui(frameIndex);
 			}
 			ImGui::TreePop();
 		}
@@ -193,7 +194,13 @@ void ProfileNode::RenderNodeImGui(int frameIndex)
 	}
 }
 
-ProfileNode* ProfileNode::GetChild(const char* pName)
+bool ProfileNode::HashChild(const char* pName)
+{
+	StringHash hash(pName);
+	return m_Map.find(hash) != m_Map.end();
+}
+
+ProfileNode* ProfileNode::GetChild(const char* pName, int i)
 {
 	StringHash hash(pName);
 	auto it = m_Map.find(hash);
@@ -203,12 +210,10 @@ ProfileNode* ProfileNode::GetChild(const char* pName)
 	}
 
 	std::unique_ptr<ProfileNode> pNewNode = std::make_unique<ProfileNode>(pName, hash, this);
-	m_Children.push_back(std::move(pNewNode));
-	ProfileNode* pNode = m_Children.back().get();
+	ProfileNode* pNode = m_Children.insert(m_Children.begin() + i, std::move(pNewNode))._Ptr->get();
 	m_Map[hash] = pNode;
 	return pNode;
 }
-
 
 Profiler* Profiler::Instance()
 {
@@ -244,19 +249,42 @@ void Profiler::Initialize(Graphics* pGraphics)
 
 void Profiler::Begin(const char* pName, CommandContext* pContext)
 {
-	m_pCurrentBlock = m_pCurrentBlock->GetChild(pName);
-	m_pCurrentBlock->StartTimer(pContext);
+	if (m_pCurrentBlock->HashChild(pName))
+	{
+		m_pCurrentBlock = m_pCurrentBlock->GetChild(pName);
+		m_pCurrentBlock->StartTimer(pContext);
+	}
+	else
+	{
+		int i = 0;
+		if (m_pPreviousBlock)
+		{
+			for (; i < m_pCurrentBlock->GetChildCount(); i++)
+			{
+				if (m_pCurrentBlock->GetChild(i) == m_pPreviousBlock)
+				{
+					++i;
+					break;
+				}
+			}
+		}
+
+		m_pCurrentBlock = m_pCurrentBlock->GetChild(pName, i);
+		m_pCurrentBlock->StartTimer(pContext);
+	}
 }
 
 void Profiler::End(CommandContext* pContext)
 {
 	m_pCurrentBlock->EndTimer(pContext);
+	m_pPreviousBlock = m_pCurrentBlock;
 	m_pCurrentBlock = m_pCurrentBlock->GetParent();
 }
 
 void Profiler::BeginReadback(int frameIndex)
 {
 	int backBufferIndex = frameIndex % Graphics::FRAME_COUNT;
+	m_pPreviousBlock = nullptr;
 
 	assert(m_pCurrentReadBackData == nullptr);
 	m_pGraphics->WaitForFence(m_FenceValues[backBufferIndex]);

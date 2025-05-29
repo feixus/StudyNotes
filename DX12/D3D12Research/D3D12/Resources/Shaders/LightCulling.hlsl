@@ -8,6 +8,7 @@ cbuffer ShaderParameters : register(b0)
     float4x4 cProjectionInverse;
 	uint4 cNumThreadGroups;
     float2 cScreenDimensions;
+    uint cLightCount;
 }
 
 StructuredBuffer<Light> Lights : register(t1);
@@ -159,7 +160,7 @@ void CSMain(CS_INPUT input)
     GroupMemoryBarrierWithGroupSync();
 
     // perform the light culling
-    for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint i = input.GroupIndex; i < cLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
         Light light = Lights[i];
         switch (light.Type)

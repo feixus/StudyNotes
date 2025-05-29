@@ -83,7 +83,6 @@ public:
 	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;
 	static const int32_t MAX_SHADOW_CASTERS = 8;
 	static const int32_t SHADOW_MAP_SIZE = 4096;
-	static const int32_t MAX_LIGHT_COUNT = 1024;
 	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -99,13 +98,15 @@ private:
 
 	void UpdateImGui();
 
-	void RandomizeLights();
+	void RandomizeLights(int count);
 
 	void SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches);
 
 	double m_LoadSponzaTime{0.0f};
 	int m_Frame{0};
 	std::array<float, 180> m_FrameTimes;
+
+	int m_DesiredLightCount = 4096;
 
 	Vector3 m_CameraPosition;
 	Quaternion m_CameraRotation;

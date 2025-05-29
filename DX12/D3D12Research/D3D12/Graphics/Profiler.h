@@ -35,9 +35,9 @@ public:
 	TimeHistory() = default;
 	~TimeHistory() = default;
 
-	void AddTime(uint32_t frameIndex, T time)
+	void AddTime(T time)
 	{
-		m_History[frameIndex % SIZE] = time;
+		m_History[m_Entries % SIZE] = time;
 		++m_Entries;
 	}
 
@@ -96,7 +96,8 @@ public:
 	void LogTimes(int frameIndex, void(*pLogFunction)(const char* pText), int depth = 0, bool isRoot = false);
 	void RenderImGui(int frameIndex);
 
-	ProfileNode* GetChild(const char* pName);
+	bool HashChild(const char* pName);
+	ProfileNode* GetChild(const char* pName, int i = -1);
 	ProfileNode* GetParent() const { return m_pParent; }
 	size_t GetChildCount() const { return m_Children.size(); }
 	const ProfileNode* GetChild(int index) const { return m_Children[index].get(); }
@@ -158,5 +159,6 @@ private:
 	std::unique_ptr<ReadbackBuffer> m_pReadBackBuffer;
 
 	std::unique_ptr<ProfileNode> m_pRootBlock;
+	ProfileNode* m_pPreviousBlock{nullptr};
 	ProfileNode* m_pCurrentBlock{nullptr};
 };

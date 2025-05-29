@@ -1,12 +1,13 @@
 #include "Common.hlsl"
 
-#define MAX_LIGHTS_PER_TILE 256
+#define MAX_LIGHTS_PER_TILE 32
 #define THREAD_GROUP_SIZE 4
 
 cbuffer ShaderParameters : register(b0)
 {
     float4x4 cView;
     uint3 cClusterDimensions;
+    uint cLightCount;
 }
 
 StructuredBuffer<Light> Lights : register(t0);
@@ -47,7 +48,7 @@ void LightCulling(CS_Input input)
         AABB aabb = tClusterAABBs[clusterIndex];
 
         // perform light culling
-        for (uint i = 0; i < LIGHT_COUNT; i++)
+        for (uint i = 0; i < cLightCount; i++)
         {
             Light light = Lights[i];
 

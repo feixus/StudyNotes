@@ -15,7 +15,7 @@ struct ClusteredForwardInputResource
     GraphicsTexture2D* pRenderTarget;
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
-    const std::vector<Light>* pLights;
+    StructuredBuffer* pLightBuffer;
 };
 
 class ClusteredForward
@@ -67,7 +67,6 @@ private:
     std::unique_ptr<RootSignature> m_pLightCullingRS;
     std::unique_ptr<ComputePipelineState> m_pLightCullingPSO;
     ComPtr<ID3D12CommandSignature> m_pLightCullingCommandSignature;;
-    std::unique_ptr<StructuredBuffer> m_pLights;
     std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
     std::unique_ptr<StructuredBuffer> m_pLightIndexGrid;
     std::unique_ptr<StructuredBuffer> m_pLightGrid;
