@@ -35,8 +35,6 @@ public:
 		}
 
 		m_pGraphics->Shutdown();
-
-		GameTimer::Stop();
 	}
 
 private:
@@ -44,7 +42,7 @@ private:
 	{
 		WNDCLASS wc;
 
-		wc.hInstance = GetModuleHandle(nullptr);
+		wc.hInstance = GetModuleHandle(0);
 		wc.cbClsExtra = 0;
 		wc.cbWndExtra = 0;
 		wc.hIcon = 0;
@@ -71,8 +69,8 @@ private:
 		uint32_t windowWidth = windowRec.right - windowRec.left;
 		uint32_t windowHeight = windowRec.bottom - windowRec.top;
 
-		int x = (displayWidth - windowWidth) / 2;
-		int y = (displayHeight - windowHeight) / 2;
+		int x = (displayWidth - gWindowWidth) / 2;
+		int y = (displayHeight - gWindowHeight) / 2;
 
 		m_Hwnd = CreateWindow(
 			TEXT("wndClass"),
@@ -84,7 +82,7 @@ private:
 			windowHeight,
 			nullptr,
 			nullptr,
-			GetModuleHandle(nullptr),
+			GetModuleHandle(0),
 			this
 		);
 
