@@ -32,8 +32,10 @@ public:
 	virtual uint64_t ExecuteAndReset(bool wait);
 	
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
+	void InsertUavBarrier(GraphicsBuffer* pBuffer, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
+	void CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pDest);
 	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 

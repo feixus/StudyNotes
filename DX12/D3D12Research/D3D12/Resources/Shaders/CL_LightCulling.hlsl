@@ -34,6 +34,18 @@ void AddLight(uint lightIndex)
     }
 }
 
+bool ConeInSphere(float3 conePos, float3 coneDir, float coneRange, float2 coneAngleSinCos, Sphere sphere)
+{
+    float3 v = sphere.Position - conePos;
+    float lenSq = dot(v, v);
+    float v1Len = dot(v, coneDir);
+    float distanceClosestPoint = coneAngleSinCos.y * sqrt(lenSq - v1Len * v1Len) - v1Len * coneAngleSinCos.x;
+    bool angleCull = distanceClosestPoint > sphere.Radius;
+    bool frontCull = v1Len > sphere.Radius + coneRange;
+    bool backCull = v1Len < -sphere.Radius;
+    return !(angleCull || frontCull || backCull);
+}
+
 struct CS_Input
 {
     uint3 GroupID : SV_GroupID;
@@ -73,6 +85,16 @@ void LightCulling(CS_Input input)
         break;
         case LIGHT_SPOT:
         {
+#ifdef OPTIMIZED_SPOT_LIGHT_CULLING
+            Sphere sphere;
+            sphere.Position = GroupAABB.Center;
+            sphere.Radius = sqrt(dot(GroupAABB.Extents, GroupAABB.Extents));
+
+            if (ConeInSphere(mul(float4(light.Position, 1.0f), cView).xyz, mul(light.Direction, (float3x3)cView), light.Range, float2(sin(radians(light.SpotLightAngle * 0.5f)), cos(radians(light.SpotLightAngle * 0.5f))), sphere))
+            {
+                AddLight(i);
+            }
+#else
             Sphere sphere;
             sphere.Radius = light.Range * 0.5f / pow(cos(radians(light.SpotLightAngle * 0.5f)), 2);
             sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
@@ -80,7 +102,7 @@ void LightCulling(CS_Input input)
             {
                 AddLight(i);
             }
-            
+#endif
         }
         break;
         case LIGHT_DIRECTIONAL:

@@ -15,6 +15,9 @@ static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
 bool gUseAlternativeLightCulling = false;
+bool gVisualizeClusters = true;
+
+float tFovAngle = Math::ToRadians * 60.0f;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
     : m_pGraphics(pGraphics)
@@ -36,15 +39,19 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
     m_pUniqueClusterBuffer->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters, false);
     m_pUniqueClusterBuffer->SetName("Unique Clusters");
 
-    m_pActiveClusterListBuffer->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters, false);
-    m_pActiveClusterListBuffer->SetName("Active Cluster List");
+    m_pCompactedClusterBuffer->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters, false);
+    m_pCompactedClusterBuffer->SetName("Compacted Cluster");
+
+    m_pDebugCompactedClusterBuffer->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters, false);
+    m_pDebugCompactedClusterBuffer->SetName("Debug Compacted Cluster");
 
     m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters * 32);
     m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32_t), m_MaxClusters);
+    m_pDebugLightGrid->Create(m_pGraphics, 2 * sizeof(uint32_t), m_MaxClusters);
 
 	float nearZ = 2.0f;
 	float farZ = 500.0f;
-	Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)windowWidth / windowHeight, nearZ, farZ);
+	Matrix projection = XMMatrixPerspectiveFovLH(tFovAngle, (float)windowWidth / windowHeight, nearZ, farZ);
 
 	// create AABBs
 	{
@@ -89,7 +96,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
     Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
     float nearZ = 2.0f;
     float farZ = 500.0f;
-    Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, screenDimensions.x / screenDimensions.y, nearZ, farZ);
+    Matrix projection = XMMatrixPerspectiveFovLH(tFovAngle, screenDimensions.x / screenDimensions.y, nearZ, farZ);
 
     float sliceMagicA = (float)cClusterCountZ / log(farZ / nearZ);
     float sliceMagicB = (float)cClusterCountZ * log(nearZ) / log(farZ / nearZ);
@@ -178,10 +185,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             pContext->SetComputeRootSignature(m_pCompactClusterListRS.get());
 
             uint32_t values[] = {0, 0, 0, 0};
-            pContext->ClearUavUInt(m_pActiveClusterListBuffer->GetCounter(), values);
+            pContext->ClearUavUInt(m_pCompactedClusterBuffer->GetCounter(), values);
 
             pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusterBuffer->GetSRV());
-            pContext->SetDynamicDescriptor(1, 0, m_pActiveClusterListBuffer->GetUAV());
+            pContext->SetDynamicDescriptor(1, 0, m_pCompactedClusterBuffer->GetUAV());
 
             pContext->Dispatch((int)ceil(m_MaxClusters / 64.f), 1, 1);
         
@@ -198,7 +205,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
 		    pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
 
-            pContext->SetDynamicDescriptor(0, 0, m_pActiveClusterListBuffer->GetCounter()->GetSRV());
+            pContext->SetDynamicDescriptor(0, 0, m_pCompactedClusterBuffer->GetCounter()->GetSRV());
 		    pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
 
             pContext->Dispatch(1, 1, 1);
@@ -239,7 +246,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 			pContext->SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());
 			pContext->SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
-			pContext->SetDynamicDescriptor(1, 2, m_pActiveClusterListBuffer->GetSRV());
+			pContext->SetDynamicDescriptor(1, 2, m_pCompactedClusterBuffer->GetSRV());
 			pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
 			pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
 			pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
@@ -275,7 +282,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
             pContext->SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());
             pContext->SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
-            pContext->SetDynamicDescriptor(1, 2, m_pActiveClusterListBuffer->GetSRV());
+            pContext->SetDynamicDescriptor(1, 2, m_pCompactedClusterBuffer->GetSRV());
             pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
             pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
             pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
@@ -391,14 +398,53 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         Profiler::Instance()->End(pContext);
         pContext->Execute(false);
 	}
+
+    if (gVisualizeClusters)
+    {
+        GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+        if (m_DidCopyDebugClusterData == false)
+        {
+            pContext->CopyResource(m_pCompactedClusterBuffer.get(), m_pDebugCompactedClusterBuffer.get());
+            pContext->CopyResource(m_pLightGrid.get(), m_pDebugLightGrid.get());
+            m_DebugClusterViewMatrix = m_pGraphics->GetViewMatrix();
+            m_DebugClusterViewMatrix.Invert(m_DebugClusterViewMatrix);
+            pContext->ExecuteAndReset(true);
+            m_DidCopyDebugClusterData = true;
+        }
+
+        pContext->SetGraphicsPipelineState(m_pDebugClusterPSO.get());
+        pContext->SetGraphicsRootSignature(m_pDebugClusterRS.get());
+
+        pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+        pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+        pContext->SetRenderTarget(inputResource.pRenderTarget->GetRTV(), inputResource.pDepthPrepassBuffer->GetDSV());
+        pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+
+        Matrix p = m_DebugClusterViewMatrix * m_pGraphics->GetViewMatrix() * projection;
+
+        Profiler::Instance()->Begin("Cluster Visualization", pContext);
+        pContext->SetDynamicConstantBufferView(0, &p, sizeof(Matrix));
+        pContext->SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetSRV());
+        pContext->SetDynamicDescriptor(1, 1, m_pDebugCompactedClusterBuffer->GetSRV());
+        pContext->SetDynamicDescriptor(1, 2, m_pDebugLightGrid->GetSRV());
+        pContext->SetDynamicDescriptor(1, 3, m_pHeatMapTexture->GetSRV());
+        pContext->Draw(0, m_MaxClusters);
+        Profiler::Instance()->End(pContext);
+        pContext->Execute(false);
+    }
+    else
+    {
+        m_DidCopyDebugClusterData = false;
+    }
 }
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)
 {
     m_pAabbBuffer = std::make_unique<StructuredBuffer>(pGraphics);
     m_pUniqueClusterBuffer = std::make_unique<StructuredBuffer>(pGraphics);
-    m_pActiveClusterListBuffer = std::make_unique<StructuredBuffer>(pGraphics);
-
+    m_pCompactedClusterBuffer = std::make_unique<StructuredBuffer>(pGraphics);
+    m_pDebugCompactedClusterBuffer = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pIndirectArguments = std::make_unique<ByteAddressBuffer>(pGraphics);
     m_pIndirectArguments->Create(m_pGraphics, sizeof(uint32_t), 3, false);
 
@@ -406,6 +452,7 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pLightIndexCounter->Create(m_pGraphics, sizeof(uint32_t), 1);
 	m_pLightIndexGrid = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
+    m_pDebugLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
 
     CopyCommandContext* pCopyContext = (CopyCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
     m_pHeatMapTexture = std::make_unique<GraphicsTexture2D>();
@@ -590,6 +637,31 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pDiffuseTransparencyPSO->SetBlendMode(BlendMode::Alpha, false);
 		m_pDiffuseTransparencyPSO->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
 		m_pDiffuseTransparencyPSO->Finalize("Diffuse (Transparent)", pGraphics->GetDevice());
+    }
+
+    // cluster debug rendering
+    {
+        Shader vertexShader = Shader("Resources/Shaders/CL_DebugDrawClusters.hlsl", Shader::Type::VertexShader, "VSMain");
+        Shader geometryShader = Shader("Resources/Shaders/CL_DebugDrawClusters.hlsl", Shader::Type::GeometryShader, "GSMain");
+        Shader pixelShader = Shader("Resources/Shaders/CL_DebugDrawClusters.hlsl", Shader::Type::PixelShader, "PSMain");
+
+        m_pDebugClusterRS = std::make_unique<RootSignature>();
+        m_pDebugClusterRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_GEOMETRY);
+        m_pDebugClusterRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, D3D12_SHADER_VISIBILITY_VERTEX);
+        m_pDebugClusterRS->Finalize("Debug Cluster", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS);
+
+        m_pDebugClusterPSO = std::make_unique<GraphicsPipelineState>();
+        m_pDebugClusterPSO->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
+        m_pDebugClusterPSO->SetDepthWrite(false);
+        m_pDebugClusterPSO->SetInputLayout(nullptr, 0);
+        m_pDebugClusterPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+        m_pDebugClusterPSO->SetGeometryShader(geometryShader.GetByteCode(), geometryShader.GetByteCodeSize());
+        m_pDebugClusterPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+        m_pDebugClusterPSO->SetRootSignature(m_pDebugClusterRS->GetRootSignature());
+        m_pDebugClusterPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
+        m_pDebugClusterPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
+        m_pDebugClusterPSO->SetBlendMode(BlendMode::Add, false);
+        m_pDebugClusterPSO->Finalize("Debug Cluster PSO", pGraphics->GetDevice());
     }
 }
 

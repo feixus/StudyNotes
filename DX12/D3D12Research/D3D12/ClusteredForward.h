@@ -56,7 +56,7 @@ private:
     // step 3: compact cluster list
     std::unique_ptr<RootSignature> m_pCompactClusterListRS;
     std::unique_ptr<ComputePipelineState> m_pCompactClusterListPSO;
-    std::unique_ptr<StructuredBuffer> m_pActiveClusterListBuffer;
+    std::unique_ptr<StructuredBuffer> m_pCompactedClusterBuffer;
 
     // step 4: update Indirect Dispatch Buffer
     std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
@@ -78,4 +78,12 @@ private:
     std::unique_ptr<RootSignature> m_pDiffuseRS;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffuseTransparencyPSO;
+
+    // cluster debug rendering
+    std::unique_ptr<RootSignature> m_pDebugClusterRS;
+    std::unique_ptr<GraphicsPipelineState> m_pDebugClusterPSO;
+    std::unique_ptr<StructuredBuffer> m_pDebugCompactedClusterBuffer;
+    std::unique_ptr<StructuredBuffer> m_pDebugLightGrid;
+    Matrix m_DebugClusterViewMatrix;
+    bool m_DidCopyDebugClusterData{false};
 };

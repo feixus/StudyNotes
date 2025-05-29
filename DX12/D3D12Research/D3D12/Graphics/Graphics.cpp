@@ -118,7 +118,8 @@ void Graphics::Update()
 	Matrix cameraView;
 	frameData.ViewInverse.Invert(cameraView);
 	frameData.LightCount = (uint32_t)m_Lights.size();
-	Matrix cameraProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
+	extern float tFovAngle;
+	Matrix cameraProj = XMMatrixPerspectiveFovLH(tFovAngle, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
 	Matrix cameraViewProj = cameraView * cameraProj;
 
 	// shadow map partitioning
@@ -1022,10 +1023,8 @@ void Graphics::InitializeAssets()
 	{
 		CopyCommandContext* pCommandContext = static_cast<CopyCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY));
 		
-		GameTimer::CounterBegin();
 		m_pMesh = std::make_unique<Mesh>();
 		m_pMesh->Load("Resources/sponza/sponza.dae", this, pCommandContext);
-		m_LoadSponzaTime = GameTimer::CounterEnd();
 
 		pCommandContext->Execute(true);
 
@@ -1053,17 +1052,11 @@ void Graphics::UpdateImGui()
 	
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
-	ImGui::Begin("GPU Stats", nullptr,
-		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
+	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	ImGui::Text("MS: %.4f", GameTimer::DeltaTime() * 1000.0f);
 	ImGui::SameLine(100);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
-
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(200, 100));
-
-	ImGui::Text("LoadSponzaTime: %.1f", m_LoadSponzaTime);
-	ImGui::Text("Light Count: %d", m_Lights.size());
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -1086,6 +1079,9 @@ void Graphics::UpdateImGui()
 		
 		extern bool gUseAlternativeLightCulling;
 		ImGui::Checkbox("Alternative Light Culling", &gUseAlternativeLightCulling);
+
+		extern bool gVisualizeClusters;
+		ImGui::Checkbox("Visualize Clusters", &gVisualizeClusters);
 
 		ImGui::Separator();
 		ImGui::SliderInt("Lights", &m_DesiredLightCount, 0, 16384);
@@ -1127,7 +1123,6 @@ void Graphics::UpdateImGui()
 			str << usedDescriptors << "/" << totalDescriptors;
 			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
 		}
-
 		ImGui::TreePop();
 	}
 
@@ -1162,7 +1157,6 @@ void Graphics::UpdateImGui()
 		}
 		ImGui::TreePop();
 	}
-
 	ImGui::End();
 
 	static bool showOutputLog = true;
@@ -1195,7 +1189,6 @@ void Graphics::UpdateImGui()
 			}
 		}
 	}
-
 	ImGui::End();
 
 	if (showOutputLog)
@@ -1263,10 +1256,6 @@ void Graphics::RandomizeLights(int count)
 	GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
 	pContext->Execute(true);
-}
-
-void Graphics::SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches)
-{
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

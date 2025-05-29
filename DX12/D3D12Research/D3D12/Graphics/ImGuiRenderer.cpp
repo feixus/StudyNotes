@@ -13,8 +13,8 @@
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
 {
-	InitializeImGui();
 	CreatePipeline();
+	InitializeImGui();
 }
 
 ImGuiRenderer::~ImGuiRenderer()
@@ -34,17 +34,16 @@ void ImGuiRenderer::NewFrame()
 	Vector2 mousePos = Input::Instance().GetMousePosition();
 	io.MousePos.x = mousePos.x;
 	io.MousePos.y = mousePos.y;
+
 	ImGui::NewFrame();
 }
 
 void ImGuiRenderer::InitializeImGui()
 {
-	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->AddFontDefault();
-
-	ImGui::StyleColorsDark();
 
 	unsigned char* pPixels;
 	int width, height;
@@ -54,6 +53,7 @@ void ImGuiRenderer::InitializeImGui()
 	m_pFontTexture->Create(m_pGraphics, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource, 1);
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels);
+	
 	io.Fonts->SetTexID(m_pFontTexture->GetSRV().ptr);
 
 	pContext->Execute(true);
@@ -124,8 +124,6 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, (float)width, (float)height), 0, 1);
-	context.SetScissorRect(FloatRect(0, 0, (float)width, (float)height));
-
 	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTarget()->GetRTV(), m_pGraphics->GetDepthStencil()->GetDSV());
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
