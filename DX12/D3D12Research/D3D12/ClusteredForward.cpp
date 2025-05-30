@@ -15,7 +15,7 @@ static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
 bool gUseAlternativeLightCulling = false;
-bool gVisualizeClusters = true;
+bool gVisualizeClusters = false;
 
 float tFovAngle = Math::ToRadians * 60.0f;
 
@@ -241,7 +241,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 			constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
 			constantBuffer.ClusterDimensions[2] = cClusterCountZ;
-            constantBuffer.LightCount = inputResource.pLightBuffer->GetElementCount();
+            constantBuffer.LightCount = (int)inputResource.pLightBuffer->GetElementCount();
 
 			pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 			pContext->SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());
@@ -273,11 +273,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             struct ConstantBuffer
             {
                 Matrix View;
-                int LightCount;
+                int LightCount{0};
             } constantBuffer;
 
             constantBuffer.View = m_pGraphics->GetViewMatrix();
-            constantBuffer.LightCount = inputResource.pLightBuffer->GetElementCount();
+            constantBuffer.LightCount = (int)inputResource.pLightBuffer->GetElementCount();
 
             pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
             pContext->SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());

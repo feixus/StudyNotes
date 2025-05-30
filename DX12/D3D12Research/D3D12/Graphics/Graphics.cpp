@@ -109,7 +109,7 @@ void Graphics::Update()
 	struct PerFrameData
 	{
 		Matrix ViewInverse;
-		uint32_t LightCount;
+		uint32_t LightCount{0};
 	} frameData;
 
 	// camera constants
@@ -278,7 +278,7 @@ void Graphics::Update()
 				Matrix ProjectionInverse;
 				uint32_t NumThreadGroups[4]{};
 				Vector2 ScreenDimensions;
-				uint32_t LightCount;
+				uint32_t LightCount{0};
 			} Data;
 
 			Data.CameraView = cameraView;
@@ -1193,7 +1193,7 @@ void Graphics::UpdateImGui()
 
 	if (showOutputLog)
 	{
-		ImGui::SetNextWindowPos(ImVec2(250 + (m_WindowWidth - 250) * 0.5f, showOutputLog ? m_WindowHeight - 250 : m_WindowHeight - 20));
+		ImGui::SetNextWindowPos(ImVec2(250.f + (m_WindowWidth - 250) * 0.5f, (float)(showOutputLog ? m_WindowHeight - 250 : m_WindowHeight - 20)));
 		ImGui::SetNextWindowSize(ImVec2((m_WindowWidth - 250) * 0.5f, 250));
 		ImGui::SetNextWindowCollapsed(!showOutputLog);
 		ImGui::Begin("Profiler", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);

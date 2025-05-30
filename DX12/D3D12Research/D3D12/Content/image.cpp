@@ -471,6 +471,7 @@ bool Image::LoadDds(const std::string& inputStream)
 			pCurrentImage->m_Height = header.Height;
 			pCurrentImage->m_Depth = header.Depth;
 			pCurrentImage->m_Format = m_Format;
+			pCurrentImage->m_BBP = m_BBP;
 			file.read(reinterpret_cast<char*>(pCurrentImage->m_Pixels.data()), totalDataSize);
 			
 			if (imageIdx < imageChainCount - 1)

@@ -165,7 +165,11 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount)
 {
 	uint64_t allocationSize = (uint32_t)GetRequiredIntermediateSize(pResource->GetResource(), (UINT)firstSubresource, (UINT)subresourceCount);
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32_t)allocationSize, 512);
+	/* D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT(512 bytes): can for the start address of each subresource's data
+	*  D3D12_TEXTURE_DATA_PITCH_ALIGNMENT(256 bytes): can used to ensure each row's pitch is properly padded
+	*  D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT(64 KB): can used to with CreatePlacedResource, for GPU page size
+	*/
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32_t)allocationSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubresource, subresourceCount, pSubresources);
