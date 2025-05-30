@@ -57,6 +57,9 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableT
     std::array<uint32_t, MAX_DESCRIPTORS_PER_COPY> sourceRangeSizes{};
     std::array<uint32_t, MAX_DESCRIPTORS_PER_COPY> destinationRangeSizes{};
 
+    int tableCount = 0;
+    std::array<D3D12_GPU_DESCRIPTOR_HANDLE, MAX_NUM_ROOT_PARAMETERS> newDescriptorTables{};
+
     for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
     {
         // if the range count exceeds the max amount of descriptors per copy, flush
@@ -88,26 +91,32 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableT
         destinationRangeSizes[destinationRangeCount] = rangeSize;
         ++destinationRangeCount;
 
+		newDescriptorTables[tableCount++] = gpuHandle.GetGpuHandle();
+		gpuHandle += rangeSize * m_DescriptorSize;
+    }
+
+	m_pGraphics->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(),
+		sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
+
+    int i = 0;
+    for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
+    {
+        uint32_t rootIndex = it.Value();
         switch (descriptorTableType)
         {
         case DescriptorTableType::Compute:
-            m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
+            m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, newDescriptorTables[i++]);
             break;
         case DescriptorTableType::Graphics:
-            m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
+            m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, newDescriptorTables[i++]);
             break;
         default:
             assert(false);
             break;
         }
-
-        gpuHandle += rangeSize * m_DescriptorSize;
     }
 
     m_StaleRootParameters.ClearAll();
-
-    m_pGraphics->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(),
-        sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
 }
 
 bool DynamicDescriptorAllocator::HasSpace(int count)

@@ -46,8 +46,11 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
     m_pDebugCompactedClusterBuffer->SetName("Debug Compacted Cluster");
 
     m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters * 32);
+    m_pLightIndexGrid->SetName("Light Index Grid");
     m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32_t), m_MaxClusters);
+    m_pLightGrid->SetName("Light Grid");
     m_pDebugLightGrid->Create(m_pGraphics, 2 * sizeof(uint32_t), m_MaxClusters);
+    m_pDebugLightGrid->SetName("Debug Light Grid");
 
 	float nearZ = 2.0f;
 	float farZ = 500.0f;
@@ -221,7 +224,9 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			pContext->SetComputePipelineState(m_pAlternativeLightCullingPSO.get());
 			pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
-			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
+			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, false);
+            pContext->InsertResourceBarrier(m_pCompactedClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
+            pContext->InsertResourceBarrier(m_pAabbBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
             Profiler::Instance()->Begin("Set Data", pContext);
 			uint32_t zero = 0;
@@ -265,7 +270,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             pContext->SetComputePipelineState(m_pLightCullingPSO.get());
             pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
-            pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
+			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, false);
+			pContext->InsertResourceBarrier(m_pCompactedClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
+			pContext->InsertResourceBarrier(m_pAabbBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
+			pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
+			pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
             uint32_t zero = 0;
             m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32_t));
@@ -392,9 +401,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             Profiler::Instance()->End(pContext);
         }
 
-		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
-		pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
-		
         Profiler::Instance()->End(pContext);
         pContext->Execute(false);
 	}
@@ -457,6 +463,7 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
     CopyCommandContext* pCopyContext = (CopyCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
     m_pHeatMapTexture = std::make_unique<GraphicsTexture2D>();
     m_pHeatMapTexture->Create(pGraphics, pCopyContext, "Resources/textures/HeatMap.png", TextureUsage::ShaderResource);
+    m_pHeatMapTexture->SetName("Heatmap texture");
     pCopyContext->Execute(true);
 }
 
@@ -603,7 +610,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pDiffuseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pDiffuseRS->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pDiffuseRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
-		m_pDiffuseRS->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pDiffuseRS->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
         m_pDiffuseRS->SetDescriptorTableSimple(4, 6, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
 
         D3D12_SAMPLER_DESC samplerDesc{};

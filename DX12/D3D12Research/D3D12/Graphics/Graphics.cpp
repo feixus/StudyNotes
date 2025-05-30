@@ -1252,6 +1252,7 @@ void Graphics::RandomizeLights(int count)
 	if (m_pLightBuffer->GetElementCount() != count)
 	{
 		m_pLightBuffer->Create(this, sizeof(Light), count);
+		m_pLightBuffer->SetName("Light Buffer");
 	}
 	GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());

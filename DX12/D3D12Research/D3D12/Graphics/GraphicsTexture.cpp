@@ -101,7 +101,7 @@ void GraphicsTexture::Create_Internal(Graphics* pGraphics, TextureDimension dime
 	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-		clearValue.DepthStencil.Depth = 0;
+		clearValue.DepthStencil.Depth = 1;
 		clearValue.DepthStencil.Stencil = 0;
 		pClearValue = &clearValue;
 	}
@@ -242,7 +242,7 @@ void GraphicsTexture::Create_Internal(Graphics* pGraphics, TextureDimension dime
 			uavDesc.Texture2D.MipSlice = i;
 			uavDesc.Texture2DArray.MipSlice = i;
 			uavDesc.Texture3D.MipSlice = i;
-			pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, m_Uav.Offset(i, m_SrvUavDescriptorSize));
+			pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Uav, i, m_SrvUavDescriptorSize));
 		}
 	}
 
