@@ -90,8 +90,6 @@ void Graphics::Update()
 	movement *= GameTimer::DeltaTime() * 20.0f;
 	m_CameraPosition += movement;
 
-	m_Lights[0].Position = Vector3(cos(GameTimer::GameTime() / 20.f) * 70, 50, 0);
-
 	std::sort(m_TransparentBatches.begin(), m_TransparentBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_CameraPosition);
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_CameraPosition);
