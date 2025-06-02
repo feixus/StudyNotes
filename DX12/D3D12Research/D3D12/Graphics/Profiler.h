@@ -155,6 +155,7 @@ private:
 	float m_SecondsPerGpuTick{ 0.f };
 	float m_SecondsPerCpuTick{ 0.f };
 	int m_CurrentTimer{0};
+	int m_LastTimer{0};
 	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
 	std::unique_ptr<ReadbackBuffer> m_pReadBackBuffer;
 

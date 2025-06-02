@@ -30,12 +30,11 @@ float CpuTimer::GetTime() const
 
 GpuTimer::GpuTimer()
 {
-	m_TimerIndex = Profiler::Instance()->GetNextTimerIndex();
 }
 
 void GpuTimer::Begin(CommandContext* pContext)
 {
-	if (m_TimerIndex == -1)
+	//if (m_TimerIndex == -1)
 	{
 		m_TimerIndex = Profiler::Instance()->GetNextTimerIndex();
 	}
@@ -249,6 +248,8 @@ void Profiler::Initialize(Graphics* pGraphics)
 
 	m_pRootBlock = std::make_unique<ProfileNode>("", StringHash(""), nullptr);
 	m_pCurrentBlock = m_pRootBlock.get();
+
+	m_CurrentTimer = 0;
 }
 
 void Profiler::Begin(const char* pName, CommandContext* pContext)
@@ -305,14 +306,16 @@ void Profiler::EndReadBack(int frameIndex)
 	m_pCurrentReadBackData = nullptr;
 
 	int offset = HEAP_SIZE * backBufferIndex * 2;
+	int numQueries = (m_CurrentTimer - m_LastTimer) * 2;
 	m_pCurrentBlock->StartTimer(nullptr);
 	m_pCurrentBlock->EndTimer(nullptr);
 
 	GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, offset, HEAP_SIZE, m_pReadBackBuffer->GetResource(), offset);
+	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, offset, numQueries, m_pReadBackBuffer->GetResource(), offset);
 	m_FenceValues[backBufferIndex] = pContext->Execute(false);
 
-	m_CurrentTimer = HEAP_SIZE * backBufferIndex;
+	m_CurrentTimer = HEAP_SIZE * ((backBufferIndex + 1) % Graphics::FRAME_COUNT);
+	m_LastTimer = m_CurrentTimer;
 }
 
 float Profiler::GetGpuTime(int timerIndex) const

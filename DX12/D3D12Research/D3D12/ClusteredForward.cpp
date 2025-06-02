@@ -37,6 +37,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
     m_pAabbBuffer->SetName("AABBs");
 
     m_pUniqueClusterBuffer->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters, false);
+    DXGI_FORMAT bufferFormat = m_pGraphics->CheckTyped
     m_pUniqueClusterBuffer->SetName("Unique Clusters");
 
     m_pCompactedClusterBuffer->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters, false);

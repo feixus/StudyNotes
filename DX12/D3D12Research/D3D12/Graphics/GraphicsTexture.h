@@ -35,6 +35,37 @@ enum class CubeMapFace
 	MAX
 };
 
+struct ClearBinding
+{
+	struct DepthStencilData
+	{
+		float Depth;
+		uint8_t Stencil;
+	};
+
+	enum class ClearBindingValue
+	{
+		None,
+		Color,
+		DepthStencil,
+	};
+
+	ClearBinding() : BindingValue(ClearBindingValue::None) {}
+	ClearBinding(const Color& color) : BindingValue(ClearBindingValue::Color), Color(color) {}
+	ClearBinding(float depth, uint8_t stencil = 0) : BindingValue(ClearBindingValue::DepthStencil)
+	{
+		DepthStencil.Depth = depth;
+		DepthStencil.Stencil = stencil;
+	}
+
+	ClearBindingValue BindingValue;
+	union
+	{
+		Color Color;
+		DepthStencilData DepthStencil;
+	};
+};
+
 class GraphicsTexture : public GraphicsResource
 {
 public:
@@ -47,6 +78,8 @@ public:
 	int GetMipLevels() const { return m_MipLevels; }
 	bool IsArray() const { return m_IsArray; }
 	TextureDimension GetDimension() const { return m_Dimension; }
+	DXGI_FORMAT GetFormat() const { return m_Format; }
+	const ClearBinding& GetClearBinding() const { return m_ClearBinding; }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(int subResource = 0) const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV(int subResource = 0) const;
@@ -57,13 +90,14 @@ public:
 	static DXGI_FORMAT GetSrvFormatFromDepth(DXGI_FORMAT format);
 
 protected:
-	void Create_Internal(Graphics* pGraphics, TextureDimension dimension, int width, int height, int depthOrArraySize, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
+	void Create_Internal(Graphics* pGraphics, TextureDimension dimension, int width, int height, int depthOrArraySize, DXGI_FORMAT format, TextureUsage usage, int sampleCount, const ClearBinding& clearBinding);
 
 	// this can hold multiple handles as long as they're sequential in memory.
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv{D3D12_DEFAULT};
 	DXGI_FORMAT m_Format{};
+	ClearBinding m_ClearBinding{};
 
 	TextureDimension m_Dimension{};
 	int m_SampleCount{1};
@@ -81,7 +115,7 @@ class GraphicsTexture2D : public GraphicsTexture
 {
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
-	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1);
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1, ClearBinding clearBinding = ClearBinding());
 	void SetData(CommandContext* pContext, const void* pData);
 	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
 };

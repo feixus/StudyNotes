@@ -64,6 +64,8 @@ public:
 	int32_t GetWindowWidth() const { return m_WindowWidth; }
 	int32_t GetWindowHeight() const { return m_WindowHeight; }
 
+	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
+
 	bool IsFenceComplete(uint64_t fenceValue);
 
 	GraphicsTexture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }

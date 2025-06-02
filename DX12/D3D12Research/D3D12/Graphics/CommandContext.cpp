@@ -164,12 +164,14 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 
 void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount)
 {
-	uint64_t allocationSize = (uint32_t)GetRequiredIntermediateSize(pResource->GetResource(), (UINT)firstSubresource, (UINT)subresourceCount);
+	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
+	size_t requiredSize = 0;
+	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, firstSubresource, subresourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
 	/* D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT(512 bytes): can for the start address of each subresource's data
 	*  D3D12_TEXTURE_DATA_PITCH_ALIGNMENT(256 bytes): can used to ensure each row's pitch is properly padded
 	*  D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT(64 KB): can used to with CreatePlacedResource, for GPU page size
 	*/
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32_t)allocationSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32_t)requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubresource, subresourceCount, pSubresources);
@@ -190,6 +192,43 @@ GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12Graphi
 {
 	m_CurrentContext = CommandListContext::Graphics;
 	m_Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+}
+
+void GraphicsCommandContext::BeginRenderPass(GraphicsTexture* pRenderTarget, GraphicsTexture* pDepthStencil, const ClearValues& clearValues, RenderPassAccess rtAccess /*= RenderPassAccess::Load_Store*/, RenderPassAccess dsAccess /*= RenderPassAccess::Load_Store*/)
+{
+	ComPtr<ID3D12GraphicsCommandList> pCmd;
+	if (m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
+	{
+		auto getRenderPassAccessBegin = [](RenderTargetLoadAction access) {
+			switch (access)
+			{
+			case RenderTargetLoadAction::DontCare: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
+			case RenderTargetLoadAction::Load: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
+			case RenderTargetLoadAction::Clear: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+			}
+			return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS;
+			};
+
+		auto getRenderPassAccessEnd = [](RenderTargetStoreAction access) {
+			switch (access)
+			{
+			case RenderTargetStoreAction::DontCare: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
+			case RenderTargetStoreAction::Store: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+			case RenderTargetStoreAction::Resolve: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE;
+			}
+			return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
+			};
+
+		D3D12_RENDER_PASS_BEGINNING_ACCESS depthAccessBegin{ getRenderPassAccessBegin((RenderTargetLoadAction)((uint8_t)dsAccess >> 2)) };
+		if (clearValues.ClearDepth || clearValues.ClearStencil)
+		{
+		}
+	}
+}
+
+void GraphicsCommandContext::EndRenderPass()
+{
+
 }
 
 void GraphicsCommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)

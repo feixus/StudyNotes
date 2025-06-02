@@ -8,6 +8,7 @@ class RootSignature;
 class StructuredBuffer;
 class GraphicsTexture;
 class ByteAddressBuffer;
+class Typedbuffer;
 
 struct ClusteredForwardInputResource
 {
@@ -51,7 +52,7 @@ private:
     std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparentPSO;
-    std::unique_ptr<StructuredBuffer> m_pUniqueClusterBuffer;
+    std::unique_ptr<TypedBuffer> m_pUniqueClusterBuffer;
 
     // step 3: compact cluster list
     std::unique_ptr<RootSignature> m_pCompactClusterListRS;
