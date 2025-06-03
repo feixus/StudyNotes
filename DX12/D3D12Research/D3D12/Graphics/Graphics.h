@@ -70,7 +70,7 @@ public:
 
 	GraphicsTexture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture2D* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
-	GraphicsTexture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer(); }
+	GraphicsTexture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
 	GraphicsTexture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
@@ -119,7 +119,7 @@ private:
 	int m_SampleCount{1};
 	int m_SampleQuality{0};
 
-	std::array<std::unique_ptr<GraphicsTexture2D>, FRAME_COUNT> m_MultiSampleRenderTargets;
+	std::unique_ptr<GraphicsTexture2D> m_pMultiSampleRenderTarget;
 	std::array<std::unique_ptr<GraphicsTexture2D>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;

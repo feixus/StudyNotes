@@ -37,6 +37,8 @@ public:
 	const BitField32& GetDescriptorTableMask() const { return m_DescriptorTableMask; }
 	const std::vector<uint32_t>& GetDescriptorTableSizes() const { return m_DescriptorTableSizes; }
 
+	uint32_t GetDWordSize() const;
+
 private:
 	std::vector<D3D12_ROOT_PARAMETER1> m_RootParameters;
 	std::vector<std::array<D3D12_DESCRIPTOR_RANGE1, MAX_RANGES_PER_TABLE>> m_DescriptorTableRanges;

@@ -195,10 +195,8 @@ void Graphics::Update()
 			Profiler::Instance()->Begin("Depth Prepass", pCommandContext);
 
 			pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
-			
-			ClearValues values;
-			values.ClearDepth = true;
-			pCommandContext->BeginRenderPass(nullptr, GetDepthStencil(), values, RenderPassAccess::DontCare_DontCare, RenderPassAccess::Clear_Store);
+
+			pCommandContext->BeginRenderPass(RenderPassInfo(GetDepthStencil(), RenderPassAccess::Clear_Store));
 		
 			pCommandContext->SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -320,9 +318,7 @@ void Graphics::Update()
 
 			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		
-			ClearValues values;
-			values.ClearDepth = true;
-			pCommandContext->BeginRenderPass(nullptr, GetDepthStencil(), values, RenderPassAccess::DontCare_DontCare, RenderPassAccess::Clear_Store);
+			pCommandContext->BeginRenderPass(RenderPassInfo(GetDepthStencil(), RenderPassAccess::Clear_Store));
 
 			pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -402,7 +398,7 @@ void Graphics::Update()
 		
 			ClearValues values;
 			values.ClearColor = true;
-			pCommandContext->BeginRenderPass(GetCurrentRenderTarget(), GetDepthStencil(), values, RenderPassAccess::DontCare_Store, RenderPassAccess::Load_DontCare);
+			pCommandContext->BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::DontCare_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
 
 			pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
@@ -481,7 +477,6 @@ void Graphics::Update()
 	{
 		Profiler::Instance()->Begin("Clustered Forward+");
 		ClusteredForwardInputResource resources;
-		resources.pDepthPrepassBuffer = GetDepthStencil();
 		resources.pOpaqueBatches = &m_OpaqueBatches;
 		resources.pTransparentBatches = &m_TransparentBatches;
 		resources.pRenderTarget = GetCurrentRenderTarget();
@@ -667,10 +662,7 @@ void Graphics::InitD3D()
 	if (m_SampleCount > 1)
 	{
 		m_pResolveDepthStencil = std::make_unique<GraphicsTexture2D>();
-		for (int i = 0; i < FRAME_COUNT; i++)
-		{
-			m_MultiSampleRenderTargets[i] = std::make_unique<GraphicsTexture2D>();
-		}
+		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture2D>();
 	}
 
 	m_pLightGridOpaque = std::make_unique<GraphicsTexture2D>();
@@ -751,24 +743,21 @@ void Graphics::OnResize(int width, int height)
  		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_RenderTargets[i]->CreateForSwapChain(this, pResource);
 		m_RenderTargets[i]->SetName("RenderTarget");
-
-		if (m_SampleCount > 1)
-		{
-			m_MultiSampleRenderTargets[i]->Create(this, m_WindowWidth, m_WindowHeight, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, -1, ClearBinding(Color(0, 0, 0, 0)));
-			m_MultiSampleRenderTargets[i]->SetName("Multisample RenderTarget");
-		}
 	}
 
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(1.0f, 0));
+		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(0.0f, 0));
 		m_pDepthStencil->SetName("Depth Stencil");
-		m_pResolveDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1, -1, ClearBinding(1.0f, 0));
+		m_pResolveDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1, -1, ClearBinding(0.0f, 0));
 		m_pResolveDepthStencil->SetName("Resolve Depth Stencil");
+
+		m_pMultiSampleRenderTarget->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, -1, ClearBinding(Color(0,0,0,0)));
+		m_pMultiSampleRenderTarget->SetName("Multisample Rendertarget");
 	}
 	else
 	{
-		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(1.0f, 0));
+		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(0.0f, 0));
 		m_pDepthStencil->SetName("Depth Stencil");
 	}
 
@@ -953,7 +942,7 @@ void Graphics::InitializeAssets()
 		}
 
 		m_pShadowMap = std::make_unique<GraphicsTexture2D>();
-		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, -1, ClearBinding(1.0f, 0));
+		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, -1, ClearBinding(0.0f, 0));
 	}
 
 	// depth prepass
@@ -1151,17 +1140,18 @@ void Graphics::UpdateImGui()
 			case LogType::VeryVerbose:
 			case LogType::Verbose:
 			case LogType::Info:
-				ImGui::TextColored(ImVec4(1, 1, 1, 1), "%s", entry.Message.c_str());
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
 				break;
 			case LogType::Warning:
-				ImGui::TextColored(ImVec4(1, 1, 0, 1), "%s", entry.Message.c_str());
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
 				break;
 			case LogType::Error:
-				ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", entry.Message.c_str());
-				break;
-			default:
+			case LogType::FatalError:
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
 				break;
 			}
+			ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
+			ImGui::PopStyleColor();
 		}
 	}
 	ImGui::End();
@@ -1256,8 +1246,6 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		ComPtr<ID3D12CommandList> pCommandList;
 		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
-		ComPtr<ID3D12GraphicsCommandList> pCmd;
-		pCommandList.As<ID3D12GraphicsCommandList>(&pCmd);
 		m_CommandLists.push_back(std::move(pCommandList));
 
 		switch (type)

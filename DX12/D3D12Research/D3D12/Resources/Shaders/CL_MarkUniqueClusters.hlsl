@@ -10,7 +10,7 @@ cbuffer Parameters : register(b0)
 
 // UAV(register u#) and render target outputs(SV_Target#) share the same register namespace.
 // SV_Target0 implicitly uses u0 internally.
-RWStructuredBuffer<uint> uUniqueCluster : register(u1);
+RWStructuredBuffer<uint> uActiveCluster : register(u1);
 
 Texture2D tDiffuseTexture : register(t0);
 SamplerState sDiffuseSampler : register(s0);
@@ -54,9 +54,9 @@ void MarkClusters_PS(PS_Input input)
     {
         discard;
     }
-    uUniqueCluster[clusterIndex1D] = 1;
+    uActiveCluster[clusterIndex1D] = ceil(s);
 #else
-    uUniqueCluster[clusterIndex1D] = 1;
+    uActiveCluster[clusterIndex1D] = 1;
 #endif
 }
 

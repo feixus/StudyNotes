@@ -8,11 +8,9 @@ class RootSignature;
 class StructuredBuffer;
 class GraphicsTexture;
 class ByteAddressBuffer;
-class Typedbuffer;
 
 struct ClusteredForwardInputResource
 {
-    GraphicsTexture2D* pDepthPrepassBuffer;
     GraphicsTexture2D* pRenderTarget;
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
@@ -42,6 +40,7 @@ private:
     uint32_t m_MaxClusters{0};
 
     std::unique_ptr<GraphicsTexture2D> m_pHeatMapTexture;
+    std::unique_ptr<GraphicsTexture2D> m_pDepthTexture;
 
     // step 1: AABB
     std::unique_ptr<RootSignature> m_pCreateAabbRS;
@@ -52,7 +51,7 @@ private:
     std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparentPSO;
-    std::unique_ptr<TypedBuffer> m_pUniqueClusterBuffer;
+    std::unique_ptr<StructuredBuffer> m_pUniqueClusterBuffer;
 
     // step 3: compact cluster list
     std::unique_ptr<RootSignature> m_pCompactClusterListRS;
