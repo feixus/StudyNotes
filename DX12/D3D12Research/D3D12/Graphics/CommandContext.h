@@ -66,7 +66,8 @@ struct RenderPassInfo
 	struct RenderTargetInfo
 	{
 		RenderPassAccess Access{RenderPassAccess::DontCare_DontCare};
-		GraphicsTexture* Texture{nullptr};
+		GraphicsTexture* Target{nullptr};
+		GraphicsTexture* ResolveTarget{nullptr};
 		int MipLevel{0};
 		int ArrayIndex{0};
 	};
@@ -75,26 +76,34 @@ struct RenderPassInfo
 	{
 		RenderPassAccess Access{RenderPassAccess::DontCare_DontCare};
 		RenderPassAccess StencilAccess{RenderPassAccess::DontCare_DontCare};
-		GraphicsTexture* Texture{nullptr};
+		GraphicsTexture* Target{nullptr};
 	};
 
-	RenderPassInfo(GraphicsTexture* pDepthBuffer, RenderPassAccess access)
+	RenderPassInfo() {}
+
+	RenderPassInfo(GraphicsTexture* pDepthBuffer, RenderPassAccess access, bool uavWrites = false)
 		: RenderTargetCount(0)
 	{
 		DepthStencilTarget.Access = access;
-		DepthStencilTarget.Texture = pDepthBuffer;
+		DepthStencilTarget.Target = pDepthBuffer;
+		WriteUAVs = uavWrites;
 	}
 
-	RenderPassInfo(GraphicsTexture* pRenderTarget, RenderPassAccess renderTargetAccess, GraphicsTexture* pDepthBuffer, RenderPassAccess depthAccess, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
+	RenderPassInfo(GraphicsTexture* pRenderTarget, RenderPassAccess renderTargetAccess, GraphicsTexture* pDepthBuffer, RenderPassAccess depthAccess, bool uavWritrs = false, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
 		: RenderTargetCount(1)
 	{
 		RenderTargets[0].Access = renderTargetAccess;
-		RenderTargets[0].Texture = pRenderTarget;
+		RenderTargets[0].Target = pRenderTarget;
 		DepthStencilTarget.Access = depthAccess;
-		DepthStencilTarget.Texture = pDepthBuffer;
+		DepthStencilTarget.Target = pDepthBuffer;
 		DepthStencilTarget.StencilAccess = stencilAccess;
+		WriteUAVs = uavWritrs;
 	}
 
+	static D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE ExtractBeginAccess(RenderPassAccess access);
+	static D3D12_RENDER_PASS_ENDING_ACCESS_TYPE ExtractEndingAccess(RenderPassAccess access);
+
+	bool WriteUAVs = false;
 	uint32_t RenderTargetCount;
 	std::array<RenderTargetInfo, 4> RenderTargets;
 	DepthTargetInfo DepthStencilTarget;
@@ -208,6 +217,10 @@ public:
 
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
+
+private:
+	RenderPassInfo m_CurrentRenderPassInfo;
+	bool m_InRenderPass{false};
 };
 
 class CopyCommandContext : public CommandContext

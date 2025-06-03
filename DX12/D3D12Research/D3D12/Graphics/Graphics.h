@@ -65,7 +65,7 @@ public:
 	int32_t GetWindowHeight() const { return m_WindowHeight; }
 
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
-
+	bool UseRenderPasses() const;
 	bool IsFenceComplete(uint64_t fenceValue);
 
 	GraphicsTexture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
@@ -115,6 +115,8 @@ private:
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
+
+	D3D12_RENDER_PASS_TIER m_RenderPassTier{D3D12_RENDER_PASS_TIER_0};
 
 	int m_SampleCount{1};
 	int m_SampleQuality{0};

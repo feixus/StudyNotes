@@ -194,7 +194,7 @@ void Graphics::Update()
 			GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 			Profiler::Instance()->Begin("Depth Prepass", pCommandContext);
 
-			pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
+			pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
 			pCommandContext->BeginRenderPass(RenderPassInfo(GetDepthStencil(), RenderPassAccess::Clear_Store));
 		
@@ -316,7 +316,7 @@ void Graphics::Update()
 			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
 			pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
 
-			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
+			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 		
 			pCommandContext->BeginRenderPass(RenderPassInfo(GetDepthStencil(), RenderPassAccess::Clear_Store));
 
@@ -388,16 +388,14 @@ void Graphics::Update()
 			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 			pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 	
-			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
-			pCommandContext->InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
-			pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
-			pCommandContext->InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
-			pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
-			pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, false);
-			pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
-		
-			ClearValues values;
-			values.ClearColor = true;
+			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			pCommandContext->InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			pCommandContext->InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			pCommandContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+			pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
 			pCommandContext->BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::DontCare_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
 
 			pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -488,7 +486,6 @@ void Graphics::Update()
 	{
 		GraphicsCommandContext* pCommandContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 		Profiler::Instance()->Begin("UI", pCommandContext);
-
 		// 6. UI
 		//  - ImGui render, pretty straight forward
 		{
@@ -498,21 +495,22 @@ void Graphics::Update()
 		}
 		Profiler::Instance()->End(pCommandContext);
 
-		Profiler::Instance()->Begin("Present", pCommandContext);
 		// 7. MSAA render target resolve
 		//  - we have to resolve a MSAA render target ourselves.
 		{
 			if (m_SampleCount > 1)
 			{
-				pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE, false);
-				pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RESOLVE_DEST, true);
-				pCommandContext->GetCommandList()->ResolveSubresource(GetCurrentBackbuffer()->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
+				Profiler::Instance()->Begin("Resolve MSAA", pCommandContext);
+				RenderPassInfo info(GetCurrentRenderTarget(), RenderPassAccess::Load_Resolve, GetDepthStencil(), RenderPassAccess::DontCare_DontCare);
+				info.RenderTargets[0].ResolveTarget = GetCurrentBackbuffer();
+				pCommandContext->BeginRenderPass(info);
+				pCommandContext->EndRenderPass();
+				Profiler::Instance()->End(pCommandContext);
 			}
 			pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT, true);
-
-			Profiler::Instance()->End(pCommandContext);
-			nextFenceValue = pCommandContext->Execute(false);
 		}
+
+		nextFenceValue = pCommandContext->Execute(false);
 	}
 
 	// 8. present
@@ -622,6 +620,12 @@ void Graphics::InitD3D()
  		pInfoQueue->Release();
 	}
 #endif
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options{};
+	if (m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5)) == S_OK)
+	{
+		m_RenderPassTier = options.RenderPassesTier;
+	}
 
 	// check msaa support
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
@@ -1370,6 +1374,11 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 	default:
 		return false;
 	}
+}
+
+bool Graphics::UseRenderPasses() const
+{
+	return m_RenderPassTier > D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
 }
 
 bool Graphics::IsFenceComplete(uint64_t fenceValue)

@@ -543,6 +543,7 @@ void GraphicsTexture2D::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* 
 	m_Width = (uint32_t)desc.Width;
 	m_Height = (uint32_t)desc.Height;
 	m_Format = desc.Format;
+	m_ClearBinding = ClearBinding(Color(0, 0, 0, 1));
 	m_Rtv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
