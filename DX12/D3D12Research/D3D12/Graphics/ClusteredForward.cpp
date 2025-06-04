@@ -28,7 +28,7 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-    m_pDepthTexture->Create(m_pGraphics, windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), -1, ClearBinding(1.0f, 0));
+    m_pDepthTexture->Create(m_pGraphics, windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), -1, ClearBinding(0.0f, 0));
 
 	m_ClusterCountX = (uint32_t)ceil((float)windowWidth / cClusterSize);
 	m_ClusterCountY = (uint32_t)ceil((float)windowHeight / cClusterSize);
@@ -54,8 +54,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
     m_pDebugLightGrid->Create(m_pGraphics, 2 * sizeof(uint32_t), m_MaxClusters);
     m_pDebugLightGrid->SetName("Debug Light Grid");
 
-	float nearZ = 2.0f;
-	float farZ = 500.0f;
+	float nearZ = 500.0f;
+	float farZ = 1.0f;
 	Matrix projection = XMMatrixPerspectiveFovLH(tFovAngle, (float)windowWidth / windowHeight, nearZ, farZ);
 
 	// create AABBs
@@ -77,8 +77,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		} constantBuffer;
 
 		constantBuffer.ScreenDimensions = Vector2((float)windowWidth, (float)windowHeight);
-		constantBuffer.NearZ = nearZ;
-		constantBuffer.FarZ = farZ;
+		constantBuffer.NearZ = farZ;
+		constantBuffer.FarZ = nearZ;
 		projection.Invert(constantBuffer.ProjectionInverse);
 		constantBuffer.ClusterSize.x = cClusterSize;
 		constantBuffer.ClusterSize.y = cClusterSize;
@@ -99,12 +99,12 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResource)
 {
     Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
-    float nearZ = 2.0f;
-    float farZ = 500.0f;
+    float nearZ = 500.0f;
+    float farZ = 1.0f;
     Matrix projection = XMMatrixPerspectiveFovLH(tFovAngle, screenDimensions.x / screenDimensions.y, nearZ, farZ);
 
-    float sliceMagicA = (float)cClusterCountZ / log(farZ / nearZ);
-    float sliceMagicB = (float)cClusterCountZ * log(nearZ) / log(farZ / nearZ);
+    float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
+    float sliceMagicB = (float)cClusterCountZ * log(farZ) / log(nearZ / farZ);
 
     // mark unique clusters
     {
@@ -521,7 +521,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pMarkUniqueClustersRS->Finalize("Mark Unique Clusters", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
         m_pMarkUniqueClustersOpaquePSO = std::make_unique<GraphicsPipelineState>();
-        m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
+        m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
         m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElementDescs, _countof(inputElementDescs));
         m_pMarkUniqueClustersOpaquePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
         m_pMarkUniqueClustersOpaquePSO->SetPixelShader(pixelShaderOpaque.GetByteCode(), pixelShaderOpaque.GetByteCodeSize());
@@ -652,7 +652,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         // transparent
 		m_pDiffuseTransparencyPSO = std::make_unique<GraphicsPipelineState>(*m_pDiffusePSO.get());
 		m_pDiffuseTransparencyPSO->SetBlendMode(BlendMode::Alpha, false);
-		m_pDiffuseTransparencyPSO->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
+		m_pDiffuseTransparencyPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		m_pDiffuseTransparencyPSO->Finalize("Diffuse (Transparent)", pGraphics->GetDevice());
     }
 
@@ -668,7 +668,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pDebugClusterRS->Finalize("Debug Cluster", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS);
 
         m_pDebugClusterPSO = std::make_unique<GraphicsPipelineState>();
-        m_pDebugClusterPSO->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
+        m_pDebugClusterPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
         m_pDebugClusterPSO->SetDepthWrite(false);
         m_pDebugClusterPSO->SetInputLayout(nullptr, 0);
         m_pDebugClusterPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
