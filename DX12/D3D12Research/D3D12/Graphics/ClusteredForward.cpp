@@ -10,6 +10,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/Light.h"
 #include "Graphics/Profiler.h"
+#include "Scene/Camera.h"
 
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
@@ -29,6 +30,7 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
     m_pDepthTexture->Create(m_pGraphics, windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), -1, ClearBinding(0.0f, 0));
+    m_pDepthTexture->SetName("Clustered Forward Depth Texture");
 
 	m_ClusterCountX = (uint32_t)ceil((float)windowWidth / cClusterSize);
 	m_ClusterCountY = (uint32_t)ceil((float)windowHeight / cClusterSize);
@@ -54,10 +56,6 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
     m_pDebugLightGrid->Create(m_pGraphics, 2 * sizeof(uint32_t), m_MaxClusters);
     m_pDebugLightGrid->SetName("Debug Light Grid");
 
-	float nearZ = 500.0f;
-	float farZ = 1.0f;
-	Matrix projection = XMMatrixPerspectiveFovLH(tFovAngle, (float)windowWidth / windowHeight, nearZ, farZ);
-
 	// create AABBs
 	{
 		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
@@ -77,9 +75,9 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		} constantBuffer;
 
 		constantBuffer.ScreenDimensions = Vector2((float)windowWidth, (float)windowHeight);
-		constantBuffer.NearZ = farZ;
-		constantBuffer.FarZ = nearZ;
-		projection.Invert(constantBuffer.ProjectionInverse);
+		constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
+        constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
+		constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
 		constantBuffer.ClusterSize.x = cClusterSize;
 		constantBuffer.ClusterSize.y = cClusterSize;
 		constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
@@ -99,9 +97,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResource)
 {
     Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
-    float nearZ = 500.0f;
-    float farZ = 1.0f;
-    Matrix projection = XMMatrixPerspectiveFovLH(tFovAngle, screenDimensions.x / screenDimensions.y, nearZ, farZ);
+    float nearZ = m_pGraphics->GetCamera()->GetNear();
+    float farZ = m_pGraphics->GetCamera()->GetFar();
 
     float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
     float sliceMagicB = (float)cClusterCountZ * log(farZ) / log(nearZ / farZ);
@@ -118,6 +115,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         Profiler::Instance()->End(pContext);
 
         pContext->InsertResourceBarrier(m_pDepthTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        pContext->InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
         pContext->InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         pContext->BeginRenderPass(RenderPassInfo(m_pDepthTexture.get(), RenderPassAccess::Clear_Store, true));
@@ -138,8 +136,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             float SliceMagicB{0};
         } constantBuffer;
 
-        constantBuffer.WorldView = m_pGraphics->GetViewMatrix();
-        constantBuffer.Projection = projection;
+        constantBuffer.WorldView = inputResource.pCamera->GetView();
+        constantBuffer.Projection = inputResource.pCamera->GetProjection();
         constantBuffer.SliceMagicA = sliceMagicA;
         constantBuffer.SliceMagicB = sliceMagicB;
         constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
@@ -247,7 +245,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
                 int LightCount{0};
 			} constantBuffer;
 
-            constantBuffer.View = m_pGraphics->GetViewMatrix();
+            constantBuffer.View = inputResource.pCamera->GetView();
 			constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 			constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
 			constantBuffer.ClusterDimensions[2] = cClusterCountZ;
@@ -290,7 +288,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
                 int LightCount{0};
             } constantBuffer;
 
-            constantBuffer.View = m_pGraphics->GetViewMatrix();
+            constantBuffer.View = inputResource.pCamera->GetView();
             constantBuffer.LightCount = (int)inputResource.pLightBuffer->GetElementCount();
 
             pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
@@ -333,10 +331,9 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             float SliceMagicB{0};
         } frameData;
 
-        Matrix view = m_pGraphics->GetViewMatrix();
-        view.Invert(frameData.ViewInverse);
-        frameData.View = view;
-        frameData.Projection = projection;
+        frameData.View = inputResource.pCamera->GetView();
+        frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
+        frameData.Projection = inputResource.pCamera->GetProjection();
 		frameData.ClusterDimensions[0] = m_ClusterCountX;
 		frameData.ClusterDimensions[1] = m_ClusterCountY;
 		frameData.ClusterDimensions[2] = cClusterCountZ;
@@ -420,7 +417,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         {
             pContext->CopyResource(m_pCompactedClusterBuffer.get(), m_pDebugCompactedClusterBuffer.get());
             pContext->CopyResource(m_pLightGrid.get(), m_pDebugLightGrid.get());
-            m_DebugClusterViewMatrix = m_pGraphics->GetViewMatrix();
+            m_DebugClusterViewMatrix = inputResource.pCamera->GetView();
             m_DebugClusterViewMatrix.Invert(m_DebugClusterViewMatrix);
             pContext->ExecuteAndReset(true);
             m_DidCopyDebugClusterData = true;
@@ -435,7 +432,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
         pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-        Matrix p = m_DebugClusterViewMatrix * m_pGraphics->GetViewMatrix() * projection;
+        Matrix p = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
 
         pContext->SetDynamicConstantBufferView(0, &p, sizeof(Matrix));
         pContext->SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetSRV());
@@ -617,7 +614,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         Shader pixelShader = Shader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::PixelShader, "Diffuse_PS");
 
         m_pDiffuseRS = std::make_unique<RootSignature>();
-		m_pDiffuseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+		m_pDiffuseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 		m_pDiffuseRS->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pDiffuseRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
 		m_pDiffuseRS->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);

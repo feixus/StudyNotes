@@ -18,6 +18,7 @@ class GraphicsProfiler;
 class PersistentResourceAllocator;
 class ClusteredForward;
 struct Material;
+class Camera;
 
 struct Batch
 {
@@ -73,12 +74,12 @@ public:
 	GraphicsTexture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
 	GraphicsTexture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
+	Camera* GetCamera() const { return m_pCamera.get(); }
+
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 	uint32_t GetMultiSampleQualityLevel(uint32_t msaa);
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
-
-	Matrix GetViewMatrix();
 
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
@@ -107,8 +108,7 @@ private:
 
 	int m_DesiredLightCount = 4096;
 
-	Vector3 m_CameraPosition;
-	Quaternion m_CameraRotation;
+	std::unique_ptr<Camera> m_pCamera;
 
 	HWND m_pWindow{};
 

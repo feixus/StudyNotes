@@ -8,6 +8,7 @@ class RootSignature;
 class StructuredBuffer;
 class GraphicsTexture;
 class ByteAddressBuffer;
+class Camera;
 
 struct ClusteredForwardInputResource
 {
@@ -15,6 +16,7 @@ struct ClusteredForwardInputResource
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
     StructuredBuffer* pLightBuffer;
+    Camera* pCamera;
 };
 
 class ClusteredForward
