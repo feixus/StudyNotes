@@ -49,14 +49,18 @@ class StructuredBuffer : public GraphicsBuffer
 {
 public:
 	StructuredBuffer(Graphics* pGraphics);
+	~StructuredBuffer();
 
 	void Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, bool cpuVisible = false);
+	void Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, ByteAddressBuffer* pCounter, uint64_t counterOffset = 0, bool cpuVisible = false);
 	virtual void CreateViews(Graphics* pGraphics) override;
 
-	ByteAddressBuffer* GetCounter() const { return m_pCounter.get(); }
+	ByteAddressBuffer* GetCounter() const { return m_pCounter; }
 
 private:
-	std::unique_ptr<ByteAddressBuffer> m_pCounter;
+	ByteAddressBuffer* m_pCounter{nullptr};
+	uint32_t m_CounterBufferOffset{0};
+	bool m_CounterOwner{true};
 };
 
 class TypedBuffer : public GraphicsBuffer

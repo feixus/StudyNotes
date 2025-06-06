@@ -61,6 +61,16 @@ StructuredBuffer::StructuredBuffer(Graphics* pGraphics)
 	m_Srv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
+StructuredBuffer::~StructuredBuffer()
+{
+	// delete the counter if we own it
+	if (m_pCounter && m_CounterOwner)
+	{
+		delete m_pCounter;
+		m_pCounter = nullptr;
+	}
+}
+
 void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, bool cpuVisible)
 {
 	Release();
@@ -75,10 +85,18 @@ void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint6
 	CreateViews(pGraphics);
 }
 
+void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint64_t elementCount, ByteAddressBuffer* pCounter, uint64_t counterOffset, bool cpuVisible)
+{
+	m_pCounter = pCounter;
+	m_CounterBufferOffset = counterOffset * D3D12_UAV_COUNTER_PLACEMENT_ALIGNMENT;
+	m_CounterOwner = false;
+	Create(pGraphics, elementStride, elementCount, cpuVisible);
+}
+
 void StructuredBuffer::CreateViews(Graphics* pGraphics)
 {
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
-	uavDesc.Buffer.CounterOffsetInBytes = 0;
+	uavDesc.Buffer.CounterOffsetInBytes = m_CounterBufferOffset;
 	uavDesc.Buffer.FirstElement = 0;
 	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 	uavDesc.Buffer.NumElements = (uint32_t)m_ElementCount;
@@ -87,9 +105,9 @@ void StructuredBuffer::CreateViews(Graphics* pGraphics)
 	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 
 	// structured buffer with counters
-	if (m_pCounter == nullptr)
+	if (m_CounterOwner && m_pCounter == nullptr)
 	{
-		m_pCounter = std::make_unique<ByteAddressBuffer>(pGraphics);
+		m_pCounter = new ByteAddressBuffer(pGraphics);
 		m_pCounter->Create(pGraphics, 4, 1, false);
 	}
 

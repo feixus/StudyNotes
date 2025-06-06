@@ -120,7 +120,7 @@ public:
 	virtual uint64_t ExecuteAndReset(bool wait);
 	
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
-	void InsertUavBarrier(GraphicsBuffer* pBuffer, bool executeImmediate = false);
+	void InsertUavBarrier(GraphicsBuffer* pBuffer = nullptr, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
 	void CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pDest);

@@ -9,6 +9,8 @@ class StructuredBuffer;
 class GraphicsTexture;
 class ByteAddressBuffer;
 class Camera;
+class CommandSignature;
+class GpuParticles;
 
 struct ClusteredForwardInputResource
 {
@@ -23,6 +25,7 @@ class ClusteredForward
 {
 public:
     ClusteredForward(Graphics* pGraphics);
+    ~ClusteredForward();
 
     void OnSwapchainCreated(int windowWidth, int windowHeight);
 
@@ -68,7 +71,7 @@ private:
     // step 5: light culling
     std::unique_ptr<RootSignature> m_pLightCullingRS;
     std::unique_ptr<ComputePipelineState> m_pLightCullingPSO;
-    ComPtr<ID3D12CommandSignature> m_pLightCullingCommandSignature;;
+    std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;;
     std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
     std::unique_ptr<StructuredBuffer> m_pLightIndexGrid;
     std::unique_ptr<StructuredBuffer> m_pLightGrid;
@@ -88,4 +91,6 @@ private:
     std::unique_ptr<StructuredBuffer> m_pDebugLightGrid;
     Matrix m_DebugClusterViewMatrix;
     bool m_DidCopyDebugClusterData{false};
+
+    std::unique_ptr<GpuParticles> m_pGpuParticles;
 };
