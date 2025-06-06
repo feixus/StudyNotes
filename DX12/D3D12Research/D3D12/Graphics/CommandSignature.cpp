@@ -30,3 +30,11 @@ void CommandSignature::AddDispatch()
     m_ArgumentDescs.push_back(desc);
     m_Stride += 3 * sizeof(uint32_t); // 3 uint32_t for x, y, z dimensions
 }
+
+void CommandSignature::AddDraw()
+{
+    D3D12_INDIRECT_ARGUMENT_DESC desc = {};
+    desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+    m_ArgumentDescs.push_back(desc);
+    m_Stride += 4 * sizeof(uint32_t);
+}

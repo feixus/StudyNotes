@@ -38,7 +38,12 @@ private:
     std::unique_ptr<ComputePipelineState> m_pSimulatePSO;
     std::unique_ptr<ByteAddressBuffer> m_pSimulateArguments;
 
+    std::unique_ptr<RootSignature> m_pSimulateEndRS;
+    std::unique_ptr<ComputePipelineState> m_pSimulateEndPSO;
+    std::unique_ptr<ByteAddressBuffer> m_pDrawArguments;
+
     std::unique_ptr<CommandSignature> m_pSimpleDispatchCommandSignature;
+    std::unique_ptr<CommandSignature> m_pSimpleDrawCommandSignature;
 
     std::unique_ptr<RootSignature> m_pParticleRenderRS;
     std::unique_ptr<GraphicsPipelineState> m_pParticleRenderPSO;
