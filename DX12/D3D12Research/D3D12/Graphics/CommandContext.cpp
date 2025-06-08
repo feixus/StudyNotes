@@ -144,7 +144,7 @@ void CommandContext::FlushResourceBarriers()
 	}
 }
 
-void CommandContext::CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pDest)
+void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* pDest)
 {
 	assert(pSource);
 	assert(pDest);

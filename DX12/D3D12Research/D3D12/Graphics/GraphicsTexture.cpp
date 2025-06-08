@@ -244,6 +244,7 @@ void GraphicsTexture::Create_Internal(Graphics* pGraphics, TextureDimension dime
 			break;
 		case TextureDimension::Texture3D:
 			uavDesc.Texture3D.FirstWSlice = 0;
+			uavDesc.Texture3D.WSize = depthOrArraySize;
 			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
 			break;
 		case TextureDimension::TextureCube:
@@ -549,9 +550,16 @@ void GraphicsTexture2D::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* 
 	m_Height = (uint32_t)desc.Height;
 	m_Format = desc.Format;
 	m_ClearBinding = ClearBinding(Color(0, 0, 0, 1));
-	m_Rtv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-	pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
+	if (m_Rtv.ptr == 0)
+	{
+		m_Rtv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	}
+	pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
+	if (m_Srv.ptr == 0)
+	{
+		m_Srv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	}
+	pGraphics->GetDevice()->CreateShaderResourceView(pTexture, nullptr, m_Srv);
 }
 
 void GraphicsTextureCube::Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage)

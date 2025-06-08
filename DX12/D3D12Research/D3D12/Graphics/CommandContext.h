@@ -123,7 +123,7 @@ public:
 	void InsertUavBarrier(GraphicsBuffer* pBuffer = nullptr, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
-	void CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pDest);
+	void CopyResource(GraphicsResource* pSource, GraphicsResource* pDest);
 	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 
