@@ -529,7 +529,6 @@ void ComputeCommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY,
 // GPU-driven rendering
 void ComputeCommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments)
 {
-	assert(m_CurrentContext == CommandListContext::Compute);
 	FlushResourceBarriers();
 	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(m_CurrentContext == CommandListContext::Compute ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
 	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(m_CurrentContext == CommandListContext::Compute ? DescriptorTableType::Compute : DescriptorTableType::Graphics);

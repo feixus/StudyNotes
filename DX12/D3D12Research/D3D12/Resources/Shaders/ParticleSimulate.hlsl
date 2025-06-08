@@ -50,6 +50,11 @@ void UpdateSimulationParameters(CS_INPUT input)
 
 #ifdef COMPILE_EMITTER
 
+cbuffer EmitterData : register(b0)
+{
+    float4 cRandomDirections[64];
+}
+
 RWByteAddressBuffer uCounters : register(u0);
 RWStructuredBuffer<uint> uDeadList : register(u1);
 RWStructuredBuffer<uint> uAliveList1 : register(u2);
@@ -61,14 +66,15 @@ void Emit(CS_INPUT input)
     uint emitCount = uCounters.Load(EMIT_COUNT);
     if (input.DispatchThreadId.x < emitCount)
     {
-        ParticleData p;
-        p.LifeTime = 0;
-        p.Position = float3(input.DispatchThreadId.x, 0, 0);
-        p.Velocity = float3(1, 0, 0);
-
         uint deadSlot;
         uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
         uint particleIndex = uDeadList[deadSlot - 1];
+
+        ParticleData p;
+        p.LifeTime = 0;
+        p.Position = float3(0, 0, 0);
+        p.Velocity = 30 * cRandomDirections[particleIndex % 64].xyz;
+
         uParticleData[particleIndex] = p;
 
         uint aliveSlot;
@@ -99,17 +105,18 @@ void Simulate(CS_INPUT input)
     uint aliveCount = uCounters.Load(ALIVE_LIST_1_COUNTER);
     if (input.DispatchThreadId.x < aliveCount)
     {
-        uint particleIndex = uAliveList2[input.DispatchThreadId.x];
+        uint particleIndex = uAliveList1[input.DispatchThreadId.x];
         ParticleData p = uParticleData[particleIndex];
         if (p.LifeTime < cParticleLifetime)
         {
+            p.Velocity += float3(0, -9.81f * cDeltaTime, 0);
             p.Position += p.Velocity * cDeltaTime;
             p.LifeTime += cDeltaTime;
             uParticleData[particleIndex] = p;
 
             uint aliveSlot;
             uCounters.InterlockedAdd(ALIVE_LIST_2_COUNTER, 1, aliveSlot);
-            uAliveList1[aliveSlot] = particleIndex;
+            uAliveList2[aliveSlot] = particleIndex;
         }
         else
         {
@@ -118,6 +125,20 @@ void Simulate(CS_INPUT input)
             uDeadList[deadSlot] = particleIndex;
         }
     }
+}
+
+#endif
+
+#ifdef COMPILE_SIMULATE_END
+
+ByteAddressBuffer uCounters : register(t0);
+RWByteAddressBuffer uArgumentsBuffer : register(u0);
+
+[numthreads(1, 1, 1)]
+void SimulateEnd(CS_INPUT input)
+{
+    uint particleCount = uCounters.Load(ALIVE_LIST_2_COUNTER);
+    uArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
 }
 
 #endif

@@ -8,19 +8,16 @@ struct ParticleData
 cbuffer FrameData : register(b0)
 {
     float4x4 cViewInverse;
-    float4x4 cViewProjection;
+    float4x4 cView;
+    float4x4 cProjection;
 }
 
 StructuredBuffer<ParticleData> tParticleData : register(t0);
+StructuredBuffer<uint> tAliveList : register(t1);
 
 struct VS_INPUT
 {
     uint vertexId : SV_VertexID;
-};
-
-struct GS_INPUT
-{
-    uint index : INDEX;
 };
 
 struct PS_INPUT
@@ -29,34 +26,36 @@ struct PS_INPUT
     float4 color : COLOR;
 };
 
-GS_INPUT VSMain(VS_INPUT input)
+static const float3 BILLBOARD[] = {
+    float3(-1, -1, 0),
+    float3( 1, -1, 0),
+    float3(-1,  1, 0),
+
+    float3(-1,  1, 0),
+    float3( 1, -1, 0),
+    float3( 1,  1, 0),
+};
+
+PS_INPUT VSMain(VS_INPUT input)
 {
-    GS_INPUT output;
-    output.index = input.vertexId;
+    PS_INPUT output;
+
+    uint vertexId = input.vertexId % 6;
+    uint instanceId = input.vertexId / 6;
+
+    uint particleIndex = tAliveList[instanceId];
+    ParticleData particle = tParticleData[particleIndex];
+    float3 quadPos = 0.1 * BILLBOARD[vertexId];
+
+    output.position = float4(mul(quadPos, (float3x3)cViewInverse), 1);
+    output.position.xyz += particle.Position;
+    output.position = mul(output.position, cView);
+    output.position = mul(output.position, cProjection);
+    
+    // Calculate color based on lifetime
+    float lifeFactor = particle.LifeTime / 4.0f; // Assuming max lifetime is 4
+    output.color = float4(1.0f - lifeFactor, lifeFactor, 0.0f, 1.0f); // Gradient from red to green
     return output;
-}
-
-[maxvertexcount(4)]
-void GSMain(point GS_INPUT input[1], inout TriangleStream<PS_INPUT> outputStream)
-{
-    static float size = 4;
-    static float3 vertices[4] = {
-        float3(-size, size, 0),
-        float3(size, size, 0),
-        float3(-size, -size, 0),
-        float3(size, -size, 0),
-    };
-
-    ParticleData p = tParticleData[input[0].index];
-    float3 transformedVertices[4];
-    [unroll]
-    for (int i = 0; i < 4; i++)
-    {
-        PS_INPUT vertex;
-        vertex.position = mul(float4(mul(vertices[i], (float3x3)cViewInverse) + p.Position, 1), cViewProjection);
-        vertex.color = float4(1, 1, 0, 1);
-        outputStream.Append(vertex);
-    }
 }
 
 float4 PSMain(PS_INPUT input) : SV_TARGET
