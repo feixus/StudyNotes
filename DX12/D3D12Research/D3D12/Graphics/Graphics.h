@@ -55,6 +55,9 @@ public:
 	void WaitForFence(uint64_t fenceValue);
 	void IdleGPU();
 
+	bool BeginPixCapture() const;
+	bool EndPixCapture() const;
+
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandContext);
@@ -71,7 +74,7 @@ public:
 
 	GraphicsTexture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture2D* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
-	GraphicsTexture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
+	GraphicsTexture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pResolvedRenderTarget.get(); }
 	GraphicsTexture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	Camera* GetCamera() const { return m_pCamera.get(); }
@@ -122,6 +125,7 @@ private:
 	int m_SampleQuality{0};
 
 	std::unique_ptr<GraphicsTexture2D> m_pMultiSampleRenderTarget;
+	std::unique_ptr<GraphicsTexture2D> m_pResolvedRenderTarget;
 	std::array<std::unique_ptr<GraphicsTexture2D>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
@@ -138,6 +142,8 @@ private:
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
+	bool m_StartPixCapture{false};
+	bool m_EndPixCapture{false};
 
 	// synchronization objects
 	uint32_t m_CurrentBackBufferIndex{0};
@@ -188,4 +194,6 @@ private:
 	int m_ShadowCasters{0};
 	std::vector<Light> m_Lights;
 	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
+
+	std::unique_ptr<class Clouds> m_pClouds;
 };

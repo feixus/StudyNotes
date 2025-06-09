@@ -4,7 +4,7 @@
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
-const int gMsaaSampleCount = 1;
+const int gMsaaSampleCount = 4;
 
 class ViewWrapper
 {
