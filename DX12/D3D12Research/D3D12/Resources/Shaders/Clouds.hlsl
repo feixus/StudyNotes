@@ -56,6 +56,8 @@ float2 rayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, floa
     return float2(distanceToBox, diatanceInsideBox);
 }
 
+// non-linear depth buffer value to linear view-space depth (reversed-Z perspective projection in left hand) - linearizing the native depth values
+//https://iolite-engine.com/blog_posts/reverse_z_cheatsheet
 float GetLinearDepth(float c)
 {
     return cFarPlane * cNearPlane / (cNearPlane + c * (cFarPlane - cNearPlane));

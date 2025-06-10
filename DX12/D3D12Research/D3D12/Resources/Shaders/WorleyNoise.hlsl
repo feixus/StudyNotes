@@ -1,7 +1,7 @@
 cbuffer Constants : register(b0)
 {
-    float4 cPoints[256];
-    uint4 cPointsPerRow;
+    float4 cPoints[256];    // feature points
+    uint4 cPointsPerRow;    // x/y/z: number of points per row in each axis
     uint Resolution;
 };
 
@@ -11,7 +11,7 @@ float WorleyNoise(float3 uvw, uint pointsPerRow)
 {
     uvw *= pointsPerRow;
     float3 frc = frac(uvw);
-    uint3 i = floor(uvw);
+    uint3 cell = floor(uvw);
 
     float minDistSq = 1;
     [loop]
@@ -24,13 +24,13 @@ float WorleyNoise(float3 uvw, uint pointsPerRow)
             for (int offsetX = -1; offsetX <= 1; offsetX++)
             {
                 int3 offset = int3(offsetX, offsetY, offsetZ);
-                int3 neighbourCellWrappedId = int3(i + offset + pointsPerRow) % pointsPerRow;
-                float3 p = cPoints[neighbourCellWrappedId.x + pointsPerRow * (neighbourCellWrappedId.y + neighbourCellWrappedId.z * pointsPerRow)].xyz + offset;
+                int3 neighborCell = int3(cell + offset + pointsPerRow) % pointsPerRow;
+                float3 p = cPoints[neighborCell.x + pointsPerRow * (neighborCell.y + neighborCell.z * pointsPerRow)].xyz + offset;
                 minDistSq = min(minDistSq, dot(frc - p, frc - p));
             }
         }
     }
-
+    // return the closest feature point distance
     return sqrt(minDistSq);
 }
 

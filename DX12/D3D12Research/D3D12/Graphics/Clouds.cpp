@@ -166,7 +166,7 @@ void Clouds::Render(Graphics* pGraphics, GraphicsTexture2D* pSceneTexture, Graph
 	{
 		Profiler::Instance()->Begin("Clouds", pContext);
 		
-		pContext->InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		pContext->InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -185,8 +185,8 @@ void Clouds::Render(Graphics* pGraphics, GraphicsTexture2D* pSceneTexture, Graph
 		float aspect = (float)pGraphics->GetWindowWidth() / (float)pGraphics->GetWindowHeight();
 		float halfFov = fov * 0.5f;
 		float tanFov = tan(halfFov);
-		Vector3 toRight = Vector3::Right * tanFov * aspect;
-		Vector3 toTop = Vector3::Up * tanFov;
+		Vector3 toRight = Vector3::Right * tanFov * aspect;  // right vector to frustum edge
+		Vector3 toTop = Vector3::Up * tanFov;				// top vector to frustum edge
 
 		sCloudParameters.FrustumCorners[0] = Vector4(-Vector3::Forward - toRight + toTop);
 		sCloudParameters.FrustumCorners[1] = Vector4(-Vector3::Forward + toRight + toTop);
