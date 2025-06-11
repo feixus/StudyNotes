@@ -9,6 +9,18 @@
 #pragma comment(lib, "dxcompiler.lib")
 #endif
 
+
+Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
+{
+	m_Path = pFilePath;
+	m_Type = shaderType;
+	Compile(pFilePath, shaderType, pEntryPoint, 6, 0, defines);
+}
+
+Shader::~Shader()
+{
+}
+
 bool Shader::ProcessSource(const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)
 {
 	if (m_Path != filePath)
@@ -74,17 +86,29 @@ bool Shader::ProcessSource(const std::string& filePath, std::stringstream& outpu
 	return true;
 }
 
-Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
+bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string>& defines)
 {
 	std::stringstream shadersource;
 	std::vector<StringHash> includes;
 	std::vector<std::string> dependencies;
 	if (!ProcessSource(pFilePath, shadersource, includes, dependencies))
 	{
-		return;
+		return false;
 	}
 
 	std::string source = shadersource.str();
+	std::string target = GetShaderTarget(shaderType, shaderModelMajor, shaderModelMinor);
+
+	if (shaderModelMajor < 6)
+	{
+		return CompileFxc(source, target.c_str(), pEntryPoint, defines);
+	}
+
+	return CompileDxc(source, target.c_str(), pEntryPoint, defines);
+}
+
+bool Shader::CompileDxc(const std::string& source, const char* pTarget, const char* pEntryPoint, const std::vector<std::string>& defines)
+{
 
 #if DXC_COMPILER
 	IDxcLibrary* pLibrary;
@@ -95,25 +119,9 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 	IDxcBlobEncoding* pSource;
 	HR(pLibrary->CreateBlobWithEncodingFromPinned(source.data(), (uint32_t)source.size(), CP_UTF8, &pSource));
 
-	std::wstring target = L"";
-	switch (shaderType)
-	{
-	case Type::VertexShader:
-		target = L"vs_6_0";
-		break;
-	case Type::PixelShader:
-		target = L"ps_6_0";
-		break;
-	case Type::GeometryShader:
-		target = L"gs_6_0";
-		break;
-	case Type::ComputeShader:
-		target = L"cs_6_0";
-		break;
-	case Type::MAX:
-	default:
-		return;
-	}
+	size_t written = 0;
+	wchar_t target[256];
+	mbstowcs_s(&written, target, pTarget, 256);
 
 	LPCWSTR pArgs[] = {
 		L"/Zpr",
@@ -148,11 +156,11 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 	}
 
 	wchar_t fileName[256], entryPoint[256];
-	size_t written = 0;
-	mbstowcs_s(&written, fileName, pFilePath, 256);
+	mbstowcs_s(&written, fileName, m_Path.c_str(), 256);
 	mbstowcs_s(&written, entryPoint, pEntryPoint, 256);
+
 	IDxcOperationResult* pCompileResult;
-	HR(pCompiler->Compile(pSource, fileName, entryPoint, target.c_str(), pArgs, sizeof(pArgs) / sizeof(pArgs[0]), dxcDefines.data(), (uint32_t)dxcDefines.size(), nullptr, &pCompileResult));
+	HR(pCompiler->Compile(pSource, fileName, entryPoint, target, pArgs, sizeof(pArgs) / sizeof(pArgs[0]), dxcDefines.data(), (uint32_t)dxcDefines.size(), nullptr, &pCompileResult));
 
 	HRESULT hrCompilation;
 	pCompileResult->GetStatus(&hrCompilation);
@@ -164,14 +172,19 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 		E_LOG(LogType::Error, "Shader compilation failed: %s", (char*)pRintBlob8->GetBufferPointer());
 		pRintBlob8->Release();
 		pPrintBlob->Release();
-		return;
+		return false;
 	}
 
 	pCompileResult->GetResult(m_pByteCodeDxc.GetAddressOf());
 
 	pCompileResult->Release();
 #else
+	return false;
+#endif
+}
 
+bool Shader::CompileFxc(const std::string& source, const char* pTarget, const char* pEntryPoint, const std::vector<std::string>& defines)
+{
 	uint32_t compileFlags = D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 #if defined(_DEBUG)
 	// shader debugging
@@ -202,43 +215,42 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 	endMacro.Definition = nullptr;
 	shaderDefines.push_back(endMacro);
 
-	std::string shaderModel = "";
-	switch (shaderType)
-	{
-	case Type::VertexShader:
-		shaderModel = "vs_5_0";
-		break;
-	case Type::PixelShader:
-		shaderModel = "ps_5_0";
-		break;
-	case Type::GeometryShader:
-		shaderModel = "gs_5_0";
-		break;
-	case Type::ComputeShader:
-		shaderModel = "cs_5_0";
-		break;
-	case Type::MAX:
-	default:
-		return;
-	}
-	m_Type = shaderType;
-
 	ComPtr<ID3DBlob> pErrorBlob;
-	D3DCompile(source.data(), source.size(), pFilePath, shaderDefines.data(), nullptr, pEntryPoint, shaderModel.c_str(), compileFlags, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompile(source.data(), source.size(), m_Path.c_str(), shaderDefines.data(), nullptr, pEntryPoint, pTarget, compileFlags, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		std::wstring errorMessage((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-		std::wcout << pFilePath << " --> " << errorMessage << std::endl;
-		return;
+		std::wcout << m_Path.c_str() << " --> " << errorMessage << std::endl;
+		return false;
 	}
 
 	pErrorBlob.Reset();
-#endif
+	return true;
 }
 
-Shader::~Shader()
+std::string Shader::GetShaderTarget(Type shaderType, char shaderModelMajor, char shaderModelMinor)
 {
+	char out[7];
+	switch (shaderType)
+	{
+	case Type::VertexShader:
+		sprintf_s(out, "vs_%d_%d", shaderModelMajor, shaderModelMinor);
+		break;
+	case Type::PixelShader:
+		sprintf_s(out, "ps_%d_%d", shaderModelMajor, shaderModelMinor);
+		break;
+	case Type::GeometryShader:
+		sprintf_s(out, "gs_%d_%d", shaderModelMajor, shaderModelMinor);
+		break;
+	case Type::ComputeShader:
+		sprintf_s(out, "cs_%d_%d", shaderModelMajor, shaderModelMinor);
+		break;
+	case Type::MAX:
+	default:
+		return "";
+	}
 
+	return out;
 }
 
 void Shader::AddGlobalShaderDefine(const std::string& name, const std::string& value)
@@ -248,18 +260,20 @@ void Shader::AddGlobalShaderDefine(const std::string& name, const std::string& v
 
 void* Shader::GetByteCode() const
 {
-#if DXC_COMPILER
-	return m_pByteCodeDxc->GetBufferPointer();	
-#else
+	if (m_pByteCodeDxc)
+	{
+		return m_pByteCodeDxc->GetBufferPointer();
+	}
+
 	return m_pByteCode->GetBufferPointer();
-#endif
 }
 
 uint32_t Shader::GetByteCodeSize() const
 {
-#if DXC_COMPILER
-	return (uint32_t)m_pByteCodeDxc->GetBufferSize();
-#else
+	if (m_pByteCodeDxc)
+	{
+		return (uint32_t)m_pByteCodeDxc->GetBufferSize();
+	}
+
 	return (uint32_t)m_pByteCode->GetBufferSize();
-#endif
 }

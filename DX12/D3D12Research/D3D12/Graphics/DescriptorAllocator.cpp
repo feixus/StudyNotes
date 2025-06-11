@@ -22,6 +22,11 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptors(uint32_t co
 	return handle;
 }
 
+uint32_t DescriptorAllocator::GetNumAllocatedDescriptors() const
+{
+	return std::max<int>(m_DescriptorHeapPool.size() - 1, 0) * DESCRIPTORS_PER_HEAP + DESCRIPTORS_PER_HEAP - m_RemainingDescriptors;
+}
+
 void DescriptorAllocator::AllocateNewHeap()
 {
 	// D3D12_DESCRIPTOR_HEAP_FLAG_NONE: CPU-only, write-only heap

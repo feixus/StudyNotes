@@ -7,6 +7,8 @@
 	we keep a bitmask to later dynamically copy CPU descriptors to the GPU when rendering
 */
 
+class Shader;
+
 class RootSignature
 {
 public:
@@ -30,6 +32,7 @@ public:
 	void AddStaticSampler(uint32_t shaderRegister, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility);
 
 	void Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags);
+	void FinalizeFromShader(const char* pName, const Shader& shader, ID3D12Device* pDevice);
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
 	

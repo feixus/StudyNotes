@@ -14,7 +14,6 @@
 #include "Mesh.h"
 #include "Core/Input.h"
 #include "Profiler.h"
-#include "PersistentResourceAllocator.h"
 #include "ClusteredForward.h"
 #include "Scene/Camera.h"
 #include "Clouds.h"
@@ -667,7 +666,6 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	m_pPersistentAllocationManager = std::make_unique<PersistentResourceAllocator>(GetDevice());
 	Profiler::Instance()->Initialize(this);
 
 	// swap chain
@@ -823,36 +821,7 @@ void Graphics::InitializeAssets()
 
 		// root signature
 		m_pDiffuseRS = std::make_unique<RootSignature>();
-		m_pDiffuseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-		m_pDiffuseRS->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pDiffuseRS->SetConstantBufferView(2, 2, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pDiffuseRS->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pDiffuseRS->SetDescriptorTableSimple(4, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		// static samplers
-		D3D12_SAMPLER_DESC samplerDesc{};
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
-		m_pDiffuseRS->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		samplerDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
-		m_pDiffuseRS->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-		samplerDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
-		m_pDiffuseRS->AddStaticSampler(2, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-		m_pDiffuseRS->Finalize("Diffuse RS", m_pDevice.Get(), rootSignatureFlags);
+		m_pDiffuseRS->FinalizeFromShader("Diffuse RS", vertexShader, m_pDevice.Get());
 
 		// opaque
 		{
@@ -907,14 +876,7 @@ void Graphics::InitializeAssets()
 
 			// root signature
 			m_pShadowRS = std::make_unique<RootSignature>();
-			m_pShadowRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-
-			D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-				D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-			m_pShadowRS->Finalize("Shadow Mapping RS", m_pDevice.Get(), rootSignatureFlags);
+			m_pShadowRS->FinalizeFromShader("Shadow Mapping RS", vertexShader, m_pDevice.Get());
 
 			// pipeline state
 			m_pShadowPSO = std::make_unique<GraphicsPipelineState>();
@@ -935,23 +897,7 @@ void Graphics::InitializeAssets()
 
 			// root signature
 			m_pShadowAlphaRS = std::make_unique<RootSignature>();
-			m_pShadowAlphaRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-			m_pShadowAlphaRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
-
-			D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-				D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-				D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-			D3D12_SAMPLER_DESC samplerDesc{};
-			samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-			samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-			samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-			samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
-			m_pShadowAlphaRS->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-			m_pShadowAlphaRS->Finalize("Shadow Mapping Alpha RS", m_pDevice.Get(), rootSignatureFlags);
+			m_pShadowAlphaRS->FinalizeFromShader("Shadow Mapping Alpha RS", vertexShader, m_pDevice.Get());
 
 			// pipeline state
 			m_pShadowAlphaPSO = std::make_unique<GraphicsPipelineState>();
@@ -977,14 +923,7 @@ void Graphics::InitializeAssets()
 
 		// root signature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>();
-		m_pDepthPrepassRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-		m_pDepthPrepassRS->Finalize("Depth Prepass RS", m_pDevice.Get(), rootSignatureFlags);
+		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass RS", vertexShader, m_pDevice.Get());
 
 		// pipeline state
 		m_pDepthPrepassPSO = std::make_unique<GraphicsPipelineState>();
@@ -1004,9 +943,7 @@ void Graphics::InitializeAssets()
 		Shader computeShader("Resources/Shaders/ResolveDepth.hlsl", Shader::Type::ComputeShader, "CSMain");
 
 		m_pResolveDepthRS = std::make_unique<RootSignature>();
-		m_pResolveDepthRS->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pResolveDepthRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pResolveDepthRS->Finalize("Resolve Depth RS", m_pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pResolveDepthRS->FinalizeFromShader("Resolve Depth RS", computeShader, m_pDevice.Get());
 
 		m_pResolveDepthPSO = std::make_unique<ComputePipelineState>();
 		m_pResolveDepthPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
@@ -1020,10 +957,7 @@ void Graphics::InitializeAssets()
 		Shader computeShader("Resources/Shaders/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
 
 		m_pComputeLightCullRS = std::make_unique<RootSignature>();
-		m_pComputeLightCullRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeLightCullRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 5, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeLightCullRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeLightCullRS->Finalize("Compute Light Culling RS", m_pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pComputeLightCullRS->FinalizeFromShader("Light Culling", computeShader, m_pDevice.Get());
 
 		m_pComputeLightCullPipeline = std::make_unique<ComputePipelineState>();
 		m_pComputeLightCullPipeline->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
@@ -1171,16 +1105,18 @@ void Graphics::UpdateImGui()
 			case LogType::Verbose:
 			case LogType::Info:
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+				ImGui::TextWrapped("[Info] %s", entry.Message.c_str());
 				break;
 			case LogType::Warning:
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
+				ImGui::TextWrapped("[Warning] %s", entry.Message.c_str());
 				break;
 			case LogType::Error:
 			case LogType::FatalError:
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
+				ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
 				break;
 			}
-			ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
 			ImGui::PopStyleColor();
 		}
 	}
@@ -1449,22 +1385,16 @@ uint32_t Graphics::GetMultiSampleQualityLevel(uint32_t msaa)
 ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue)
 {
 	ID3D12Resource* pResource;
-	/*if (heapType == D3D12_HEAP_TYPE_DEFAULT)
-	{
-		pResource = m_pPersistentAllocationManager->CreateResource(desc, initialState, pClearValue);
-	}
-	else*/
-	{
-		D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(heapType);
-		HR(m_pDevice->CreateCommittedResource(
-			&heapProps,
-			D3D12_HEAP_FLAG_NONE,
-			&desc,
-			initialState,
-			pClearValue,
-			IID_PPV_ARGS(&pResource)));
-	}
-
+	
+	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(heapType);
+	HR(m_pDevice->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&desc,
+		initialState,
+		pClearValue,
+		IID_PPV_ARGS(&pResource)));
+	
 	return pResource;
 }
 
