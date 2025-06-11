@@ -71,3 +71,4 @@ project (ENGINE_NAME)
 	filter "system:Windows"
 		AddD3D12()
 		AddPix()
+		AddDxc()

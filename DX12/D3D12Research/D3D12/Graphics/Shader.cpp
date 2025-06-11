@@ -3,6 +3,11 @@
 #include "Core/Paths.h"
 
 #define USE_SHADER_LINE_DIRECTIVE 1
+#define DXC_COMPILER 1
+
+#if DXC_COMPILER
+#pragma comment(lib, "dxcompiler.lib")
+#endif
 
 bool Shader::ProcessSource(const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)
 {
@@ -81,6 +86,92 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 
 	std::string source = shadersource.str();
 
+#if DXC_COMPILER
+	IDxcLibrary* pLibrary;
+	DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pLibrary));
+	IDxcCompiler* pCompiler;
+	DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&pCompiler));
+
+	IDxcBlobEncoding* pSource;
+	HR(pLibrary->CreateBlobWithEncodingFromPinned(source.data(), (uint32_t)source.size(), CP_UTF8, &pSource));
+
+	std::wstring target = L"";
+	switch (shaderType)
+	{
+	case Type::VertexShader:
+		target = L"vs_6_0";
+		break;
+	case Type::PixelShader:
+		target = L"ps_6_0";
+		break;
+	case Type::GeometryShader:
+		target = L"gs_6_0";
+		break;
+	case Type::ComputeShader:
+		target = L"cs_6_0";
+		break;
+	case Type::MAX:
+	default:
+		return;
+	}
+
+	LPCWSTR pArgs[] = {
+		L"/Zpr",
+#ifdef _DEBUG
+		L"-Zi",
+#else
+		L"-0d",
+#endif	
+	};
+
+	std::vector<std::wstring> dDefineNames;
+	std::vector<std::wstring> dDefineValues;
+	for (const auto& define : defines)
+	{
+		dDefineNames.push_back(std::wstring(define.begin(), define.end()));
+		dDefineValues.push_back(L"1");
+	}
+
+	for (const auto& define : m_GlobalShaderDefines)
+	{
+		dDefineNames.push_back(std::wstring(define.first.begin(), define.first.end()));
+		dDefineValues.push_back(std::wstring(define.second.begin(), define.second.end()));
+	}
+
+	std::vector<DxcDefine> dxcDefines;
+	for (size_t i = 0; i < dDefineNames.size(); i++)
+	{
+		DxcDefine define;
+		define.Name = dDefineNames[i].c_str();
+		define.Value = dDefineValues[i].c_str();
+		dxcDefines.push_back(define);
+	}
+
+	wchar_t fileName[256], entryPoint[256];
+	size_t written = 0;
+	mbstowcs_s(&written, fileName, pFilePath, 256);
+	mbstowcs_s(&written, entryPoint, pEntryPoint, 256);
+	IDxcOperationResult* pCompileResult;
+	HR(pCompiler->Compile(pSource, fileName, entryPoint, target.c_str(), pArgs, sizeof(pArgs) / sizeof(pArgs[0]), dxcDefines.data(), (uint32_t)dxcDefines.size(), nullptr, &pCompileResult));
+
+	HRESULT hrCompilation;
+	pCompileResult->GetStatus(&hrCompilation);
+	if (hrCompilation != S_OK)
+	{
+		IDxcBlobEncoding* pPrintBlob, * pRintBlob8;
+		HR(pCompileResult->GetErrorBuffer(&pPrintBlob));
+		pLibrary->GetBlobAsUtf8(pPrintBlob, &pRintBlob8);
+		E_LOG(LogType::Error, "Shader compilation failed: %s", (char*)pRintBlob8->GetBufferPointer());
+		pRintBlob8->Release();
+		pPrintBlob->Release();
+		return;
+	}
+
+	pCompileResult->GetResult(m_pByteCodeDxc.GetAddressOf());
+
+	pCompileResult->Release();
+#else
+
 	uint32_t compileFlags = D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 #if defined(_DEBUG)
 	// shader debugging
@@ -142,9 +233,33 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 	}
 
 	pErrorBlob.Reset();
+#endif
+}
+
+Shader::~Shader()
+{
+
 }
 
 void Shader::AddGlobalShaderDefine(const std::string& name, const std::string& value)
 {
 	m_GlobalShaderDefines.emplace_back(name, value);
+}
+
+void* Shader::GetByteCode() const
+{
+#if DXC_COMPILER
+	return m_pByteCodeDxc->GetBufferPointer();	
+#else
+	return m_pByteCode->GetBufferPointer();
+#endif
+}
+
+uint32_t Shader::GetByteCodeSize() const
+{
+#if DXC_COMPILER
+	return (uint32_t)m_pByteCodeDxc->GetBufferSize();
+#else
+	return (uint32_t)m_pByteCode->GetBufferSize();
+#endif
 }
