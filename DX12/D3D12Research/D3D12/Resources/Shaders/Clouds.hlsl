@@ -43,6 +43,7 @@ PSInput VSMain(VSInput input)
 
 float2 rayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, float3 rayDirection)
 {
+    // ray(t) = rayOrigin + t * rayDirection
     float3 t0 = (boundsMin - rayOrigin) / rayDirection;
     float3 t1 = (boundsMax - rayOrigin) / rayDirection;
     float3 tmin = min(t0, t1);
@@ -89,10 +90,13 @@ float4 PSMain(PSInput input) : SV_TARGET
     while (distanceTravelled < dstLimit)
     {
         float3 rayPos = ro + rd * (boxResult.x + distanceTravelled);
+        // approximation of the integral of density along the ray, a simple Riemann sum
+        // this could be improved with a more sophisticated numerical integration method
         totalDensity += SampleDensity(rayPos) * stepSize;
         distanceTravelled += stepSize;
     }
-
+    // Beer-Lambert law for transmittance
+    // T = e^(-k * d), where k is the extinction coefficient (density) and d is the distance travelled
     float transmittance = exp(-totalDensity);
     return float4(color.xyz * transmittance, 1);
 }
