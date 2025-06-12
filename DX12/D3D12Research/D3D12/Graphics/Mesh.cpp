@@ -136,7 +136,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 	return pSubMesh;
 }
 
-void SubMesh::Draw(GraphicsCommandContext* pContext) const
+void SubMesh::Draw(CommandContext* pContext) const
 {
 	pContext->SetVertexBuffer(m_pVertexBuffer.get());
 	pContext->SetIndexBuffer(m_pIndexBuffer.get());

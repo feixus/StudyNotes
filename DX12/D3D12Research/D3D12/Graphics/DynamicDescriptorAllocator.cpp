@@ -4,7 +4,7 @@
 #include "CommandContext.h"
 #include "RootSignature.h"
 
-DynamicDescriptorAllocator::DynamicDescriptorAllocator(Graphics* pGraphics, ComputeCommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
+DynamicDescriptorAllocator::DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
     : m_pGraphics(pGraphics), m_pOwner(pContext), m_Type(type)
 {
     m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);

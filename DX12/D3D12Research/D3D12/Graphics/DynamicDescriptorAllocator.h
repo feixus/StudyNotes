@@ -2,7 +2,7 @@
 
 #include "DescriptorHandle.h"
 
-class ComputeCommandContext;
+class CommandContext;
 class Graphics;
 class RootSignature;
 
@@ -16,7 +16,7 @@ class DynamicDescriptorAllocator
 {
 public:
 
-	DynamicDescriptorAllocator(Graphics* pGraphics, ComputeCommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
 	~DynamicDescriptorAllocator() = default;
 
     DescriptorHandle AllocateTransientDescriptor(int count);
@@ -64,7 +64,7 @@ private:
     BitField32 m_StaleRootParameters{};
 
     Graphics* m_pGraphics;
-    ComputeCommandContext* m_pOwner;
+    CommandContext* m_pOwner;
     DescriptorHandle m_StartHandle{};
     ID3D12DescriptorHeap* m_pCurrentHeap{nullptr};
     D3D12_DESCRIPTOR_HEAP_TYPE m_Type;

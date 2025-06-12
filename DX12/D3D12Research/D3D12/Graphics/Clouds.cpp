@@ -84,7 +84,7 @@ void Clouds::Initialize(Graphics* pGraphics)
 			{ Vector3(1, -1, 2), Vector2(1, 1) },
 		};
 
-		GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+		CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		m_pQuadVertexBuffer = std::make_unique<VertexBuffer>();
 		m_pQuadVertexBuffer->Create(pGraphics, 6, sizeof(Vertex), false);
 		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
@@ -97,7 +97,7 @@ void Clouds::Initialize(Graphics* pGraphics)
 	}
 	
 	{
-		GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+		CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		Profiler::Instance()->Begin("Clouds_Render", pContext);
 
 		pContext->SetComputePipelineState(m_pWorleyNoisePS.get());
@@ -162,7 +162,7 @@ void Clouds::RenderUI()
 
 void Clouds::Render(Graphics* pGraphics, GraphicsTexture2D* pSceneTexture, GraphicsTexture2D* pDepthTexture)
 {
-	GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
 		Profiler::Instance()->Begin("Clouds", pContext);
 		

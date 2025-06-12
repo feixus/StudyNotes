@@ -28,7 +28,7 @@ GpuParticles::GpuParticles(Graphics* pGraphics)
 
 void GpuParticles::Initialize()
 {
-    GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+    CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
     m_pCounterBuffer = std::make_unique<ByteAddressBuffer>(m_pGraphics);
     m_pCounterBuffer->Create(m_pGraphics, sizeof(uint32_t), 4);
@@ -140,7 +140,7 @@ void GpuParticles::Initialize()
 
 void GpuParticles::Simulate()
 {
-    GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+    CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
     
     {
         Profiler::Instance()->Begin("Prepare Arguments", pContext);

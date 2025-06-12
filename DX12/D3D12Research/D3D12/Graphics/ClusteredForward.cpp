@@ -67,7 +67,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 
 	// create AABBs
 	{
-		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 		Profiler::Instance()->Begin("Create AABBs", pContext);
 
 		pContext->SetComputePipelineState(m_pCreateAabbPSO.get());
@@ -114,7 +114,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
     // mark unique clusters
     {
-        GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
         Profiler::Instance()->Begin("Mark Unique Clusters", pContext);
 
         Profiler::Instance()->Begin("Update Data", pContext);
@@ -190,7 +190,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
     }
     
     {
-        ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
         // compact clusters
         {
             Profiler::Instance()->Begin("Compact Clusters", pContext);
@@ -321,7 +321,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
     // base pass
     {
-		GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
         
         struct PerObjectData
         {
@@ -421,7 +421,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
     if (gVisualizeClusters)
     {
-        GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
         Profiler::Instance()->Begin("Visualize Clusters", pContext);
 
         if (m_DidCopyDebugClusterData == false)
@@ -480,7 +480,7 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
     m_pDebugLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
 
-    CopyCommandContext* pCopyContext = (CopyCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+    CommandContext* pCopyContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
     m_pHeatMapTexture = std::make_unique<GraphicsTexture2D>();
     m_pHeatMapTexture->Create(pGraphics, pCopyContext, "Resources/textures/HeatMap.png", TextureUsage::ShaderResource);
     m_pHeatMapTexture->SetName("Heatmap texture");
