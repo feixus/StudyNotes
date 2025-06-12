@@ -48,12 +48,25 @@
 	
 	depth precision(reverse-Z)
     https://developer.nvidia.com/content/depth-precision-visualized
+	https://iolite-engine.com/blog_posts/reverse_z_cheatsheet
 	
 12. computer shader  
 	DX12: thread->thread group->dispatch, SV_GroupID/SV_GroupThreadID/SV_DispatchThreadID/SV_GroupIndex, the max numThreads is 1024. 
 	https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-numthreads  
 	https://www.stefanpijnacker.nl/article/compute-with-directx12-part-1/  
 	https://logins.github.io/graphics/2020/10/31/D3D12ComputeShaders.html  
+
+13. Render Dependency Graph(RDG)  
+	https://epicgames.ent.box.com/s/ul1h44ozs0t2850ug0hrohlzm53kxwrz  
+	https://www.gdcvault.com/play/1024656/Advanced-Graphics-Tech-Moving-to  
+	https://logins.github.io/graphics/2021/05/31/RenderGraphs.html  
+	https://dev.epicgames.com/documentation/en-us/unreal-engine/render-dependency-graph-in-unreal-engine?application_version=5.5  
+	https://github.com/staticJPL/Render-Dependency-Graph-Documentation/tree/main  
+	https://mcro.de/c/rdg  
+  
+  
+	
+	
 	
    
 

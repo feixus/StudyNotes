@@ -3,6 +3,7 @@
 <br>
 
 - [FDeferredShadingSceneRenderer::Render](#fdeferredshadingscenerendererrender)
+  - [light function atlas](#light-function-atlas)
   - [Virtual Texture](#virtual-texture)
   - [FSceneRenderer::OnRenderBegin](#fscenerendereronrenderbegin)
     - [UpdateAllPrimitiveSceneInfos](#updateallprimitivesceneinfos)
@@ -26,10 +27,21 @@
 - FInitViewTaskDatas 收集到场景更新后的VisibilityTaskData  
 - GPUScene 启动FGPUScene::BeginRender,通过Scope会自动析构所有数据.  
 - VirtualTexture初始化  
--     
+- commit all the pipeline states(FamilyPipelineState/ViewPipelineState).  
+- initialize global system textures(FSystemTextures::InitializeTextures).  
+- launch light function atlas task
     
     
-    
+## light function atlas  
+light function 和 lights casting dynamic shadows一样使用同样昂贵的rendering pass. 为了减轻此过程昂贵的GPU消耗, light function atlas用于将animated light function烘培到制作成图集的tiles(2D textures)中.  
+这些2D textures存储然后投射到场景, 可以极大的节省GPU时间.  
+虽然有一些限制, 但可用于chromatic light function 或者 MegaLights.  
+  
+(https://dev.epicgames.com/documentation/en-us/unreal-engine/using-light-functions-in-unreal-engine)   
+  
+
+
+
 ## Virtual Texture  
 virtual texturing仅运行在ERendererOutput::BasePass | ERendererOutput::FinalSceneColor  
 - FVirtualTextureSystem::BeginUpdate  

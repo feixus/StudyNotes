@@ -106,7 +106,7 @@ __attribute__((visibility("default"))) in apple or linux
 
 37. android.max_aspect android设置屏幕的最大宽高比, 若设备的实际宽高比超出此数值,便会在屏幕左右或上下出现黑边.  
 UE5默认配置的是2.1, 而华为mate60已经超出, 导致屏幕左右出现白屏和黑边.  
-UE5 从UEDeployAndroid读取android配置, 可以在Engine/AndroidRuntimeSettings中重置MaxAspectRatio  
+UE5 从UEDeployAndroid读取android配置, 可以在Engine/AndroidRuntimeSettings中设置MaxAspectRatio为2.4    
     
 
 	
