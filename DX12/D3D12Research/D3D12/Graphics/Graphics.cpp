@@ -18,6 +18,7 @@
 #include "Scene/Camera.h"
 #include "Clouds.h"
 #include <DXProgrammableCapture.h>
+#include "RenderGraph/RenderGraph.h"
 
 bool gSortOpaqueMeshes = true;
 bool gSortTransparentMeshes = true;
@@ -208,25 +209,39 @@ void Graphics::Update()
 		//  - if MSAA is enabled, run a compute shader to resolve the depth buffer
 		if (m_SampleCount > 1)
 		{
-			CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-			Profiler::Instance()->Begin("Depth Resolve", pCommandContext);
+			RG::RenderGraph graph;
 
-			pCommandContext->SetComputeRootSignature(m_pResolveDepthRS.get());
-			pCommandContext->SetComputePipelineState(m_pResolveDepthPSO.get());
+			RG::ResourceHandle stencilSource = graph.ImportResource<RG::Texture>("Depth Stencil", nullptr);
+			RG::ResourceHandleMutable stencilTarget = graph.ImportResource<RG::Texture>("Depth Stencil Target", nullptr);
 
-			pCommandContext->SetDynamicDescriptor(0, 0, GetResolveDepthStencil()->GetUAV());
-			pCommandContext->SetDynamicDescriptor(1, 0, GetDepthStencil()->GetSRV());
+			struct DepthResolveData
+			{
+				RG::ResourceHandle StencilSource;
+				RG::ResourceHandleMutable StencilTarget;
+			};
 
-			int dispatchGroupX = Math::RoundUp(m_WindowWidth / 16.0f);
-			int dispatchGroupY = Math::RoundUp(m_WindowHeight / 16.0f);
-			pCommandContext->Dispatch(dispatchGroupX, dispatchGroupY, 1);
+			graph.AddCallbackPass<DepthResolveData>("Depth Resolve", [&](RG::RenderPassBuilder& builder, DepthResolveData& data)
+				{
+					data.StencilSource = builder.Read(stencilSource);
+					data.StencilTarget = builder.Write(stencilTarget);
+				},
+				[=](CommandContext& renderContext, const RG::RenderPassResources& resources, const DepthResolveData& data)
+				{
+					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
+					renderContext.SetComputePipelineState(m_pResolveDepthPSO.get());
 
-			pCommandContext->InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
-			Profiler::Instance()->End(pCommandContext);
+					renderContext.SetDynamicDescriptor(0, 0, GetResolveDepthStencil()->GetUAV());
+					renderContext.SetDynamicDescriptor(1, 0, GetDepthStencil()->GetSRV());
 
-			uint64_t resolveDepthFence = pCommandContext->Execute(false);
-			m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->InsertWaitForFence(resolveDepthFence);
-			m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(resolveDepthFence);
+					int dispatchGroupX = Math::RoundUp(m_WindowWidth / 16.0f);
+					int dispatchGroupY = Math::RoundUp(m_WindowHeight / 16.0f);
+					renderContext.Dispatch(dispatchGroupX, dispatchGroupY, 1);
+
+					renderContext.InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+				});
+
+			graph.Compile();
+			graph.Execute(this);
 		}
 
 		// 3. light culling

@@ -113,7 +113,7 @@ namespace RG
         std::string m_Name;
         int m_Id;
         bool m_IsImported;
-        int m_Version;
+        int m_Version{0};
 
         // render graph compile-time values
         int m_References{0};
@@ -153,6 +153,7 @@ namespace RG
 
     struct ResourceHandle
     {
+        ResourceHandle() {};
         explicit ResourceHandle(int id = InvalidIndex) : Index(id) {}
 
         bool operator==(const ResourceHandle& other) const { return Index == other.Index;}
@@ -163,11 +164,12 @@ namespace RG
         inline void Invalidate() { Index = InvalidIndex; }
         inline bool IsValid() const { return Index != InvalidIndex; }
 
-        int Index; // index into the ResourceNodes array of the RenderGraph
+        int Index{InvalidIndex}; // index into the ResourceNodes array of the RenderGraph
     };
 
     struct ResourceHandleMutable : public ResourceHandle
     {
+        ResourceHandleMutable() : ResourceHandle(InvalidIndex) {}
         explicit ResourceHandleMutable(int id = InvalidIndex) : ResourceHandle(id) {}
     };
 

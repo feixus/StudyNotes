@@ -56,7 +56,6 @@ RG::ResourceBase* RG::RenderPassResources::GetResourceInternal(ResourceHandle ha
 
 RG::RenderGraph::RenderGraph()
 {
-
 }
 
 RG::RenderGraph::~RenderGraph()
@@ -131,6 +130,7 @@ void RG::RenderGraph::Compile()
         {
             ResourceNode& node = m_ResourceNodes[write.Index];
             node.m_pWriter = pPass;
+            node.m_Reads++;
         }
     }
 
