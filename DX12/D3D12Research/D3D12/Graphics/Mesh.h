@@ -2,7 +2,7 @@
 
 class Graphics;
 class GraphicsBuffer;
-class GraphicsTexture2D;
+class GraphicsTexture;
 class VertexBuffer;
 class IndexBuffer;
 class CommandContext;
@@ -30,10 +30,10 @@ private:
 
 struct Material
 {
-    std::unique_ptr<GraphicsTexture2D> pDiffuseTexture;
-    std::unique_ptr<GraphicsTexture2D> pNormalTexture;
-    std::unique_ptr<GraphicsTexture2D> pSpecularTexture;
-    std::unique_ptr<GraphicsTexture2D> pAlphaTexture;
+	std::unique_ptr<GraphicsTexture> pDiffuseTexture;
+	std::unique_ptr<GraphicsTexture> pNormalTexture;
+	std::unique_ptr<GraphicsTexture> pSpecularTexture;
+	std::unique_ptr<GraphicsTexture> pAlphaTexture;
     bool IsTransparent;
 };
 

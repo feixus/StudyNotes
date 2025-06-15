@@ -14,7 +14,7 @@ class GpuParticles;
 
 struct ClusteredForwardInputResource
 {
-    GraphicsTexture2D* pRenderTarget;
+    GraphicsTexture* pRenderTarget;
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
     StructuredBuffer* pLightBuffer;
@@ -44,8 +44,8 @@ private:
     uint32_t m_ClusterCountY{0};
     uint32_t m_MaxClusters{0};
 
-    std::unique_ptr<GraphicsTexture2D> m_pHeatMapTexture;
-    std::unique_ptr<GraphicsTexture2D> m_pDepthTexture;
+    std::unique_ptr<GraphicsTexture> m_pHeatMapTexture;
+    std::unique_ptr<GraphicsTexture> m_pDepthTexture;
 
     // step 1: AABB
     std::unique_ptr<RootSignature> m_pCreateAabbRS;

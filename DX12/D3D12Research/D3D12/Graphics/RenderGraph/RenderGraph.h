@@ -1,4 +1,5 @@
 #pragma once
+#include "../GraphicsTexture.h"
 
 #define RG_DEBUG 1
 
@@ -19,15 +20,6 @@ class CommandContext;
 
 namespace RG
 {
-    struct Texture
-    {
-        struct Descriptor
-        {
-            int Width;
-            int Height;
-        };
-    };
-
     struct Buffer
     {
         struct Descriptor
@@ -186,7 +178,7 @@ namespace RG
 
         ResourceHandle Read(const ResourceHandle& resource);
         ResourceHandleMutable& Write(ResourceHandleMutable& resource);
-        ResourceHandleMutable CreateTexture(const std::string& name, const Texture::Descriptor& desc);
+        ResourceHandleMutable CreateTexture(const std::string& name, const GraphicsTexture::Descriptor& desc);
         ResourceHandleMutable CreateBuffer(const std::string& name, const Buffer::Descriptor& desc);
 
         void NeverCull();

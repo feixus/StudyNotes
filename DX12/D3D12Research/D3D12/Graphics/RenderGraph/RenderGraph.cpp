@@ -33,9 +33,9 @@ RG::ResourceHandleMutable& RG::RenderPassBuilder::Write(ResourceHandleMutable& r
     return newResource;
 }
 
-RG::ResourceHandleMutable RG::RenderPassBuilder::CreateTexture(const std::string& name, const Texture::Descriptor& desc)
+RG::ResourceHandleMutable RG::RenderPassBuilder::CreateTexture(const std::string& name, const GraphicsTexture::Descriptor& desc)
 {
-    return m_RenderGraph.CreateResource<Texture>(name, desc);
+    return m_RenderGraph.CreateResource<GraphicsTexture>(name, desc);
 }
 
 RG::ResourceHandleMutable RG::RenderPassBuilder::CreateBuffer(const std::string& name, const Buffer::Descriptor& desc)

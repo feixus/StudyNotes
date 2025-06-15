@@ -211,8 +211,8 @@ void Graphics::Update()
 		{
 			RG::RenderGraph graph;
 
-			RG::ResourceHandle stencilSource = graph.ImportResource<RG::Texture>("Depth Stencil", nullptr);
-			RG::ResourceHandleMutable stencilTarget = graph.ImportResource<RG::Texture>("Depth Stencil Target", nullptr);
+			RG::ResourceHandle stencilSource = graph.ImportResource<GraphicsTexture>("Depth Stencil", GetDepthStencil());
+			RG::ResourceHandleMutable stencilTarget = graph.ImportResource<GraphicsTexture>("Depth Stencil Target", GetResolveDepthStencil());
 
 			struct DepthResolveData
 			{
@@ -230,14 +230,14 @@ void Graphics::Update()
 					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
 					renderContext.SetComputePipelineState(m_pResolveDepthPSO.get());
 
-					renderContext.SetDynamicDescriptor(0, 0, GetResolveDepthStencil()->GetUAV());
-					renderContext.SetDynamicDescriptor(1, 0, GetDepthStencil()->GetSRV());
+					renderContext.SetDynamicDescriptor(0, 0, resources.GetResource<GraphicsTexture>(data.StencilTarget)->GetUAV());
+					renderContext.SetDynamicDescriptor(1, 0, resources.GetResource<GraphicsTexture>(data.StencilSource)->GetSRV());
 
 					int dispatchGroupX = Math::RoundUp(m_WindowWidth / 16.0f);
 					int dispatchGroupY = Math::RoundUp(m_WindowHeight / 16.0f);
 					renderContext.Dispatch(dispatchGroupX, dispatchGroupY, 1);
 
-					renderContext.InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+					renderContext.InsertResourceBarrier(resources.GetResource<GraphicsTexture>(data.StencilTarget), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
 				});
 
 			graph.Compile();
@@ -689,19 +689,19 @@ void Graphics::InitD3D()
 	// create the textures but don't create the resources themselves yet. 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
-		m_RenderTargets[i] = std::make_unique<GraphicsTexture2D>();
+		m_RenderTargets[i] = std::make_unique<GraphicsTexture>();
 	}
-	m_pDepthStencil = std::make_unique<GraphicsTexture2D>();
+	m_pDepthStencil = std::make_unique<GraphicsTexture>();
 
 	if (m_SampleCount > 1)
 	{
-		m_pResolveDepthStencil = std::make_unique<GraphicsTexture2D>();
-		m_pResolvedRenderTarget = std::make_unique<GraphicsTexture2D>();
-		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture2D>();
+		m_pResolveDepthStencil = std::make_unique<GraphicsTexture>();
+		m_pResolvedRenderTarget = std::make_unique<GraphicsTexture>();
+		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture>();
 	}
 
-	m_pLightGridOpaque = std::make_unique<GraphicsTexture2D>();
-	m_pLightGridTransparent = std::make_unique<GraphicsTexture2D>();
+	m_pLightGridOpaque = std::make_unique<GraphicsTexture>();
+	m_pLightGridTransparent = std::make_unique<GraphicsTexture>();
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 
@@ -782,27 +782,27 @@ void Graphics::OnResize(int width, int height)
 
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(0.0f, 0));
+		m_pDepthStencil->Create(this, TextureDesc(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 		m_pDepthStencil->SetName("Depth Stencil");
-		m_pResolveDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1, -1, ClearBinding(0.0f, 0));
+		m_pResolveDepthStencil->Create(this, TextureDesc(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1, ClearBinding(0.0f, 0)));
 		m_pResolveDepthStencil->SetName("Resolve Depth Stencil");
 
-		m_pMultiSampleRenderTarget->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, -1, ClearBinding(Color(0,0,0,0)));
+		m_pMultiSampleRenderTarget->Create(this, TextureDesc(width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, ClearBinding(Color(0,0,0,0))));
 		m_pMultiSampleRenderTarget->SetName("Multisample Rendertarget");
 
-		m_pResolvedRenderTarget->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget | TextureUsage::ShaderResource, 1, -1, ClearBinding(Color(0,0,0,0)));
+		m_pResolvedRenderTarget->Create(this, TextureDesc(width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget | TextureUsage::ShaderResource, 1, ClearBinding(Color(0,0,0,0))));
 		m_pResolvedRenderTarget->SetName("Resolved Render Target");
 	}
 	else
 	{
-		m_pDepthStencil->Create(this, m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(0.0f, 0));
+		m_pDepthStencil->Create(this, TextureDesc(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 		m_pDepthStencil->SetName("Depth Stencil");
 	}
 
 	int frustumCountX = (int)ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = (int)ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
-	m_pLightGridOpaque->Create(this, frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, 1);
-	m_pLightGridTransparent->Create(this, frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, 1);
+	m_pLightGridOpaque->Create(this, TextureDesc(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, 1));
+	m_pLightGridTransparent->Create(this, TextureDesc(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, 1));
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 }
@@ -927,8 +927,8 @@ void Graphics::InitializeAssets()
 			m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
 		}
 
-		m_pShadowMap = std::make_unique<GraphicsTexture2D>();
-		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, -1, ClearBinding(0.0f, 0));
+		m_pShadowMap = std::make_unique<GraphicsTexture>();
+		m_pShadowMap->Create(this, TextureDesc(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, ClearBinding(0.0f, 0)));
 	}
 
 	// depth prepass

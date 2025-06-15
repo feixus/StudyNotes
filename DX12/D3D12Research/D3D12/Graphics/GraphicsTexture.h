@@ -6,6 +6,7 @@ class Graphics;
 
 enum class TextureUsage
 {
+	None = 0,
 	UnorderedAccess = 1 << 1,
 	ShaderResource = 1 << 2,
 	RenderTarget = 1 << 3,
@@ -66,70 +67,66 @@ struct ClearBinding
 	};
 };
 
+struct TextureDesc
+{
+	TextureDesc() : Width(1), Height(1), DepthOrArraySize(1), Mips(1), SampleCount(1), Format(DXGI_FORMAT_UNKNOWN), Usage(TextureUsage::None), ClearBindingValue(), Dimension(TextureDimension::Texture2D) {}
+	TextureDesc(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding())
+		: Width(width), Height(height), DepthOrArraySize(1), Mips(1), SampleCount(sampleCount), Format(format), Usage(usage), ClearBindingValue(clearBinding), Dimension(TextureDimension::Texture2D) {}
+	TextureDesc(int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, TextureDimension dimension = TextureDimension::Texture2D)
+		: Width(width), Height(height), DepthOrArraySize(depth), Mips(1), SampleCount(1), Format(format), Usage(usage), Dimension(dimension), ClearBindingValue() {}
+
+	int Width;
+	int Height;
+	int DepthOrArraySize;
+	int Mips;
+	int SampleCount;
+	DXGI_FORMAT Format;
+	TextureUsage Usage;
+	ClearBinding ClearBindingValue;
+	TextureDimension Dimension;
+};
+
 class GraphicsTexture : public GraphicsResource
 {
 public:
+	using Descriptor = TextureDesc;
+
 	GraphicsTexture();
 
-	int GetWidth() const { return m_Width; }
-	int GetHeight() const { return m_Height; }
-	int GetDepth() const { return m_Height; }
-	int GetArraySize() const { return m_DepthOrArraySize; }
-	int GetMipLevels() const { return m_MipLevels; }
-	bool IsArray() const { return m_IsArray; }
-	TextureDimension GetDimension() const { return m_Dimension; }
-	DXGI_FORMAT GetFormat() const { return m_Format; }
-	const ClearBinding& GetClearBinding() const { return m_ClearBinding; }
+	int GetWidth() const { return m_Desc.Width; }
+	int GetHeight() const { return m_Desc.Height; }
+	int GetDepth() const { return m_Desc.DepthOrArraySize; }
+	int GetArraySize() const { return m_Desc.DepthOrArraySize; }
+	int GetMipLevels() const { return m_Desc.Mips; }
+	const TextureDesc& GetDesc() const { return m_Desc; }
+
+	void Create(Graphics* pGraphics, const Descriptor& desc);
+	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath);
+	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
+	void SetData(CommandContext* pContext, const void* pData);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(int subResource = 0) const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV(int subResource = 0) const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV(int subResource = 0) const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
 
+	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
+	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
+
 	static int GetRowDataSize(DXGI_FORMAT format, unsigned int width);
 	static DXGI_FORMAT GetSrvFormatFromDepth(DXGI_FORMAT format);
 
-protected:
+private:
 	void Create_Internal(Graphics* pGraphics, TextureDimension dimension, int width, int height, int depthOrArraySize, DXGI_FORMAT format, TextureUsage usage, int sampleCount, const ClearBinding& clearBinding);
 
 	// this can hold multiple handles as long as they're sequential in memory.
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv{D3D12_DEFAULT};
-	DXGI_FORMAT m_Format{};
-	ClearBinding m_ClearBinding{};
 
-	TextureDimension m_Dimension{};
-	int m_SampleCount{1};
-	int m_Width{0};
-	int m_Height{0};
-	int m_DepthOrArraySize{0};
-	int m_MipLevels{0};
-	bool m_IsArray{false};
+	Descriptor m_Desc;
 
 	int m_SrvUavDescriptorSize{0};
 	int m_RtvDescriptorSize{0};
 	int m_DsvDescriptorSize{0};
-};
-
-class GraphicsTexture2D : public GraphicsTexture
-{
-public:
-	void Create(Graphics* pGraphics, CommandContext* pContext, const char* filePath, TextureUsage usage);
-	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1, ClearBinding clearBinding = ClearBinding());
-	void SetData(CommandContext* pContext, const void* pData);
-	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
-};
-
-class GraphicsTexture3D : public GraphicsTexture
-{
-public:
-	void Create(Graphics* pGraphics, int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage);
-};
-
-class GraphicsTextureCube : public GraphicsTexture
-{
-public:
-	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage);
-	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1);
 };
