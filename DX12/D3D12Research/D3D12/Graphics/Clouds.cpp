@@ -29,7 +29,7 @@ void Clouds::Initialize(Graphics* pGraphics)
 		m_pWorleyNoisePS->Finalize("Worley Noise PS", pGraphics->GetDevice());
 
 		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>();
-		m_pWorleyNoiseTexture->Create(pGraphics, TextureDesc(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, TextureDimension::Texture3D));
+		m_pWorleyNoiseTexture->Create(pGraphics, TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource, TextureDimension::Texture3D));
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{
@@ -91,9 +91,9 @@ void Clouds::Initialize(Graphics* pGraphics)
 		pContext->Execute(true);
 
 		m_pIntermediateColor = std::make_unique<GraphicsTexture>();
-		m_pIntermediateColor->Create(pGraphics, TextureDesc(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::RENDER_TARGET_FORMAT, TextureUsage::RenderTarget | TextureUsage::ShaderResource, 1, ClearBinding(Color(1, 0, 0, 1))));
+		m_pIntermediateColor->Create(pGraphics, TextureDesc::CreateRenderTarget(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::RENDER_TARGET_FORMAT, TextureUsage::RenderTarget | TextureUsage::ShaderResource, 1, ClearBinding(Color(1, 0, 0, 1))));
 		m_pIntermediateDepth = std::make_unique<GraphicsTexture>();
-		m_pIntermediateDepth->Create(pGraphics, TextureDesc(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, ClearBinding(1.0f, 0)));
+		m_pIntermediateDepth->Create(pGraphics, TextureDesc::CreateDepth(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, ClearBinding(1.0f, 0)));
 	}
 	
 	{
@@ -106,8 +106,8 @@ void Clouds::Initialize(Graphics* pGraphics)
 		struct
 		{
 			Vector4 WorleyNoisePosition[MaxPoints];
-			uint32_t PointsPerRow[4];
-			uint32_t Resolution;
+			uint32_t PointsPerRow[4]{};
+			uint32_t Resolution{0};
 		} Constants;
 
 		for (int i = 0; i < MaxPoints; i++)
@@ -139,8 +139,8 @@ struct CloudParameters
 {
 	Vector4 FrustumCorners[4];
 	Matrix ViewInverse;
-	float NearPlane;
-	float FarPlane;
+	float NearPlane{0};
+	float FarPlane{0};
 
 	float CloudScale{0.02f};
 	float CloudThreshold{0.4f};

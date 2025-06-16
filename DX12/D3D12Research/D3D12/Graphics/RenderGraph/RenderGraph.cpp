@@ -33,25 +33,31 @@ RG::ResourceHandleMutable& RG::RenderPassBuilder::Write(ResourceHandleMutable& r
     return newResource;
 }
 
-RG::ResourceHandleMutable RG::RenderPassBuilder::CreateTexture(const std::string& name, const GraphicsTexture::Descriptor& desc)
+RG::ResourceHandleMutable RG::RenderPassBuilder::CreateTexture(const std::string& name, const TextureDesc& desc)
 {
-    return m_RenderGraph.CreateResource<GraphicsTexture>(name, desc);
+    return m_RenderGraph.CreateTexture(name, desc);
 }
 
-RG::ResourceHandleMutable RG::RenderPassBuilder::CreateBuffer(const std::string& name, const Buffer::Descriptor& desc)
+RG::ResourceHandleMutable RG::RenderPassBuilder::CreateBuffer(const std::string& name, const BufferDesc& desc)
 {
-    return m_RenderGraph.CreateResource<Buffer>(name, desc);
+    return m_RenderGraph.CreateBuffer(name, desc);
+}
+
+const TextureDesc& RG::RenderPassBuilder::GetTextureDesc(const ResourceHandle& handle) const
+{
+    VirtualResourceBase* pResource = m_RenderGraph.GetResource(handle);
+    return static_cast<TextureResource*>(pResource)->GetDesc();
+}
+
+const RG::BufferDesc& RG::RenderPassBuilder::GetBufferDesc(const ResourceHandle& handle) const
+{
+	VirtualResourceBase* pResource = m_RenderGraph.GetResource(handle);
+	return static_cast<BufferResource*>(pResource)->GetDesc();
 }
 
 void RG::RenderPassBuilder::NeverCull()
 {
     m_Pass.m_NeverCull = true;
-}
-
-RG::ResourceBase* RG::RenderPassResources::GetResourceInternal(ResourceHandle handle) const
-{
-    const ResourceNode& node = m_RenderGraph.GetResourceNode(handle);
-    return node.m_pResource;
 }
 
 RG::RenderGraph::RenderGraph()
@@ -64,7 +70,7 @@ RG::RenderGraph::~RenderGraph()
     {
         delete pPass;
     }
-    for (ResourceBase* pResource : m_Resources)
+    for (VirtualResourceBase* pResource : m_Resources)
     {
         delete pResource;
     }
@@ -187,7 +193,7 @@ void RG::RenderGraph::Compile()
 
         for (ResourceHandle read : pPass->m_Reads)
         {
-            ResourceBase* pResource = GetResource(read);
+            VirtualResourceBase* pResource = GetResource(read);
             if (pResource->pFirstPassUsage == nullptr)
             {
                 pResource->pFirstPassUsage = pPass;
@@ -197,7 +203,7 @@ void RG::RenderGraph::Compile()
 
         for (ResourceHandle write : pPass->m_Writes)
         {
-            ResourceBase* pResource = GetResource(write);
+            VirtualResourceBase* pResource = GetResource(write);
             if (pResource->pFirstPassUsage == nullptr)
             {
                 pResource->pFirstPassUsage = pPass;
@@ -206,7 +212,7 @@ void RG::RenderGraph::Compile()
         }
     }
 
-    for (ResourceBase* pResource : m_Resources)
+    for (VirtualResourceBase* pResource : m_Resources)
     {
         if (pResource->m_References > 0)
         {
@@ -228,7 +234,7 @@ int64_t RG::RenderGraph::Execute(Graphics* pGraphics)
     {
         if (pPass->m_References > 0)
         {
-            for (ResourceBase* pResource : pPass->m_ResourcesToCreate)
+            for (VirtualResourceBase* pResource : pPass->m_ResourcesToCreate)
             {
                 pResource->Create();
             }
@@ -238,7 +244,7 @@ int64_t RG::RenderGraph::Execute(Graphics* pGraphics)
             pPass->Execute(resources, *pContext);
             Profiler::Instance()->End(pContext);
 
-            for (ResourceBase* pResource : pPass->m_ResourcesToDestroy)
+            for (VirtualResourceBase* pResource : pPass->m_ResourcesToDestroy)
             {
                 pResource->Destroy();
             }
@@ -370,3 +376,8 @@ RG::ResourceHandle RG::RenderGraph::MoveResource(ResourceHandle from, ResourceHa
     return CreateResourceNode(node.m_pResource);
 }
 
+RG::VirtualResourceBase* RG::RenderPassResources::GetResourceInternal(ResourceHandle handle) const
+{
+	const ResourceNode& node = m_Graph.GetResourceNode(handle);
+	return node.m_pResource;
+}

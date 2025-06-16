@@ -28,7 +28,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetDSV(bool writeable) const
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Rtv, writeable ? 0 : 1, m_DsvDescriptorSize);
 }
 
-void GraphicsTexture::Create(Graphics* pGraphics, const Descriptor& textureDesc)
+void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 {
 	m_Desc = textureDesc;
 	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
@@ -121,6 +121,8 @@ void GraphicsTexture::Create(Graphics* pGraphics, const Descriptor& textureDesc)
 			desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 		}
 	}
+
+	D3D12_RESOURCE_ALLOCATION_INFO info = pGraphics->GetDevice()->GetResourceAllocationInfo(0, 1, &desc);
 
 	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 

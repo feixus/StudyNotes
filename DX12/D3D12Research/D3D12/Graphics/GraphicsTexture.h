@@ -84,13 +84,81 @@ struct TextureDesc
 	TextureUsage Usage;
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimension;
+
+	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, int sampleCount = 1, int mips = 1)
+	{
+		assert(width);
+		assert(height);
+		TextureDesc desc{};
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = 1;
+		desc.Mips = mips;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = usage;
+		desc.ClearBindingValue = ClearBinding();
+		desc.Dimension = TextureDimension::Texture2D;
+		return desc;
+	}
+
+	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
+	{
+		assert(width);
+		assert(height);
+		assert((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil);
+		TextureDesc desc{};
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = 1;
+		desc.Mips = 1;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = usage;
+		desc.ClearBindingValue = clearBinding;
+		desc.Dimension = TextureDimension::Texture2D;
+		return desc;
+	}
+
+	static TextureDesc CreateRenderTarget(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::RenderTarget, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
+	{
+		assert(width);
+		assert(height);
+		assert((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget);
+		TextureDesc desc{};
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = 1;
+		desc.Mips = 1;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = usage;
+		desc.ClearBindingValue = clearBinding;
+		desc.Dimension = TextureDimension::Texture2D;
+		return desc;
+	}
+
+	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, TextureDimension dimension = TextureDimension::Texture3D, int sampleCount = 1)
+	{
+		assert(width);
+		assert(height);
+		TextureDesc desc{};
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = depth;
+		desc.Mips = 1;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = usage;
+		desc.ClearBindingValue = ClearBinding();
+		desc.Dimension = dimension;
+		return desc;
+	}
 };
 
 class GraphicsTexture : public GraphicsResource
 {
 public:
-	using Descriptor = TextureDesc;
-
 	GraphicsTexture();
 
 	int GetWidth() const { return m_Desc.Width; }
@@ -100,7 +168,7 @@ public:
 	int GetMipLevels() const { return m_Desc.Mips; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
-	void Create(Graphics* pGraphics, const Descriptor& desc);
+	void Create(Graphics* pGraphics, const TextureDesc& desc);
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath);
 	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
 	void SetData(CommandContext* pContext, const void* pData);
@@ -117,14 +185,12 @@ public:
 	static DXGI_FORMAT GetSrvFormatFromDepth(DXGI_FORMAT format);
 
 private:
-	void Create_Internal(Graphics* pGraphics, TextureDimension dimension, int width, int height, int depthOrArraySize, DXGI_FORMAT format, TextureUsage usage, int sampleCount, const ClearBinding& clearBinding);
-
 	// this can hold multiple handles as long as they're sequential in memory.
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv{D3D12_DEFAULT};
 
-	Descriptor m_Desc;
+	TextureDesc m_Desc;
 
 	int m_SrvUavDescriptorSize{0};
 	int m_RtvDescriptorSize{0};

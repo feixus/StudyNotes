@@ -86,7 +86,7 @@ public:
 	inline const D3D12_VERTEX_BUFFER_VIEW GetView() const { return m_View; }
 
 private:
-	D3D12_VERTEX_BUFFER_VIEW m_View;
+	D3D12_VERTEX_BUFFER_VIEW m_View{};
 };
 
 class IndexBuffer : public GraphicsBuffer
