@@ -220,7 +220,7 @@ void RG::RenderGraph::Compile()
     }
 }
 
-void RG::RenderGraph::Execute(Graphics* pGraphics)
+int64_t RG::RenderGraph::Execute(Graphics* pGraphics)
 {
     CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -246,7 +246,7 @@ void RG::RenderGraph::Execute(Graphics* pGraphics)
         }
     }
 
-    pContext->Execute(true);
+    return pContext->Execute(false);
 }
 
 void RG::RenderGraph::Present(ResourceHandle resource)

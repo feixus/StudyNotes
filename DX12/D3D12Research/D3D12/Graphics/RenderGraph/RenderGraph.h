@@ -43,7 +43,7 @@ namespace RG
             RG_ASSERT(m_DataMap.find(T::Type()) == m_DataMap.end(), "Data type already exists in blackboard");
             T* pData = new T();
             m_DataMap[T::Type()] = pData;
-            return pData;
+            return *pData;
         }
 
         template<typename T>
@@ -51,6 +51,14 @@ namespace RG
         {
             void* pData = GetData(T::Type());
             RG_ASSERT(pData, "Data type not found in blackboard");
+            return *static_cast<T*>(pData);
+        }
+
+        template<typename T>
+        const T& Get() const
+        {
+            void* pData = GetData(T::Type());
+            RG_ASSERT(pData, "Data for given type does not exist in blackboard");
             return *static_cast<T*>(pData);
         }
 
@@ -145,8 +153,8 @@ namespace RG
 
     struct ResourceHandle
     {
-        ResourceHandle() {};
-        explicit ResourceHandle(int id = InvalidIndex) : Index(id) {}
+        ResourceHandle() = default;
+        explicit ResourceHandle(int id) : Index(id) {}
 
         bool operator==(const ResourceHandle& other) const { return Index == other.Index;}
         bool operator!=(const ResourceHandle& other) const { return Index != other.Index;}
@@ -161,8 +169,8 @@ namespace RG
 
     struct ResourceHandleMutable : public ResourceHandle
     {
-        ResourceHandleMutable() : ResourceHandle(InvalidIndex) {}
-        explicit ResourceHandleMutable(int id = InvalidIndex) : ResourceHandle(id) {}
+		ResourceHandleMutable() = default;
+        explicit ResourceHandleMutable(int id) : ResourceHandle(id) {}
     };
 
     class RenderGraph;
@@ -310,7 +318,7 @@ namespace RG
         RenderGraph& operator=(const RenderGraph& other) = delete;
 
         void Compile();
-        void Execute(Graphics* pGraphics);
+        int64_t Execute(Graphics* pGraphics);
         void Present(ResourceHandle resource);
         void DumpGraphViz(const char* pPath) const;
 
@@ -325,6 +333,13 @@ namespace RG
             setupCallback(builder, pPass->GetData());
             m_RenderPasses.push_back(pPass);
             return *pPass;
+        }
+
+        template<typename T>
+        T* ExtractResource(ResourceHandle handle)
+        {
+            const ResourceNode& node = GetResourceNode(handle);
+            return node.m_pResource;
         }
 
         template<typename T>
