@@ -40,8 +40,8 @@ struct ClearBinding
 {
 	struct DepthStencilData
 	{
-		float Depth{0};
-		uint8_t Stencil{0};
+		float Depth{0.f};
+		uint8_t Stencil{1};
 	};
 
 	enum class ClearBindingValue

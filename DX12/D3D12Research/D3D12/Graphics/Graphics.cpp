@@ -275,11 +275,6 @@ void Graphics::Update()
 		{
 			graph.DumpGraphViz("graph.gv");
 			written = true;
-
-			std::ifstream infile("graph.gv");
-			std::stringstream buffer;
-			buffer << infile.rdbuf();
-			E_LOG(LogType::Info, buffer.str());
 		}
 
 		WaitForFence(fence);

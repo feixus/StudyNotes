@@ -21,23 +21,24 @@ class CommandContext;
 
 namespace RG
 {
+    class RenderGraph;
+    class RenderPassBase;
+
     struct BufferDesc
     {
         int Size;
     };
 
-    class RenderPassBase;
-
     class VirtualResourceBase
     {
     public:
-        VirtualResourceBase(const std::string& name, int id, bool isImported)
+        VirtualResourceBase(const char* name, int id, bool isImported)
             : m_Name(name), m_Id(id), m_IsImported(isImported) {}
 
-        virtual void Create() = 0;
-        virtual void Destroy() = 0;
+        virtual void Create(RenderGraph& graph) = 0;
+        virtual void Destroy(RenderGraph& graph) = 0;
 
-        std::string m_Name;
+        const char* m_Name;
         int m_Id;
         bool m_IsImported;
         int m_Version{0};
@@ -52,11 +53,8 @@ namespace RG
     class VirtualResource : public VirtualResourceBase
     {
     public:
-        VirtualResource(const std::string& name, int id)
-            : VirtualResourceBase(name, id, false), m_pResource(nullptr) {}
-
-        VirtualResource(const std::string& name, int id, T* pResource)
-            : VirtualResourceBase(name, id, true), m_pResource(pResource) {}
+        VirtualResource(const char* name, int id, T* pResource)
+            : VirtualResourceBase(name, id, pResource != nullptr), m_pResource(pResource) {}
 
         T* GetResource() const { return m_pResource; }
         
@@ -67,14 +65,11 @@ namespace RG
     class TextureResource : public VirtualResource<GraphicsTexture>
     {
     public:
-        TextureResource(const std::string& name, int id, const TextureDesc& desc)
-            : VirtualResource(name, id), m_Desc(desc) {}
+        TextureResource(const char* name, int id, const TextureDesc& desc, GraphicsTexture* pTexture)
+            : VirtualResource(name, id, pTexture), m_Desc(desc)  {}
 
-        TextureResource(const std::string& name, int id, GraphicsTexture* pTexture)
-            : VirtualResource(name, id, pTexture), m_Desc(pTexture->GetDesc())  {}
-
-        virtual void Create() override {}
-        virtual void Destroy() override {}
+        virtual void Create(RenderGraph& graph) override {}
+        virtual void Destroy(RenderGraph& graph) override {}
 
         const TextureDesc& GetDesc() const { return m_Desc; }
 
@@ -85,14 +80,11 @@ namespace RG
 	class BufferResource : public VirtualResource<GraphicsBuffer>
 	{
 	public:
-        BufferResource(const std::string& name, int id, const BufferDesc& desc)
-			: VirtualResource(name, id), m_Desc(desc) {}
+        BufferResource(const char* name, int id, const BufferDesc& desc, GraphicsBuffer* pBuffer)
+			: VirtualResource(name, id, pBuffer), m_Desc(desc) {}
 
-        BufferResource(const std::string& name, int id, GraphicsBuffer* pBuffer)
-			: VirtualResource(name, id, pBuffer) {}
-
-		virtual void Create() override {}
-		virtual void Destroy() override {}
+		virtual void Create(RenderGraph& graph) override {}
+		virtual void Destroy(RenderGraph& graph) override {}
 
 		const BufferDesc& GetDesc() const { return m_Desc; }
 
@@ -126,7 +118,7 @@ namespace RG
         inline void Invalidate() { Index = InvalidIndex; }
         inline bool IsValid() const { return Index != InvalidIndex; }
 
-        int Index{InvalidIndex}; // index into the ResourceNodes array of the RenderGraph
+        int Index{InvalidIndex};
     };
 
     struct ResourceHandleMutable : public ResourceHandle
@@ -148,10 +140,8 @@ namespace RG
 
         ResourceHandle Read(const ResourceHandle& resource);
         ResourceHandleMutable& Write(ResourceHandleMutable& resource);
-        ResourceHandleMutable CreateTexture(const std::string& name, const TextureDesc& desc);
-        ResourceHandleMutable CreateBuffer(const std::string& name, const BufferDesc& desc);
-        const TextureDesc& GetTextureDesc(const ResourceHandle& handle) const;
-        const BufferDesc& GetBufferDesc(const ResourceHandle& handle) const;
+        ResourceHandleMutable CreateTexture(const char* name, const TextureDesc& desc);
+        ResourceHandleMutable CreateBuffer(const char* name, const BufferDesc& desc);
 
         void NeverCull();
     
@@ -188,41 +178,27 @@ namespace RG
         friend class RenderPassBuilder;
         friend class RenderGraph;
 
-        RenderPassBase(RenderGraph& graph, const std::string& name, int id)
+        RenderPassBase(RenderGraph& graph, const char* name, int id)
             : m_Name(name), m_RenderGraph(graph), m_Id(id) {}
 
-        virtual ~RenderPassBase() {}
+        virtual ~RenderPassBase() = default;
 
         virtual void Execute(const RenderPassResources& resources, CommandContext& renderContext) = 0;
 
-        const std::string& GetName() const { return m_Name; }
+        const char* GetName() const { return m_Name; }
 
-        bool ReadsFrom(ResourceHandle handle)
+        bool ReadsFrom(ResourceHandle handle) const
         {
-            for (const ResourceHandle& read : m_Reads)
-            {
-                if (read == handle)
-                {
-                    return true;
-                }
-            }
-            return false;
+            return std::find(m_Reads.begin(), m_Reads.end(), handle) != m_Reads.end();
         }
 
-        bool WritesTo(ResourceHandle handle)
+        bool WritesTo(ResourceHandle handle) const
         {
-            for (const ResourceHandle& write : m_Writes)
-            {
-                if (write == handle)
-                {
-                    return true;
-                }
-            }
-            return false;
+            return std::find(m_Writes.begin(), m_Writes.end(), handle) != m_Writes.end();
         }
         
     protected:
-        std::string m_Name;
+        const char* m_Name;
         std::vector<ResourceHandle> m_Reads;
         std::vector<ResourceHandle> m_Writes;
         RenderGraph& m_RenderGraph;
@@ -239,18 +215,11 @@ namespace RG
     class RenderPass : public RenderPassBase
     {
     public:
-        RenderPass(RenderGraph& graph, const std::string& name, int id)
+        RenderPass(RenderGraph& graph, const char* name, int id)
             : RenderPassBase(graph, name, id), m_PassData{} {}
 
-        const PassData& GetData() const
-        {
-            return m_PassData;
-        }
-
-        PassData& GetData()
-        {
-            return m_PassData;
-        }
+        const PassData& GetData() const { return m_PassData; }
+        PassData& GetData() { return m_PassData; }
 
     protected:
         PassData m_PassData;
@@ -260,7 +229,7 @@ namespace RG
     class LambdaRenderPass : public RenderPass<PassData>
     {
     public:
-        LambdaRenderPass(RenderGraph& graph, const std::string& name, int id, ExecuteCallback&& executeCallback)
+        LambdaRenderPass(RenderGraph& graph, const char* name, int id, ExecuteCallback&& executeCallback)
             : RenderPass<PassData>(graph, name, id), m_ExecuteCallback(std::forward<ExecuteCallback>(executeCallback)) {}
 
         virtual void Execute(const RenderPassResources& resources, CommandContext& renderContext) override
@@ -289,9 +258,9 @@ namespace RG
         ResourceHandle MoveResource(ResourceHandle from, ResourceHandle to);
 
         template<typename PassData, typename SetupCallback, typename ExecuteCallback>
-        RenderPass<PassData>& AddCallbackPass(const std::string& name, const SetupCallback& setupCallback, ExecuteCallback&& executeCallback)
+        RenderPass<PassData>& AddCallbackPass(const char* name, const SetupCallback& setupCallback, ExecuteCallback&& executeCallback)
         {
-            RG_STATIC_ASSERT(sizeof(ExecuteCallback) < MAX_EXECUTE_CAPTURE_SIZE, "The Execute callback exceeds the maximum size");
+            RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "The Execute callback exceeds the maximum size");
             RenderPass<PassData>* pPass = new LambdaRenderPass<PassData, ExecuteCallback>(*this, name, (int)m_RenderPasses.size(), std::forward<ExecuteCallback>(executeCallback));
             RenderPassBuilder builder(*this, *pPass);
             setupCallback(builder, pPass->GetData());
@@ -299,39 +268,33 @@ namespace RG
             return *pPass;
         }
 
-        template<typename T>
-        T* ExtractResource(ResourceHandle handle)
+        ResourceHandleMutable CreateTexture(const char* name, const TextureDesc& desc)
         {
-            const ResourceNode& node = GetResourceNode(handle);
-            return node.m_pResource;
-        }
-
-        ResourceHandleMutable CreateTexture(const std::string& name, const TextureDesc& desc)
-        {
-            VirtualResourceBase* pResource = new TextureResource(name, (int)m_Resources.size(), desc);
+            VirtualResourceBase* pResource = new TextureResource(name, (int)m_Resources.size(), desc, nullptr);
             m_Resources.push_back(pResource);
             return CreateResourceNode(pResource);
         }
 
-        ResourceHandleMutable ImportTexture(const std::string& name, GraphicsTexture* pTexture)
+        ResourceHandleMutable ImportTexture(const char* name, GraphicsTexture* pTexture)
         {
             assert(pTexture);
-            VirtualResourceBase* pResource = new TextureResource(name, (int)m_Resources.size(), pTexture);
+            VirtualResourceBase* pResource = new TextureResource(name, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
             m_Resources.push_back(pResource);
             return CreateResourceNode(pResource);
         }
 
-		ResourceHandleMutable CreateBuffer(const std::string& name, const BufferDesc& desc)
+		ResourceHandleMutable CreateBuffer(const char* name, const BufferDesc& desc)
 		{
-			VirtualResourceBase* pResource = new BufferResource(name, (int)m_Resources.size(), desc);
+			VirtualResourceBase* pResource = new BufferResource(name, (int)m_Resources.size(), desc, nullptr);
 			m_Resources.push_back(pResource);
 			return CreateResourceNode(pResource);
 		}
 
-		ResourceHandleMutable ImportBuffer(const std::string& name, GraphicsBuffer* pBuffer)
+		ResourceHandleMutable ImportBuffer(const char* name, GraphicsBuffer* pBuffer)
 		{
 			assert(pBuffer);
-			VirtualResourceBase* pResource = new BufferResource(name, (int)m_Resources.size(), pBuffer);
+            BufferDesc desc{};
+			VirtualResourceBase* pResource = new BufferResource(name, (int)m_Resources.size(), desc, pBuffer);
 			m_Resources.push_back(pResource);
 			return CreateResourceNode(pResource);
 		}
@@ -361,8 +324,6 @@ namespace RG
         }
 
     private:
-        constexpr static const int MAX_EXECUTE_CAPTURE_SIZE = 1 << 10;
-
         struct ResourceAlias
         {
             ResourceHandle From;
