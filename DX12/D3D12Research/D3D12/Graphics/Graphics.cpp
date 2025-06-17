@@ -19,6 +19,7 @@
 #include "Clouds.h"
 #include <DXProgrammableCapture.h>
 #include "RenderGraph/RenderGraph.h"
+#include "RenderGraph/Blackboard.h"
 
 bool gSortOpaqueMeshes = true;
 bool gSortTransparentMeshes = true;

@@ -8,7 +8,7 @@
 #include "RootSignature.h"
 #include "GraphicsTexture.h"
 #include "GraphicsBuffer.h"
-
+#include "Buffer.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON |
 													D3D12_RESOURCE_STATE_UNORDERED_ACCESS | 
@@ -179,6 +179,16 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 	InsertResourceBarrier(pResource, previousState, true);
 }
 
+void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset)
+{
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
+	InsertResourceBarrier(pResource, previousState, true);
+}
+
 void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount)
 {
 	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
@@ -216,6 +226,14 @@ void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, 
 	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
 	// pCommandSignature: command type (dispatch or draw...)
 	// pArgumentBuffer: the parameters for command
+	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
+}
+
+void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments)
+{
+	FlushResourceBarriers();
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
 	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
@@ -468,25 +486,31 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffer(VertexBuffer* pVertexBuffer)
+void CommandContext::SetVertexBuffer(Buffer* pVertexBuffer)
 {
-	SetVertexBuffers(pVertexBuffer, 1);
+	SetVertexBuffers(&pVertexBuffer, 1);
 }
 
-void CommandContext::SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount)
+void CommandContext::SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount)
 {
 	assert(bufferCount <= 4);
 	std::array<D3D12_VERTEX_BUFFER_VIEW, 4> views{};
 	for (int i = 0; i < bufferCount; ++i)
 	{
-		views[i] = pVertexBuffers->GetView();
+		Buffer* pBuffer = pVertexBuffers[i];
+		views[i].BufferLocation = pBuffer->GetGpuHandle();
+		views[i].SizeInBytes = (uint32_t)pBuffer->GetSize();
+		views[i].StrideInBytes = pBuffer->GetDesc().ByteStride;
 	}
 	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
 }
 
-void CommandContext::SetIndexBuffer(IndexBuffer* pIndexBuffer)
+void CommandContext::SetIndexBuffer(Buffer* pIndexBuffer)
 {
-	const D3D12_INDEX_BUFFER_VIEW view = pIndexBuffer->GetView();
+	D3D12_INDEX_BUFFER_VIEW view;
+	view.BufferLocation = pIndexBuffer->GetGpuHandle();
+	view.SizeInBytes = pIndexBuffer->GetSize();
+	view.Format = pIndexBuffer->GetDesc().ByteStride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
@@ -519,6 +543,13 @@ void CommandContext::ClearUavUInt(GraphicsBuffer* pBuffer, uint32_t values[4])
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
 	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pBuffer->GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), pBuffer->GetUAV(), pBuffer->GetResource(), values, 0, nullptr);
+}
+
+void CommandContext::ClearUavUInt(const BufferUAV& uav, uint32_t values[4])
+{
+	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
+	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav.GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav.GetDescriptor(), uav.GetParent()->GetResource(), values, 0, nullptr);
 }
 
 void CommandContext::ClearUavUFloat(GraphicsBuffer* pBuffer, float values[4])

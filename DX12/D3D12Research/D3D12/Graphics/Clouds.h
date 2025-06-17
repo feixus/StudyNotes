@@ -6,7 +6,7 @@ class RootSignature;
 class GraphicsTexture;
 class Graphics;
 class GraphicsTexture;
-class VertexBuffer;
+class Buffer;
 
 class Clouds
 {
@@ -26,5 +26,5 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pIntermediateColor;
 	std::unique_ptr<GraphicsTexture> m_pIntermediateDepth;
 
-	std::unique_ptr<VertexBuffer> m_pQuadVertexBuffer;
+	std::unique_ptr<Buffer> m_pQuadVertexBuffer;
 };

@@ -7,10 +7,10 @@ class Graphics;
 enum class TextureUsage
 {
 	None = 0,
-	UnorderedAccess = 1 << 1,
-	ShaderResource = 1 << 2,
-	RenderTarget = 1 << 3,
-	DepthStencil = 1 << 4,
+	UnorderedAccess = 1 << 0,
+	ShaderResource = 1 << 1,
+	RenderTarget = 1 << 2,
+	DepthStencil = 1 << 3,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TextureUsage)
 

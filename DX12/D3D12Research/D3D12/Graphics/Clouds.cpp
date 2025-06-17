@@ -9,6 +9,7 @@
 #include "Profiler.h"
 #include "Scene/Camera.h"
 #include "GraphicsBuffer.h"
+#include "Buffer.h"
 
 static const int Resolution = 256;
 static const int MaxPoints = 256;
@@ -85,8 +86,8 @@ void Clouds::Initialize(Graphics* pGraphics)
 		};
 
 		CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		m_pQuadVertexBuffer = std::make_unique<VertexBuffer>();
-		m_pQuadVertexBuffer->Create(pGraphics, 6, sizeof(Vertex), false);
+		m_pQuadVertexBuffer = std::make_unique<Buffer>();
+		m_pQuadVertexBuffer->Create(pGraphics, BufferDesc::VertexBuffer(6, sizeof(Vertex)));
 		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
 		pContext->Execute(true);
 

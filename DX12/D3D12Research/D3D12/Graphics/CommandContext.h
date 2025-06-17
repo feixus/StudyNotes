@@ -4,8 +4,8 @@ class Graphics;
 class GraphicsResource;
 class GraphicsBuffer;
 class GraphicsTexture;
-class VertexBuffer;
-class IndexBuffer;
+class Buffer;
+class BufferUAV;
 class DynamicDescriptorAllocator;
 class RootSignature;
 class GraphicsPipelineState;
@@ -104,9 +104,9 @@ struct RenderPassInfo
 	static D3D12_RENDER_PASS_ENDING_ACCESS_TYPE ExtractEndingAccess(RenderPassAccess access);
 
 	bool WriteUAVs = false;
-	uint32_t RenderTargetCount;
-	std::array<RenderTargetInfo, 4> RenderTargets;
-	DepthTargetInfo DepthStencilTarget;
+	uint32_t RenderTargetCount{0};
+	std::array<RenderTargetInfo, 4> RenderTargets{};
+	DepthTargetInfo DepthStencilTarget{};
 };
 
 class CommandContext
@@ -125,6 +125,7 @@ public:
 
 	void CopyResource(GraphicsResource* pSource, GraphicsResource* pDest);
 	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
+	void InitializeBuffer(Buffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
@@ -135,12 +136,14 @@ public:
 	// commands
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments);
+	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
 	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 
+	void ClearUavUInt(const BufferUAV& uav, uint32_t values[4]);
 	void ClearUavUInt(GraphicsBuffer* pBuffer, uint32_t values[4]);
 	void ClearUavUFloat(GraphicsBuffer* pBuffer, float values[4]);
 
@@ -167,9 +170,9 @@ public:
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(VertexBuffer* pVertexBuffer);
-	void SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount);
-	void SetIndexBuffer(IndexBuffer* pIndexBuffer);
+	void SetVertexBuffer(Buffer* pVertexBuffer);
+	void SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount);
+	void SetIndexBuffer(Buffer* pIndexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 

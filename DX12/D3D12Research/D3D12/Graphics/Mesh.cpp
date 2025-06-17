@@ -7,6 +7,7 @@
 #include "GraphicsBuffer.h"
 #include "CommandContext.h"
 #include "Graphics.h"
+#include "Buffer.h"
 
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {
@@ -118,22 +119,26 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 
 	{
 		uint32_t size = (uint32_t)vertices.size() * sizeof(Vertex);
-		pSubMesh->m_pVertexBuffer = std::make_unique<VertexBuffer>();
-		pSubMesh->m_pVertexBuffer->Create(pGraphics, (uint32_t)vertices.size(), sizeof(Vertex), false);
+		pSubMesh->m_pVertexBuffer = std::make_unique<Buffer>();
+		pSubMesh->m_pVertexBuffer->Create(pGraphics, BufferDesc::VertexBuffer((uint32_t)vertices.size(), sizeof(Vertex)));
 		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
 	}
 
 	{
 		uint32_t size = sizeof(uint32_t) * (uint32_t)indices.size();
 		pSubMesh->m_IndexCount = (int)indices.size();
-		pSubMesh->m_pIndexBuffer = std::make_unique<IndexBuffer>();
-		pSubMesh->m_pIndexBuffer->Create(pGraphics, false, (uint32_t)indices.size(), false);
+		pSubMesh->m_pIndexBuffer = std::make_unique<Buffer>();
+		pSubMesh->m_pIndexBuffer->Create(pGraphics, BufferDesc::IndexBuffer(indices.size()));
 		pSubMesh->m_pIndexBuffer->SetData(pContext, indices.data(), size);
 	}
 
 	pSubMesh->m_MaterialId = pMesh->mMaterialIndex;
 
 	return pSubMesh;
+}
+
+SubMesh::~SubMesh()
+{
 }
 
 void SubMesh::Draw(CommandContext* pContext) const

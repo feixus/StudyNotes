@@ -1,7 +1,7 @@
 #pragma once
 #include "Graphics.h"
 
-class ReadbackBuffer;
+class Buffer;
 class CommandContext;
 
 class CpuTimer
@@ -157,7 +157,7 @@ private:
 	int m_CurrentTimer{0};
 	int m_LastTimer{0};
 	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
-	std::unique_ptr<ReadbackBuffer> m_pReadBackBuffer;
+	std::unique_ptr<Buffer> m_pReadBackBuffer;
 
 	std::unique_ptr<ProfileNode> m_pRootBlock;
 	ProfileNode* m_pPreviousBlock{nullptr};

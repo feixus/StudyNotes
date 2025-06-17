@@ -3,8 +3,7 @@
 class Graphics;
 class GraphicsBuffer;
 class GraphicsTexture;
-class VertexBuffer;
-class IndexBuffer;
+class Buffer;
 class CommandContext;
 class CommandContext;
 struct aiMesh;
@@ -15,6 +14,7 @@ class SubMesh
     friend class Mesh;
 
 public:
+    ~SubMesh();
     void Draw(CommandContext* pContext) const;
     int GetMaterialId() const { return m_MaterialId; }
     const BoundingBox& GetBounds() const { return m_Bounds; }
@@ -24,8 +24,8 @@ private:
     int m_IndexCount{};
     int m_VertexCount{};
     BoundingBox m_Bounds;
-    std::unique_ptr<VertexBuffer> m_pVertexBuffer;
-    std::unique_ptr<IndexBuffer> m_pIndexBuffer;
+    std::unique_ptr<Buffer> m_pVertexBuffer;
+    std::unique_ptr<Buffer> m_pIndexBuffer;
 };
 
 struct Material
@@ -34,7 +34,7 @@ struct Material
 	std::unique_ptr<GraphicsTexture> pNormalTexture;
 	std::unique_ptr<GraphicsTexture> pSpecularTexture;
 	std::unique_ptr<GraphicsTexture> pAlphaTexture;
-    bool IsTransparent;
+    bool IsTransparent{false};
 };
 
 class Mesh
