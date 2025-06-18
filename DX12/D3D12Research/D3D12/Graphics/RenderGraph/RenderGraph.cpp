@@ -3,6 +3,7 @@
 #include "Graphics/Graphics.h"
 #include "Graphics/CommandContext.h"
 #include "Graphics/Profiler.h"
+#include "ResourceAllocator.h"
 
 RG::ResourceHandle RG::RenderPassBuilder::Read(const ResourceHandle& resource)
 {
@@ -47,7 +48,8 @@ void RG::RenderPassBuilder::NeverCull()
     m_Pass.m_NeverCull = true;
 }
 
-RG::RenderGraph::RenderGraph()
+RG::RenderGraph::RenderGraph(ResourceAllocator* pAllocator)
+    : m_pAllocator(pAllocator)
 {
 }
 
@@ -221,21 +223,14 @@ int64_t RG::RenderGraph::Execute(Graphics* pGraphics)
     {
         if (pPass->m_References > 0)
         {
-            for (VirtualResourceBase* pResource : pPass->m_ResourcesToCreate)
-            {
-                pResource->Create(*this);
-            }
+            pPass->PrepareResources(m_pAllocator);
 
             RenderPassResources resources(*this, *pPass);
             Profiler::Instance()->Begin(pPass->m_Name, pContext);
             pPass->Execute(resources, *pContext);
             Profiler::Instance()->End(pContext);
 
-            for (VirtualResourceBase* pResource : pPass->m_ResourcesToDestroy)
-            {
-                pResource->Destroy(*this);
-            }
-                
+            pPass->ReleaseResources(m_pAllocator);
         }
     }
 
@@ -269,4 +264,50 @@ RG::VirtualResourceBase* RG::RenderPassResources::GetResourceInternal(ResourceHa
 {
 	const ResourceNode& node = m_Graph.GetResourceNode(handle);
 	return node.m_pResource;
+}
+
+void RG::RenderPassBase::PrepareResources(ResourceAllocator* pAllocator)
+{
+    for (VirtualResourceBase* pResource : m_ResourcesToCreate)
+    {
+        if (pResource->m_IsImported)
+        {
+            continue;
+        }
+
+        switch (pResource->m_Type)
+        {
+        case ResourceType::Texture:
+            pResource->m_pPhysicalResource = pAllocator->CreateTexture(static_cast<TextureResource*>(pResource)->GetDesc());
+            break;
+        case ResourceType::Buffer:
+            // pResource->m_pPhysicalResource = pAllocator->CreateBuffer(static_cast<BufferResource*>(pResource)->GetDesc());
+            break;
+        default:
+            RG_ASSERT(false, "Invalid resource type");
+        }
+    }
+}
+
+void RG::RenderPassBase::ReleaseResources(ResourceAllocator* pAllocator)
+{
+    for (VirtualResourceBase* pResource : m_ResourcesToDestroy)
+    {
+        if (pResource->m_IsImported)
+        {
+            continue;
+        }
+
+        switch (pResource->m_Type)
+        {
+        case ResourceType::Texture:
+            pAllocator->ReleaseTexture(static_cast<GraphicsTexture*>(pResource->m_pPhysicalResource));
+            break;
+        case ResourceType::Buffer:
+            // pAllocator->ReleaseBuffer(static_cast<GraphicsBuffer*>(pResource->m_pPhysicalResource));
+            break;
+        default:
+            RG_ASSERT(false, "Invalid resource type");
+        }
+    }
 }

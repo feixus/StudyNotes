@@ -20,6 +20,7 @@
 #include <DXProgrammableCapture.h>
 #include "RenderGraph/RenderGraph.h"
 #include "RenderGraph/Blackboard.h"
+#include "RenderGraph/ResourceAllocator.h"
 
 bool gSortOpaqueMeshes = true;
 bool gSortTransparentMeshes = true;
@@ -162,7 +163,7 @@ void Graphics::Update()
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		RG::RenderGraph graph;
+		RG::RenderGraph graph(m_pResourceAllocator.get());
 		RG::Blackboard mainBlackboard;
 		
 		struct MainData
@@ -743,6 +744,7 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
+	m_pResourceAllocator = std::make_unique<RG::ResourceAllocator>(this);
 }
 
 void Graphics::CreateSwapchain()
