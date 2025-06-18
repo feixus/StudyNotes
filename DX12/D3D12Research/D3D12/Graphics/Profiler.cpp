@@ -236,7 +236,7 @@ void Profiler::Initialize(Graphics* pGraphics)
 
 	int bufferSize = HEAP_SIZE * sizeof(uint64_t) * 2 * Graphics::FRAME_COUNT;
 	m_pReadBackBuffer = std::make_unique<Buffer>();
-	m_pReadBackBuffer->Create(pGraphics, BufferDesc::Readback(bufferSize));
+	m_pReadBackBuffer->Create(pGraphics, BufferDesc::CreateReadback(bufferSize));
 
 	uint64_t timeStampFrequency;
 	pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);

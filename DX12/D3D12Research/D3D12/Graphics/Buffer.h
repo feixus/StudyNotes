@@ -4,77 +4,141 @@
 
 class CommandContext;
 class Graphics;
-
 class Buffer;
 
-enum class BufferUsage
+enum class BufferFlag
 {
 	None = 0,
-	UnorderedAccess = 1 << 0,
-	ShaderResource = 1 << 1,
-};
-DEFINE_ENUM_FLAG_OPERATORS(BufferUsage)
+	UnorderedAccess =  1 << 0,
+	ShaderResource =   1 << 1,
+	Upload =           1 << 2,
+	Readback =         1 << 3,
+	Structured =       1 << 4,
+	ByteAddress =      1 << 5,
+	IndirectArgument = 1 << 6,
 
-enum class BufferStorageType
-{
-	Default,
-	Upload,
-	Readback,
-	MAX
+	MAX = 1 << 7
 };
+DECLARE_BITMASK_TYPE(BufferFlag)
 
 struct BufferDesc
 {
 	BufferDesc() = default;
-	explicit BufferDesc(uint32_t elementCount, uint32_t stride, BufferUsage usage = BufferUsage::None, bool cpuVisible = false)
-				: ElementCount(elementCount), ByteStride(stride), Usage(usage), Storage(cpuVisible ? BufferStorageType::Upload : BufferStorageType::Default) {}
+	BufferDesc(uint32_t elementCount, uint32_t stride, BufferFlag usage = BufferFlag::None)
+				: ElementCount(elementCount), ElementSize(stride), Usage(usage) {}
 
-	static BufferDesc VertexBuffer(uint32_t elements, uint32_t elementSize, bool cpuVisible = false)
+	static BufferDesc CreateIndexBuffer(uint32_t elements, bool smallIndices, BufferFlag usage = BufferFlag::None)
+	{
+		return BufferDesc(elements, smallIndices ? 2 : 4, usage);
+	}
+
+	static BufferDesc CreateVertexBuffer(uint32_t elements, int vertexSize, BufferFlag usage = BufferFlag::None)
+	{
+		return BufferDesc(elements, vertexSize, usage);
+	}
+
+	static BufferDesc CreateReadback(uint32_t size)
+	{
+		return BufferDesc(size, sizeof(uint64_t), BufferFlag::Readback);
+	}
+
+	static BufferDesc CreateStructured(uint32_t elementCount, uint32_t elementSize, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
 		BufferDesc desc;
-		desc.ElementCount = elements;
-		desc.ByteStride = elementSize;
-		desc.Usage = BufferUsage::None;
-		desc.Storage = cpuVisible ? BufferStorageType::Upload : BufferStorageType::Default;
+		desc.ElementCount = elementCount;
+		desc.ElementSize = elementSize;
+		desc.Usage = usage | BufferFlag::Structured;
 		return desc;
 	}
 
-	static BufferDesc IndexBuffer(uint32_t elements, bool cpuVisible = false)
+	static BufferDesc CreateByteAddress(uint32_t bytes, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
+		assert(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = elements;
-		desc.ByteStride = 4;
-		desc.Usage = BufferUsage::None;
-		desc.Storage = cpuVisible ? BufferStorageType::Upload : BufferStorageType::Default;
+		desc.ElementCount = bytes / 4;
+		desc.ElementSize = 4;
+		desc.Usage = usage | BufferFlag::ByteAddress;
 		return desc;
 	}
 
-	static BufferDesc Readback(uint32_t size)
+	template<typename IndirectParameters>
+	static BufferDesc CreateIndirectArgumemnts(int elements = 1, BufferFlag usage = BufferFlag::IndirectArgument | BufferFlag::UnorderedAccess)
 	{
 		BufferDesc desc;
-		desc.ElementCount = size;
-		desc.ByteStride = 8;
-		desc.Usage = BufferUsage::None;
-		desc.Storage = BufferStorageType::Readback;
+		desc.ElementCount = elements;
+		desc.ElementSize = sizeof(IndirectParameters);
+		desc.Usage = usage | BufferFlag::IndirectArgument;
 		return desc;
+	}
+
+	bool operator==(const BufferDesc& other) const
+	{
+		return ElementCount == other.ElementCount && ElementSize == other.ElementSize && Usage == other.Usage;
+	}
+
+	bool operator!=(const BufferDesc& other) const
+	{
+		return !(*this == other);
 	}
 
 	uint32_t ElementCount{0};
-	uint32_t ByteStride{0};
-	BufferUsage Usage{BufferUsage::None};
-	BufferStorageType Storage{BufferStorageType::Default};
+	uint32_t ElementSize{0};
+	BufferFlag Usage{BufferFlag::None};
 };
 
-struct BufferSRVDesc
+struct BufferUAVDesc
 {
-	static BufferSRVDesc Structured(Buffer* pCounter = nullptr)
+	static BufferUAVDesc CreateStructured(Buffer* pCounter = nullptr)
 	{
-		BufferSRVDesc desc;
+		BufferUAVDesc desc;
 		desc.Format = DXGI_FORMAT_UNKNOWN;
 		desc.FirstElement = 0;
 		desc.CounterOffset = 0;
 		desc.pCounter = pCounter;
-		desc.IsRaw = false;
+		return desc;
+	}
+
+	static BufferUAVDesc CreateTyped(DXGI_FORMAT format, Buffer* pCounter = nullptr)
+	{
+		BufferUAVDesc desc;
+		desc.Format = format;
+		desc.FirstElement = 0;
+		desc.CounterOffset = 0;
+		desc.pCounter = pCounter;
+		return desc;
+	}
+
+	static BufferUAVDesc ByteAddress()
+	{
+		BufferUAVDesc desc;
+		desc.Format = DXGI_FORMAT_R32_TYPELESS;
+		desc.FirstElement = 0;
+		desc.CounterOffset = 0;
+		desc.pCounter = nullptr;
+		return desc;
+	}
+
+	DXGI_FORMAT Format;
+	int FirstElement;
+	int CounterOffset;
+	Buffer* pCounter;
+};
+
+struct BufferSRVDesc
+{
+	static BufferSRVDesc CreateStructured(Buffer* pCounter = nullptr)
+	{
+		BufferSRVDesc desc;
+		desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.FirstElement = 0;
+		return desc;
+	}
+
+	static BufferSRVDesc CreateTyped(DXGI_FORMAT format, Buffer* pCounter = nullptr)
+	{
+		BufferSRVDesc desc;
+		desc.Format = format;
+		desc.FirstElement = 0;
 		return desc;
 	}
 
@@ -83,20 +147,12 @@ struct BufferSRVDesc
 		BufferSRVDesc desc;
 		desc.Format = DXGI_FORMAT_R32_TYPELESS;
 		desc.FirstElement = 0;
-		desc.CounterOffset = 0;
-		desc.pCounter = nullptr;
-		desc.IsRaw = true;
 		return desc;
 	}
 
 	DXGI_FORMAT Format;
 	int FirstElement;
-	int CounterOffset;
-	bool IsRaw;
-	Buffer* pCounter;
 };
-
-using BufferUAVDesc = BufferSRVDesc;
 
 class Buffer : public GraphicsResource
 {
@@ -109,7 +165,7 @@ public:
 	void* Map(uint32_t subResource = 0, uint64_t readFrom = 0, uint64_t readTo = 0);
 	void UnMap(uint32_t subResource = 0, uint64_t writeFrom = 0, uint64_t writeTo = 0);
 
-	inline uint64_t GetSize() const { return m_Desc.ElementCount * m_Desc.ByteStride; }
+	inline uint64_t GetSize() const { return m_Desc.ElementCount * m_Desc.ElementSize; }
 	const BufferDesc& GetDesc() const { return m_Desc; }
 
 private:

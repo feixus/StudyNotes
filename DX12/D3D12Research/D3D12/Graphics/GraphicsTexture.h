@@ -4,15 +4,15 @@
 class CommandContext;
 class Graphics;
 
-enum class TextureUsage
+enum class TextureFlag
 {
 	None = 0,
-	UnorderedAccess = 1 << 0,
-	ShaderResource = 1 << 1,
-	RenderTarget = 1 << 2,
-	DepthStencil = 1 << 3,
+	UnorderedAccess = 1 << 1,
+	ShaderResource = 1 << 2,
+	RenderTarget = 1 << 3,
+	DepthStencil = 1 << 4,
 };
-DEFINE_ENUM_FLAG_OPERATORS(TextureUsage)
+DECLARE_BITMASK_TYPE(TextureFlag)
 
 enum class TextureDimension
 {
@@ -59,6 +59,19 @@ struct ClearBinding
 		DepthStencil.Stencil = stencil;
 	}
 
+	bool operator==(const ClearBinding& other) const
+	{
+		if (BindingValue != other.BindingValue)
+		{
+			return false;
+		}
+		if (BindingValue == ClearBindingValue::Color)
+		{
+			return Color == other.Color;
+		}
+		return DepthStencil.Depth == other.DepthStencil.Depth && DepthStencil.Stencil == other.DepthStencil.Stencil;
+	}
+
 	ClearBindingValue BindingValue;
 	union
 	{
@@ -69,10 +82,10 @@ struct ClearBinding
 
 struct TextureDesc
 {
-	TextureDesc() : Width(1), Height(1), DepthOrArraySize(1), Mips(1), SampleCount(1), Format(DXGI_FORMAT_UNKNOWN), Usage(TextureUsage::None), ClearBindingValue(), Dimension(TextureDimension::Texture2D) {}
-	TextureDesc(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding())
+	TextureDesc() : Width(1), Height(1), DepthOrArraySize(1), Mips(1), SampleCount(1), Format(DXGI_FORMAT_UNKNOWN), Usage(TextureFlag::None), ClearBindingValue(), Dimension(TextureDimension::Texture2D) {}
+	TextureDesc(int width, int height, DXGI_FORMAT format, TextureFlag usage = TextureFlag::ShaderResource, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding())
 		: Width(width), Height(height), DepthOrArraySize(1), Mips(1), SampleCount(sampleCount), Format(format), Usage(usage), ClearBindingValue(clearBinding), Dimension(TextureDimension::Texture2D) {}
-	TextureDesc(int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, TextureDimension dimension = TextureDimension::Texture2D)
+	TextureDesc(int width, int height, int depth, DXGI_FORMAT format, TextureFlag usage = TextureFlag::ShaderResource, TextureDimension dimension = TextureDimension::Texture2D)
 		: Width(width), Height(height), DepthOrArraySize(depth), Mips(1), SampleCount(1), Format(format), Usage(usage), Dimension(dimension), ClearBindingValue() {}
 
 	int Width;
@@ -81,11 +94,11 @@ struct TextureDesc
 	int Mips;
 	int SampleCount;
 	DXGI_FORMAT Format;
-	TextureUsage Usage;
+	TextureFlag Usage;
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimension;
 
-	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, int sampleCount = 1, int mips = 1)
+	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureFlag flag = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
 	{
 		assert(width);
 		assert(height);
@@ -96,17 +109,17 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = usage;
+		desc.Usage = flag;
 		desc.ClearBindingValue = ClearBinding();
 		desc.Dimension = TextureDimension::Texture2D;
 		return desc;
 	}
 
-	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
+	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
 		assert(width);
 		assert(height);
-		assert((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil);
+		assert(Any(flags, TextureFlag::DepthStencil));
 		TextureDesc desc{};
 		desc.Width = width;
 		desc.Height = height;
@@ -114,17 +127,17 @@ struct TextureDesc
 		desc.Mips = 1;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = usage;
+		desc.Usage = flags;
 		desc.ClearBindingValue = clearBinding;
 		desc.Dimension = TextureDimension::Texture2D;
 		return desc;
 	}
 
-	static TextureDesc CreateRenderTarget(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::RenderTarget, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
+	static TextureDesc CreateRenderTarget(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::RenderTarget, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
 	{
 		assert(width);
 		assert(height);
-		assert((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget);
+		assert(Any(flags, TextureFlag::RenderTarget));
 		TextureDesc desc{};
 		desc.Width = width;
 		desc.Height = height;
@@ -132,13 +145,13 @@ struct TextureDesc
 		desc.Mips = 1;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = usage;
+		desc.Usage = flags;
 		desc.ClearBindingValue = clearBinding;
 		desc.Dimension = TextureDimension::Texture2D;
 		return desc;
 	}
 
-	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, TextureDimension dimension = TextureDimension::Texture3D, int sampleCount = 1)
+	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, TextureDimension dimension = TextureDimension::Texture3D, int sampleCount = 1)
 	{
 		assert(width);
 		assert(height);
@@ -149,7 +162,7 @@ struct TextureDesc
 		desc.Mips = 1;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = usage;
+		desc.Usage = flags;
 		desc.ClearBindingValue = ClearBinding();
 		desc.Dimension = dimension;
 		return desc;

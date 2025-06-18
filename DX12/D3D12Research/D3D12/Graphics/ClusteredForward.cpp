@@ -38,7 +38,7 @@ ClusteredForward::~ClusteredForward()
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-    m_pDepthTexture->Create(m_pGraphics, TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
+    m_pDepthTexture->Create(m_pGraphics, TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
     m_pDepthTexture->SetName("Clustered Forward Depth Texture");
 
 	m_ClusterCountX = (uint32_t)ceil((float)windowWidth / cClusterSize);
@@ -46,25 +46,25 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
     m_MaxClusters = m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
 
     struct AABB { Vector4 Min; Vector4 Max; };
-    m_pAabbBuffer->Create(m_pGraphics, BufferDesc(m_MaxClusters, sizeof(AABB), BufferUsage::UnorderedAccess | BufferUsage::ShaderResource));
+    m_pAabbBuffer->Create(m_pGraphics, BufferDesc::CreateStructured(m_MaxClusters, sizeof(AABB), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
     m_pAabbBuffer->SetName("AABBs");
-    m_AabbBufferUAV.Create(m_pGraphics, m_pAabbBuffer.get(), BufferUAVDesc::Structured());
-    m_AabbBufferSRV.Create(m_pGraphics, m_pAabbBuffer.get(), BufferSRVDesc::Structured());
+    m_AabbBufferUAV.Create(m_pGraphics, m_pAabbBuffer.get(), BufferUAVDesc::CreateStructured());
+    m_AabbBufferSRV.Create(m_pGraphics, m_pAabbBuffer.get(), BufferSRVDesc::CreateStructured());
 
-    m_pUniqueClusterBuffer->Create(m_pGraphics, BufferDesc(m_MaxClusters, sizeof(uint32_t), BufferUsage::UnorderedAccess | BufferUsage::ShaderResource));
+    m_pUniqueClusterBuffer->Create(m_pGraphics, BufferDesc::CreateStructured(m_MaxClusters, sizeof(uint32_t), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
     m_pUniqueClusterBuffer->SetName("Unique Clusters");
-    m_UniqueClusterBufferUAV.Create(m_pGraphics, m_pUniqueClusterBuffer.get(), BufferUAVDesc::Structured());
-    m_UniqueClusterBufferSRV.Create(m_pGraphics, m_pUniqueClusterBuffer.get(), BufferSRVDesc::Structured());
+    m_UniqueClusterBufferUAV.Create(m_pGraphics, m_pUniqueClusterBuffer.get(), BufferUAVDesc::CreateStructured());
+    m_UniqueClusterBufferSRV.Create(m_pGraphics, m_pUniqueClusterBuffer.get(), BufferSRVDesc::CreateStructured());
 
-    m_pCompactedClusterCounter->Create(m_pGraphics, BufferDesc(1, sizeof(uint64_t), BufferUsage::UnorderedAccess | BufferUsage::ShaderResource));
+    m_pCompactedClusterCounter->Create(m_pGraphics, BufferDesc::CreateByteAddress(1 * sizeof(uint32_t), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
     m_pCompactedClusterCounter->SetName("Compacted Cluster Counter");
     m_CompactedClusterCounterUAV.Create(m_pGraphics, m_pCompactedClusterCounter.get(), BufferUAVDesc::ByteAddress());
     m_CompactedClusterCounterSRV.Create(m_pGraphics, m_pCompactedClusterCounter.get(), BufferSRVDesc::ByteAddress());
 
-    m_pCompactedClusterBuffer->Create(m_pGraphics, BufferDesc(m_MaxClusters, sizeof(uint32_t), BufferUsage::UnorderedAccess | BufferUsage::ShaderResource));
+    m_pCompactedClusterBuffer->Create(m_pGraphics, BufferDesc::CreateStructured(m_MaxClusters, sizeof(uint32_t), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
     m_pCompactedClusterBuffer->SetName("Compacted Cluster");
-    m_CompactedClusterBufferUAV.Create(m_pGraphics, m_pCompactedClusterBuffer.get(), BufferUAVDesc::Structured(m_pCompactedClusterCounter.get()));
-    m_CompactedClusterBufferSRV.Create(m_pGraphics, m_pCompactedClusterBuffer.get(), BufferSRVDesc::Structured());
+    m_CompactedClusterBufferUAV.Create(m_pGraphics, m_pCompactedClusterBuffer.get(), BufferUAVDesc::CreateStructured(m_pCompactedClusterCounter.get()));
+    m_CompactedClusterBufferSRV.Create(m_pGraphics, m_pCompactedClusterBuffer.get(), BufferSRVDesc::CreateStructured());
 
     m_pDebugCompactedClusterBuffer->Create(m_pGraphics, sizeof(uint32_t), m_MaxClusters, false);
     m_pDebugCompactedClusterBuffer->SetName("Debug Compacted Cluster");
@@ -484,7 +484,7 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
     m_pCompactedClusterCounter = std::make_unique<Buffer>();
     m_pDebugCompactedClusterBuffer = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pIndirectArguments = std::make_unique<Buffer>();
-    m_pIndirectArguments->Create(m_pGraphics, BufferDesc(3, sizeof(uint32_t), BufferUsage::UnorderedAccess));
+    m_pIndirectArguments->Create(m_pGraphics, BufferDesc::CreateByteAddress(3 * sizeof(uint32_t), BufferFlag::UnorderedAccess));
     m_IndirectArgumentsUAV.Create(m_pGraphics, m_pIndirectArguments.get(), BufferUAVDesc::ByteAddress());
 
 	m_pLightIndexCounter = std::make_unique<StructuredBuffer>(pGraphics);

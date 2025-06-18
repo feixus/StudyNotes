@@ -119,6 +119,6 @@ void DynamicAllocationManager::FreeLargePages(uint64_t fenceValue, const std::ve
 
 void AllocationPage::Create(Graphics* pGraphics, uint64_t size)
 {
-	GraphicsBuffer::Create(pGraphics, size, 1, true);
+	Buffer::Create(pGraphics, BufferDesc((uint32_t)size, 1, BufferFlag::Upload));
 	m_pMappedData = Map();
 }

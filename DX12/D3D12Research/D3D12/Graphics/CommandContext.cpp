@@ -497,10 +497,9 @@ void CommandContext::SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount)
 	std::array<D3D12_VERTEX_BUFFER_VIEW, 4> views{};
 	for (int i = 0; i < bufferCount; ++i)
 	{
-		Buffer* pBuffer = pVertexBuffers[i];
-		views[i].BufferLocation = pBuffer->GetGpuHandle();
-		views[i].SizeInBytes = (uint32_t)pBuffer->GetSize();
-		views[i].StrideInBytes = pBuffer->GetDesc().ByteStride;
+		views[i].BufferLocation = pVertexBuffers[i]->GetGpuHandle();
+		views[i].SizeInBytes = (uint32_t)pVertexBuffers[i]->GetSize();
+		views[i].StrideInBytes = pVertexBuffers[i]->GetDesc().ElementSize;
 	}
 	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
 }
@@ -510,7 +509,7 @@ void CommandContext::SetIndexBuffer(Buffer* pIndexBuffer)
 	D3D12_INDEX_BUFFER_VIEW view;
 	view.BufferLocation = pIndexBuffer->GetGpuHandle();
 	view.SizeInBytes = pIndexBuffer->GetSize();
-	view.Format = pIndexBuffer->GetDesc().ByteStride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+	view.Format = pIndexBuffer->GetDesc().ElementSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 

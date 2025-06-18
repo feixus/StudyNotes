@@ -31,8 +31,8 @@ D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetDSV(bool writeable) const
 void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 {
 	m_Desc = textureDesc;
-	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
-	assert((textureDesc.Usage & depthAndRt) != depthAndRt);
+	TextureFlag depthAndRt = TextureFlag::RenderTarget | TextureFlag::DepthStencil;
+	assert(Any(textureDesc.Usage, depthAndRt) == false);
 
 	Release();
 
@@ -82,11 +82,11 @@ void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc
 		break;
 	}
 
-	if ((textureDesc.Usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
+	if (Any(textureDesc.Usage, TextureFlag::UnorderedAccess))
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
-	if ((textureDesc.Usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
+	if (Any(textureDesc.Usage, TextureFlag::RenderTarget))
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 		if (textureDesc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::Color)
@@ -100,7 +100,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc
 		}
 		pClearValue = &clearValue;
 	}
-	if ((textureDesc.Usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	if (Any(textureDesc.Usage, TextureFlag::DepthStencil))
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 		if (textureDesc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::DepthStencil)
@@ -116,7 +116,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc
 		pClearValue = &clearValue;
 		m_CurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
-		if ((textureDesc.Usage & TextureUsage::ShaderResource) != TextureUsage::ShaderResource)
+		if ((textureDesc.Usage & TextureFlag::ShaderResource) != TextureFlag::ShaderResource)
 		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 		}
@@ -126,7 +126,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc
 
 	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 
-	if ((textureDesc.Usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
+	if (Any(textureDesc.Usage, TextureFlag::ShaderResource))
 	{
 		if (m_Srv.ptr == 0)
 		{
@@ -135,7 +135,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.Format = (textureDesc.Usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil ? GetSrvFormatFromDepth(m_Desc.Format) : m_Desc.Format;
+		srvDesc.Format = (textureDesc.Usage & TextureFlag::DepthStencil) == TextureFlag::DepthStencil ? GetSrvFormatFromDepth(m_Desc.Format) : m_Desc.Format;
 
 		switch (textureDesc.Dimension)
 		{
@@ -211,7 +211,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc
 		pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 	}
 
-	if ((textureDesc.Usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
+	if (Any(textureDesc.Usage, TextureFlag::UnorderedAccess))
 	{
 		if (m_Uav.ptr == 0)
 		{
@@ -265,7 +265,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc
 		}
 	}
 
-	if ((textureDesc.Usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
+	if (Any(textureDesc.Usage, TextureFlag::RenderTarget))
 	{
 		if (m_Rtv.ptr == 0)
 		{
@@ -326,7 +326,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, const TextureDesc& textureDesc
 		
 		pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, &rtvDesc, m_Rtv);
 	}
-	else if ((textureDesc.Usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	else if (Any(textureDesc.Usage, TextureFlag::DepthStencil))
 	{
 		if (m_Rtv.ptr == 0)
 		{
@@ -496,7 +496,7 @@ void GraphicsTexture::Create(Graphics* pGraphics, CommandContext* pContext, cons
 		desc.Height = img.GetHeight();
 		desc.Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), false);
 		desc.Mips = img.GetMipLevels();
-		desc.Usage = TextureUsage::ShaderResource;
+		desc.Usage = TextureFlag::ShaderResource;
 
 		std::vector<D3D12_SUBRESOURCE_DATA> subresources(desc.Mips);
 		for (int i = 0; i < desc.Mips; i++)

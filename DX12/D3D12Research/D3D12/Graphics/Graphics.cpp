@@ -820,27 +820,27 @@ void Graphics::OnResize(int width, int height)
 
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(this, TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
+		m_pDepthStencil->Create(this, TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 		m_pDepthStencil->SetName("Depth Stencil");
-		m_pResolveDepthStencil->Create(this, TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess));
+		m_pResolveDepthStencil->Create(this, TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 		m_pResolveDepthStencil->SetName("Resolve Depth Stencil");
 
-		m_pMultiSampleRenderTarget->Create(this, TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, ClearBinding(Color(0,0,0,0))));
+		m_pMultiSampleRenderTarget->Create(this, TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0,0,0,0))));
 		m_pMultiSampleRenderTarget->SetName("Multisample Rendertarget");
 
-		m_pResolvedRenderTarget->Create(this, TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget | TextureUsage::ShaderResource, 1, ClearBinding(Color(0,0,0,0))));
+		m_pResolvedRenderTarget->Create(this, TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(0,0,0,0))));
 		m_pResolvedRenderTarget->SetName("Resolved Render Target");
 	}
 	else
 	{
-		m_pDepthStencil->Create(this, TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
+		m_pDepthStencil->Create(this, TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 		m_pDepthStencil->SetName("Depth Stencil");
 	}
 
 	int frustumCountX = (int)ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = (int)ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
-	m_pLightGridOpaque->Create(this, TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource));
-	m_pLightGridTransparent->Create(this, TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::UnorderedAccess | TextureUsage::ShaderResource));
+	m_pLightGridOpaque->Create(this, TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	m_pLightGridTransparent->Create(this, TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 }
@@ -966,7 +966,7 @@ void Graphics::InitializeAssets()
 		}
 
 		m_pShadowMap = std::make_unique<GraphicsTexture>();
-		m_pShadowMap->Create(this, TextureDesc(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, ClearBinding(0.0f, 0)));
+		m_pShadowMap->Create(this, TextureDesc(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 	}
 
 	// depth prepass

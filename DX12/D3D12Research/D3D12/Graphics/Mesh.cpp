@@ -120,7 +120,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 	{
 		uint32_t size = (uint32_t)vertices.size() * sizeof(Vertex);
 		pSubMesh->m_pVertexBuffer = std::make_unique<Buffer>();
-		pSubMesh->m_pVertexBuffer->Create(pGraphics, BufferDesc::VertexBuffer((uint32_t)vertices.size(), sizeof(Vertex)));
+		pSubMesh->m_pVertexBuffer->Create(pGraphics, BufferDesc::CreateVertexBuffer((uint32_t)vertices.size(), sizeof(Vertex)));
 		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
 	}
 
@@ -128,7 +128,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 		uint32_t size = sizeof(uint32_t) * (uint32_t)indices.size();
 		pSubMesh->m_IndexCount = (int)indices.size();
 		pSubMesh->m_pIndexBuffer = std::make_unique<Buffer>();
-		pSubMesh->m_pIndexBuffer->Create(pGraphics, BufferDesc::IndexBuffer(indices.size()));
+		pSubMesh->m_pIndexBuffer->Create(pGraphics, BufferDesc::CreateIndexBuffer(indices.size(), false));
 		pSubMesh->m_pIndexBuffer->SetData(pContext, indices.data(), size);
 	}
 
