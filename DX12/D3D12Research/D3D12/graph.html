@@ -1,0 +1,20 @@
+<script src="https://unpkg.com/mermaid@11.6.0/dist/mermaid.min.js"></script><script>mermaid.initialize({ startOnLoad:true });</script><div class="mermaid">graph LR;
+classDef referencedPass fill:#fa0,stroke:#333,stroke-width:2px;
+classDef unreferenced stroke:#fee,stroke-width:1px;
+classDef referencedResource fill:#bef,stroke:#333,stroke-width:2px;
+classDef importedResource fill:#9bd,stroke:#333,stroke-width:2px;
+Pass0[Depth Prepass<br/>Refs: 2<br/>Index: 0]:::referencedPass
+Pass1[Depth Resolve<br/>Refs: 2<br/>Index: 1]:::referencedPass
+Resource0_0([Depth Stencil<br/>Id: 0<br/>Refs: 2]):::importedResource
+Resource1_0([Depth Stencil Target<br/>Id: 1<br/>Refs: 1]):::importedResource
+Resource0_1([Depth Stencil<br/>Id: 0<br/>Refs: 2]):::importedResource
+Resource1_1([Depth Stencil Target<br/>Id: 1<br/>Refs: 1]):::importedResource
+Pass0 --> Resource0_1
+linkStyle 0 stroke:#f82,stroke-width:2px;
+Pass1 --> Resource1_1
+linkStyle 1 stroke:#f82,stroke-width:2px;
+
+Resource0_1 --> Pass1
+linkStyle 2 stroke:#9c9,stroke-width:2px;
+
+</div>

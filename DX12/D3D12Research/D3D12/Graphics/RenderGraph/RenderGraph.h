@@ -245,7 +245,9 @@ namespace RG
         void Compile();
         int64_t Execute(Graphics* pGraphics);
         void Present(ResourceHandle resource);
+
         void DumpGraphViz(const char* pPath) const;
+        void DumpGraphMermaid(const char* pPath) const;
 
         ResourceHandle MoveResource(ResourceHandle from, ResourceHandle to);
 

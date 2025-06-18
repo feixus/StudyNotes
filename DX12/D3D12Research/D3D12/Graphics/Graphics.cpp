@@ -275,6 +275,7 @@ void Graphics::Update()
 		if (!written)
 		{
 			graph.DumpGraphViz("graph.gv");
+			graph.DumpGraphMermaid("graph.html");
 			written = true;
 		}
 
