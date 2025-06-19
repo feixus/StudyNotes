@@ -1,50 +1,48 @@
 #pragma once
 
-namespace RG
+class RGBlackboard final
 {
-	class Blackboard final
-	{
 #define RG_BLACKBOARD_DATA(clazz) constexpr static const char* Type() { return #clazz; }
 
-	public:
-		Blackboard();
-		~Blackboard();
+public:
+	RGBlackboard();
+	~RGBlackboard();
 
-		Blackboard(const Blackboard&) = delete;
-		Blackboard& operator=(const Blackboard&) = delete;
+	RGBlackboard(const RGBlackboard&) = delete;
+	RGBlackboard& operator=(const RGBlackboard&) = delete;
 
-		template<typename T>
-		T& Add()
-		{
-			RG_ASSERT(m_DataMap.find(T::Type()) == m_DataMap.end(), "Data type already exists in blackboard");
-			T* pData = new T();
-			m_DataMap[T::Type()] = pData;
-			return *pData;
-		}
+	template<typename T>
+	T& Add()
+	{
+		RG_ASSERT(m_DataMap.find(T::Type()) == m_DataMap.end(), "Data type already exists in RGBlackboard");
+		T* pData = new T();
+		m_DataMap[T::Type()] = pData;
+		return *pData;
+	}
 
-		template<typename T>
-		T& Get()
-		{
-			void* pData = GetData(T::Type());
-			RG_ASSERT(pData, "Data type not found in blackboard");
-			return *static_cast<T*>(pData);
-		}
+	template<typename T>
+	T& Get()
+	{
+		void* pData = GetData(T::Type());
+		RG_ASSERT(pData, "Data type not found in RGBlackboard");
+		return *static_cast<T*>(pData);
+	}
 
-		template<typename T>
-		const T& Get() const
-		{
-			void* pData = GetData(T::Type());
-			RG_ASSERT(pData, "Data for given type does not exist in blackboard");
-			return *static_cast<T*>(pData);
-		}
+	template<typename T>
+	const T& Get() const
+	{
+		void* pData = GetData(T::Type());
+		RG_ASSERT(pData, "Data for given type does not exist in RGBlackboard");
+		return *static_cast<T*>(pData);
+	}
 
-		Blackboard& Branch();
+	RGBlackboard& Branch();
 
-	private:
-		void* GetData(const std::string& name);
+private:
+	void* GetData(const std::string& name);
 
-		std::map<std::string, void*> m_DataMap;
-		std::vector<std::unique_ptr<Blackboard>> m_Children;
-		Blackboard* m_Parent{ nullptr };
-	};
-}
+	std::map<std::string, void*> m_DataMap;
+	std::vector<std::unique_ptr<RGBlackboard>> m_Children;
+	RGBlackboard* m_Parent{ nullptr };
+};
+

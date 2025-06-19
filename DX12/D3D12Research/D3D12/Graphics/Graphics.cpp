@@ -163,19 +163,19 @@ void Graphics::Update()
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		RG::RenderGraph graph(m_pResourceAllocator.get());
-		RG::Blackboard mainBlackboard;
+		RGGraph graph(m_pResourceAllocator.get());
+		RGBlackboard mainRGBlackboard;
 		
 		struct MainData
 		{
 			MainData() = default;
 
 			RG_BLACKBOARD_DATA(MainData);
-			RG::ResourceHandleMutable DepthStencil;
-			RG::ResourceHandleMutable DepthStencilResolved;
+			RGResourceHandleMutable DepthStencil;
+			RGResourceHandleMutable DepthStencilResolved;
 		};
 
-		MainData& data = mainBlackboard.Add<MainData>();
+		MainData& data = mainRGBlackboard.Add<MainData>();
 		data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
 		data.DepthStencilResolved = graph.ImportTexture("Depth Stencil Target", GetResolveDepthStencil());
 
@@ -187,17 +187,17 @@ void Graphics::Update()
 		{
 			struct DepthPrepassData
 			{
-				RG::ResourceHandleMutable StencilTarget;
+				RGResourceHandleMutable StencilTarget;
 			};
 
-			RG::RenderPass<DepthPrepassData>& prepass = graph.AddCallbackPass<DepthPrepassData>("Depth Prepass",
-				[&](RG::RenderPassBuilder& builder, DepthPrepassData& data) 
+			RGPass<DepthPrepassData>& prepass = graph.AddCallbackPass<DepthPrepassData>("Depth Prepass",
+				[&](RGPassBuilder& builder, DepthPrepassData& data) 
 				{
-					MainData& main = mainBlackboard.Get<MainData>();
+					MainData& main = mainRGBlackboard.Get<MainData>();
 					data.StencilTarget = builder.Write(main.DepthStencil);
 					main.DepthStencil = data.StencilTarget;
 				},
-				[=](CommandContext& renderContext, const RG::RenderPassResources& resources, const DepthPrepassData& data) 
+				[=](CommandContext& renderContext, const RGPassResource& resources, const DepthPrepassData& data) 
 				{
 					GraphicsTexture* pDepthStencil = resources.GetResource<GraphicsTexture>(data.StencilTarget);
 					const TextureDesc& desc = pDepthStencil->GetDesc();
@@ -234,19 +234,19 @@ void Graphics::Update()
 		{
 			struct DepthResolveData
 			{
-				RG::ResourceHandle StencilSource;
-				RG::ResourceHandleMutable StencilTarget;
+				RGResourceHandle StencilSource;
+				RGResourceHandleMutable StencilTarget;
 			};
 
 			graph.AddCallbackPass<DepthResolveData>("Depth Resolve", 
-				[&](RG::RenderPassBuilder& builder, DepthResolveData& data)
+				[&](RGPassBuilder& builder, DepthResolveData& data)
 				{
-					MainData& main = mainBlackboard.Get<MainData>();
+					MainData& main = mainRGBlackboard.Get<MainData>();
 					data.StencilSource = builder.Read(main.DepthStencil);
 					data.StencilTarget = builder.Write(main.DepthStencilResolved);
 					main.DepthStencilResolved = data.StencilTarget;
 				},
-				[=](CommandContext& renderContext, const RG::RenderPassResources& resources, const DepthResolveData& data)
+				[=](CommandContext& renderContext, const RGPassResource& resources, const DepthResolveData& data)
 				{
 					GraphicsTexture* pDepthStencil = resources.GetResource<GraphicsTexture>(data.StencilTarget);
 					GraphicsTexture* pDepthStencilSource = resources.GetResource<GraphicsTexture>(data.StencilSource);
@@ -271,8 +271,6 @@ void Graphics::Update()
 		graph.Present(data.DepthStencilResolved);
 		graph.Compile();
 	
-		int64_t fence = graph.Execute(this);
-
 		static bool written = false;
 		if (!written)
 		{
@@ -281,6 +279,7 @@ void Graphics::Update()
 			written = true;
 		}
 
+		int64_t fence = graph.Execute(this);
 		WaitForFence(fence);
 
 		// 3. light culling
@@ -747,7 +746,7 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
-	m_pResourceAllocator = std::make_unique<RG::ResourceAllocator>(this);
+	m_pResourceAllocator = std::make_unique<RGResourceAllocator>(this);
 }
 
 void Graphics::CreateSwapchain()
