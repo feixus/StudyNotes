@@ -2,7 +2,6 @@
 
 class Graphics;
 class GraphicsResource;
-class GraphicsBuffer;
 class GraphicsTexture;
 class Buffer;
 class BufferUAV;
@@ -120,12 +119,11 @@ public:
 	virtual uint64_t ExecuteAndReset(bool wait);
 	
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
-	void InsertUavBarrier(GraphicsBuffer* pBuffer = nullptr, bool executeImmediate = false);
+	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
 	void CopyResource(GraphicsResource* pSource, GraphicsResource* pDest);
-	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
-	void InitializeBuffer(Buffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
+	void InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
@@ -135,7 +133,6 @@ public:
 
 	// commands
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
-	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments);
 	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
@@ -143,9 +140,8 @@ public:
 	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 
-	void ClearUavUInt(const BufferUAV& uav, uint32_t values[4]);
-	void ClearUavUInt(GraphicsBuffer* pBuffer, uint32_t values[4]);
-	void ClearUavUFloat(GraphicsBuffer* pBuffer, float values[4]);
+	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32_t values[4]);
+	void ClearUavUFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4]);
 
 	// a more structured way for applications to decalare data dependencies and output targets for a set of rendering operations. 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);

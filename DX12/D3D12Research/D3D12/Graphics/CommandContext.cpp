@@ -8,7 +8,7 @@
 #include "RootSignature.h"
 #include "GraphicsTexture.h"
 #include "GraphicsBuffer.h"
-#include "Buffer.h"
+#include "GraphicsResource.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON |
 													D3D12_RESOURCE_STATE_UNORDERED_ACCESS | 
@@ -131,7 +131,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 }
 
-void CommandContext::InsertUavBarrier(GraphicsBuffer* pBuffer, bool executeImmediate)
+void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer, bool executeImmediate)
 {
 	m_QueueBarriers[m_NumQueueBarriers] = CD3DX12_RESOURCE_BARRIER::UAV(pBuffer ? pBuffer->GetResource() : nullptr);
 	++m_NumQueueBarriers;
@@ -169,17 +169,7 @@ void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* p
 	InsertResourceBarrier(pDest, destState);
 }
 
-void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset)
-{
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
-	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
-	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
-	InsertResourceBarrier(pResource, previousState, true);
-}
-
-void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint64_t dataSize, uint32_t offset)
+void CommandContext::InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
@@ -219,16 +209,6 @@ void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32
 }
 
 // GPU-driven rendering
-void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments)
-{
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
-	// pCommandSignature: command type (dispatch or draw...)
-	// pArgumentBuffer: the parameters for command
-	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
-}
-
 void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments)
 {
 	FlushResourceBarriers();
@@ -537,25 +517,18 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 	m_pCommandList->RSSetScissorRects(1, &r);
 }
 
-void CommandContext::ClearUavUInt(GraphicsBuffer* pBuffer, uint32_t values[4])
+void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32_t values[4])
 {
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pBuffer->GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), pBuffer->GetUAV(), pBuffer->GetResource(), values, 0, nullptr);
+	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values, 0, nullptr);
 }
 
-void CommandContext::ClearUavUInt(const BufferUAV& uav, uint32_t values[4])
+void CommandContext::ClearUavUFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4])
 {
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav.GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav.GetDescriptor(), uav.GetParent()->GetResource(), values, 0, nullptr);
-}
-
-void CommandContext::ClearUavUFloat(GraphicsBuffer* pBuffer, float values[4])
-{
-	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pBuffer->GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), pBuffer->GetUAV(), pBuffer->GetResource(), values, 0, nullptr);
+	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values, 0, nullptr);
 }
 
 void CommandContext::SetComputePipelineState(ComputePipelineState* pPipelineState)

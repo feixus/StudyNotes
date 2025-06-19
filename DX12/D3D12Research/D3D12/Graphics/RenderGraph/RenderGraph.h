@@ -1,6 +1,6 @@
 #pragma once
-#include "../GraphicsTexture.h"
-#include "../GraphicsBuffer.h"
+#include "Graphics/GraphicsTexture.h"
+#include "Graphics/GraphicsBuffer.h"
 
 #define RG_DEBUG 1
 
@@ -24,11 +24,6 @@ namespace RG
     class ResourceAllocator;
     class RenderGraph;
     class RenderPassBase;
-
-    struct BufferDesc
-    {
-        int Size;
-    };
 
     enum class ResourceType
     {
@@ -61,7 +56,8 @@ namespace RG
     {
     public:
         TextureResource(const char* name, int id, const TextureDesc& desc, GraphicsTexture* pTexture)
-            : VirtualResourceBase(name, id, pTexture != nullptr, ResourceType::Texture, pTexture), m_Desc(desc)  {}
+            : VirtualResourceBase(name, id, pTexture != nullptr, ResourceType::Texture, pTexture), m_Desc(desc)  
+        {}
 
         const TextureDesc& GetDesc() const { return m_Desc; }
 
@@ -72,8 +68,9 @@ namespace RG
 	class BufferResource : public VirtualResourceBase
 	{
 	public:
-        BufferResource(const char* name, int id, const BufferDesc& desc, GraphicsBuffer* pBuffer)
-			: VirtualResourceBase(name, id, pBuffer != nullptr, ResourceType::Buffer, pBuffer), m_Desc(desc) {}
+        BufferResource(const char* name, int id, const BufferDesc& desc, Buffer* pBuffer)
+			: VirtualResourceBase(name, id, pBuffer != nullptr, ResourceType::Buffer, pBuffer), m_Desc(desc) 
+        {}
 
 		const BufferDesc& GetDesc() const { return m_Desc; }
 
@@ -284,7 +281,7 @@ namespace RG
 			return CreateResourceNode(pResource);
 		}
 
-		ResourceHandleMutable ImportBuffer(const char* name, GraphicsBuffer* pBuffer)
+		ResourceHandleMutable ImportBuffer(const char* name, Buffer* pBuffer)
 		{
 			assert(pBuffer);
             BufferDesc desc{};

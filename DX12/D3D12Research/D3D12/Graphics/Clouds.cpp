@@ -9,7 +9,6 @@
 #include "Profiler.h"
 #include "Scene/Camera.h"
 #include "GraphicsBuffer.h"
-#include "Buffer.h"
 
 static const int Resolution = 256;
 static const int MaxPoints = 256;

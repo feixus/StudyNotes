@@ -2,7 +2,7 @@
 #include "Profiler.h"
 #include "CommandContext.h"
 #include "CommandQueue.h"
-#include "Buffer.h"
+#include "GraphicsBuffer.h"
 
 #define USE_PIX
 #ifdef USE_PIX

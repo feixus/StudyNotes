@@ -1,6 +1,5 @@
 #pragma once
-#include "Buffer.h"
-#include "Buffer.h"
+#include "GraphicsBuffer.h"
 
 class Graphics;
 

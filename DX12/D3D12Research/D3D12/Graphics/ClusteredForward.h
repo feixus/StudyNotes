@@ -1,7 +1,6 @@
 #pragma once
 #include "Graphics/Graphics.h"
 #include "Graphics/Light.h"
-#include "Buffer.h"
 
 class ComputePipelineState;
 class GraphicsPipelineState;
@@ -52,33 +51,23 @@ private:
     // step 1: AABB
     std::unique_ptr<RootSignature> m_pCreateAabbRS;
     std::unique_ptr<ComputePipelineState> m_pCreateAabbPSO;
-    std::unique_ptr<Buffer> m_pAabbBuffer;
-    BufferUAV m_AabbBufferUAV;
-    BufferSRV m_AabbBufferSRV;
+    std::unique_ptr<StructuredBuffer> m_pAabbBuffer;
 
     // step 2: mark unique clusters
     std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparentPSO;
-    std::unique_ptr<Buffer> m_pUniqueClusterBuffer;
-    BufferUAV m_UniqueClusterBufferUAV;
-    BufferSRV m_UniqueClusterBufferSRV;
+    std::unique_ptr<StructuredBuffer> m_pUniqueClusterBuffer;
 
     // step 3: compact cluster list
     std::unique_ptr<RootSignature> m_pCompactClusterListRS;
     std::unique_ptr<ComputePipelineState> m_pCompactClusterListPSO;
-    std::unique_ptr<Buffer> m_pCompactedClusterBuffer;
-    std::unique_ptr<Buffer> m_pCompactedClusterCounter;
-    BufferUAV m_CompactedClusterBufferUAV;
-    BufferSRV m_CompactedClusterBufferSRV;
-    BufferUAV m_CompactedClusterCounterUAV;
-    BufferSRV m_CompactedClusterCounterSRV;
+    std::unique_ptr<StructuredBuffer> m_pCompactedClusterBuffer;
 
     // step 4: update Indirect Dispatch Buffer
     std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
 	std::unique_ptr<ComputePipelineState> m_pUpdateIndirectArgumentsPSO;
-    std::unique_ptr<Buffer> m_pIndirectArguments;
-    BufferUAV m_IndirectArgumentsUAV;
+    std::unique_ptr<ByteAddressBuffer> m_pIndirectArguments;
 
     // step 5: light culling
     std::unique_ptr<RootSignature> m_pLightCullingRS;
