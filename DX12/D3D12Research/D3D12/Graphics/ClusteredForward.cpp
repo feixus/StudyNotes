@@ -464,18 +464,18 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 void ClusteredForward::SetupResources(Graphics* pGraphics)
 {
     m_pDepthTexture = std::make_unique<GraphicsTexture>();
-    m_pAabbBuffer = std::make_unique<StructuredBuffer>(pGraphics);
-    m_pUniqueClusterBuffer = std::make_unique<StructuredBuffer>(pGraphics);
-    m_pCompactedClusterBuffer = std::make_unique<StructuredBuffer>(pGraphics);
-    m_pDebugCompactedClusterBuffer = std::make_unique<StructuredBuffer>(pGraphics);
-	m_pIndirectArguments = std::make_unique<ByteAddressBuffer>(pGraphics);
+    m_pAabbBuffer = std::make_unique<StructuredBuffer>();
+    m_pUniqueClusterBuffer = std::make_unique<StructuredBuffer>();
+    m_pCompactedClusterBuffer = std::make_unique<StructuredBuffer>();
+    m_pDebugCompactedClusterBuffer = std::make_unique<StructuredBuffer>();
+	m_pIndirectArguments = std::make_unique<ByteAddressBuffer>();
     m_pIndirectArguments->Create(m_pGraphics, sizeof(uint32_t), 3, false);
 
-	m_pLightIndexCounter = std::make_unique<StructuredBuffer>(pGraphics);
+	m_pLightIndexCounter = std::make_unique<StructuredBuffer>();
 	m_pLightIndexCounter->Create(m_pGraphics, sizeof(uint32_t), 1);
-	m_pLightIndexGrid = std::make_unique<StructuredBuffer>(pGraphics);
-	m_pLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
-    m_pDebugLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
+	m_pLightIndexGrid = std::make_unique<StructuredBuffer>();
+	m_pLightGrid = std::make_unique<StructuredBuffer>();
+    m_pDebugLightGrid = std::make_unique<StructuredBuffer>();
 
     CommandContext* pCopyContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
     m_pHeatMapTexture = std::make_unique<GraphicsTexture>();

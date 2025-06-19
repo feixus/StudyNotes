@@ -27,7 +27,7 @@ struct BufferUAVDesc
 		return desc;
 	}
 
-	static BufferUAVDesc ByteAddress()
+	static BufferUAVDesc CreateByteAddress()
 	{
 		BufferUAVDesc desc;
 		desc.Format = DXGI_FORMAT_R32_TYPELESS;
@@ -61,7 +61,7 @@ struct BufferSRVDesc
 		return desc;
 	}
 
-	static BufferSRVDesc ByteAddress()
+	static BufferSRVDesc CreateByteAddress()
 	{
 		BufferSRVDesc desc;
 		desc.Format = DXGI_FORMAT_R32_TYPELESS;

@@ -30,14 +30,14 @@ void GpuParticles::Initialize()
 {
     CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-    m_pCounterBuffer = std::make_unique<ByteAddressBuffer>(m_pGraphics);
+    m_pCounterBuffer = std::make_unique<ByteAddressBuffer>();
     m_pCounterBuffer->Create(m_pGraphics, sizeof(uint32_t), 4);
 
-    m_pAliveList1 = std::make_unique<StructuredBuffer>(m_pGraphics);
+    m_pAliveList1 = std::make_unique<StructuredBuffer>();
     m_pAliveList1->Create(m_pGraphics, sizeof(uint32_t), cMaxParticleCount);
-    m_pAliveList2 = std::make_unique<StructuredBuffer>(m_pGraphics);
+    m_pAliveList2 = std::make_unique<StructuredBuffer>();
     m_pAliveList2->Create(m_pGraphics, sizeof(uint32_t), cMaxParticleCount);
-    m_pDeadList = std::make_unique<StructuredBuffer>(m_pGraphics);
+    m_pDeadList = std::make_unique<StructuredBuffer>();
     m_pDeadList->Create(m_pGraphics, sizeof(uint32_t), cMaxParticleCount);
 
     std::vector<uint32_t> deadList(cMaxParticleCount);
@@ -47,14 +47,14 @@ void GpuParticles::Initialize()
     uint32_t aliveCount = cMaxParticleCount;
     m_pCounterBuffer->SetData(pContext, &aliveCount, sizeof(uint32_t), 0);
 
-    m_pParticleBuffer = std::make_unique<StructuredBuffer>(m_pGraphics);
+    m_pParticleBuffer = std::make_unique<StructuredBuffer>();
     m_pParticleBuffer->Create(m_pGraphics, sizeof(ParticleData), cMaxParticleCount);
 
-    m_pEmitArguments = std::make_unique<ByteAddressBuffer>(m_pGraphics);
+    m_pEmitArguments = std::make_unique<ByteAddressBuffer>();
     m_pEmitArguments->Create(m_pGraphics, sizeof(uint32_t), 3);
-    m_pSimulateArguments = std::make_unique<ByteAddressBuffer>(m_pGraphics);
+    m_pSimulateArguments = std::make_unique<ByteAddressBuffer>();
     m_pSimulateArguments->Create(m_pGraphics, sizeof(uint32_t), 3);
-    m_pDrawArguments = std::make_unique<ByteAddressBuffer>(m_pGraphics);
+    m_pDrawArguments = std::make_unique<ByteAddressBuffer>();
     m_pDrawArguments->Create(m_pGraphics, sizeof(uint32_t), 4);
 
     pContext->Execute(true);
