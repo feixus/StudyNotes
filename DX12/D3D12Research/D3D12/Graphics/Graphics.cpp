@@ -268,7 +268,9 @@ void Graphics::Update()
 				});
 		}
 
+		graph.Present(data.DepthStencilResolved);
 		graph.Compile();
+	
 		int64_t fence = graph.Execute(this);
 
 		static bool written = false;

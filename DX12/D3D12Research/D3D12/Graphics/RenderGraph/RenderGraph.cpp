@@ -55,14 +55,23 @@ RG::RenderGraph::RenderGraph(ResourceAllocator* pAllocator)
 
 RG::RenderGraph::~RenderGraph()
 {
+    DestroyData();
+}
+
+void RG::RenderGraph::DestroyData()
+{
     for (RenderPassBase* pPass : m_RenderPasses)
     {
         delete pPass;
     }
+    m_RenderPasses.clear();
     for (VirtualResourceBase* pResource : m_Resources)
     {
         delete pResource;
     }
+    m_Resources.clear();
+    m_ResourceNodes.clear();
+    m_Aliases.clear();
 }
 
 void RG::RenderGraph::Compile()
@@ -223,14 +232,20 @@ int64_t RG::RenderGraph::Execute(Graphics* pGraphics)
     {
         if (pPass->m_References > 0)
         {
-            pPass->PrepareResources(m_pAllocator);
+            PrepareResources(pPass,m_pAllocator);
 
             RenderPassResources resources(*this, *pPass);
+
+            // automatically insert resource barrier
+            // check if we're in a graphics pass and automatically call BeginRenderPass
+
             Profiler::Instance()->Begin(pPass->m_Name, pContext);
             pPass->Execute(resources, *pContext);
             Profiler::Instance()->End(pContext);
 
-            pPass->ReleaseResources(m_pAllocator);
+            // check if we're in a graphics pass and automatically call EndRenderPass
+
+            ReleaseResources(pPass, m_pAllocator);
         }
     }
 
@@ -266,9 +281,9 @@ RG::VirtualResourceBase* RG::RenderPassResources::GetResourceInternal(ResourceHa
 	return node.m_pResource;
 }
 
-void RG::RenderPassBase::PrepareResources(ResourceAllocator* pAllocator)
+void RG::RenderGraph::PrepareResources(RenderPassBase* pPass, ResourceAllocator* pAllocator)
 {
-    for (VirtualResourceBase* pResource : m_ResourcesToCreate)
+    for (VirtualResourceBase* pResource : pPass->m_ResourcesToCreate)
     {
         if (pResource->m_IsImported)
         {
@@ -289,9 +304,9 @@ void RG::RenderPassBase::PrepareResources(ResourceAllocator* pAllocator)
     }
 }
 
-void RG::RenderPassBase::ReleaseResources(ResourceAllocator* pAllocator)
+void RG::RenderGraph::ReleaseResources(RenderPassBase* pPass, ResourceAllocator* pAllocator)
 {
-    for (VirtualResourceBase* pResource : m_ResourcesToDestroy)
+    for (VirtualResourceBase* pResource : pPass->m_ResourcesToDestroy)
     {
         if (pResource->m_IsImported)
         {
