@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <assert.h>
 #include <filesystem>
+#include <list>
 
 #include "Core/GameTimer.h"
 #include "Core/BitField.h"

@@ -1,23 +1,23 @@
 #include "stdafx.h"
-#include "DynamicDescriptorAllocator.h"
+#include "OnlineDescriptorAllocator.h"
 #include "Graphics.h"
 #include "CommandContext.h"
 #include "RootSignature.h"
 
-DynamicDescriptorAllocator::DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
+OnlineDescriptorAllocator::OnlineDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
     : m_pGraphics(pGraphics), m_pOwner(pContext), m_Type(type)
 {
     m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
-DescriptorHandle DynamicDescriptorAllocator::AllocateTransientDescriptor(int count)
+DescriptorHandle OnlineDescriptorAllocator::AllocateTransientDescriptor(int count)
 {
     GetHeap();
     assert(HasSpace(count));
     return Allocate(count);
 }
 
-void DynamicDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
+void OnlineDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
 {
     assert(m_RootDescriptorMask.GetBit(rootIndex));
     assert(numHandles + offset <= m_RootDescriptorTable[rootIndex].TableSize);
@@ -31,7 +31,7 @@ void DynamicDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t off
     m_StaleRootParameters.SetBit(rootIndex);
 }
 
-void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType)
+void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType)
 {
     if (m_StaleRootParameters.AnyBitSet() == false)
     {
@@ -119,12 +119,12 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableT
     m_StaleRootParameters.ClearAll();
 }
 
-bool DynamicDescriptorAllocator::HasSpace(int count)
+bool OnlineDescriptorAllocator::HasSpace(int count)
 {
     return m_pCurrentHeap && m_CurrentOffst + count <= DESCRIPTORS_PER_HEAP;
 }
 
-ID3D12DescriptorHeap* DynamicDescriptorAllocator::GetHeap()
+ID3D12DescriptorHeap* OnlineDescriptorAllocator::GetHeap()
 {
     if (m_pCurrentHeap == nullptr)
     {
@@ -135,7 +135,7 @@ ID3D12DescriptorHeap* DynamicDescriptorAllocator::GetHeap()
     return m_pCurrentHeap;
 }
 
-void DynamicDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature)
+void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature)
 {
     m_RootDescriptorMask = m_Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ? pRootSignature->GetSamplerTableMask() : pRootSignature->GetDescriptorTableMask();
     m_StaleRootParameters.ClearAll();
@@ -154,7 +154,7 @@ void DynamicDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignatur
     }
 }
 
-void DynamicDescriptorAllocator::ReleaseUsedHeaps(uint64_t fenceValue)
+void OnlineDescriptorAllocator::ReleaseUsedHeaps(uint64_t fenceValue)
 {
     ReleaseHeap();
     for (ID3D12DescriptorHeap* pHeap : m_UsedDescriptorHeaps)
@@ -164,7 +164,7 @@ void DynamicDescriptorAllocator::ReleaseUsedHeaps(uint64_t fenceValue)
     m_UsedDescriptorHeaps.clear();
 }
 
-uint32_t DynamicDescriptorAllocator::GetRequiredSpace()
+uint32_t OnlineDescriptorAllocator::GetRequiredSpace()
 {
     uint32_t requiredSpace = 0;
     for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
@@ -178,7 +178,7 @@ uint32_t DynamicDescriptorAllocator::GetRequiredSpace()
     return requiredSpace;
 }
 
-ID3D12DescriptorHeap* DynamicDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
+ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
     if (m_FreeDescriptors[m_Type].size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors[m_Type].front().first))
     {
@@ -198,7 +198,7 @@ ID3D12DescriptorHeap* DynamicDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTO
     return m_DescriptorHeaps.back().Get();
 }
 
-void DynamicDescriptorAllocator::ReleaseHeap()
+void OnlineDescriptorAllocator::ReleaseHeap()
 {
     if (m_CurrentOffst == 0)
     {
@@ -212,7 +212,7 @@ void DynamicDescriptorAllocator::ReleaseHeap()
     m_CurrentOffst = 0;
 }
 
-void DynamicDescriptorAllocator::UnbindAll()
+void OnlineDescriptorAllocator::UnbindAll()
 {
     m_StaleRootParameters.ClearAll();
     for (auto it = m_RootDescriptorMask.GetSetBitsIterator(); it.Valid(); ++it)
@@ -225,7 +225,7 @@ void DynamicDescriptorAllocator::UnbindAll()
     }
 }
 
-DescriptorHandle DynamicDescriptorAllocator::Allocate(int descriptorCount)
+DescriptorHandle OnlineDescriptorAllocator::Allocate(int descriptorCount)
 {
     DescriptorHandle handle = m_StartHandle + m_CurrentOffst * m_DescriptorSize;
     m_CurrentOffst += descriptorCount;

@@ -12,12 +12,12 @@ enum class DescriptorTableType
     Compute,
 };
 
-class DynamicDescriptorAllocator
+class OnlineDescriptorAllocator
 {
 public:
 
-	DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
-	~DynamicDescriptorAllocator() = default;
+	OnlineDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	~OnlineDescriptorAllocator() = default;
 
     DescriptorHandle AllocateTransientDescriptor(int count);
 
