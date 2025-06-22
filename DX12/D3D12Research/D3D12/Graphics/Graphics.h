@@ -3,7 +3,7 @@
 
 class CommandQueue;
 class CommandContext;
-class DescriptorAllocator;
+class OfflineDescriptorAllocator;
 class DynamicAllocationManager;
 class ImGuiRenderer;
 class GraphicsBuffer;
@@ -12,7 +12,7 @@ class GraphicsPipelineState;
 class ComputePipelineState;
 class GraphicsTexture;
 class Mesh;
-class StructuredBuffer;
+class Buffer;
 class SubMesh;
 class GraphicsProfiler;
 class ClusteredForward;
@@ -63,7 +63,7 @@ public:
 	void FreeCommandList(CommandContext* pCommandContext);
 
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	OfflineDescriptorAllocator* GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE type) const { return m_DescriptorHeaps[type].get(); }
 
 	int32_t GetWindowWidth() const { return m_WindowWidth; }
 	int32_t GetWindowHeight() const { return m_WindowHeight; }
@@ -128,7 +128,7 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_RenderTargets;
 
-	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
+	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
@@ -175,10 +175,10 @@ private:
 	// light culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferOpaque;
+	std::unique_ptr<Buffer> m_pLightIndexCounter;
+	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
 	std::unique_ptr<GraphicsTexture> m_pLightGridOpaque;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferTransparent;
+	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparent;
 	std::unique_ptr<GraphicsTexture> m_pLightGridTransparent;
 
 	// depth prepass
@@ -194,7 +194,7 @@ private:
 	// light data
 	int m_ShadowCasters{0};
 	std::vector<Light> m_Lights;
-	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
+	std::unique_ptr<Buffer> m_pLightBuffer;
 
 	std::unique_ptr<class Clouds> m_pClouds;
 };

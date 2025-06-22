@@ -3,6 +3,11 @@
 
 class CommandContext;
 class Graphics;
+class UnorderedAccessView;
+class ShaderResourceView;
+class DescriptorBase;
+struct TextureUAVDesc;
+struct TextureSRVDesc;
 
 enum class TextureFlag
 {
@@ -172,7 +177,8 @@ struct TextureDesc
 class GraphicsTexture : public GraphicsResource
 {
 public:
-	GraphicsTexture();
+	GraphicsTexture(Graphics* pGraphics, const char* pName = "");
+	~GraphicsTexture();
 
 	int GetWidth() const { return m_Desc.Width; }
 	int GetHeight() const { return m_Desc.Height; }
@@ -181,14 +187,17 @@ public:
 	int GetMipLevels() const { return m_Desc.Mips; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
-	void Create(Graphics* pGraphics, const TextureDesc& desc);
-	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath);
-	void CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture);
+	void Create(const TextureDesc& desc);
+	void Create(CommandContext* pContext, const char* pFilePath);
+	void CreateForSwapChain(ID3D12Resource* pTexture);
 	void SetData(CommandContext* pContext, const void* pData);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(int subResource = 0) const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV(int subResource = 0) const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV(int subResource = 0) const;
+	void CreateUAV(UnorderedAccessView** pView, const TextureUAVDesc& desc);
+	void CreateSRV(ShaderResourceView** pView, const TextureSRVDesc& desc);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
+	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const;
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
 
 	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
@@ -198,13 +207,15 @@ public:
 	static DXGI_FORMAT GetSrvFormatFromDepth(DXGI_FORMAT format);
 
 private:
-	// this can hold multiple handles as long as they're sequential in memory.
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav{D3D12_DEFAULT};
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv{D3D12_DEFAULT};
-
 	TextureDesc m_Desc;
+	std::vector<std::unique_ptr<DescriptorBase>> m_Descriptors;
 
+	ShaderResourceView* m_pSrv{ nullptr };
+	UnorderedAccessView* m_pUav{ nullptr };
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{};
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv{D3D12_DEFAULT};
+	
 	int m_SrvUavDescriptorSize{0};
 	int m_RtvDescriptorSize{0};
 	int m_DsvDescriptorSize{0};

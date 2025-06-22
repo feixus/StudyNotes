@@ -4,20 +4,19 @@
 #include "Graphics.h"
 #include "GraphicsTexture.h"
 
-Buffer::Buffer(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
-	: GraphicsResource(pResource, state), m_pName(nullptr)
+Buffer::Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
+	: GraphicsResource(pResource, pResource, state), m_pName(nullptr)
 {}
 
 
-Buffer::Buffer(const char* pName) : m_pName(pName)
-{
-}
+Buffer::Buffer(Graphics* pGraphics, const char* pName) 
+	: GraphicsResource(pGraphics), m_pName(pName)
+{}
 
 Buffer::~Buffer()
-{
-}
+{}
 
-void Buffer::Create(Graphics* pGraphics, const BufferDesc& bufferDesc)
+void Buffer::Create(const BufferDesc& bufferDesc)
 {
 	Release();
 	m_Desc = bufferDesc;
@@ -46,11 +45,45 @@ void Buffer::Create(Graphics* pGraphics, const BufferDesc& bufferDesc)
 		heapType = D3D12_HEAP_TYPE_UPLOAD;
 	}
 
-	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, heapType);
+	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, heapType);
 
 	if (m_pName)
 	{
 		SetName(m_pName);
+	}
+
+	if (Any(bufferDesc.Usage, BufferFlag::UnorderedAccess))
+	{
+		if (Any(bufferDesc.Usage, BufferFlag::Structured))
+		{
+			if (m_pCounter == nullptr)
+			{
+				m_pCounter = std::make_unique<Buffer>(m_pGraphics);
+				m_pCounter->Create(BufferDesc::CreateByteAddress(4));
+			}
+
+			CreateUAV(&m_pUav, BufferUAVDesc::CreateStructured(m_pCounter.get()));
+		}
+		else if (Any(bufferDesc.Usage, BufferFlag::ByteAddress))
+		{
+			CreateUAV(&m_pUav, BufferUAVDesc::CreateByteAddress());
+		}
+		else
+		{
+			CreateUAV(&m_pUav, BufferUAVDesc::CreateStructured(nullptr));
+		}
+	}
+
+	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource))
+	{
+		if (Any(bufferDesc.Usage, BufferFlag::ByteAddress))
+		{
+			CreateSRV(&m_pSrv, BufferSRVDesc::CreateByteAddress());
+		}
+		else
+		{
+			CreateSRV(&m_pSrv, BufferSRVDesc::CreateStructured());
+		}
 	}
 }
 
@@ -78,44 +111,34 @@ void Buffer::UnMap(uint32_t subResource /*= 0*/, uint64_t writeFrom /*= 0*/, uin
 	m_pResource->Unmap(subResource, &range);
 }
 
-void ByteAddressBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible /*= false*/)
+void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
 {
-	BufferFlag flags = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess;
-	if (cpuVisible)
+	if (*pView == nullptr)
 	{
-		flags |= BufferFlag::Upload;
+		m_Descriptors.push_back(std::make_unique<UnorderedAccessView>(m_pGraphics));
+		*pView = static_cast<UnorderedAccessView*>(m_Descriptors.back().get());
 	}
-	Buffer::Create(pGraphics, BufferDesc::CreateByteAddress(elementCount * elementStride, flags))	;
 
-	m_Srv.Create(pGraphics, this, BufferSRVDesc::CreateByteAddress());
-	m_Uav.Create(pGraphics, this, BufferUAVDesc::CreateByteAddress());
+	(*pView)->Create(this, desc);
 }
 
-void StructuredBuffer::Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible)
+void Buffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
 {
-	BufferFlag flags = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess;
-	if (cpuVisible)
+	if (*pView == nullptr)
 	{
-		flags |= BufferFlag::Upload;
-	}
-	Buffer::Create(pGraphics, BufferDesc::CreateStructured(elementCount, elementStride, flags));
-
-	if (m_pCounter == nullptr)
-	{
-		m_pCounter = std::make_unique<ByteAddressBuffer>();
-		m_pCounter->Create(pGraphics, 4, 1, false);
+		m_Descriptors.push_back(std::make_unique<ShaderResourceView>(m_pGraphics));
+		*pView = static_cast<ShaderResourceView*>(m_Descriptors.back().get());
 	}
 
-	m_Srv.Create(pGraphics, this, BufferSRVDesc::CreateStructured());
-	m_Uav.Create(pGraphics, this, BufferUAVDesc::CreateStructured(m_pCounter.get()));
+	(*pView)->Create(this, desc);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE BufferWithDescriptor::GetSRV() const
 {
-	return m_Srv.GetDescriptor();
+	return m_pSrv->GetDescriptor();
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE BufferWithDescriptor::GetUAV() const
 {
-	return m_Uav.GetDescriptor();
+	return m_pUav->GetDescriptor();
 }
