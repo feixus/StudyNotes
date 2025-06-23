@@ -16,6 +16,11 @@ workspace (ENGINE_NAME)
 	-- kind ("ConsoleApp")
 	kind ("WindowedApp")
     characterset ("MBCS")
+	flags { "MultiProcessorCompile" }
+	rtti "Off"
+	
+	filter { "system:windows" }
+		defines { "PLATFORM_WINDOWS" }
 
     filter "platforms:x64"
 		defines {"x64"}

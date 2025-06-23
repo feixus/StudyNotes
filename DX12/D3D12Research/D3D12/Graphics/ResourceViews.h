@@ -8,87 +8,32 @@ class GraphicsResource;
 
 struct BufferUAVDesc
 {
-	static BufferUAVDesc CreateStructured(Buffer* pCounter = nullptr)
-	{
-		BufferUAVDesc desc;
-		desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.FirstElement = 0;
-		desc.CounterOffset = 0;
-		desc.pCounter = pCounter;
-		return desc;
-	}
-
-	static BufferUAVDesc CreateTyped(DXGI_FORMAT format, Buffer* pCounter = nullptr)
-	{
-		BufferUAVDesc desc;
-		desc.Format = format;
-		desc.FirstElement = 0;
-		desc.CounterOffset = 0;
-		desc.pCounter = pCounter;
-		return desc;
-	}
-
-	static BufferUAVDesc CreateByteAddress()
-	{
-		BufferUAVDesc desc;
-		desc.Format = DXGI_FORMAT_R32_TYPELESS;
-		desc.FirstElement = 0;
-		desc.CounterOffset = 0;
-		desc.pCounter = nullptr;
-		return desc;
-	}
+	BufferUAVDesc(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN, bool raw = false, bool counter = false)
+		: Format(format), Raw(raw), Counter(counter) {}
 
 	DXGI_FORMAT Format;
-	int FirstElement;
-	int CounterOffset;
-	Buffer* pCounter;
+	bool Raw;
+	bool Counter;
 };
 
 struct BufferSRVDesc
 {
-	static BufferSRVDesc CreateStructured(Buffer* pCounter = nullptr)
-	{
-		BufferSRVDesc desc;
-		desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.FirstElement = 0;
-		return desc;
-	}
-
-	static BufferSRVDesc CreateTyped(DXGI_FORMAT format, Buffer* pCounter = nullptr)
-	{
-		BufferSRVDesc desc;
-		desc.Format = format;
-		desc.FirstElement = 0;
-		return desc;
-	}
-
-	static BufferSRVDesc CreateByteAddress()
-	{
-		BufferSRVDesc desc;
-		desc.Format = DXGI_FORMAT_R32_TYPELESS;
-		desc.FirstElement = 0;
-		return desc;
-	}
+	BufferSRVDesc(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN, bool raw = false)
+        : Format(format), Raw(raw) {}
 
 	DXGI_FORMAT Format;
-	int FirstElement;
+	bool Raw;
 };
 
 struct TextureSRVDesc
 {
-    DXGI_FORMAT Format;
+    TextureSRVDesc(uint8_t mipLevel = 0) : MipLevel(mipLevel) {}
+
     uint8_t MipLevel;
-    uint8_t NumMipLevels;
-    uint32_t FirstArraySlice;
-    uint32_t NumArraySlices;
 
     bool operator==(const TextureSRVDesc& other) const
     {
-        return Format == other.Format && 
-                MipLevel == other.MipLevel && 
-                NumMipLevels == other.NumMipLevels && 
-                FirstArraySlice == other.FirstArraySlice && 
-                NumArraySlices == other.NumArraySlices;
+        return MipLevel == other.MipLevel;
     }
 
     bool operator!=(const TextureSRVDesc& other) const
@@ -99,6 +44,8 @@ struct TextureSRVDesc
 
 struct TextureUAVDesc
 {
+    explicit TextureUAVDesc(uint8_t mipLevel = 0) : MipLevel(mipLevel) {}
+
     uint8_t MipLevel;
 
     bool operator==(const TextureUAVDesc& other) const
@@ -107,10 +54,12 @@ struct TextureUAVDesc
     }
 };
 
-class DescriptorBase : GraphicsObject
+class ResourceView : GraphicsObject
 {
 public:
-	DescriptorBase(Graphics* pGraphics);
+	ResourceView(Graphics* pGraphics);
+    virtual ~ResourceView() = default;
+
 	GraphicsResource* GetParent() const { return m_pParent; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptor() const { return m_Descriptor; }
 
@@ -119,7 +68,7 @@ protected:
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Descriptor{ D3D12_DEFAULT };
 };
 
-class ShaderResourceView : public DescriptorBase
+class ShaderResourceView : public ResourceView
 {
 public:
 	ShaderResourceView(Graphics* pGraphics);
@@ -130,7 +79,7 @@ public:
 	void Release();
 };
 
-class UnorderedAccessView : public DescriptorBase
+class UnorderedAccessView : public ResourceView
 {
 public:
 	UnorderedAccessView(Graphics* pGraphics);
@@ -139,5 +88,12 @@ public:
 	void Create(Buffer* pBuffer, const BufferUAVDesc& desc);
 	void Create(GraphicsTexture* pTexture, const TextureUAVDesc& desc);
 	void Release();
+
+    Buffer* GetCounter() const { return m_pCounter.get(); }
+    UnorderedAccessView* GetCounterUAV() const;
+    ShaderResourceView* GetCounterSRV() const;
+
+private:
+    std::unique_ptr<Buffer> m_pCounter;
 };
 

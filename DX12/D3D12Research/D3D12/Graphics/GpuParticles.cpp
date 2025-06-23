@@ -11,6 +11,7 @@
 #include "GraphicsResource.h"
 #include "Scene/Camera.h"
 #include "GraphicsTexture.h"
+#include "ResourceViews.h"
 
 static constexpr uint32_t cMaxParticleCount = 4096000;
 
@@ -161,9 +162,9 @@ void GpuParticles::Simulate()
         parameters.EmitCount = 10000;
 
         D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-            m_pCounterBuffer->GetUAV(),
-            m_pEmitArguments->GetUAV(),
-            m_pSimulateArguments->GetUAV()
+            m_pCounterBuffer->GetUAV()->GetDescriptor(),
+            m_pEmitArguments->GetUAV()->GetDescriptor(),
+            m_pSimulateArguments->GetUAV()->GetDescriptor()
         };
 
         pContext->SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
@@ -184,10 +185,10 @@ void GpuParticles::Simulate()
         pContext->SetComputeRootSignature(m_pEmitRS.get());
 
         D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-            m_pCounterBuffer->GetUAV(),
-            m_pDeadList->GetUAV(),
-            m_pAliveList1->GetUAV(),
-            m_pParticleBuffer->GetUAV()
+            m_pCounterBuffer->GetUAV()->GetDescriptor(),
+            m_pDeadList->GetUAV()->GetDescriptor(),
+            m_pAliveList1->GetUAV()->GetDescriptor(),
+            m_pParticleBuffer->GetUAV()->GetDescriptor()
         };
         pContext->SetDynamicDescriptors(1, 0, uavs, _countof(uavs));
 
@@ -219,11 +220,11 @@ void GpuParticles::Simulate()
         pContext->SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
         D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-            m_pCounterBuffer->GetUAV(),
-            m_pDeadList->GetUAV(),
-            m_pAliveList1->GetUAV(),
-            m_pAliveList2->GetUAV(),
-            m_pParticleBuffer->GetUAV()
+            m_pCounterBuffer->GetUAV()->GetDescriptor(),
+            m_pDeadList->GetUAV()->GetDescriptor(),
+            m_pAliveList1->GetUAV()->GetDescriptor(),
+            m_pAliveList2->GetUAV()->GetDescriptor(),
+            m_pParticleBuffer->GetUAV()->GetDescriptor()
         };
         pContext->SetDynamicDescriptors(1, 0, uavs, _countof(uavs));
 
@@ -282,8 +283,8 @@ void GpuParticles::Simulate()
         pContext->SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
 
         D3D12_CPU_DESCRIPTOR_HANDLE srv[] = {
-            m_pParticleBuffer->GetSRV(),
-            m_pAliveList2->GetSRV(),
+            m_pParticleBuffer->GetSRV()->GetDescriptor(),
+            m_pAliveList2->GetSRV()->GetDescriptor(),
         };
         pContext->SetDynamicDescriptors(1, 0, srv, _countof(srv));
         

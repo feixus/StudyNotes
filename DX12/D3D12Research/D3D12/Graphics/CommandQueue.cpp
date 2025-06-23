@@ -7,12 +7,12 @@
 #include "pix3.h"
 
 CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
-	: m_pGraphics(pGraphics),
+	: GraphicsObject(pGraphics),
 	m_NextFenceValue((uint64_t)type << 56 | 1),			// set the command list type nested in fence value
 	m_LastCompletedFenceValue((uint64_t)type << 56),
 	m_Type(type)
 {
-	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics->GetDevice(), m_Type);
+	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics, m_Type);
 
 	D3D12_COMMAND_QUEUE_DESC desc = {};
 	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;

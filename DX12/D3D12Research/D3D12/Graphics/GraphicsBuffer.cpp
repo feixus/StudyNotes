@@ -56,34 +56,17 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	{
 		if (Any(bufferDesc.Usage, BufferFlag::Structured))
 		{
-			if (m_pCounter == nullptr)
-			{
-				m_pCounter = std::make_unique<Buffer>(m_pGraphics);
-				m_pCounter->Create(BufferDesc::CreateByteAddress(4));
-			}
-
-			CreateUAV(&m_pUav, BufferUAVDesc::CreateStructured(m_pCounter.get()));
-		}
-		else if (Any(bufferDesc.Usage, BufferFlag::ByteAddress))
-		{
-			CreateUAV(&m_pUav, BufferUAVDesc::CreateByteAddress());
+			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, false, true));
 		}
 		else
 		{
-			CreateUAV(&m_pUav, BufferUAVDesc::CreateStructured(nullptr));
+			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
 		}
 	}
 
 	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource))
 	{
-		if (Any(bufferDesc.Usage, BufferFlag::ByteAddress))
-		{
-			CreateSRV(&m_pSrv, BufferSRVDesc::CreateByteAddress());
-		}
-		else
-		{
-			CreateSRV(&m_pSrv, BufferSRVDesc::CreateStructured());
-		}
+		CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN));
 	}
 }
 
@@ -131,14 +114,4 @@ void Buffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
 	}
 
 	(*pView)->Create(this, desc);
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE Buffer::GetSRV() const
-{
-	return m_pSrv->GetDescriptor();
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE Buffer::GetUAV() const
-{
-	return m_pUav->GetDescriptor();
 }

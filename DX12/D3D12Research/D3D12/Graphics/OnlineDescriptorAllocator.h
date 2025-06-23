@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DescriptorHandle.h"
+#include "GraphicsResource.h"
 
 class CommandContext;
 class Graphics;
@@ -12,7 +13,7 @@ enum class DescriptorTableType
     Compute,
 };
 
-class OnlineDescriptorAllocator
+class OnlineDescriptorAllocator : public GraphicsObject
 {
 public:
 
@@ -63,7 +64,6 @@ private:
     BitField32 m_RootDescriptorMask{};
     BitField32 m_StaleRootParameters{};
 
-    Graphics* m_pGraphics;
     CommandContext* m_pOwner;
     DescriptorHandle m_StartHandle{};
     ID3D12DescriptorHeap* m_pCurrentHeap{nullptr};

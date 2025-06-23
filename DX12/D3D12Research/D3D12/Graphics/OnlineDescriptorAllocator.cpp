@@ -5,7 +5,7 @@
 #include "RootSignature.h"
 
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
-    : m_pGraphics(pGraphics), m_pOwner(pContext), m_Type(type)
+    : GraphicsObject(pGraphics), m_pOwner(pContext), m_Type(type)
 {
     m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }

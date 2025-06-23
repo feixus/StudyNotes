@@ -9,6 +9,7 @@
 #include "GraphicsTexture.h"
 #include "GraphicsBuffer.h"
 #include "GraphicsResource.h"
+#include "ResourceViews.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON |
 													D3D12_RESOURCE_STATE_UNORDERED_ACCESS | 
@@ -26,7 +27,7 @@ constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON |
 #endif
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
-	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
+	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
@@ -193,11 +194,6 @@ void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESO
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubresource, subresourceCount, pSubresources);
 	InsertResourceBarrier(pResource, previousState, true);
-}
-
-void CommandContext::SetName(const char* pName)
-{
-	SetD3DObjectName(m_pCommandList, pName);
 }
 
 void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
@@ -524,11 +520,21 @@ void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTO
 	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values, 0, nullptr);
 }
 
-void CommandContext::ClearUavUFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4])
+void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t values[4])
+{
+	ClearUavUInt(pBuffer, pUav->GetDescriptor(), values);
+}
+
+void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4])
 {
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
 	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values, 0, nullptr);
+}
+
+void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float values[4])
+{
+	ClearUavFloat(pBuffer, pUav->GetDescriptor(), values);
 }
 
 void CommandContext::SetComputePipelineState(ComputePipelineState* pPipelineState)
@@ -558,6 +564,16 @@ void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, void* pD
 void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
 	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
+}
+
+void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, ShaderResourceView* pSrv)
+{
+	SetDynamicDescriptor(rootIndex, offset, pSrv->GetDescriptor());
+}
+
+void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, UnorderedAccessView* pUav)
+{
+	SetDynamicDescriptor(rootIndex, offset, pUav->GetDescriptor());
 }
 
 void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)

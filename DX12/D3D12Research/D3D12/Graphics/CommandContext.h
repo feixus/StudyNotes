@@ -1,4 +1,5 @@
 #pragma once
+#include "GraphicsResource.h"
 
 class Graphics;
 class GraphicsResource;
@@ -13,6 +14,8 @@ class DynamicResourceAllocator;
 class GraphicsCommandContext;
 class ComputeCommandContext;
 class CopyCommandContext;
+class UnorderedAccessView;
+class ShaderResourceView;
 
 enum class CommandListContext
 {
@@ -108,7 +111,7 @@ struct RenderPassInfo
 	DepthTargetInfo DepthStencilTarget{};
 };
 
-class CommandContext
+class CommandContext : public GraphicsObject
 {
 public:
 	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type);
@@ -129,8 +132,6 @@ public:
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
-	void SetName(const char* pName);
-
 	// commands
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments);
@@ -141,7 +142,9 @@ public:
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 
 	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32_t values[4]);
-	void ClearUavUFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4]);
+	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t values[4]);
+	void ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4]);
+	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float values[4]);
 
 	// a more structured way for applications to decalare data dependencies and output targets for a set of rendering operations. 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
@@ -154,6 +157,8 @@ public:
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 
 	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void SetDynamicDescriptor(int rootIndex, int offset, ShaderResourceView* pSrv);
+	void SetDynamicDescriptor(int rootIndex, int offset, UnorderedAccessView* pUav);
 	void SetDynamicDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
 	void SetDynamicSamplerDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
 	void SetDynamicSamplerDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
@@ -186,8 +191,6 @@ private:
 
 	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueueBarriers{};
 	int m_NumQueueBarriers = 0;
-
-	Graphics* m_pGraphics{};
 
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList{};

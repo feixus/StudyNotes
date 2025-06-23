@@ -5,7 +5,7 @@ class CommandContext;
 class Graphics;
 class UnorderedAccessView;
 class ShaderResourceView;
-class DescriptorBase;
+class ResourceView;
 struct TextureUAVDesc;
 struct TextureSRVDesc;
 
@@ -208,7 +208,7 @@ public:
 
 private:
 	TextureDesc m_Desc;
-	std::vector<std::unique_ptr<DescriptorBase>> m_Descriptors;
+	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 
 	ShaderResourceView* m_pSrv{ nullptr };
 	UnorderedAccessView* m_pUav{ nullptr };

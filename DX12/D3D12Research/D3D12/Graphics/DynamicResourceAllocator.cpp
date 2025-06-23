@@ -59,7 +59,7 @@ void DynamicResourceAllocator::Free(uint64_t fenceValue)
 
 
 DynamicAllocationManager::DynamicAllocationManager(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
+	: GraphicsObject(pGraphics)
 {
 }
 

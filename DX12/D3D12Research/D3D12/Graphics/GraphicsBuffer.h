@@ -6,7 +6,7 @@ class Graphics;
 class Buffer;
 class ShaderResourceView;
 class UnorderedAccessView;
-class DescriptorBase;
+class ResourceView;
 struct BufferSRVDesc;
 struct BufferUAVDesc;
 
@@ -109,8 +109,8 @@ public:
 	void CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc);
 	void CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const;
+	ShaderResourceView* GetSRV() const { return m_pSrv; }
+	UnorderedAccessView* GetUAV() const { return m_pUav; }
 
 	Buffer* GetCounter() const { return m_pCounter.get(); }
 
@@ -121,7 +121,7 @@ protected:
 
 	const char* m_pName{nullptr};
 	BufferDesc m_Desc;
-	std::vector<std::unique_ptr<DescriptorBase>> m_Descriptors;
+	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 };
 
 

@@ -23,7 +23,7 @@ private:
 	void* m_pMappedData{nullptr};
 };
 
-class DynamicAllocationManager
+class DynamicAllocationManager : public GraphicsObject
 {
 public:
 	DynamicAllocationManager(Graphics* pGraphics);
@@ -36,7 +36,6 @@ public:
 	void FreeLargePages(uint64_t fenceValue, const std::vector<AllocationPage*> pLargePages);
 
 private:
-	Graphics* m_pGraphics;
 	std::mutex m_PageMutex;
 	std::vector<std::unique_ptr<AllocationPage>> m_Pages;
 	std::queue<std::pair<uint64_t, AllocationPage*>> m_FreedPages;
