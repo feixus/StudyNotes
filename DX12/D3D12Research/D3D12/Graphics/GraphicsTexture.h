@@ -213,7 +213,7 @@ private:
 	ShaderResourceView* m_pSrv{ nullptr };
 	UnorderedAccessView* m_pUav{ nullptr };
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{};
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv{D3D12_DEFAULT};
 	
 	int m_SrvUavDescriptorSize{0};

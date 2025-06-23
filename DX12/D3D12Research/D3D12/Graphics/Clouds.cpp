@@ -28,8 +28,8 @@ void Clouds::Initialize(Graphics* pGraphics)
 		m_pWorleyNoisePS->SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
 		m_pWorleyNoisePS->Finalize("Worley Noise PS", pGraphics->GetDevice());
 
-		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>();
-		m_pWorleyNoiseTexture->Create(pGraphics, TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource, TextureDimension::Texture3D));
+		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>(pGraphics, "Worley Noise");
+		m_pWorleyNoiseTexture->Create(TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource, TextureDimension::Texture3D));
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{
@@ -85,15 +85,15 @@ void Clouds::Initialize(Graphics* pGraphics)
 		};
 
 		CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		m_pQuadVertexBuffer = std::make_unique<Buffer>();
-		m_pQuadVertexBuffer->Create(pGraphics, BufferDesc::CreateVertexBuffer(6, sizeof(Vertex)));
+		m_pQuadVertexBuffer = std::make_unique<Buffer>(pGraphics, "Quad Vertex Buffer");
+		m_pQuadVertexBuffer->Create(BufferDesc::CreateVertexBuffer(6, sizeof(Vertex)));
 		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
 		pContext->Execute(true);
 
-		m_pIntermediateColor = std::make_unique<GraphicsTexture>();
-		m_pIntermediateColor->Create(pGraphics, TextureDesc::CreateRenderTarget(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(1, 0, 0, 1))));
-		m_pIntermediateDepth = std::make_unique<GraphicsTexture>();
-		m_pIntermediateDepth->Create(pGraphics, TextureDesc::CreateDepth(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(1.0f, 0)));
+		m_pIntermediateColor = std::make_unique<GraphicsTexture>(pGraphics, "Cloud Intermediate Color");
+		m_pIntermediateColor->Create(TextureDesc::CreateRenderTarget(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(1, 0, 0, 1))));
+		m_pIntermediateDepth = std::make_unique<GraphicsTexture>(pGraphics, "Cloud Intermediate Depth");
+		m_pIntermediateDepth->Create(TextureDesc::CreateDepth(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(1.0f, 0)));
 	}
 	
 	{

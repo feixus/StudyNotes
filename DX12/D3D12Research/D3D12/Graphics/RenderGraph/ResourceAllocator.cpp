@@ -24,8 +24,8 @@ GraphicsTexture* RGResourceAllocator::CreateTexture(const TextureDesc& desc)
 		}
 	}
 
-	std::unique_ptr<GraphicsTexture> pTexture = std::make_unique<GraphicsTexture>();
-	pTexture->Create(m_pGraphics, desc);
+	std::unique_ptr<GraphicsTexture> pTexture = std::make_unique<GraphicsTexture>(m_pGraphics);
+	pTexture->Create(desc);
 	m_Textures.push_back(std::move(pTexture));
 	return m_Textures.back().get();
 }

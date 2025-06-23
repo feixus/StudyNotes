@@ -30,15 +30,15 @@ void GpuParticles::Initialize()
 {
     CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-    m_pCounterBuffer = std::make_unique<ByteAddressBuffer>();
-    m_pCounterBuffer->Create(m_pGraphics, sizeof(uint32_t), 4);
+    m_pCounterBuffer = std::make_unique<Buffer>(m_pGraphics, "GpuParticle Counter Buffer");
+    m_pCounterBuffer->Create(BufferDesc::CreateStructured(4, sizeof(uint32_t)));
 
-    m_pAliveList1 = std::make_unique<StructuredBuffer>();
-    m_pAliveList1->Create(m_pGraphics, sizeof(uint32_t), cMaxParticleCount);
-    m_pAliveList2 = std::make_unique<StructuredBuffer>();
-    m_pAliveList2->Create(m_pGraphics, sizeof(uint32_t), cMaxParticleCount);
-    m_pDeadList = std::make_unique<StructuredBuffer>();
-    m_pDeadList->Create(m_pGraphics, sizeof(uint32_t), cMaxParticleCount);
+    m_pAliveList1 = std::make_unique<Buffer>(m_pGraphics, "GpuParticle AliveList1");
+    m_pAliveList1->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32_t)));
+    m_pAliveList2 = std::make_unique<Buffer>(m_pGraphics, "GpuParticle AliveList2");
+    m_pAliveList2->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32_t)));
+    m_pDeadList = std::make_unique<Buffer>(m_pGraphics, "GpuParticle DeadList");
+    m_pDeadList->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32_t)));
 
     std::vector<uint32_t> deadList(cMaxParticleCount);
     std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
@@ -47,15 +47,15 @@ void GpuParticles::Initialize()
     uint32_t aliveCount = cMaxParticleCount;
     m_pCounterBuffer->SetData(pContext, &aliveCount, sizeof(uint32_t), 0);
 
-    m_pParticleBuffer = std::make_unique<StructuredBuffer>();
-    m_pParticleBuffer->Create(m_pGraphics, sizeof(ParticleData), cMaxParticleCount);
+    m_pParticleBuffer = std::make_unique<Buffer>(m_pGraphics, "GpuParticle ParticleBuffer");
+    m_pParticleBuffer->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)));
 
-    m_pEmitArguments = std::make_unique<ByteAddressBuffer>();
-    m_pEmitArguments->Create(m_pGraphics, sizeof(uint32_t), 3);
-    m_pSimulateArguments = std::make_unique<ByteAddressBuffer>();
-    m_pSimulateArguments->Create(m_pGraphics, sizeof(uint32_t), 3);
-    m_pDrawArguments = std::make_unique<ByteAddressBuffer>();
-    m_pDrawArguments->Create(m_pGraphics, sizeof(uint32_t), 4);
+    m_pEmitArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle EmitArguments");
+    m_pEmitArguments->Create(BufferDesc::CreateStructured(3, sizeof(uint32_t)));
+    m_pSimulateArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle SimulateArguments");
+    m_pSimulateArguments->Create(BufferDesc::CreateStructured(3, sizeof(uint32_t)));
+    m_pDrawArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle Arguments");
+    m_pDrawArguments->Create(BufferDesc::CreateStructured(4, sizeof(uint32_t)));
 
     pContext->Execute(true);
 
@@ -195,7 +195,7 @@ void GpuParticles::Simulate()
 		std::generate(randomDirections.begin(), randomDirections.end(), []() {
             Vector3 v = Math::RandVector(); v.Normalize(); return Vector4(v.x, v.y, v.z, 0);
 			});
-        pContext->SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * randomDirections.size());
+        pContext->SetComputeDynamicConstantBufferView(0, randomDirections.data(), (uint32_t)(sizeof(Vector4) * randomDirections.size()));
 
         pContext->ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pEmitArguments.get());
 

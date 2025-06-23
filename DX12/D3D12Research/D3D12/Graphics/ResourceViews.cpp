@@ -7,7 +7,7 @@
 
 ShaderResourceView::ShaderResourceView(Graphics* pGraphics) : DescriptorBase(pGraphics)
 {
-    m_Descriptor = m_pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
+    m_Descriptor = pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
 }
 
 ShaderResourceView::~ShaderResourceView()
@@ -49,7 +49,7 @@ void ShaderResourceView::Create(GraphicsTexture* pTexture, const TextureSRVDesc&
 
     if (m_Descriptor.ptr == 0)
     {
-        m_Descriptor = m_pParent->GetGraphics()->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        m_Descriptor = m_pParent->GetGraphics()->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
     }
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -131,26 +131,31 @@ void ShaderResourceView::Create(GraphicsTexture* pTexture, const TextureSRVDesc&
     m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, m_Descriptor);
 }
 
-UnorderedAccessView::UnorderedAccessView(Graphics* pGraphics)
+void ShaderResourceView::Release()
 {
+    if (m_Descriptor.ptr != 0)
+    {
+        assert(m_pParent);
+        m_pParent->GetGraphics()->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->FreeDescriptor(m_Descriptor);
+        m_Descriptor.ptr = 0;
+    }
+}
 
+UnorderedAccessView::UnorderedAccessView(Graphics* pGraphics) : DescriptorBase(pGraphics)
+{
+    m_Descriptor = pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
 }
 
 UnorderedAccessView::~UnorderedAccessView()
 {
-
+    Release();
 }
 
-void UnorderedAccessView::Create(Graphics* pGraphics, Buffer* pBuffer, const BufferUAVDesc& desc)
+void UnorderedAccessView::Create(Buffer* pBuffer, const BufferUAVDesc& desc)
 {
     assert(pBuffer);
 	m_pParent = pBuffer;
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
-
-	if (m_Descriptor.ptr == 0)
-	{
-		m_Descriptor = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 	uavDesc.Format = desc.Format;
@@ -165,15 +170,15 @@ void UnorderedAccessView::Create(Graphics* pGraphics, Buffer* pBuffer, const Buf
 	{
 		uavDesc.Buffer.Flags |= D3D12_BUFFER_UAV_FLAG_RAW;
 	}
-	else if (Any(bufferDesc.Usage, BufferFlag::Structured))
+	else if (Any(bufferDesc.Usage, BufferFlag::Structured) || Any(bufferDesc.Usage, BufferFlag::IndirectArgument))
 	{
 		uavDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
 	}
 
-	pGraphics->GetDevice()->CreateUnorderedAccessView(pBuffer->GetResource(), desc.pCounter ? desc.pCounter->GetResource() : nullptr, &uavDesc, m_Descriptor);
+	m_pParent->GetGraphics()->GetDevice()->CreateUnorderedAccessView(pBuffer->GetResource(), desc.pCounter ? desc.pCounter->GetResource() : nullptr, &uavDesc, m_Descriptor);
 }
 
-void UnorderedAccessView::Create(Graphics* pGraphics, GraphicsTexture* pTexture, const TextureUAVDesc& desc)
+void UnorderedAccessView::Create(GraphicsTexture* pTexture, const TextureUAVDesc& desc)
 {
     assert(pTexture);
 	m_pParent = pTexture;
@@ -181,7 +186,7 @@ void UnorderedAccessView::Create(Graphics* pGraphics, GraphicsTexture* pTexture,
 
     if (m_Descriptor.ptr == 0)
     {
-        m_Descriptor = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        m_Descriptor = m_pParent->GetGraphics()->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
     }
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
@@ -224,7 +229,17 @@ void UnorderedAccessView::Create(Graphics* pGraphics, GraphicsTexture* pTexture,
     uavDesc.Texture2D.MipSlice = desc.MipLevel;
     uavDesc.Texture2DArray.MipSlice = desc.MipLevel;
     uavDesc.Texture3D.MipSlice = desc.MipLevel;
-    pGraphics->GetDevice()->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, m_Descriptor);
+    m_pParent->GetGraphics()->GetDevice()->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, m_Descriptor);
+}
+
+void UnorderedAccessView::Release()
+{
+    if (m_Descriptor.ptr != 0)
+    {
+        assert(m_pParent);
+        m_pParent->GetGraphics()->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->FreeDescriptor(m_Descriptor);
+        m_Descriptor.ptr = 0;
+    }
 }
 
 DescriptorBase::DescriptorBase(Graphics* pGraphics) : GraphicsObject(pGraphics)

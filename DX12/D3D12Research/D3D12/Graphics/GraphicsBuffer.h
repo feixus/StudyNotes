@@ -93,7 +93,7 @@ struct BufferDesc
 class Buffer : public GraphicsResource
 {
 public:
-	Buffer(Graphics* pGraphics, const char* pName);
+	Buffer(Graphics* pGraphics, const char* pName = "");
 	Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 	~Buffer();
 
@@ -109,6 +109,9 @@ public:
 	void CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc);
 	void CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc);
 
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
+	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const;
+
 	Buffer* GetCounter() const { return m_pCounter.get(); }
 
 protected:
@@ -121,39 +124,6 @@ protected:
 	std::vector<std::unique_ptr<DescriptorBase>> m_Descriptors;
 };
 
-
-
-
-class BufferWithDescriptor : public Buffer
-{
-public:
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const;
-
-protected:
-	UnorderedAccessView m_Uav;
-	ShaderResourceView m_Srv;
-};
-
-/*
-* raw buffer, can read arbitrary bytes at any offset, no predefined format.
-*/
-class ByteAddressBuffer : public BufferWithDescriptor
-{
-public:
-	void Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible = false);
-};
-
-class StructuredBuffer : public BufferWithDescriptor
-{
-public:
-	void Create(Graphics* pGraphics, uint32_t elementStride, uint32_t elementCount, bool cpuVisible = false);
-
-	ByteAddressBuffer* GetCounter() const { return m_pCounter.get(); }
-
-private:
-	std::unique_ptr<ByteAddressBuffer> m_pCounter;
-};
 
 
  /*

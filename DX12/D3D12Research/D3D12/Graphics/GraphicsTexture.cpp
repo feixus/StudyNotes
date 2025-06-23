@@ -15,17 +15,17 @@ GraphicsTexture::~GraphicsTexture()
 {
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetRTV(int subResource) const
+D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetRTV() const
 {
 	return m_Rtv;
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetUAV(int subResource) const
+D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetUAV() const
 {
 	return m_pUav->GetDescriptor();
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetSRV(int subResource) const
+D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetSRV() const
 {
 	return m_pSrv->GetDescriptor();
 }
@@ -154,7 +154,7 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc)
 	{
 		if (m_Rtv.ptr == 0)
 		{
-			m_Rtv = m_pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+			m_Rtv = m_pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateDescriptor();
 		}
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
@@ -215,12 +215,12 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc)
 	{
 		if (m_Rtv.ptr == 0)
 		{
-			m_Rtv = m_pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+			m_Rtv = m_pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)->AllocateDescriptor();
 		}
 
 		if (m_ReadOnlyDsv.ptr == 0)
 		{
-			m_ReadOnlyDsv = m_pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+			m_ReadOnlyDsv = m_pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)->AllocateDescriptor();
 		}
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
@@ -433,7 +433,7 @@ void GraphicsTexture::CreateSRV(ShaderResourceView** pView, const TextureSRVDesc
 	(*pView)->Create(this, desc);
 }
 
-void GraphicsTexture::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pTexture)
+void GraphicsTexture::CreateForSwapChain(ID3D12Resource* pTexture)
 {
 	Release();
 
@@ -448,9 +448,9 @@ void GraphicsTexture::CreateForSwapChain(Graphics* pGraphics, ID3D12Resource* pT
 	
 	if (m_Rtv.ptr == 0)
 	{
-		m_Rtv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		m_Rtv = m_pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateDescriptor();
 	}
-	pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
+	m_pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
 
 	TextureSRVDesc srvDesc{};
 	srvDesc.FirstArraySlice = 0;

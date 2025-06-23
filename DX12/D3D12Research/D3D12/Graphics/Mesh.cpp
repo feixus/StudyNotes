@@ -28,7 +28,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	auto loadTexture = [pGraphics, pContext](std::filesystem::path basePath, aiMaterial* pMaterial, aiTextureType type)
 	{
-		std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>();
+		std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphics);
 
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
@@ -40,21 +40,21 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 				texturePath = texturePath.relative_path();
 			}
 			texturePath = basePath / texturePath;
-			pTex->Create(pGraphics, pContext, texturePath.string().c_str());
+			pTex->Create(pContext, texturePath.string().c_str());
 		}
 		else
 		{
 			switch (type)
 			{
 			case aiTextureType_NORMALS:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_ddn.png");
+				pTex->Create(pContext, "Resources/textures/dummy_ddn.png");
 				break;
 			case aiTextureType_SPECULAR:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_specular.png");
+				pTex->Create(pContext, "Resources/textures/dummy_specular.png");
 				break;
 			case aiTextureType_DIFFUSE:
 			default:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy.png");
+				pTex->Create(pContext, "Resources/textures/dummy.png");
 				break;
 			}
 		}
@@ -118,16 +118,16 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 
 	{
 		uint32_t size = (uint32_t)vertices.size() * sizeof(Vertex);
-		pSubMesh->m_pVertexBuffer = std::make_unique<Buffer>();
-		pSubMesh->m_pVertexBuffer->Create(pGraphics, BufferDesc::CreateVertexBuffer((uint32_t)vertices.size(), sizeof(Vertex)));
+		pSubMesh->m_pVertexBuffer = std::make_unique<Buffer>(pGraphics);
+		pSubMesh->m_pVertexBuffer->Create(BufferDesc::CreateVertexBuffer((uint32_t)vertices.size(), sizeof(Vertex)));
 		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
 	}
 
 	{
 		uint32_t size = sizeof(uint32_t) * (uint32_t)indices.size();
 		pSubMesh->m_IndexCount = (int)indices.size();
-		pSubMesh->m_pIndexBuffer = std::make_unique<Buffer>();
-		pSubMesh->m_pIndexBuffer->Create(pGraphics, BufferDesc::CreateIndexBuffer(indices.size(), false));
+		pSubMesh->m_pIndexBuffer = std::make_unique<Buffer>(pGraphics);
+		pSubMesh->m_pIndexBuffer->Create(BufferDesc::CreateIndexBuffer((uint32_t)indices.size(), false));
 		pSubMesh->m_pIndexBuffer->SetData(pContext, indices.data(), size);
 	}
 

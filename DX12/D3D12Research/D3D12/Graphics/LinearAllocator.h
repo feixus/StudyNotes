@@ -19,8 +19,8 @@ struct DynamicAllocation
 class LinearAllocationPage : public GraphicsResource
 {
 public:
-	LinearAllocationPage(ID3D12Resource* pResource, const size_t size, D3D12_RESOURCE_STATES usageState) :
-		GraphicsResource(pResource, usageState), m_Size(size)
+	LinearAllocationPage(Graphics* pGraphics, ID3D12Resource* pResource, const size_t size, D3D12_RESOURCE_STATES usageState) :
+		GraphicsResource(pGraphics, pResource, usageState), m_Size(size)
 	{
 		//m_pResource.Attach(pResource);
 		m_pGpuAddress = pResource->GetGPUVirtualAddress();

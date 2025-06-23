@@ -1,24 +1,22 @@
 #pragma once
-#include "Graphics/Graphics.h"
-#include "Graphics/Light.h"
 
 class ComputePipelineState;
 class GraphicsPipelineState;
 class RootSignature;
-class StructuredBuffer;
+class Buffer;
 class GraphicsTexture;
-class ByteAddressBuffer;
 class Camera;
 class CommandSignature;
 class GpuParticles;
-
+struct Batch;
+class Graphics;
 
 struct ClusteredForwardInputResource
 {
     GraphicsTexture* pRenderTarget;
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
-    StructuredBuffer* pLightBuffer;
+    Buffer* pLightBuffer;
     Camera* pCamera;
 };
 
@@ -51,31 +49,31 @@ private:
     // step 1: AABB
     std::unique_ptr<RootSignature> m_pCreateAabbRS;
     std::unique_ptr<ComputePipelineState> m_pCreateAabbPSO;
-    std::unique_ptr<StructuredBuffer> m_pAabbBuffer;
+    std::unique_ptr<Buffer> m_pAabbBuffer;
 
     // step 2: mark unique clusters
     std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparentPSO;
-    std::unique_ptr<StructuredBuffer> m_pUniqueClusterBuffer;
+    std::unique_ptr<Buffer> m_pUniqueClusterBuffer;
 
     // step 3: compact cluster list
     std::unique_ptr<RootSignature> m_pCompactClusterListRS;
     std::unique_ptr<ComputePipelineState> m_pCompactClusterListPSO;
-    std::unique_ptr<StructuredBuffer> m_pCompactedClusterBuffer;
+    std::unique_ptr<Buffer> m_pCompactedClusterBuffer;
 
     // step 4: update Indirect Dispatch Buffer
     std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
 	std::unique_ptr<ComputePipelineState> m_pUpdateIndirectArgumentsPSO;
-    std::unique_ptr<ByteAddressBuffer> m_pIndirectArguments;
+    std::unique_ptr<Buffer> m_pIndirectArguments;
 
     // step 5: light culling
     std::unique_ptr<RootSignature> m_pLightCullingRS;
     std::unique_ptr<ComputePipelineState> m_pLightCullingPSO;
     std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;;
-    std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
-    std::unique_ptr<StructuredBuffer> m_pLightIndexGrid;
-    std::unique_ptr<StructuredBuffer> m_pLightGrid;
+    std::unique_ptr<Buffer> m_pLightIndexCounter;
+    std::unique_ptr<Buffer> m_pLightIndexGrid;
+    std::unique_ptr<Buffer> m_pLightGrid;
 
     // alternative light culling
     std::unique_ptr<ComputePipelineState> m_pAlternativeLightCullingPSO;
@@ -88,8 +86,8 @@ private:
     // cluster debug rendering
     std::unique_ptr<RootSignature> m_pDebugClusterRS;
     std::unique_ptr<GraphicsPipelineState> m_pDebugClusterPSO;
-    std::unique_ptr<StructuredBuffer> m_pDebugCompactedClusterBuffer;
-    std::unique_ptr<StructuredBuffer> m_pDebugLightGrid;
+    std::unique_ptr<Buffer> m_pDebugCompactedClusterBuffer;
+    std::unique_ptr<Buffer> m_pDebugLightGrid;
     Matrix m_DebugClusterViewMatrix;
     bool m_DidCopyDebugClusterData{false};
 

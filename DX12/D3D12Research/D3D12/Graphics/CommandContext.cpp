@@ -323,7 +323,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = subResourceParams.data();
 			}
 
-			renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV(subResource);
+			renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV();
 		}
 
 		D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
@@ -371,9 +371,9 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			if (RenderPassInfo::ExtractBeginAccess(data.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 			{
 				assert(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				m_pCommandList->ClearRenderTargetView(data.Target->GetRTV(subResource), data.Target->GetClearBinding().Color, 0, nullptr);
+				m_pCommandList->ClearRenderTargetView(data.Target->GetRTV(), data.Target->GetClearBinding().Color, 0, nullptr);
 			}
-			rtvHandles[i] = data.Target->GetRTV(subResource);
+			rtvHandles[i] = data.Target->GetRTV();
 		}
 		m_pCommandList->OMSetRenderTargets(renderPassInfo.RenderTargetCount, rtvHandles.data(), false, &dsvHandle);	
 	}
@@ -488,7 +488,7 @@ void CommandContext::SetIndexBuffer(Buffer* pIndexBuffer)
 {
 	D3D12_INDEX_BUFFER_VIEW view;
 	view.BufferLocation = pIndexBuffer->GetGpuHandle();
-	view.SizeInBytes = pIndexBuffer->GetSize();
+	view.SizeInBytes = (uint32_t)pIndexBuffer->GetSize();
 	view.Format = pIndexBuffer->GetDesc().ElementSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
 }

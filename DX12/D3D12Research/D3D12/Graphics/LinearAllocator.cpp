@@ -106,5 +106,5 @@ LinearAllocationPage* LinearAllocatorPageManager::CreateNewPage(const size_t siz
 
 	pResource->SetName(L"Linear Allocator Page");
 
-	return new LinearAllocationPage(pResource, (size_t)resourceDesc.Width, usage);
+	return new LinearAllocationPage(m_pGraphics, pResource, (size_t)resourceDesc.Width, usage);
 }

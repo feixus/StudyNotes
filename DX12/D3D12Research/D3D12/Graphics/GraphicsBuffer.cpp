@@ -3,11 +3,11 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 #include "GraphicsTexture.h"
+#include "ResourceViews.h"
 
 Buffer::Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
-	: GraphicsResource(pResource, pResource, state), m_pName(nullptr)
+	: GraphicsResource(pGraphics, pResource, state)
 {}
-
 
 Buffer::Buffer(Graphics* pGraphics, const char* pName) 
 	: GraphicsResource(pGraphics), m_pName(pName)
@@ -133,12 +133,12 @@ void Buffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
 	(*pView)->Create(this, desc);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE BufferWithDescriptor::GetSRV() const
+D3D12_CPU_DESCRIPTOR_HANDLE Buffer::GetSRV() const
 {
 	return m_pSrv->GetDescriptor();
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE BufferWithDescriptor::GetUAV() const
+D3D12_CPU_DESCRIPTOR_HANDLE Buffer::GetUAV() const
 {
 	return m_pUav->GetDescriptor();
 }

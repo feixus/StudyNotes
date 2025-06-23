@@ -88,8 +88,8 @@ AllocationPage* DynamicAllocationManager::AllocatePage(size_t size)
 
 AllocationPage* DynamicAllocationManager::CreateNewPage(size_t size)
 {
-	AllocationPage* pNewPage = new AllocationPage();
-	pNewPage->Create(m_pGraphics, size);
+	AllocationPage* pNewPage = new AllocationPage(m_pGraphics);
+	pNewPage->Create(size);
 	return pNewPage;
 }
 
@@ -117,8 +117,12 @@ void DynamicAllocationManager::FreeLargePages(uint64_t fenceValue, const std::ve
 	}
 }
 
-void AllocationPage::Create(Graphics* pGraphics, uint64_t size)
+AllocationPage::AllocationPage(Graphics* pGraphics) : Buffer(pGraphics, "Dynamic Allocation Page")
 {
-	Buffer::Create(pGraphics, BufferDesc((uint32_t)size, 1, BufferFlag::Upload));
+}
+
+void AllocationPage::Create(uint64_t size)
+{
+	Buffer::Create(BufferDesc((uint32_t)size, 1, BufferFlag::Upload));
 	m_pMappedData = Map();
 }
