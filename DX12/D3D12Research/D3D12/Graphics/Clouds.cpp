@@ -13,7 +13,11 @@
 static const int Resolution = 256;
 static const int MaxPoints = 256;
 
-void Clouds::Initialize(Graphics* pGraphics)
+Clouds::Clouds(Graphics* pGraphics) : GraphicsObject(pGraphics)
+{
+}
+
+void Clouds::Initialize()
 {
 	{
 		Shader shader("Resources/Shaders/WorleyNoise.hlsl", Shader::Type::ComputeShader, "WorleyNoiseCS");
@@ -21,14 +25,14 @@ void Clouds::Initialize(Graphics* pGraphics)
 		m_pWorleyNoiseRS = std::make_unique<RootSignature>();
 		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pWorleyNoiseRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pWorleyNoiseRS->Finalize("Worley Noise RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pWorleyNoiseRS->Finalize("Worley Noise RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 		m_pWorleyNoisePS = std::make_unique<ComputePipelineState>();
 		m_pWorleyNoisePS->SetComputeShader(shader.GetByteCode(), shader.GetByteCodeSize());
 		m_pWorleyNoisePS->SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
-		m_pWorleyNoisePS->Finalize("Worley Noise PS", pGraphics->GetDevice());
+		m_pWorleyNoisePS->Finalize("Worley Noise PS", m_pGraphics->GetDevice());
 
-		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>(pGraphics, "Worley Noise");
+		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>(m_pGraphics, "Worley Noise");
 		m_pWorleyNoiseTexture->Create(TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource, TextureDimension::Texture3D));
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
@@ -49,7 +53,7 @@ void Clouds::Initialize(Graphics* pGraphics)
 		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
 		m_pCloudsRS->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
-		m_pCloudsRS->Finalize("Clouds RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		m_pCloudsRS->Finalize("Clouds RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		D3D12_INPUT_ELEMENT_DESC quadIL[] = {
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -65,7 +69,7 @@ void Clouds::Initialize(Graphics* pGraphics)
 		m_pCloudsPS->SetDepthWrite(false);
 		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, 1, 0);
 		m_pCloudsPS->SetRootSignature(m_pCloudsRS->GetRootSignature());
-		m_pCloudsPS->Finalize("Clouds PS", pGraphics->GetDevice());
+		m_pCloudsPS->Finalize("Clouds PS", m_pGraphics->GetDevice());
 	}
 
 	{
@@ -84,20 +88,18 @@ void Clouds::Initialize(Graphics* pGraphics)
 			{ Vector3(1, -1, 2), Vector2(1, 1) },
 		};
 
-		CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		m_pQuadVertexBuffer = std::make_unique<Buffer>(pGraphics, "Quad Vertex Buffer");
+		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		m_pQuadVertexBuffer = std::make_unique<Buffer>(m_pGraphics, "Quad Vertex Buffer");
 		m_pQuadVertexBuffer->Create(BufferDesc::CreateVertexBuffer(6, sizeof(Vertex)));
 		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
 		pContext->Execute(true);
 
-		m_pIntermediateColor = std::make_unique<GraphicsTexture>(pGraphics, "Cloud Intermediate Color");
-		m_pIntermediateColor->Create(TextureDesc::CreateRenderTarget(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(1, 0, 0, 1))));
-		m_pIntermediateDepth = std::make_unique<GraphicsTexture>(pGraphics, "Cloud Intermediate Depth");
-		m_pIntermediateDepth->Create(TextureDesc::CreateDepth(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(1.0f, 0)));
+		m_pIntermediateColor = std::make_unique<GraphicsTexture>(m_pGraphics, "Cloud Intermediate Color");
+		m_pIntermediateDepth = std::make_unique<GraphicsTexture>(m_pGraphics, "Cloud Intermediate Depth");
 	}
 	
 	{
-		CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		Profiler::Instance()->Begin("Clouds_Render", pContext);
 
 		pContext->SetComputePipelineState(m_pWorleyNoisePS.get());
@@ -135,6 +137,12 @@ void Clouds::Initialize(Graphics* pGraphics)
 	}
 }
 
+void Clouds::OnSwapchainCreated(int windowWidth, int windowHeight)
+{
+	m_pIntermediateColor->Create(TextureDesc::CreateRenderTarget(windowWidth, windowHeight, Graphics::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(1, 0, 0, 1))));
+	m_pIntermediateDepth->Create(TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(1.0f, 0)));
+}
+
 struct CloudParameters
 {
 	Vector4 FrustumCorners[4];
@@ -160,20 +168,20 @@ void Clouds::RenderUI()
 	ImGui::End();
 }
 
-void Clouds::Render(Graphics* pGraphics, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture)
+void Clouds::Render(GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture)
 {
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
 		Profiler::Instance()->Begin("Clouds", pContext);
-		
+
 		pContext->InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 		pContext->FlushResourceBarriers();
 
-		pContext->SetViewport(FloatRect(0, 0, (float)pGraphics->GetWindowWidth(), (float)pGraphics->GetWindowHeight()));
-		pContext->SetScissorRect(FloatRect(0, 0, (float)pGraphics->GetWindowWidth(), (float)pGraphics->GetWindowHeight()));
+		pContext->SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()));
+		pContext->SetScissorRect(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()));
 
 		pContext->BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, m_pIntermediateDepth.get(), RenderPassAccess::Clear_Store));
 
@@ -181,8 +189,8 @@ void Clouds::Render(Graphics* pGraphics, GraphicsTexture* pSceneTexture, Graphic
 		pContext->SetGraphicsRootSignature(m_pCloudsRS.get());
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		float fov = pGraphics->GetCamera()->GetFoV();
-		float aspect = (float)pGraphics->GetWindowWidth() / (float)pGraphics->GetWindowHeight();
+		float fov = m_pGraphics->GetCamera()->GetFoV();
+		float aspect = (float)m_pGraphics->GetWindowWidth() / (float)m_pGraphics->GetWindowHeight();
 		float halfFov = fov * 0.5f;
 		float tanFov = tan(halfFov);
 		Vector3 toRight = Vector3::Right * tanFov * aspect;  // right vector to frustum edge
@@ -193,9 +201,9 @@ void Clouds::Render(Graphics* pGraphics, GraphicsTexture* pSceneTexture, Graphic
 		sCloudParameters.FrustumCorners[2] = Vector4(-Vector3::Forward + toRight - toTop);
 		sCloudParameters.FrustumCorners[3] = Vector4(-Vector3::Forward - toRight - toTop);
 
-		sCloudParameters.ViewInverse = pGraphics->GetCamera()->GetViewInverse();
-		sCloudParameters.NearPlane = pGraphics->GetCamera()->GetNear();
-		sCloudParameters.FarPlane = pGraphics->GetCamera()->GetFar();
+		sCloudParameters.ViewInverse = m_pGraphics->GetCamera()->GetViewInverse();
+		sCloudParameters.NearPlane = m_pGraphics->GetCamera()->GetNear();
+		sCloudParameters.FarPlane = m_pGraphics->GetCamera()->GetFar();
 
 		pContext->SetDynamicConstantBufferView(0, &sCloudParameters, sizeof(sCloudParameters));
 

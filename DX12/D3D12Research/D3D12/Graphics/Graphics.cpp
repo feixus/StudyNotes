@@ -53,9 +53,6 @@ void Graphics::Initialize(HWND hWnd)
 	InitD3D();
 	InitializeAssets();
 
-	m_pClouds = std::make_unique<Clouds>();
-	m_pClouds->Initialize(this);
-
 	RandomizeLights(m_DesiredLightCount);
 }
 
@@ -555,7 +552,7 @@ void Graphics::Update()
 		pCommandContext->Execute(false);
 	}
 
-	m_pClouds->Render(this, m_pResolvedRenderTarget.get(), m_pResolveDepthStencil.get());
+	m_pClouds->Render(m_pResolvedRenderTarget.get(), m_pResolveDepthStencil.get());
 
 	{
 		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -743,10 +740,13 @@ void Graphics::InitD3D()
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 
-	OnResize(m_WindowWidth, m_WindowHeight);
-
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pResourceAllocator = std::make_unique<RGResourceAllocator>(this);
+
+	m_pClouds = std::make_unique<Clouds>(this);
+	m_pClouds->Initialize();
+
+	OnResize(m_WindowWidth, m_WindowHeight);
 }
 
 void Graphics::CreateSwapchain()
@@ -833,6 +833,8 @@ void Graphics::OnResize(int width, int height)
 	m_pLightGridTransparent->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
+
+	m_pClouds->OnSwapchainCreated(width, height);
 }
 
 void Graphics::InitializeAssets()

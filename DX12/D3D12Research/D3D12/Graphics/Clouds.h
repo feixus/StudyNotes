@@ -1,4 +1,5 @@
 #pragma once
+#include "GraphicsResource.h"
 
 class ComputePipelineState;
 class GraphicsPipelineState;
@@ -8,12 +9,14 @@ class Graphics;
 class GraphicsTexture;
 class Buffer;
 
-class Clouds
+class Clouds : public GraphicsObject
 {
 public:
-	void Initialize(Graphics* pGraphics);
+	Clouds(Graphics* pGraphics);
+	void Initialize();
+	void OnSwapchainCreated(int windowWidth, int windowHeight);
 	void RenderUI();
-	void Render(Graphics* pGraphics, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture);
+	void Render(GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture);
 
 private:
 	std::unique_ptr<ComputePipelineState> m_pWorleyNoisePS;
