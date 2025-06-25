@@ -12,8 +12,9 @@
 #include "Scene/Camera.h"
 #include "GraphicsTexture.h"
 #include "ResourceViews.h"
+#include "OnlineDescriptorAllocator.h"
 
-static constexpr uint32_t cMaxParticleCount = 4096000;
+static constexpr uint32_t cMaxParticleCount = 102400;
 
 struct ParticleData
 {
@@ -31,8 +32,15 @@ void GpuParticles::Initialize()
 {
     CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-    m_pCounterBuffer = std::make_unique<Buffer>(m_pGraphics, "GpuParticle Counter Buffer");
-    m_pCounterBuffer->Create(BufferDesc::CreateStructured(4, sizeof(uint32_t)));
+    m_pCounterBuffer = std::make_unique<Buffer>(m_pGraphics, "GpuParticle CounterBuffer");
+    m_pCounterBuffer->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));
+    uint32_t aliveCount = cMaxParticleCount;
+    m_pCounterBuffer->SetData(pContext, &aliveCount, sizeof(uint32_t), 0);
+
+    m_pEmitArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle EmitArguments");
+    m_pEmitArguments->Create(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)));
+    m_pSimulateArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle SimulateArguments");
+    m_pSimulateArguments->Create(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)));
 
     m_pAliveList1 = std::make_unique<Buffer>(m_pGraphics, "GpuParticle AliveList1");
     m_pAliveList1->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32_t)));
@@ -45,18 +53,11 @@ void GpuParticles::Initialize()
     std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
     m_pDeadList->SetData(pContext, deadList.data(), sizeof(uint32_t) * deadList.size());
 
-    uint32_t aliveCount = cMaxParticleCount;
-    m_pCounterBuffer->SetData(pContext, &aliveCount, sizeof(uint32_t), 0);
-
     m_pParticleBuffer = std::make_unique<Buffer>(m_pGraphics, "GpuParticle ParticleBuffer");
     m_pParticleBuffer->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)));
 
-    m_pEmitArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle EmitArguments");
-    m_pEmitArguments->Create(BufferDesc::CreateStructured(3, sizeof(uint32_t)));
-    m_pSimulateArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle SimulateArguments");
-    m_pSimulateArguments->Create(BufferDesc::CreateStructured(3, sizeof(uint32_t)));
     m_pDrawArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle Arguments");
-    m_pDrawArguments->Create(BufferDesc::CreateStructured(4, sizeof(uint32_t)));
+    m_pDrawArguments->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));
 
     pContext->Execute(true);
 
@@ -159,7 +160,7 @@ void GpuParticles::Simulate()
         {
             uint32_t EmitCount;
         } parameters;
-        parameters.EmitCount = 10000;
+        parameters.EmitCount = 1024;
 
         D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
             m_pCounterBuffer->GetUAV()->GetDescriptor(),
@@ -282,13 +283,10 @@ void GpuParticles::Simulate()
         pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         pContext->SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
 
-        D3D12_CPU_DESCRIPTOR_HANDLE srv[] = {
-            m_pParticleBuffer->GetSRV()->GetDescriptor(),
-            m_pAliveList2->GetSRV()->GetDescriptor(),
-        };
-        pContext->SetDynamicDescriptors(1, 0, srv, _countof(srv));
+		pContext->SetDynamicDescriptor(1, 0, m_pParticleBuffer->GetSRV());
+		pContext->SetDynamicDescriptor(1, 1, m_pAliveList2->GetSRV());
         
-        pContext->ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get());
+        pContext->ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get(), DescriptorTableType::Graphics);
         
         pContext->EndRenderPass();
         Profiler::Instance()->End(pContext);

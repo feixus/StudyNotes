@@ -150,7 +150,7 @@ private:
 	uint32_t m_CurrentBackBufferIndex{0};
 	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
-	RenderPath m_RenderPath = RenderPath::Tiled;
+	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;

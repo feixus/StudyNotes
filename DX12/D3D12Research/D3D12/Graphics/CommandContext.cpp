@@ -205,11 +205,11 @@ void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32
 }
 
 // GPU-driven rendering
-void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments)
+void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments, DescriptorTableType type)
 {
 	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(type);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(type);
 	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
