@@ -95,25 +95,7 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
         }
 #endif
 
-        LightResult result;
-
-        switch(light.Type)
-        {
-        case LIGHT_DIRECTIONAL:
-            result = DoDirectionalLight(light, worldPosition, normal, viewDirection);
-            break;
-        case LIGHT_POINT:
-            result = DoPointLight(light, worldPosition, normal, viewDirection);
-            break;
-        case LIGHT_SPOT:
-            result = DoSpotLight(light, worldPosition, normal, viewDirection);
-            break;
-        default:
-            result.Diffuse = float4(1, 0, 1, 1);
-            result.Specular = float4(0, 0, 0, 1);
-            break;
-        }
-        
+        LightResult result = DoLight(light, worldPosition, normal, viewDirection);
         totalResult.Diffuse += result.Diffuse;
         totalResult.Specular += result.Specular;
     }

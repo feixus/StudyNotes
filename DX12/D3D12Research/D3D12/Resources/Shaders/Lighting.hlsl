@@ -39,20 +39,14 @@ float4 DoSpecular(Light light, float3 normal, float3 lightVector, float3 viewDir
     return float4(light.Color.rgb * GetSpecularBlinnPhong(viewDirection, normal, lightVector, 15.0f), 1);
 }
 
-float DoAttenuation(Light light, float distance)
-{
-    return 1.0f - smoothstep(light.Range * light.Attenuation, light.Range, distance);
-}
-
-
 #ifdef SHADOW
 Texture2D tShadowMapTexture : register(t3);
 SamplerComparisonState sShadowMapSampler : register(s2);
 
-float DoShadow(float3 worldPosition, int shadowMapIndex)
+float DoShadow(float3 wPos, int shadowMapIndex)
 {
     // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
-    float4 lightPos = mul(float4(worldPosition, 1), cLightViewProjection[shadowMapIndex]);
+    float4 lightPos = mul(float4(wPos, 1), cLightViewProjection[shadowMapIndex]);
     lightPos.xyz /= lightPos.w;
     lightPos.x = lightPos.x / 2.0f + 0.5f;
     lightPos.y = lightPos.y / -2.0f + 0.5f;
@@ -78,71 +72,50 @@ float DoShadow(float3 worldPosition, int shadowMapIndex)
 
 #endif
 
-LightResult DoPointLight(Light light, float3 worldPosition, float3 normal, float3 viewDirection)
+float DoAttenuation(Light light, float distance)
+{
+    //smoothstep: cubic hermite polynomial
+    return 1.0f - smoothstep(light.Range * light.Attenuation, light.Range, distance);
+}
+
+float GetAttenuation(Light light, float3 wPos)
+{
+    float attenuation = 1.0f;
+    if (light.Type >= LIGHT_POINT)
+    {
+        float3 L = light.Position - wPos;
+        float d = length(L);
+        L = L / d;
+        attenuation *= DoAttenuation(light, d);
+
+        if (light.Type >= LIGHT_SPOT)
+        {
+            float minCos = cos(radians(light.SpotLightAngle));
+            float maxCos = lerp(minCos, 1.0f, 1 - light.Attenuation);
+            float cosAngle = dot(-L, light.Direction);
+            float spotIntensity = smoothstep(minCos, maxCos, cosAngle);
+
+            attenuation *= spotIntensity;
+        }
+    }
+    return attenuation;
+}
+
+LightResult DoLight(Light light, float3 wPos, float3 normal, float3 viewDirection)
 {
     LightResult result;
-    float3 L = light.Position - worldPosition;
-    float distance = length(L);
-    L = L / distance;
+    float3 L = normalize(light.Position - wPos);
+    float attenuation = GetAttenuation(light, wPos);
+    result.Diffuse = light.Color.w * attenuation * DoDiffuse(light, normal, L);
+    result.Specular = light.Color.w * attenuation * DoSpecular(light, normal, L, viewDirection);
 
-    float attenuation = DoAttenuation(light, distance);
-    result.Diffuse = DoDiffuse(light, normal, L) * attenuation;
-    result.Specular = DoSpecular(light, normal, L, viewDirection) * attenuation;
-    
 #ifdef SHADOW
     if (light.ShadowIndex != -1)
     {
-        float3 vLight = normalize(worldPosition - light.Position);
+        float3 vLight = normalize(wPos - light.Position);
         float faceIndex = GetCubeFaceIndex(vLight);
 
-        float shadowFactor = DoShadow(worldPosition, light.ShadowIndex + faceIndex);
-        result.Diffuse *= shadowFactor;
-        result.Specular *= shadowFactor;
-    }
-#endif
-
-    return result;
-}
-
-LightResult DoDirectionalLight(Light light, float3 worldPosition, float3 normal, float3 viewDirection)
-{
-    LightResult result;
-    result.Diffuse = light.Color.w * DoDiffuse(light, normal, -light.Direction);
-    result.Specular = light.Color.w * DoSpecular(light, normal, -light.Direction, viewDirection);
-    
-#ifdef SHADOW
-    if (light.ShadowIndex != -1)
-    {
-        float shadowFactor = DoShadow(worldPosition, light.ShadowIndex);
-        result.Diffuse *= shadowFactor;
-        result.Specular *= shadowFactor;
-    }
-#endif
-    
-    return result;
-}
-
-LightResult DoSpotLight(Light light, float3 worldPosition, float3 normal, float3 viewDirection)
-{
-    LightResult result = (LightResult)0;
-    float3 L = light.Position - worldPosition;
-    float distance = length(L);
-    L = L / distance;
-
-    float minCos = cos(radians(light.SpotLightAngle));
-    float maxCos = lerp(minCos, 1.0f, 1 - light.Attenuation);
-    float cosAngle = dot(-L, light.Direction);
-    float spotIntensity = smoothstep(minCos, maxCos, cosAngle);
-
-    float attenuation = DoAttenuation(light, distance);
-
-    result.Diffuse = light.Color.w * attenuation * spotIntensity * DoDiffuse(light, normal, L);
-    result.Specular = light.Color.w * attenuation * spotIntensity * DoSpecular(light, normal, L, viewDirection);
-
-#ifdef SHADOW
-    if (light.ShadowIndex != -1)
-    {
-        float shadowFactor = DoShadow(worldPosition, light.ShadowIndex);
+        float shadowFactor = DoShadow(wPos, light.ShadowIndex);
         result.Diffuse *= shadowFactor;
         result.Specular *= shadowFactor;
     }
