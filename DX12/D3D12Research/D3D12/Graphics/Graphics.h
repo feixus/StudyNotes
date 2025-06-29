@@ -74,7 +74,7 @@ public:
 
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
-	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pResolvedRenderTarget.get(); }
+	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	Camera* GetCamera() const { return m_pCamera.get(); }
@@ -92,7 +92,7 @@ public:
 	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
+	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
 private:
 	void BeginFrame();
@@ -125,6 +125,7 @@ private:
 	int m_SampleQuality{0};
 
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
+	std::unique_ptr<GraphicsTexture> m_pHDRRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_RenderTargets;
 
@@ -150,18 +151,11 @@ private:
 	uint32_t m_CurrentBackBufferIndex{0};
 	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
-	RenderPath m_RenderPath = RenderPath::Clustered;
+	RenderPath m_RenderPath = RenderPath::Tiled;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;
 	std::vector<Batch> m_TransparentBatches;
-
-	// diffuse scene passes
-	std::unique_ptr<RootSignature> m_pDiffuseRS;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPSO;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSODebug;
-	bool m_UseDebugView = false;
 
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 
@@ -190,6 +184,16 @@ private:
 	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
+
+	//PBR
+	std::unique_ptr<RootSignature> m_pPBRDiffuseRS;
+	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffusePSO;
+	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffuseAlphaPSO;
+
+	// Tonemapping
+	std::unique_ptr<RootSignature> m_pToneMapRS;
+	std::unique_ptr<GraphicsPipelineState> m_pToneMapPSO;
+	std::unique_ptr<GraphicsTexture> m_pToneMapDepth;
 
 	// light data
 	int m_ShadowCasters{0};

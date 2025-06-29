@@ -28,7 +28,7 @@ struct VSInput
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
     float3 bitangent : TEXCOORD1;
-}
+};
 
 struct PSInput
 {
@@ -38,7 +38,7 @@ struct PSInput
     float3 tangent : TANGENT;
     float3 bitangent : TEXCOORD1;
     float4 worldPosition : TEXCOORD2;
-}
+};
 
 Texture2D tDiffuseTexture : register(t0);
 SamplerState sDiffuseSampler : register(s0);
@@ -70,7 +70,7 @@ PSInput VSMain(VSInput input)
 
 float3 CalculateNormal(float3 normal, float3 tangent, float3 bitangent, float2 texCoord, bool invertY)
 {
-    float3 normalMatrix = float3x3(tangent, bitangent, normal);
+    float3x3 normalMatrix = float3x3(tangent, bitangent, normal);
     float3 sampledNormal = tNormalTexture.Sample(sNormalSampler, texCoord).rgb;
     sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
     if (invertY)
@@ -116,7 +116,7 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
         }
 #endif
 
-        LightResult result = DoLight(light, light.Color, albedo, 0.5f, worldPosition, normal, viewDirection);
+        LightResult result = DoLight(light, light.Color, albedo.rgb, 0.5f, worldPosition, normal, viewDirection);
         totalResult.Diffuse += result.Diffuse;
         totalResult.Specular += result.Specular;
     }
@@ -126,17 +126,17 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    float3 lightPos = float4(100, 100, 100);
+    float3 lightPos = float3(100, 100, 100);
 
-    float4 albedo = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord).rgb;
+    float4 albedo = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
     float metalness = 0;
     float r = 1.0f; // 1 - tSpecularTexture.Sample(sDiffuseSampler, input.texCoord).r
 
     float3 N = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, false);
     float3 V = normalize(cViewInverse[3].xyz - input.worldPosition.xyz);
 
-    LightResult lighting = DoLight(input.position, input.worldPosition, N, V, albedo.rgb);
+    LightResult lighting = DoLight(input.position, input.worldPosition.xyz, N, V, albedo.rgb);
 
     float3 color = lighting.Diffuse + lighting.Specular;
-    return float4(color, albedo.a)
+    return float4(color, albedo.a);
 }

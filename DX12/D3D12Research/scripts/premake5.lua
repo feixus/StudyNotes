@@ -48,7 +48,6 @@ project (ENGINE_NAME)
 
     -- Windows SDK & toolset (Visual Studio only)
     filter {"system:windows", "action:vs*"}
-        systemversion "10.0.22621.0"
         toolset "v143"
     filter {}
 

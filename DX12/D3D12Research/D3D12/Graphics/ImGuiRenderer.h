@@ -15,7 +15,9 @@ public:
 	~ImGuiRenderer();
 
 	void NewFrame();
-	void Render(CommandContext& context);
+	void Render(CommandContext& context, GraphicsTexture* pRenderTarget);
+
+	void OnSwapchainCreated(int width, int height);
 
 private:
 	static const uint32_t m_WindowWidth{ 1240 };
@@ -28,4 +30,5 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsTexture> m_pFontTexture;
+	std::unique_ptr<GraphicsTexture> m_pDepthBuffer;
 };

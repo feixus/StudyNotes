@@ -57,6 +57,13 @@ void ImGuiRenderer::InitializeImGui()
 	io.Fonts->SetTexID(m_pFontTexture->GetSRV().ptr);
 
 	pContext->Execute(true);
+
+	m_pDepthBuffer = std::make_unique<GraphicsTexture>(m_pGraphics, "ImGui Depth Buffer");
+}
+
+void ImGuiRenderer::OnSwapchainCreated(int width, int height)
+{
+	m_pDepthBuffer->Create(TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT));
 }
 
 void ImGuiRenderer::CreatePipeline()
@@ -83,14 +90,14 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineStateObject->SetDepthEnable(false);
 	m_pPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 	m_pPipelineStateObject->SetInputLayout(elementDesc.data(), (uint32_t)elementDesc.size());
-	m_pPipelineStateObject->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
+	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 	m_pPipelineStateObject->Finalize("ImGui Pipeline", m_pGraphics->GetDevice());
 }
 
-void ImGuiRenderer::Render(CommandContext& context)
+void ImGuiRenderer::Render(CommandContext& context, GraphicsTexture* pRenderTarget)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -111,7 +118,7 @@ void ImGuiRenderer::Render(CommandContext& context)
 	context.SetViewport(FloatRect(0, 0, (float)width, (float)height), 0, 1);
 
 	Profiler::Instance()->Begin("Render UI", &context);
-	context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::DontCare_DontCare));
+	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, m_pDepthBuffer.get(), RenderPassAccess::DontCare_DontCare));
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{
