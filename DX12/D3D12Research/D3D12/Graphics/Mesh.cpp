@@ -26,7 +26,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	std::filesystem::path filePath(pFilePath);
 	std::filesystem::path dirPath = filePath.parent_path();
 
-	auto loadTexture = [pGraphics, pContext](std::filesystem::path basePath, aiMaterial* pMaterial, aiTextureType type)
+	auto loadTexture = [pGraphics, pContext](std::filesystem::path basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
 		std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphics);
 
@@ -40,21 +40,21 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 				texturePath = texturePath.relative_path();
 			}
 			texturePath = basePath / texturePath;
-			pTex->Create(pContext, texturePath.string().c_str());
+			pTex->Create(pContext, texturePath.string().c_str(), srgb);
 		}
 		else
 		{
 			switch (type)
 			{
 			case aiTextureType_NORMALS:
-				pTex->Create(pContext, "Resources/textures/dummy_ddn.png");
+				pTex->Create(pContext, "Resources/textures/dummy_ddn.png", srgb);
 				break;
 			case aiTextureType_SPECULAR:
-				pTex->Create(pContext, "Resources/textures/dummy_specular.png");
+				pTex->Create(pContext, "Resources/textures/dummy_specular.png", srgb);
 				break;
 			case aiTextureType_DIFFUSE:
 			default:
-				pTex->Create(pContext, "Resources/textures/dummy.png");
+				pTex->Create(pContext, "Resources/textures/dummy.png", srgb);
 				break;
 			}
 		}
@@ -65,9 +65,9 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	for (uint32_t i = 0; i < pScene->mNumMaterials; ++i)
 	{
 		Material& m = m_Materials[i];
-		m.pDiffuseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_DIFFUSE);
-		m.pNormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMALS);
-		m.pSpecularTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_SPECULAR);
+		m.pDiffuseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_DIFFUSE, true);
+		m.pNormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMALS, false);
+		m.pSpecularTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_SPECULAR, false);
 		aiString p;
 		m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 		pContext->ExecuteAndReset(true);

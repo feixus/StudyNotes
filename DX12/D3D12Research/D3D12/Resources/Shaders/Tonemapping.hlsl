@@ -20,28 +20,60 @@ PSInput VSMain(uint index : SV_VertexID)
     output.position.w = 1.0f;
 
     output.texCoord.x = (float)(index / 2) * 2.0f;
-    output.texCoord.y = (float)(index % 2) * 2.0f;
+    output.texCoord.y = 1.0f - (float)(index % 2) * 2.0f;
 
     return output;
 }
 
-float3 LinearTosRGB(in float3 color)
+#define TONEMAP_GAMMA 1.0
+
+// Reinhard tonemapping
+float4 tonemap_reinhard(in float3 color)
 {
-    return color;
+    color *= 16;
+    color = color / (1 + color);
+    float3 ret = pow(color, TONEMAP_GAMMA);
+    return float4(ret, 1.0f);
+}
 
-    float3 x = color * 12.92f;
-    float3 y = 1.055f * pow(saturate(color), 1.0f / 2.4f) - 0.055f;
+// Uncharted 2 tonemapping
+float3 tonemap_uncharted2(in float3 x)
+{
+    float A = 0.15;
+    float B = 0.50;
+    float C = 0.10;
+    float D = 0.20;
+    float E = 0.02;
+    float F = 0.30;
 
-    float3 clr = color;
-    clr.r = color.r < 0.0031308f ? x.r : y.r;
-    clr.g = color.g < 0.0031308f ? x.g : y.g;
-    clr.b = color.b < 0.0031308f ? x.b : y.b;
+    return (x * (A * x + C * B) + D * E) / (x * (A * x + B) + F * D) - E / F;
+}
 
-    return clr;
+float3 tonemap_uc2(in float3 color)
+{
+    float W = 11.2;
+    color *= 16; // hardcoded exposure adjustment
+
+    float exposure_bias = 2.0f;
+    float3 curr = tonemap_uncharted2(color * exposure_bias);
+
+    float white_scale = 1.0f / tonemap_uncharted2(W);
+    float3 ccolor = curr * white_scale;
+
+    return pow(abs(ccolor), TONEMAP_GAMMA); // gamma
+}
+
+float3 tonemap_filmic(in float3 color)
+{
+    color = max(0, color - 0.004f);
+    color = (color * (6.2f * color + 0.5f)) / (color * (6.2f * color + 1.7f) + 0.06f);
+
+    // result has 1/2.2 baked in
+    return pow(color, TONEMAP_GAMMA);
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    float3 color = LinearTosRGB(tColorTexture.Sample(sColorSampler, input.texCoord).rgb);
+    float3 color = tonemap_uc2(tColorTexture.Sample(sColorSampler, input.texCoord).rgb);
     return float4(color, 1.0f);
 }

@@ -89,7 +89,7 @@ void Graphics::Update()
 	//////////////////////////////////
 	LightData lightData;
 
-	Matrix projection = XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, m_Lights[0].Range, 0.1f);
+	// Matrix projection = XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, m_Lights[0].Range, 0.1f);
 
 	m_ShadowCasters = 0;
 
@@ -269,13 +269,14 @@ void Graphics::Update()
 		int64_t fence = graph.Execute(this);
 		WaitForFence(fence);
 
+		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
 		// 3. light culling
 		//  - compute shader to buckets lights in tiles depending on their screen position
 		//  - require a depth buffer
 		//  - outputs a: - Texture2D containing a count and an offset of lights per tile.
 		//								- uint[] index buffer to indicate what are visible in each tile
 		{
-			CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 			Profiler::Instance()->Begin("Light Culling", pCommandContext);
 
 			Profiler::Instance()->Begin("Setup Light Data", pCommandContext);
@@ -321,8 +322,6 @@ void Graphics::Update()
 
 			pCommandContext->Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
 			Profiler::Instance()->End(pCommandContext);
-
-			lightCullingFence = pCommandContext->Execute(false);
 		}
 
 		// 4. shadow mapping
@@ -330,14 +329,13 @@ void Graphics::Update()
 		//  - renders the scene depth onto a separate depth buffer from the light's view
 		if (m_ShadowCasters > 0)
 		{
-			CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 			Profiler::Instance()->Begin("Shadows", pCommandContext);
+
+			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
 			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
 			pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
 
-			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
-		
 			pCommandContext->BeginRenderPass(RenderPassInfo(GetDepthStencil(), RenderPassAccess::Clear_Store));
 
 			pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -393,16 +391,11 @@ void Graphics::Update()
 			pCommandContext->EndRenderPass();
 
 			Profiler::Instance()->End(pCommandContext);
-			pCommandContext->Execute(false);
 		}
-
-		// cant do the lighting until the light culling is complete
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->InsertWaitForFence(lightCullingFence);
 
 		// 5. base pass
 		//  - render the scene using the shadow mapping result and the light culling buffers
 		{
-			CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 			Profiler::Instance()->Begin("Base Pass", pCommandContext);
 
 			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -490,9 +483,10 @@ void Graphics::Update()
 			pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			pCommandContext->EndRenderPass();
-			pCommandContext->Execute(false);
 		}
 		Profiler::Instance()->End();
+
+		pCommandContext->Execute(false);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
@@ -550,7 +544,7 @@ void Graphics::Update()
 		{
 			UpdateImGui();
 			//ImGui::ShowDemoWindow();
-			m_pClouds->RenderUI();
+			//m_pClouds->RenderUI();
 			m_pImGuiRenderer->Render(*pCommandContext, GetCurrentBackbuffer());
 		}
 		Profiler::Instance()->End(pCommandContext);
@@ -627,12 +621,18 @@ void Graphics::InitD3D()
 	UINT dxgiFactoryFlags = 0;
 
 #ifdef _DEBUG
-	// enable debug
+	// enable debug layer
 	ComPtr<ID3D12Debug> pDebugController;
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
-	pDebugController->EnableDebugLayer();
+	pDebugController->EnableDebugLayer();  // CPU-side
 
-	// additional debug layers
+#ifdef GPU_VALIDATION
+	ComPtr<ID3D12Debug1> pDebugController1;
+	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController1)));
+	pDebugController1->SetEnableGPUBasedValidation(true);  // GPU-side
+#endif
+
+	// additional DXGI debug layers
 	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
@@ -898,16 +898,9 @@ void Graphics::InitializeAssets()
 
 		// transparent
 		{
-			m_pPBRDiffuseAlphaPSO = std::make_unique<GraphicsPipelineState>();
+			m_pPBRDiffuseAlphaPSO = std::make_unique<GraphicsPipelineState>(*m_pPBRDiffusePSO.get());
 			m_pPBRDiffuseAlphaPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-			m_pPBRDiffuseAlphaPSO->SetRootSignature(m_pPBRDiffuseRS->GetRootSignature());
-			m_pPBRDiffuseAlphaPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pPBRDiffuseAlphaPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-			m_pPBRDiffuseAlphaPSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 			m_pPBRDiffuseAlphaPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			m_pPBRDiffuseAlphaPSO->SetCullMode(D3D12_CULL_MODE_NONE);
-			m_pPBRDiffuseAlphaPSO->SetDepthWrite(false);
-			m_pPBRDiffuseAlphaPSO->SetBlendMode(BlendMode::Alpha, false);
 			m_pPBRDiffuseAlphaPSO->Finalize("Diffuse PBR (Alpha) Pipeline", m_pDevice.Get());
 		}
 	}
@@ -1209,8 +1202,10 @@ void Graphics::RandomizeLights(int count)
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
 	int lightIndex = 0;
-	m_Lights[lightIndex] = Light::Point(Vector3(0, 20, 0), 200);
-	m_Lights[lightIndex].ShadowIndex = lightIndex;
+	
+	Vector3 dir(1, -1, 1);
+	dir.Normalize();
+	m_Lights[lightIndex] = Light::Directional(Vector3(200, 200, 200), dir, 0.4f);
 
 	int randomLightsStartIndex = lightIndex + 1;
 	for (int i = randomLightsStartIndex; i < m_Lights.size(); i++)
@@ -1222,7 +1217,7 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(7.f, 12.f);
+		const float range = Math::RandomRange(10.f, 18.f);
 		const float angle = Math::RandomRange(30.f, 60.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;

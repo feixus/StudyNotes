@@ -7,8 +7,7 @@
                 "DescriptorTable(SRV(t0, numDescriptors = 3)), " \
                 "DescriptorTable(SRV(t3, numDescriptors = 3), visibility = SHADER_VISIBILITY_PIXEL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-                "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
-                "StaticSampler(s1, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
+                "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
 cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 {
@@ -51,11 +50,10 @@ struct PSInput
 
 Texture2D myDiffuseTexture : register(t0);
 Texture2D myNormalTexture : register(t1);
+Texture2D mySpecularTexture : register(t2);
 
 SamplerState myDiffuseSampler : register(s0);
-SamplerState myNormalSampler : register(s1);
 
-Texture2D mySpecularTexture : register(t2);
 StructuredBuffer<uint2> tLightGrid : register(t3);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 StructuredBuffer<Light> Lights : register(t5);
@@ -67,22 +65,21 @@ uint GetSliceFromDepth(float depth)
     return (uint)(cSliceMagicA * log(depth) - cSliceMagicB);
 }
 
-int GetLightCount(float4 positionVS, float4 position)
+int GetLightCount(float4 vPos, float4 wPos)
 {
-    uint zSlice = GetSliceFromDepth(positionVS.z);
-    uint2 clusterIndexXY = floor(position.xy / cClusterSize);
+    uint zSlice = GetSliceFromDepth(vPos.z);
+    uint2 clusterIndexXY = floor(wPos.xy / cClusterSize);
     uint clusterIndex1D = clusterIndexXY.x + clusterIndexXY.y * cClusterDimensions.x + zSlice * cClusterDimensions.x * cClusterDimensions.y;
     return tLightGrid[clusterIndex1D].y;
 }
 
-LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosition, float3 normal, float3 viewDirection)
+LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V)
 {
-    uint zSlice = GetSliceFromDepth(viewSpacePosition.z);
-    uint2 clusterIndexXY = floor(position.xy / cClusterSize);
-    uint clusterIndex1D = clusterIndexXY.x + clusterIndexXY.y * cClusterDimensions.x + zSlice * cClusterDimensions.x * cClusterDimensions.y;
+    uint3 clusterIndex3D = uint3(floor(pos.xy / cClusterSize), GetSliceFromDepth(vPos.z));
+    uint clusterIndex1D = clusterIndex3D.x + cClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cClusterDimensions.y);
 
     uint startOffset = tLightGrid[clusterIndex1D].x;
-    uint lightCount = tLightGrid[clusterIndex1D].y;
+    uint lightCount = tLightGrid[clusterIndex1D].y; // lightCount = 0 means no light in this cluster
     LightResult totalResult = (LightResult)0;
 
     for (uint i = 0; i < lightCount; i++)
@@ -90,7 +87,7 @@ LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosit
         uint lightIndex = tLightIndexList[startOffset + i];
         Light light = Lights[lightIndex];
 
-        LightResult result = DoLight(light, worldPosition, normal, viewDirection);
+        LightResult result = DoLight(light, wPos, N, V);
         totalResult.Diffuse += result.Diffuse;
         totalResult.Specular += result.Specular;
     }
@@ -98,10 +95,10 @@ LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosit
     return totalResult;
 }
 
-float3 CalculateNormal(float3 normal, float3 tangent, float3 bitangent, float2 texCoord, bool invertY)
+float3 CalculateNormal(float3 N, float3 T, float3 BT, float2 texCoord, bool invertY)
 {
-    float3x3 normalMatrix = float3x3(tangent, bitangent, normal);
-    float3 sampleNormal = myNormalTexture.Sample(myNormalSampler, texCoord).rgb;
+    float3x3 normalMatrix = float3x3(T, BT, N);
+    float3 sampleNormal = myNormalTexture.Sample(myDiffuseSampler, texCoord).rgb;
     sampleNormal.xy = sampleNormal.xy * 2.0f - 1.0f;
     if (invertY)
     {
@@ -132,13 +129,12 @@ float4 Diffuse_PS(PSInput input) : SV_TARGET
     // float2 uv = float2((float)GetLightCount(input.positionVS, input.positionWS) / 100.0f, 0.0f);
     // return tHeatMapTexture.Sample(myDiffuseSampler, uv);
 
-    float4 diffuseSample = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
-   
-    float3 viewDirection = normalize(input.positionWS.xyz - cViewInverse[3].xyz);
-    float3 normal = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
+    float3 V = normalize(input.positionWS.xyz - cViewInverse[3].xyz);
+    float3 N = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
     
-    LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, input.normal, viewDirection);
+    LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, N, V);
 
+    float4 diffuseSample = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
     float4 specularSample = mySpecularTexture.Sample(myDiffuseSampler, input.texCoord);
     lightResults.Specular *= specularSample;
     lightResults.Diffuse *= diffuseSample;

@@ -175,7 +175,8 @@ uint32_t OnlineDescriptorAllocator::GetRequiredSpace()
         requiredSpace += (uint32_t)maxHandle + 1;
     }
 
-    return requiredSpace;
+    // #todo: super crazy hack: some descriptors are created on the fly outside of this system???
+    return requiredSpace + 10;
 }
 
 ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
