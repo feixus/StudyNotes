@@ -1,6 +1,5 @@
-#include "Constants.hlsl"
-#include "Common.hlsl"
-#include "Lighting.hlsl"
+#include "Common.hlsli"
+#include "Lighting.hlsli"
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
                 "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
@@ -19,21 +18,8 @@ cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 cbuffer PerFrameData : register(b1)
 {
     float4x4 cViewInverse;
-    uint cLightCount;
+    int cLightCount;
 }
-
-Texture2D myDiffuseTexture : register(t0);
-Texture2D myNormalTexture : register(t1);
-Texture2D mySpecularTexture : register(t2);
-
-SamplerState myDiffuseSampler : register(s0);
-
-#if FORWARD_PLUS
-Texture2D<uint2> tLightGrid : register(t4);
-StructuredBuffer<uint> tLightIndexList : register(t5);
-#endif
-
-StructuredBuffer<Light> Lights : register(t6);
 
 struct VSInput
 {
@@ -51,10 +37,49 @@ struct PSInput
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
     float3 bitangent : TEXCOORD1;
-    float4 worldPosition : TEXCOORD2;
+    float3 worldPosition : TEXCOORD2;
 };
 
-LightResult DoLight(float4 position, float3 wPos, float3 N, float3 V)
+Texture2D myDiffuseTexture : register(t0);
+Texture2D myNormalTexture : register(t1);
+Texture2D mySpecularTexture : register(t2);
+
+SamplerState myDiffuseSampler : register(s0);
+
+#if FORWARD_PLUS
+Texture2D<uint2> tLightGrid : register(t4);
+StructuredBuffer<uint> tLightIndexList : register(t5);
+#endif
+
+StructuredBuffer<Light> Lights : register(t6);
+
+[RootSignature(RootSig)]
+PSInput VSMain(VSInput input)
+{
+    PSInput result;   
+    result.position = mul(float4(input.position, 1.0f), cWorldViewProjection);
+    result.texCoord = input.texCoord;
+    result.normal = normalize(mul(input.normal, (float3x3)cWorld));
+    result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
+    result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
+    result.worldPosition = mul(float4(input.position, 1.0f), cWorld).xyz;
+    return result;
+}
+
+float3 CalculateNormal(float3 N, float3 T, float3 BT, float2 texCoord, bool invertY)
+{
+    float3x3 normalMatrix = float3x3(T, BT, N);
+    float3 sampleNormal = myNormalTexture.Sample(myDiffuseSampler, texCoord).rgb;
+    sampleNormal.xy = sampleNormal.xy * 2.0f - 1.0f;
+    if (invertY)
+    {
+        sampleNormal.y = -sampleNormal.y;
+    }
+    sampleNormal = normalize(sampleNormal);
+    return mul(sampleNormal, normalMatrix);
+}
+
+LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
 #if FORWARD_PLUS
     uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
@@ -91,57 +116,30 @@ LightResult DoLight(float4 position, float3 wPos, float3 N, float3 V)
         }
 #endif
 
-        LightResult result = DoLight(light, wPos, N, V);
-        totalResult.Diffuse += result.Diffuse;
-        totalResult.Specular += result.Specular;
+        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, wPos, N, V);
+
+        totalResult.Diffuse += result.Diffuse * light.Color.rgb * light.Color.a;
+        totalResult.Specular += result.Specular * light.Color.rgb * light.Color.a;
     }
 
     return totalResult;
 }
 
-float3 CalculateNormal(float3 N, float3 T, float3 BT, float2 texCoord, bool invertY)
-{
-    float3x3 normalMatrix = float3x3(T, BT, N);
-    float3 sampleNormal = myNormalTexture.Sample(myDiffuseSampler, texCoord).rgb;
-    sampleNormal.xy = sampleNormal.xy * 2.0f - 1.0f;
-    if (invertY)
-    {
-        sampleNormal.y = -sampleNormal.y;
-    }
-    sampleNormal = normalize(sampleNormal);
-    return mul(sampleNormal, normalMatrix);
-}
-
-[RootSignature(RootSig)]
-PSInput VSMain(VSInput input)
-{
-    PSInput result;
-    
-    result.position = mul(float4(input.position, 1.0f), cWorldViewProjection);
-    result.texCoord = input.texCoord;
-    result.normal = normalize(mul(input.normal, (float3x3)cWorld));
-    result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
-    result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
-    result.worldPosition = mul(float4(input.position, 1.0f), cWorld);
-    return result;
-}
-
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    float3 V = normalize(input.worldPosition.xyz - cViewInverse[3].xyz);
-    float3 N = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
-    
-    LightResult lightResults = DoLight(input.position, input.worldPosition.xyz, N, V);
+    float4 baseColor = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
+    float3 specular = 1.0f;
+    float metalness = 0;
+    float r = lerp(0.3f, 1.0f, 1 - mySpecularTexture.Sample(myDiffuseSampler, input.texCoord).r);
 
-    float4 diffuseSample = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
-    float4 specularSample = mySpecularTexture.Sample(myDiffuseSampler, input.texCoord);
-    lightResults.Specular *= specularSample;
-#if !DEBUG_VISUALIZE
-    lightResults.Diffuse *= diffuseSample;
-#endif
+    float3 diffuseColor = baseColor.rgb * (1 - metalness);
+    float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
-    float4 color = saturate(lightResults.Diffuse + lightResults.Specular);
-    color.a = diffuseSample.a;
+    float3 N = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, false);
+    float3 V = normalize(cViewInverse[3].xyz - input.worldPosition.xyz);
     
-    return color;
+    LightResult lightResults = DoLight(input.position, input.worldPosition, N, V, diffuseColor, specularColor, r);
+
+    float3 color = lightResults.Diffuse + lightResults.Specular;
+    return float4(color, baseColor.a);
 }

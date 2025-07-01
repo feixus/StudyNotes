@@ -1,12 +1,11 @@
-#include "Common.hlsl"
-#include "Lighting.hlsl"
+#include "Common.hlsli"
+#include "Lighting.hlsli"
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
                 "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 3)), " \
                 "DescriptorTable(SRV(t3, numDescriptors = 3), visibility = SHADER_VISIBILITY_PIXEL), " \
-                "DescriptorTable(UAV(u0, numDescriptors = 1)), " \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
 cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
@@ -57,8 +56,6 @@ SamplerState myDiffuseSampler : register(s0);
 StructuredBuffer<uint2> tLightGrid : register(t3);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 StructuredBuffer<Light> Lights : register(t5);
-Texture2D tHeatMapTexture : register(t6);
-
 
 uint GetSliceFromDepth(float depth)
 {
@@ -73,7 +70,7 @@ int GetLightCount(float4 vPos, float4 wPos)
     return tLightGrid[clusterIndex1D].y;
 }
 
-LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V)
+LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
     uint3 clusterIndex3D = uint3(floor(pos.xy / cClusterSize), GetSliceFromDepth(vPos.z));
     uint clusterIndex1D = clusterIndex3D.x + cClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cClusterDimensions.y);
@@ -87,9 +84,9 @@ LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V)
         uint lightIndex = tLightIndexList[startOffset + i];
         Light light = Lights[lightIndex];
 
-        LightResult result = DoLight(light, wPos, N, V);
-        totalResult.Diffuse += result.Diffuse;
-        totalResult.Specular += result.Specular;
+        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, wPos, N, V);
+        totalResult.Diffuse += result.Diffuse * light.Color.rgb * light.Color.a;
+        totalResult.Specular += result.Specular * light.Color.rgb * light.Color.a;
     }
 
     return totalResult;
@@ -109,7 +106,7 @@ float3 CalculateNormal(float3 N, float3 T, float3 BT, float2 texCoord, bool inve
 }
 
 [RootSignature(RootSig)]
-PSInput Diffuse_VS(VSInput input)
+PSInput VSMain(VSInput input)
 {
     PSInput result;
     
@@ -124,23 +121,22 @@ PSInput Diffuse_VS(VSInput input)
     return result;
 }
 
-float4 Diffuse_PS(PSInput input) : SV_TARGET
+float4 PSMain(PSInput input) : SV_TARGET
 {
-    // float2 uv = float2((float)GetLightCount(input.positionVS, input.positionWS) / 100.0f, 0.0f);
-    // return tHeatMapTexture.Sample(myDiffuseSampler, uv);
+    float4 baseColor = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
+    float3 specular = 1;
+    float metalness = 0;
+    float r = lerp(0.3f, 1.0f, 1 - mySpecularTexture.Sample(myDiffuseSampler, input.texCoord).r);
 
-    float3 V = normalize(input.positionWS.xyz - cViewInverse[3].xyz);
-    float3 N = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
+    float3 diffuseColor = baseColor.rgb * (1 - metalness);
+    float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
+
+    float3 N = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, false);
+    float3 V = normalize(cViewInverse[3].xyz - input.positionWS.xyz);
     
-    LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, N, V);
+    LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, N, V, diffuseColor, specularColor, r);
 
-    float4 diffuseSample = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
-    float4 specularSample = mySpecularTexture.Sample(myDiffuseSampler, input.texCoord);
-    lightResults.Specular *= specularSample;
-    lightResults.Diffuse *= diffuseSample;
-
-    float4 color = saturate(lightResults.Diffuse + lightResults.Specular);
-    color.a = diffuseSample.a;
+    float3 color = lightResults.Diffuse + lightResults.Specular;
     
-    return color;
+    return float4(color, baseColor.a);
 }

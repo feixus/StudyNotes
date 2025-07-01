@@ -124,12 +124,15 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 	mbstowcs_s(&written, target, pTarget, 256);
 
 	LPCWSTR pArgs[] = {
-		L"/Zpr",
+		L"/Zpr",			// use row-major packing for matrices in constant buffers and structures
 #ifdef _DEBUG
-		L"-Zi",
+		L"-Zi",				// enable debug info
+		L"-Qembed_debug",   // embed debug info into output
+		L"-Od",				// disable optimization
 #else
-		L"-0d",
+		L"-O3",				// enable optimization
 #endif	
+		L"/WX",				// treat warnings as errors
 	};
 
 	std::vector<std::wstring> dDefineNames;
@@ -178,6 +181,8 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 	pCompileResult->GetResult(m_pByteCodeDxc.GetAddressOf());
 
 	pCompileResult->Release();
+
+	return true;
 #else
 	return false;
 #endif

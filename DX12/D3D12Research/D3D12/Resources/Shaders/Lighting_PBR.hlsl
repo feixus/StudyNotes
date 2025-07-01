@@ -1,8 +1,8 @@
 #ifndef H_LIGHTING_PBR
 #define H_LIGHTING_PBR
 
-#include "Common.hlsl"
-#include "ShadingModels.hlsl"
+#include "Common.hlsli"
+#include "ShadingModels.hlsli"
 
 cbuffer LightData : register(b2)
 {

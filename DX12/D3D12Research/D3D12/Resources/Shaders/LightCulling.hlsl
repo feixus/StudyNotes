@@ -1,4 +1,5 @@
-#include "Common.hlsl"
+#include "Common.hlsli"
+#include "Constants.hlsli"
 
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 5), visibility = SHADER_VISIBILITY_ALL), " \
@@ -155,7 +156,7 @@ void CSMain(CS_INPUT input)
     float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensions, cProjectionInverse).z;
     float depthRange = 31.0f / (maxDepthVS - minDepthVS);
     uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
-    InterlockedOr(DepthMask, 1 << cellIndex);
+    InterlockedOr(DepthMask, 1u << cellIndex);
 #endif
 
     // clipping plane for minimum depth value

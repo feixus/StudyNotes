@@ -1,7 +1,4 @@
-#ifndef H_COMMON
-#define H_COMMON
-
-#include "Constants.hlsl"
+#include "Constants.hlsli"
 
 //https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-packing-rules
 struct Light
@@ -115,14 +112,6 @@ void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 	aabb.Extents = float4(maximum, 0) - aabb.Center;
 }
 
-float3 HUEtoRGB(in float H)
-{
-	float R = abs(H * 6 - 3) - 1;
-	float G = 2 - abs(H * 6 - 2);
-	float B = 2 - abs(H * 6 - 4);
-	return float3(R, G, B);
-}
-
 float4 ClipToView(float4 clip, float4x4 projectionInverse)
 {
     float4 view = mul(clip, projectionInverse);
@@ -195,5 +184,3 @@ float GetCubeFaceIndex(const float3 v)
     }
     return faceIndex;
 }
-
-#endif

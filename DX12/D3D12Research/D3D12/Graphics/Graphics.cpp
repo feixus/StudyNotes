@@ -876,8 +876,8 @@ void Graphics::InitializeAssets()
 	// PBR diffuse passes
 	{
 		// shaders
-		Shader vertexShader("Resources/Shaders/Diffuse_PBR.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/});
-		Shader pixelShader("Resources/Shaders/Diffuse_PBR.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/});
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
 
 		// root signature
 		m_pPBRDiffuseRS = std::make_unique<RootSignature>();

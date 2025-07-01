@@ -1,42 +1,10 @@
-#ifndef H_LIGHTING
-#define H_LIGHTING
-
 #include "Common.hlsli"
+#include "ShadingModels.hlsli"
 
 cbuffer LightData : register(b2)
 {
     float4x4 cLightViewProjection[MAX_SHADOW_CASTERS];
     float4 cShadowMapOffsets[MAX_SHADOW_CASTERS];
-}
-
-struct LightResult
-{
-    float4 Diffuse;
-    float4 Specular;
-};
-
-float GetSpecularBlinnPhong(float3 viewDirection, float3 normal, float3 lightVector, float shininess)
-{
-    float3 halfway = normalize(lightVector - viewDirection);
-    float specularStrength = dot(halfway, normal);
-    return pow(saturate(specularStrength), shininess);
-}
-
-float GetSpecularPhong(float3 viewDirection, float3 normal, float3 lightVector, float shininess)
-{
-    float3 reflectedLight = reflect(-lightVector, normal);
-    float specularStrength = dot(reflectedLight, -viewDirection);
-    return pow(saturate(specularStrength), shininess);
-}
-
-float4 DoDiffuse(Light light, float3 normal, float3 lightVector)
-{
-    return float4(light.Color.rgb * max(dot(normal, lightVector), 0), 1);
-}
-
-float4 DoSpecular(Light light, float3 normal, float3 lightVector, float3 viewDirection)
-{
-    return float4(light.Color.rgb * GetSpecularBlinnPhong(viewDirection, normal, lightVector, 15.0f), 1);
 }
 
 #ifdef SHADOW
@@ -101,27 +69,9 @@ float GetAttenuation(Light light, float3 wPos)
     return attenuation;
 }
 
-LightResult DoLight(Light light, float3 wPos, float3 normal, float3 viewDirection)
+LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V)
 {
-    LightResult result;
-    float3 L = normalize(light.Position - wPos);
     float attenuation = GetAttenuation(light, wPos);
-    result.Diffuse = light.Color.w * attenuation * DoDiffuse(light, normal, L);
-    result.Specular = light.Color.w * attenuation * DoSpecular(light, normal, L, viewDirection);
-
-#ifdef SHADOW
-    if (light.ShadowIndex != -1)
-    {
-        float3 vLight = normalize(wPos - light.Position);
-        float faceIndex = GetCubeFaceIndex(vLight);
-
-        float shadowFactor = DoShadow(wPos, light.ShadowIndex);
-        result.Diffuse *= shadowFactor;
-        result.Specular *= shadowFactor;
-    }
-#endif
-
-    return result;
+    float3 L = normalize(light.Position - wPos);
+    return DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 }
-
-#endif

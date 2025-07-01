@@ -57,7 +57,7 @@ float3 tonemap_uc2(in float3 color)
     float exposure_bias = 2.0f;
     float3 curr = tonemap_uncharted2(color * exposure_bias);
 
-    float white_scale = 1.0f / tonemap_uncharted2(W);
+    float3 white_scale = 1.0f / tonemap_uncharted2(W);
     float3 ccolor = curr * white_scale;
 
     return pow(abs(ccolor), TONEMAP_GAMMA); // gamma
