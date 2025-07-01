@@ -37,6 +37,11 @@
 bool gSortOpaqueMeshes = true;
 bool gSortTransparentMeshes = true;
 
+float g_WhitePoint = 4;
+float g_MinLogLuminance = -10.0f;
+float g_MaxLogLuminance = 2.0f;
+float g_Tau = 10;
+
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
@@ -467,13 +472,12 @@ void Graphics::Update()
 	}
 
 	{
-		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 		// 7. MSAA render target resolve
 		//  - we have to resolve a MSAA render target ourselves.
 		{
 			if (m_SampleCount > 1)
 			{
+				CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 				Profiler::Instance()->Begin("Resolve MSAA", pCommandContext);
 
 				pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
@@ -482,26 +486,101 @@ void Graphics::Update()
 				pCommandContext->GetCommandList()->ResolveSubresource(m_pHDRRenderTarget->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
 
 				Profiler::Instance()->End(pCommandContext);
+				nextFenceValue = pCommandContext->Execute(false);
 			}
 		}
 
 		// tonemap
 		{
-			Profiler::Instance()->Begin("Tonemap", pCommandContext);
-			pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-			pCommandContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+			Profiler::Instance()->Begin("Luminance Histogram", pCommandContext);
 
-			pCommandContext->SetGraphicsPipelineState(m_pToneMapPSO.get());
-			pCommandContext->SetGraphicsRootSignature(m_pToneMapRS.get());
-			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-			pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-			pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			pCommandContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
-			pCommandContext->SetDynamicDescriptor(0, 0, m_pHDRRenderTarget->GetSRV());
-			pCommandContext->Draw(0, 3);
-			pCommandContext->EndRenderPass();
+			pCommandContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pCommandContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			pCommandContext->FlushResourceBarriers();
+
+			uint32_t values[4] = {};
+			pCommandContext->ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV(), values);
+
+			pCommandContext->SetComputePipelineState(m_pLuminanceHistogramPSO.get());
+			pCommandContext->SetComputeRootSignature(m_pLuminanceHistogramRS.get());
+
+			struct HistogramParameters
+			{
+				uint32_t Width;
+				uint32_t Height;
+				float MinLogLuminance;
+				float OneOverLogLuminanceRange;
+			} Parameters;
+
+			Parameters.Width = m_WindowWidth;
+			Parameters.Height = m_WindowHeight;
+			Parameters.MinLogLuminance = g_MinLogLuminance;
+			Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+
+			pCommandContext->SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
+			pCommandContext->SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
+			pCommandContext->SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+
+			pCommandContext->Dispatch(ceil(m_WindowWidth / 16.0f), ceil(m_WindowHeight / 16.0f), 1);
 			Profiler::Instance()->End(pCommandContext);
+
+
+
+			Profiler::Instance()->Begin("Average Luminance", pCommandContext);
+
+			pCommandContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			pCommandContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			pCommandContext->SetComputePipelineState(m_pAverageLuminancePSO.get());
+			pCommandContext->SetComputeRootSignature(m_pAverageLuminanceRS.get());
+
+			struct AverageLuminanceParameters
+			{
+				uint32_t PixelCount;
+				float MinLogLuminance;
+				float LogLuminanceRange;
+				float TimeDelta;
+				float Tau;
+			} AverageParameters;
+
+			AverageParameters.PixelCount = m_WindowWidth * m_WindowHeight;
+			AverageParameters.MinLogLuminance = g_MinLogLuminance;
+			AverageParameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
+			AverageParameters.TimeDelta = GameTimer::DeltaTime();
+			AverageParameters.Tau = g_Tau;
+
+			pCommandContext->SetComputeDynamicConstantBufferView(0, &AverageParameters, sizeof(AverageLuminanceParameters));
+			pCommandContext->SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
+			pCommandContext->SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
+
+			pCommandContext->Dispatch(1, 1, 1);
+			Profiler::Instance()->End(pCommandContext);
+
+			nextFenceValue = pCommandContext->Execute(false);
 		}
+
+
+		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		Profiler::Instance()->Begin("Tonemap", pCommandContext);
+
+		pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+		pCommandContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		pCommandContext->SetGraphicsPipelineState(m_pToneMapPSO.get());
+		pCommandContext->SetGraphicsRootSignature(m_pToneMapRS.get());
+		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+		pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCommandContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
+
+		pCommandContext->SetDynamicConstantBufferView(0, &g_WhitePoint, sizeof(float));
+		pCommandContext->SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
+		pCommandContext->SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
+		pCommandContext->Draw(0, 3);
+		pCommandContext->EndRenderPass();
+		Profiler::Instance()->End(pCommandContext);
+
 
 		Profiler::Instance()->Begin("UI", pCommandContext);
 		// 6. UI
@@ -935,6 +1014,41 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
 	}
 
+	// luminance histogram
+	{
+		Shader computeShader("Resources/Shaders/LuminanceHistogram.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		// root signature
+		m_pLuminanceHistogramRS = std::make_unique<RootSignature>();
+		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Histogram RS", computeShader, m_pDevice.Get());
+
+		// pipeline state
+		m_pLuminanceHistogramPSO = std::make_unique<ComputePipelineState>();
+		m_pLuminanceHistogramPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pLuminanceHistogramPSO->SetRootSignature(m_pLuminanceHistogramRS->GetRootSignature());
+		m_pLuminanceHistogramPSO->Finalize("Luminance Histogram PSO", m_pDevice.Get());
+
+		m_pLuminanceHistogram = std::make_unique<Buffer>(this, "Luminance Histogram");
+		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32_t) * 256));
+		m_pAverageLuminance = std::make_unique<GraphicsTexture>(this, "Average Luminance");
+		m_pAverageLuminance->Create(TextureDesc::Create2D(1, 1, DXGI_FORMAT_R32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	}
+
+	// average luminance
+	{
+		Shader computeShader("Resources/Shaders/AverageLuminance.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		// root signature
+		m_pAverageLuminanceRS = std::make_unique<RootSignature>();
+		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance RS", computeShader, m_pDevice.Get());
+
+		// pipeline state
+		m_pAverageLuminancePSO = std::make_unique<ComputePipelineState>();
+		m_pAverageLuminancePSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pAverageLuminancePSO->SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
+		m_pAverageLuminancePSO->Finalize("Average Luminance PSO", m_pDevice.Get());
+	}
+
 	// tonemapping
 	{
 		Shader vertexShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::VertexShader, "VSMain");
@@ -1025,7 +1139,7 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 	
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
+	ImGui::SetNextWindowSize(ImVec2(400, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	ImGui::Text("MS: %.4f", GameTimer::DeltaTime() * 1000.0f);
 	ImGui::SameLine(100);
@@ -1068,6 +1182,11 @@ void Graphics::UpdateImGui()
 		{
 			RandomizeLights(m_DesiredLightCount);
 		}
+
+		ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
+		ImGui::SliderFloat("Min Log Luminance", &g_MaxLogLuminance, -50, 50);
+		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
+		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 
 		ImGui::TreePop();
 	}
@@ -1168,7 +1287,7 @@ void Graphics::RandomizeLights(int count)
 	
 	Vector3 dir(-300, -300, -300);
 	dir.Normalize();
-	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), dir, 0.4f);
+	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), dir, 0.1f);
 	m_Lights[lightIndex].ShadowIndex = 0;
 
 	int randomLightsStartIndex = lightIndex + 1;
@@ -1188,10 +1307,10 @@ void Graphics::RandomizeLights(int count)
 		switch (type)
 		{
 		case Light::Type::Point:
-			m_Lights[i] = Light::Point(position, range, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(position, range, 4.0f, 0.5f, color);
 			break;
 		case Light::Type::Spot:
-			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, 4.0f, 0.5f, color);
 			break;
 		case Light::Type::Directional:
 		case Light::Type::MAX:

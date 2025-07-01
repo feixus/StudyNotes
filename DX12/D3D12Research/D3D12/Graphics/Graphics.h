@@ -191,8 +191,14 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffuseAlphaPSO;
 
 	// Tonemapping
+	std::unique_ptr<RootSignature> m_pLuminanceHistogramRS;
+	std::unique_ptr<ComputePipelineState> m_pLuminanceHistogramPSO;
+	std::unique_ptr<RootSignature> m_pAverageLuminanceRS;
+	std::unique_ptr<ComputePipelineState> m_pAverageLuminancePSO;
 	std::unique_ptr<RootSignature> m_pToneMapRS;
 	std::unique_ptr<GraphicsPipelineState> m_pToneMapPSO;
+	std::unique_ptr<Buffer> m_pLuminanceHistogram;
+	std::unique_ptr<GraphicsTexture> m_pAverageLuminance;
 
 	// light data
 	int m_ShadowCasters{0};

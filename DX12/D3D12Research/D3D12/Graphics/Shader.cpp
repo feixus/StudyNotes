@@ -128,9 +128,9 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 #ifdef _DEBUG
 		L"-Zi",				// enable debug info
 		L"-Qembed_debug",   // embed debug info into output
-		L"-Od",				// disable optimization
+		L"Od",				// disable optimization
 #else
-		L"-O3",				// enable optimization
+		L"O3",				// enable optimization
 #endif	
 		L"/WX",				// treat warnings as errors
 	};
