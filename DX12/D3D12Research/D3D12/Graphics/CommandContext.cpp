@@ -259,6 +259,7 @@ void CommandContext::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLA
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
 	assert(!m_InRenderPass);
+	assert(renderPassInfo.DepthStencilTarget.Target || (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::DontCare_DontCare && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::DontCare_DontCare));
 
 #if USE_RENDERPASSES
 	ComPtr<ID3D12GraphicsCommandList4> pCmd;
@@ -290,7 +291,10 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
 		}
 		renderPassDepthStencilDesc.StencilEndingAccess.Type = RenderPassInfo::ExtractEndingAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
-		renderPassDepthStencilDesc.cpuDescriptor = renderPassInfo.DepthStencilTarget.Target->GetDSV(writeable);
+		if (renderPassInfo.DepthStencilTarget.Target != nullptr)
+		{
+			renderPassDepthStencilDesc.cpuDescriptor = renderPassInfo.DepthStencilTarget.Target->GetDSV(writeable);
+		}
 
 		std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs{};
 		for (uint32_t i = 0; i < renderPassInfo.RenderTargetCount; i++)
@@ -351,7 +355,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			writeable = false;
 		}
 
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Target->GetDSV(writeable);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target->GetDSV(writeable) : D3D12_CPU_DESCRIPTOR_HANDLE{};
 		D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
 		if (RenderPassInfo::ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 		{
@@ -380,7 +384,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			}
 			rtvHandles[i] = data.Target->GetRTV();
 		}
-		m_pCommandList->OMSetRenderTargets(renderPassInfo.RenderTargetCount, rtvHandles.data(), false, &dsvHandle);	
+		m_pCommandList->OMSetRenderTargets(renderPassInfo.RenderTargetCount, rtvHandles.data(), false, dsvHandle.ptr != 0 ? &dsvHandle : nullptr);	
 	}
 
 	m_InRenderPass = true;

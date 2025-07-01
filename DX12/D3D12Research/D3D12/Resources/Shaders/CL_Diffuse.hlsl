@@ -121,6 +121,7 @@ PSInput VSMain(VSInput input)
     return result;
 }
 
+[earlydepthstencil]  // explicitly requests early depth stencil
 float4 PSMain(PSInput input) : SV_TARGET
 {
     float4 baseColor = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);

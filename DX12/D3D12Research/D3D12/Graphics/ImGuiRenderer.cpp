@@ -57,13 +57,6 @@ void ImGuiRenderer::InitializeImGui()
 	io.Fonts->SetTexID(m_pFontTexture->GetSRV().ptr);
 
 	pContext->Execute(true);
-
-	m_pDepthBuffer = std::make_unique<GraphicsTexture>(m_pGraphics, "ImGui Depth Buffer");
-}
-
-void ImGuiRenderer::OnSwapchainCreated(int width, int height)
-{
-	m_pDepthBuffer->Create(TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT));
 }
 
 void ImGuiRenderer::CreatePipeline()
@@ -109,16 +102,14 @@ void ImGuiRenderer::Render(CommandContext& context, GraphicsTexture* pRenderTarg
 	context.SetGraphicsPipelineState(m_pPipelineStateObject.get());
 	context.SetGraphicsRootSignature(m_pRootSignature.get());
 
-	uint32_t width = m_pGraphics->GetWindowWidth();
-	uint32_t height = m_pGraphics->GetWindowHeight();
-	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)width, (float)height, 0.0f, 0.0f, 1.0f);
+	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.SetViewport(FloatRect(0, 0, (float)width, (float)height), 0, 1);
+	context.SetViewport(FloatRect(0, 0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
 
 	Profiler::Instance()->Begin("Render UI", &context);
-	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, m_pDepthBuffer.get(), RenderPassAccess::DontCare_DontCare));
+	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::DontCare_DontCare));
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{

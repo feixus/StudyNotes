@@ -22,6 +22,18 @@
 #include "RenderGraph/Blackboard.h"
 #include "RenderGraph/ResourceAllocator.h"
 
+#ifdef _DEBUG
+#define D3D_VALIDATION 1
+#endif
+
+#ifndef D3D_VALIDATION
+#define D3D_VALIDATION 0
+#endif
+
+#ifndef GPU_VALIDATION
+#define GPU_VALIDATION 0
+#endif
+
 bool gSortOpaqueMeshes = true;
 bool gSortTransparentMeshes = true;
 
@@ -89,53 +101,13 @@ void Graphics::Update()
 	//////////////////////////////////
 	LightData lightData;
 
-	// Matrix projection = XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, m_Lights[0].Range, 0.1f);
+	Matrix projection = XMMatrixOrthographicLH(512, 512, 10000.f, 0.1f);
 
 	m_ShadowCasters = 0;
 
-	// point light
-	/*lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(-1.f, 0.f, 0.f), Vector3::Up) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.f, 0.25f, 0);
+	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up)) * projection;
+	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.f, 1.f, 0);
 	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(1.f, 0.f, 0.f), Vector3::Up) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.25f, 0.f, 0.25f, 0);
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.f, -1.f, 0.f), Vector3::Forward) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.5f, 0.f, 0.25f, 0);
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.f, 1.f, 0.f), Vector3::Backward) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.75f, 0.f, 0.25f, 0);
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.f, 0.f, -1.f), Vector3::Up) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.25f, 0.25f, 0);
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.f, 0.f, 1.f), Vector3::Up) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.25f, 0.25f, 0.25f, 0);
-	++m_ShadowCasters;*/
-
-	//// main directional
-	//lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixOrthographicLH(512, 512, 1000.f, 0.1f);
-	//lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.f, 0.75f, 0);
-
-	//// spot A
-	//++m_ShadowCasters;
-	//lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
-	//lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.75f, 0.f, 0.25f, 0);
-
-	//// spot B
-	//++m_ShadowCasters;
-	//lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
-	//lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.75f, 0.25f, 0.25f, 0);
-
-	//// spot C
-	//++m_ShadowCasters;
-	//lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up) * XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.f, 300.f, 0.1f);
-	//lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.75f, 0.5f, 0.25f, 0);
 
 	Profiler::Instance()->End();
 
@@ -267,7 +239,7 @@ void Graphics::Update()
 		}
 
 		int64_t fence = graph.Execute(this);
-		WaitForFence(fence);
+		//WaitForFence(fence);
 
 		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -285,10 +257,7 @@ void Graphics::Update()
 			m_pLightBuffer->SetData(pCommandContext, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
 			Profiler::Instance()->End(pCommandContext);
 
-			pCommandContext->InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			pCommandContext->InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pCommandContext->InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 			pCommandContext->SetComputePipelineState(m_pComputeLightCullPipeline.get());
 			pCommandContext->SetComputeRootSignature(m_pComputeLightCullRS.get());
@@ -325,7 +294,6 @@ void Graphics::Update()
 		}
 
 		// 4. shadow mapping
-		//  - render shadow maps for directional and spot lights
 		//  - renders the scene depth onto a separate depth buffer from the light's view
 		if (m_ShadowCasters > 0)
 		{
@@ -333,10 +301,7 @@ void Graphics::Update()
 
 			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
-			pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
-
-			pCommandContext->BeginRenderPass(RenderPassInfo(GetDepthStencil(), RenderPassAccess::Clear_Store));
+			pCommandContext->BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
 
 			pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -531,7 +496,7 @@ void Graphics::Update()
 			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 			pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 			pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			pCommandContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, m_pToneMapDepth.get(), RenderPassAccess::Clear_DontCare));
+			pCommandContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
 			pCommandContext->SetDynamicDescriptor(0, 0, m_pHDRRenderTarget->GetSRV());
 			pCommandContext->Draw(0, 3);
 			pCommandContext->EndRenderPass();
@@ -620,13 +585,13 @@ void Graphics::InitD3D()
 	E_LOG(LogType::Info, "Graphics::InitD3D");
 	UINT dxgiFactoryFlags = 0;
 
-#ifdef _DEBUG
+#if D3D_VALIDATION
 	// enable debug layer
 	ComPtr<ID3D12Debug> pDebugController;
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
 	pDebugController->EnableDebugLayer();  // CPU-side
 
-#ifdef GPU_VALIDATION
+#if GPU_VALIDATION
 	ComPtr<ID3D12Debug1> pDebugController1;
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController1)));
 	pDebugController1->SetEnableGPUBasedValidation(true);  // GPU-side
@@ -661,7 +626,7 @@ void Graphics::InitD3D()
 	// device
 	HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_pDevice)));
 
-#ifdef _DEBUG
+#if D3D_VALIDATION
 	ID3D12InfoQueue* pInfoQueue = nullptr;
 	if (HR(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
 	{
@@ -733,18 +698,18 @@ void Graphics::InitD3D()
 	// create the textures but don't create the resources themselves yet. 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
-		m_RenderTargets[i] = std::make_unique<GraphicsTexture>(this, "Render Target");
+		m_Backbuffers[i] = std::make_unique<GraphicsTexture>(this, "Render Target");
 	}
 	m_pDepthStencil = std::make_unique<GraphicsTexture>(this, "Depth Stencil");
 
 	if (m_SampleCount > 1)
 	{
 		m_pResolveDepthStencil = std::make_unique<GraphicsTexture>(this, "Resolved Depth Stencil");
-		m_pResolvedRenderTarget = std::make_unique<GraphicsTexture>(this, "Resolved Render Target");
 		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture>(this, "MSAA Render Target");
-		m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
+		m_pResolvedRenderTarget = std::make_unique<GraphicsTexture>(this, "Resolved Render Target");
 	}
-	m_pToneMapDepth = std::make_unique<GraphicsTexture>(this, "Tonemap Depth");
+	
+	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
 
 	m_pLightGridOpaque = std::make_unique<GraphicsTexture>(this, "Opaque Light Grid");
 	m_pLightGridTransparent = std::make_unique<GraphicsTexture>(this, "Transparent Light Grid");
@@ -767,7 +732,7 @@ void Graphics::CreateSwapchain()
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 	swapchainDesc.Width = m_WindowWidth;
 	swapchainDesc.Height = m_WindowHeight;
-	swapchainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swapchainDesc.Format = SWAPCHAIN_FORMAT;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapchainDesc.BufferCount = FRAME_COUNT;
 	swapchainDesc.Scaling = DXGI_SCALING_NONE;
@@ -807,7 +772,7 @@ void Graphics::OnResize(int width, int height)
 	
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
-		m_RenderTargets[i]->Release();
+		m_Backbuffers[i]->Release();
 	}
 	m_pDepthStencil->Release();
 
@@ -816,7 +781,7 @@ void Graphics::OnResize(int width, int height)
 			FRAME_COUNT,
 			m_WindowWidth,
 			m_WindowHeight,
-			DXGI_FORMAT_R8G8B8A8_UNORM,
+			SWAPCHAIN_FORMAT,
 			DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	m_CurrentBackBufferIndex = 0;
@@ -826,7 +791,7 @@ void Graphics::OnResize(int width, int height)
 	{
 		ID3D12Resource* pResource = nullptr;
  		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-		m_RenderTargets[i]->CreateForSwapChain(pResource);
+		m_Backbuffers[i]->CreateForSwapChain(pResource);
 	}
 
 	m_pDepthStencil->Create(TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
@@ -836,11 +801,9 @@ void Graphics::OnResize(int width, int height)
 		m_pResolvedRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(0,0,0,0))));
 
 		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0,0,0,0))));
-		m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource));
 	}
 
-	m_pToneMapDepth->Create(TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil));
-	
+	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource));
 
 	int frustumCountX = (int)ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = (int)ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
@@ -848,7 +811,6 @@ void Graphics::OnResize(int width, int height)
 	m_pLightGridTransparent->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
-	m_pImGuiRenderer->OnSwapchainCreated(width, height);
 	m_pClouds->OnSwapchainCreated(width, height);
 }
 
@@ -876,8 +838,8 @@ void Graphics::InitializeAssets()
 	// PBR diffuse passes
 	{
 		// shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/});
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { "SHADOW"});
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "SHADOW" });
 
 		// root signature
 		m_pPBRDiffuseRS = std::make_unique<RootSignature>();
@@ -951,7 +913,7 @@ void Graphics::InitializeAssets()
 		}
 
 		m_pShadowMap = std::make_unique<GraphicsTexture>(this, "Shadow Map");
-		m_pShadowMap->Create(TextureDesc(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(1.0f, 0)));
+		m_pShadowMap->Create(TextureDesc(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 	}
 
 	// depth prepass
@@ -984,11 +946,12 @@ void Graphics::InitializeAssets()
 
 		// pipeline state
 		m_pToneMapPSO = std::make_unique<GraphicsPipelineState>();
+		m_pToneMapPSO->SetDepthEnable(false);
+		m_pToneMapPSO->SetDepthWrite(false);
 		m_pToneMapPSO->SetRootSignature(m_pToneMapRS->GetRootSignature());
 		m_pToneMapPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pToneMapPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pToneMapPSO->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DEPTH_STENCIL_FORMAT, 1, 0);
-		m_pToneMapPSO->SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+		m_pToneMapPSO->SetRenderTargetFormat(SWAPCHAIN_FORMAT, DEPTH_STENCIL_FORMAT, 1, 0);
 		m_pToneMapPSO->Finalize("Tonemapping Pipeline", m_pDevice.Get());
 	}
 
@@ -1203,9 +1166,10 @@ void Graphics::RandomizeLights(int count)
 
 	int lightIndex = 0;
 	
-	Vector3 dir(1, -1, 1);
+	Vector3 dir(-300, -300, -300);
 	dir.Normalize();
-	m_Lights[lightIndex] = Light::Directional(Vector3(200, 200, 200), dir, 0.4f);
+	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), dir, 0.4f);
+	m_Lights[lightIndex].ShadowIndex = 0;
 
 	int randomLightsStartIndex = lightIndex + 1;
 	for (int i = randomLightsStartIndex; i < m_Lights.size(); i++)
@@ -1217,7 +1181,7 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(10.f, 18.f);
+		const float range = Math::RandomRange(5.f, 9.f);
 		const float angle = Math::RandomRange(30.f, 60.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;

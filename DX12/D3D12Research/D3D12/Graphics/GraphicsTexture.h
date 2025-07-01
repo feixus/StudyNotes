@@ -219,4 +219,6 @@ private:
 	int m_SrvUavDescriptorSize{0};
 	int m_RtvDescriptorSize{0};
 	int m_DsvDescriptorSize{0};
+
+	const char* m_pName{nullptr};
 };

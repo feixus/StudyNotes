@@ -29,7 +29,6 @@ enum class RenderTargetLoadAction : uint8_t
 	DontCare,
 	Load,
 	Clear,
-	NoTouch,
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderTargetLoadAction)
 
@@ -38,7 +37,6 @@ enum class RenderTargetStoreAction : uint8_t
 	DontCare,
 	Store,
 	Resolve,
-	NoTouch,
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderTargetStoreAction)
 
@@ -53,7 +51,6 @@ enum class RenderPassAccess : uint8_t
 	Load_DontCare = COMBINE_ACTIONS(Load, DontCare),
 	Clear_Resolve = COMBINE_ACTIONS(Clear, Resolve),
 	Load_Resolve = COMBINE_ACTIONS(Load, Resolve),
-	NoAccess = COMBINE_ACTIONS(NoTouch, NoTouch),
 #undef COMBINE_ACTIONS
 };
 
@@ -92,7 +89,7 @@ struct RenderPassInfo
 		WriteUAVs = uavWrites;
 	}
 
-	RenderPassInfo(GraphicsTexture* pRenderTarget, RenderPassAccess renderTargetAccess, GraphicsTexture* pDepthBuffer, RenderPassAccess depthAccess, bool uavWritrs = false, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
+	RenderPassInfo(GraphicsTexture* pRenderTarget, RenderPassAccess renderTargetAccess, GraphicsTexture* pDepthBuffer, RenderPassAccess depthAccess, bool uavWritrs = false, RenderPassAccess stencilAccess = RenderPassAccess::DontCare_DontCare)
 		: RenderTargetCount(1)
 	{
 		RenderTargets[0].Access = renderTargetAccess;

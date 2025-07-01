@@ -74,8 +74,8 @@ public:
 
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
-	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
-	GraphicsTexture* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
+	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
+	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
 	Camera* GetCamera() const { return m_pCamera.get(); }
 
@@ -92,7 +92,8 @@ public:
 	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
+	static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 private:
 	void BeginFrame();
@@ -124,10 +125,13 @@ private:
 	int m_SampleCount{1};
 	int m_SampleQuality{0};
 
+
+	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pHDRRenderTarget;
+	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
+	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
-	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
@@ -139,8 +143,8 @@ private:
 	std::mutex m_ContextAllocationMutex;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
-
 	std::unique_ptr<RGResourceAllocator> m_pResourceAllocator;
+	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
@@ -157,9 +161,7 @@ private:
 	std::vector<Batch> m_OpaqueBatches;
 	std::vector<Batch> m_TransparentBatches;
 
-	std::unique_ptr<ClusteredForward> m_pClusteredForward;
-
-	// directional light shadow mapping
+	// shadow mapping
 	std::unique_ptr<GraphicsTexture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRS;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPSO;
@@ -182,8 +184,6 @@ private:
 	// MSAA depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
 	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
-	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
-	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 
 	//PBR
 	std::unique_ptr<RootSignature> m_pPBRDiffuseRS;
@@ -193,7 +193,6 @@ private:
 	// Tonemapping
 	std::unique_ptr<RootSignature> m_pToneMapRS;
 	std::unique_ptr<GraphicsPipelineState> m_pToneMapPSO;
-	std::unique_ptr<GraphicsTexture> m_pToneMapDepth;
 
 	// light data
 	int m_ShadowCasters{0};
