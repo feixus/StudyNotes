@@ -409,7 +409,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
         m_DidCopyDebugClusterData = false;
     }
 
-    m_pGpuParticles->Simulate();
+    m_pGpuParticles->Simulate(pContext);
 }
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)

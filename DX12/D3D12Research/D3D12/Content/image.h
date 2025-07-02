@@ -51,6 +51,7 @@ public:
 	int GetComponents() const { return m_Components; }
 	bool IsSRGB() const { return m_sRgb; }
 	bool IsHDR() const { return m_IsHdr; }
+	bool IsCubemap() const { return m_IsCubemap; }
 
 	uint8_t* GetWritableData() { return m_Pixels.data(); }
 	const uint8_t* GetData(int mipLevel) const;
@@ -78,6 +79,7 @@ private:
 	bool m_sRgb{false};
 	bool m_IsArray{false};
 	bool m_IsHdr{false};
+	bool m_IsCubemap{false};
 	std::unique_ptr<Image> m_pNextImage;
 	ImageFormat m_Format{ImageFormat::MAX};
 	std::vector<uint8_t> m_Pixels;

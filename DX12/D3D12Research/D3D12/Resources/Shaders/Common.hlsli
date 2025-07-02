@@ -9,7 +9,7 @@ struct Light
 	int Type;
 	float4 Color;
 	float Range;
-	float SpotLightAngle;
+	float CosSpotLightAngle;
 	float Attenuation;
     int ShadowIndex;
 };

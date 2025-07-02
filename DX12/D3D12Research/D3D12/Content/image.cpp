@@ -445,6 +445,7 @@ bool Image::LoadDds(const std::string& inputStream)
 		if (isCubemap)
 		{
 			imageChainCount = 6;
+			m_IsCubemap = true;
 		}
 		else if (hasDxgi && pDx10Header->ArraySize > 1)
 		{

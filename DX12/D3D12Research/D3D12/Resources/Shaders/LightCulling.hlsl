@@ -197,7 +197,7 @@ void CSMain(CS_INPUT input)
         case LIGHT_SPOT:
         {
             Sphere sphere;
-            sphere.Radius = light.Range * 0.5f / pow(cos(radians(light.SpotLightAngle * 0.5f)), 2);
+            sphere.Radius = light.Range * 0.5f / pow(light.CosSpotLightAngle, 2);
             sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
 
             if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))

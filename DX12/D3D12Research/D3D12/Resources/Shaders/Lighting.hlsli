@@ -58,7 +58,7 @@ float GetAttenuation(Light light, float3 wPos)
 
         if (light.Type >= LIGHT_SPOT)
         {
-            float minCos = cos(radians(light.SpotLightAngle * 0.5f));
+            float minCos = light.CosSpotLightAngle;
             float maxCos = lerp(minCos, 1.0f, 1 - light.Attenuation);
             float cosAngle = dot(-L, light.Direction);
             float spotIntensity = smoothstep(minCos, maxCos, cosAngle);

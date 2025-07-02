@@ -7,6 +7,7 @@ class CommandSignature;
 class ComputePipelineState;
 class GraphicsPipelineState;
 class RootSignature;
+class CommandContext;
 
 class GpuParticles
 {
@@ -15,7 +16,7 @@ public:
     ~GpuParticles() = default;
 
     void Initialize();
-    void Simulate();
+    void Simulate(CommandContext* pContext);
     void Render();
 
 private:

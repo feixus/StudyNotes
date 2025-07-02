@@ -140,12 +140,11 @@ void GpuParticles::Initialize()
     }
 }
 
-void GpuParticles::Simulate()
+void GpuParticles::Simulate(CommandContext* pContext)
 {
-    CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-    
+    GPU_PROFILE_SCOPE("Gpu Particles", pContext);
     {
-        Profiler::Instance()->Begin("Prepare Arguments", pContext);
+        GPU_PROFILE_SCOPE("Prepare Arguments", pContext);
         pContext->SetComputePipelineState(m_pPrepareArgumentsPSO.get());
         pContext->SetComputeRootSignature(m_pPrepareArgumentsRS.get());
 
@@ -176,12 +175,10 @@ void GpuParticles::Simulate()
         pContext->InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
         pContext->InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
         pContext->FlushResourceBarriers();
-
-        Profiler::Instance()->End(pContext);
     }
 
     {
-        Profiler::Instance()->Begin("Emit Particles", pContext);
+        GPU_PROFILE_SCOPE("Emit Particles", pContext);
         pContext->SetComputePipelineState(m_pEmitPSO.get());
         pContext->SetComputeRootSignature(m_pEmitRS.get());
 
@@ -202,11 +199,10 @@ void GpuParticles::Simulate()
         pContext->ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pEmitArguments.get());
 
         pContext->InsertUavBarrier();
-        Profiler::Instance()->End(pContext);
     }
 
     {
-        Profiler::Instance()->Begin("Simulate Particles", pContext);
+        GPU_PROFILE_SCOPE("Simulate Particles", pContext);
         pContext->SetComputePipelineState(m_pSimulatePSO.get());
         pContext->SetComputeRootSignature(m_pSimulateRS.get());
 
@@ -232,11 +228,10 @@ void GpuParticles::Simulate()
         pContext->ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pSimulateArguments.get());
 
         pContext->InsertUavBarrier();
-        Profiler::Instance()->End(pContext);
     }
 
     {
-        Profiler::Instance()->Begin("Simulate End", pContext);
+        GPU_PROFILE_SCOPE("Simulate End", pContext);
 
         pContext->InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         pContext->InsertResourceBarrier(m_pCounterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -250,11 +245,10 @@ void GpuParticles::Simulate()
         pContext->Dispatch(1, 1, 1);
 
         pContext->InsertUavBarrier();
-        Profiler::Instance()->End(pContext);
     }
 
     {
-        Profiler::Instance()->Begin("Draw Particles", pContext);
+        GPU_PROFILE_SCOPE("Draw Particles", pContext);
 
         pContext->InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
         pContext->InsertResourceBarrier(m_pAliveList2.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -289,11 +283,9 @@ void GpuParticles::Simulate()
         pContext->ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get(), DescriptorTableType::Graphics);
         
         pContext->EndRenderPass();
-        Profiler::Instance()->End(pContext);
     }
 
     std::swap(m_pAliveList1, m_pAliveList2);
-    pContext->Execute(true);
 }
 
 void GpuParticles::Render()

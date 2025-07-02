@@ -90,24 +90,13 @@ void LightCulling(CS_Input input)
         break;
         case LIGHT_SPOT:
         {
-#ifdef OPTIMIZED_SPOT_LIGHT_CULLING
             Sphere sphere;
-            sphere.Position = GroupAABB.Center.xyz;
-            sphere.Radius = sqrt(dot(GroupAABB.Extents, GroupAABB.Extents));
-
-            if (ConeInSphere(mul(float4(light.Position, 1.0f), cView).xyz, mul(light.Direction, (float3x3)cView), light.Range, float2(sin(radians(light.SpotLightAngle * 0.5f)), cos(radians(light.SpotLightAngle * 0.5f))), sphere))
-            {
-                AddLight(i);
-            }
-#else
-            Sphere sphere;
-            sphere.Radius = light.Range * 0.5f / pow(cos(radians(light.SpotLightAngle * 0.5f)), 2);
+            sphere.Radius = light.Range * 0.5f / pow(light.CosSpotLightAngle, 2);
             sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
             if (SphereInAABB(sphere, GroupAABB))
             {
                 AddLight(i);
             }
-#endif
         }
         break;
         case LIGHT_DIRECTIONAL:
