@@ -123,9 +123,36 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 {
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc{};
 
+    std::array<bool, (uint32_t)Shader::Type::MAX> shaderVisibility{};
+
     for (size_t i = 0; i < m_RootParameters.size(); i++)
     {
         D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
+
+        switch (rootParameter.ShaderVisibility)
+        {
+        case D3D12_SHADER_VISIBILITY_VERTEX:
+            shaderVisibility[(uint32_t)Shader::Type::VertexShader] = true;
+            break;
+        case D3D12_SHADER_VISIBILITY_PIXEL:
+            shaderVisibility[(uint32_t)Shader::Type::PixelShader] = true;
+            break;
+        case D3D12_SHADER_VISIBILITY_GEOMETRY:
+            shaderVisibility[(uint32_t)Shader::Type::GeometryShader] = true;
+            break;
+        case D3D12_SHADER_VISIBILITY_ALL:
+            for (bool& v : shaderVisibility)
+            {
+                v = true;
+            }
+            break;
+        default:
+        case D3D12_SHADER_VISIBILITY_DOMAIN:
+        case D3D12_SHADER_VISIBILITY_HULL:
+            assert(false);
+            break;
+        }
+
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
             rootParameter.DescriptorTable.pDescriptorRanges = m_DescriptorTableRanges[i].data();
@@ -151,6 +178,25 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
             }
 		}
     }
+
+    if (shaderVisibility[(uint32_t)Shader::Type::VertexShader] == false)
+    {
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
+    }
+
+    if (shaderVisibility[(uint32_t)Shader::Type::PixelShader] == false)
+    {
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+    }
+
+    if (shaderVisibility[(uint32_t)Shader::Type::GeometryShader] == false)
+    {
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+    }
+
+    //#todo tesellation not supported yet
+    flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+    flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
 
     constexpr uint32_t recommendedDwords = 12;
     uint32_t dwords = GetDWordSize();

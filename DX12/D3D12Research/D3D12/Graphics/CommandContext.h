@@ -120,6 +120,7 @@ public:
 	virtual uint64_t ExecuteAndReset(bool wait);
 	
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
+	void InsertResourceBarrier(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state, D3D12_RESOURCE_STATES targetState);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
@@ -139,10 +140,10 @@ public:
 	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 
-	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32_t values[4]);
-	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t values[4]);
-	void ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4]);
-	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float values[4]);
+	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32_t* values = nullptr);
+	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values = nullptr);
+	void ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float* values = nullptr);
+	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
 
 	// a more structured way for applications to decalare data dependencies and output targets for a set of rendering operations. 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);

@@ -41,24 +41,26 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
     m_pDepthTexture->Create(TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
 
-	m_ClusterCountX = (uint32_t)ceil((float)windowWidth / cClusterSize);
-	m_ClusterCountY = (uint32_t)ceil((float)windowHeight / cClusterSize);
+	m_ClusterCountX = Math::RoundUp((float)windowWidth / cClusterSize);
+	m_ClusterCountY = Math::RoundUp((float)windowHeight / cClusterSize);
     m_MaxClusters = m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
 
-    struct AABB { Vector4 Min; Vector4 Max; };
-    m_pAabbBuffer->Create(BufferDesc::CreateStructured(m_MaxClusters, sizeof(AABB)));
+    m_pAabbBuffer->Create(BufferDesc::CreateStructured(m_MaxClusters, sizeof(Vector4) * 2));
     m_pUniqueClusterBuffer->Create(BufferDesc::CreateStructured(m_MaxClusters, sizeof(uint32_t)));
+    m_pUniqueClusterBuffer->CreateUAV(&m_pUniqueClusterBufferRawUAV, BufferUAVDesc::CreateRaw());
     m_pCompactedClusterBuffer->Create(BufferDesc::CreateStructured(m_MaxClusters, sizeof(uint32_t)));
+    m_pCompactedClusterBuffer->CreateUAV(&m_pCompactedClusterBufferRawUAV, BufferUAVDesc::CreateRaw());
     m_pDebugCompactedClusterBuffer->Create(BufferDesc::CreateStructured(m_MaxClusters, sizeof(uint32_t)));
 
     m_pLightIndexGrid->Create(BufferDesc::CreateStructured(m_MaxClusters * 32, sizeof(uint32_t)));
     m_pLightGrid->Create(BufferDesc::CreateStructured(m_MaxClusters, 2 * sizeof(uint32_t)));
+    m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
     m_pDebugLightGrid->Create(BufferDesc::CreateStructured(m_MaxClusters, 2 * sizeof(uint32_t)));
 
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	// create AABBs
 	{
-		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-		Profiler::Instance()->Begin("Create AABBs", pContext);
+		GPU_PROFILE_SCOPE("CreateAABBs", pContext);
 
 		pContext->SetComputePipelineState(m_pCreateAabbPSO.get());
 		pContext->SetComputeRootSignature(m_pCreateAabbRS.get());
@@ -87,14 +89,14 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		pContext->SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetUAV());
 
 		pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-
-		Profiler::Instance()->End(pContext);
-		pContext->Execute(true);
 	}
+	pContext->Execute(true);
 }
 
-void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResource)
+void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardInputResource& inputResource)
 {
+    GPU_PROFILE_SCOPE("ClusteredForward", pContext);
+
     Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
     float nearZ = m_pGraphics->GetCamera()->GetNear();
     float farZ = m_pGraphics->GetCamera()->GetFar();
@@ -102,28 +104,25 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
     float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
     float sliceMagicB = (float)cClusterCountZ * log(farZ) / log(nearZ / farZ);
 
-    CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
     // mark unique clusters
     {
-        Profiler::Instance()->Begin("Mark Unique Clusters", pContext);
-
-        Profiler::Instance()->Begin("Update Data", pContext);
-        std::vector<uint32_t> zero(m_MaxClusters);
-        m_pUniqueClusterBuffer->SetData(pContext, zero.data(), sizeof(uint32_t) * zero.size());
-        m_pCompactedClusterBuffer->SetData(pContext, zero.data(), sizeof(uint32_t) * zero.size());
-        Profiler::Instance()->End(pContext);
+        GPU_PROFILE_SCOPE("MarkUniqueClusters", pContext);
 
         pContext->InsertResourceBarrier(m_pDepthTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
         pContext->InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
         pContext->InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        pContext->InsertResourceBarrier(m_pCompactedClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        pContext->ClearUavUInt(m_pUniqueClusterBuffer.get(), m_pUniqueClusterBufferRawUAV);
+        pContext->ClearUavUInt(m_pCompactedClusterBuffer.get(), m_pCompactedClusterBufferRawUAV);
+        pContext->ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
 
         pContext->BeginRenderPass(RenderPassInfo(m_pDepthTexture.get(), RenderPassAccess::Clear_Store, true));
 
         pContext->SetGraphicsPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
         pContext->SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
         pContext->SetViewport(FloatRect(0.0f, 0.0f, screenDimensions.x, screenDimensions.y));
-        pContext->SetScissorRect(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
         pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         
         struct ConstantBuffer
@@ -148,7 +147,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         constantBuffer.ClusterSize[1] = cClusterSize;
         
         {
-            Profiler::Instance()->Begin("Opaque", pContext);
+            GPU_PROFILE_SCOPE("Opaque", pContext);
             pContext->SetDynamicConstantBufferView(0, &constantBuffer, sizeof(constantBuffer));
             pContext->SetDynamicDescriptor(1, 0, m_pUniqueClusterBuffer->GetUAV());
 
@@ -156,12 +155,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             {
                 b.pMesh->Draw(pContext);
             }
-
-            Profiler::Instance()->End(pContext);
         }
 
         {
-			Profiler::Instance()->Begin("Transparent", pContext);
+			GPU_PROFILE_SCOPE("Transparent", pContext);
 			
             pContext->SetGraphicsPipelineState(m_pMarkUniqueClustersTransparentPSO.get());
 			for (const Batch& b : *inputResource.pTransparentBatches)
@@ -169,46 +166,37 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
                 pContext->SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 				b.pMesh->Draw(pContext);
 			}
-
-			Profiler::Instance()->End(pContext);
         }
 
-        Profiler::Instance()->End(pContext);
         pContext->EndRenderPass();
     }
     
     {
         // compact clusters
         {
-            Profiler::Instance()->Begin("Compact Clusters", pContext);
+            GPU_PROFILE_SCOPE("CompactClusters", pContext);
 
             pContext->SetComputePipelineState(m_pCompactClusterListPSO.get());
             pContext->SetComputeRootSignature(m_pCompactClusterListRS.get());
 
-            pContext->InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
             UnorderedAccessView* pCompactedClusterUav = m_pCompactedClusterBuffer->GetUAV();
-            pContext->InsertResourceBarrier(pCompactedClusterUav->GetCounter(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
-
-            uint32_t values[] = {0, 0, 0, 0};
-            pContext->ClearUavUInt(pCompactedClusterUav->GetCounter(), pCompactedClusterUav->GetCounterUAV(), values);
+            pContext->InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            pContext->InsertResourceBarrier(pCompactedClusterUav->GetCounter(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            pContext->ClearUavUInt(pCompactedClusterUav->GetCounter(), pCompactedClusterUav->GetCounterUAV());
 
             pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusterBuffer->GetSRV());
             pContext->SetDynamicDescriptor(1, 0, m_pCompactedClusterBuffer->GetUAV());
 
-            pContext->Dispatch((int)ceil(m_MaxClusters / 64.f), 1, 1);
-        
-            Profiler::Instance()->End(pContext);
+            pContext->Dispatch(Math::RoundUp(m_MaxClusters / 64.f), 1, 1);
         }
 
         // update indirect arguments
         {
-            Profiler::Instance()->Begin("Update Indirect Arguments", pContext);
+            GPU_PROFILE_SCOPE("UpdateIndirectArguments", pContext);
 
             UnorderedAccessView* pCompactedClusterUav = m_pCompactedClusterBuffer->GetUAV();
             pContext->InsertResourceBarrier(pCompactedClusterUav->GetCounter(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            pContext->FlushResourceBarriers();
 
             pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
 		    pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
@@ -217,13 +205,12 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 		    pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
 
             pContext->Dispatch(1, 1, 1);
-            Profiler::Instance()->End(pContext);
         }
 
         // light culling
         if (gUseAlternativeLightCulling)
         {
-			Profiler::Instance()->Begin("Alternative Light Culling", pContext);
+			GPU_PROFILE_SCOPE("AlternativeLightCulling", pContext);
 
 			pContext->SetComputePipelineState(m_pAlternativeLightCullingPSO.get());
 			pContext->SetComputeRootSignature(m_pLightCullingRS.get());
@@ -232,14 +219,9 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             pContext->InsertResourceBarrier(m_pCompactedClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             pContext->InsertResourceBarrier(m_pAabbBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             pContext->InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            pContext->FlushResourceBarriers();
 
-            Profiler::Instance()->Begin("Set Data", pContext);
-			uint32_t zero = 0;
-			m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32_t));
-            std::vector<char> zeros(2 * sizeof(uint32_t) * m_MaxClusters);
-            m_pLightGrid->SetData(pContext, zeros.data(), sizeof(char) * zeros.size());
-            Profiler::Instance()->End(pContext);
+            pContext->ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
+            pContext->ClearUavUInt(m_pLightGrid.get(), m_pLightGrid->GetUAV());
 
 			struct ConstantBuffer
 			{
@@ -262,13 +244,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
 			pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
 
-            pContext->Dispatch((int)ceil((float)m_ClusterCountX / 4), (int)ceil((float)m_ClusterCountY / 4), (int)ceil((float)cClusterCountZ / 4));
-            
-            Profiler::Instance()->End(pContext);
+            pContext->Dispatch(Math::RoundUp(m_ClusterCountX / 4.f), Math::RoundUp(m_ClusterCountY / 4.f), Math::RoundUp(cClusterCountZ / 4.f));
         }
         else
         {
-            Profiler::Instance()->Begin("Light Culling", pContext);
+            GPU_PROFILE_SCOPE("LightCulling", pContext);
 
             pContext->SetComputePipelineState(m_pLightCullingPSO.get());
             pContext->SetComputeRootSignature(m_pLightCullingRS.get());
@@ -278,10 +258,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			pContext->InsertResourceBarrier(m_pAabbBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            pContext->FlushResourceBarriers();
 
-            uint32_t zero = 0;
-            m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32_t));
+            pContext->ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
 
             struct ConstantBuffer
             {
@@ -301,8 +279,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
             pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
 
             pContext->ExecuteIndirect(m_pLightCullingCommandSignature->GetCommandSignature(), m_pIndirectArguments.get());
-
-            Profiler::Instance()->End(pContext);
         }
     }
 
@@ -342,7 +318,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         frameData.SliceMagicA = sliceMagicA;
         frameData.SliceMagicB = sliceMagicB;
 
-        Profiler::Instance()->Begin("Lighting Pass", pContext);
+        GPU_PROFILE_SCOPE("LightingPass", pContext);
 
         pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -351,12 +327,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 
         pContext->BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, m_pDepthTexture.get(), RenderPassAccess::Load_DontCare));
         pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-        pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
         {
-            Profiler::Instance()->Begin("Opaque", pContext);
+            GPU_PROFILE_SCOPE("Opaque", pContext);
 			
             pContext->SetGraphicsPipelineState(m_pDiffusePSO.get());
 
@@ -375,12 +350,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 			    pContext->SetDynamicDescriptor(2, 2, b.pMaterial->pSpecularTexture->GetSRV());
 			    b.pMesh->Draw(pContext);
 		    }
-
-            Profiler::Instance()->End(pContext);
         }
 
         {
-            Profiler::Instance()->Begin("Transparent", pContext);
+            GPU_PROFILE_SCOPE("Transparent", pContext);
             pContext->SetGraphicsPipelineState(m_pDiffuseTransparencyPSO.get());
 
 			for (const Batch& b : *inputResource.pTransparentBatches)
@@ -393,17 +366,14 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
 				pContext->SetDynamicDescriptor(2, 2, b.pMaterial->pSpecularTexture->GetSRV());
 				b.pMesh->Draw(pContext);
 			}
-
-            Profiler::Instance()->End(pContext);
         }
 
         pContext->EndRenderPass();
-        Profiler::Instance()->End(pContext);
 	}
 
     if (gVisualizeClusters)
     {
-        Profiler::Instance()->Begin("Visualize Clusters", pContext);
+        GPU_PROFILE_SCOPE("VisualizeClusters", pContext);
 
         if (m_DidCopyDebugClusterData == false)
         {
@@ -421,7 +391,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         pContext->SetGraphicsRootSignature(m_pDebugClusterRS.get());
 
         pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-        pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
         pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
         Matrix p = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
@@ -434,14 +403,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResource& inputResourc
         pContext->Draw(0, m_MaxClusters);
 
         pContext->EndRenderPass();
-        Profiler::Instance()->End(pContext);
     }
     else
     {
         m_DidCopyDebugClusterData = false;
     }
-
-    pContext->Execute(false);
 
     m_pGpuParticles->Simulate();
 }
@@ -504,7 +470,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
         m_pMarkUniqueClustersOpaquePSO = std::make_unique<GraphicsPipelineState>();
         m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-        m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElementDescs, _countof(inputElementDescs));
+        m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElementDescs, ARRAYSIZE(inputElementDescs));
         m_pMarkUniqueClustersOpaquePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
         m_pMarkUniqueClustersOpaquePSO->SetPixelShader(pixelShaderOpaque.GetByteCode(), pixelShaderOpaque.GetByteCodeSize());
         m_pMarkUniqueClustersOpaquePSO->SetBlendMode(BlendMode::Replace, false);
@@ -591,7 +557,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
         // opaque
         m_pDiffusePSO = std::make_unique<GraphicsPipelineState>();
-        m_pDiffusePSO->SetInputLayout(inputElementDescs, _countof(inputElementDescs));
+        m_pDiffusePSO->SetInputLayout(inputElementDescs, ARRAYSIZE(inputElementDescs));
         m_pDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
         m_pDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
         m_pDiffusePSO->SetBlendMode(BlendMode::Replace, false);

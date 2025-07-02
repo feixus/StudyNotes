@@ -75,7 +75,7 @@ void Graphics::Initialize(HWND hWnd)
 
 void Graphics::Update()
 {
-	Profiler::Instance()->Begin("Update Game State");
+	PROFILE_BEGIN("UpdateGameState");
 
 	m_pCamera->Update();
 
@@ -110,17 +110,19 @@ void Graphics::Update()
 
 	m_ShadowCasters = 0;
 
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3::Up)) * projection;
+	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, Vector3::Zero, Vector3::Up)) * projection;
 	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.f, 1.f, 0);
 	++m_ShadowCasters;
 
-	Profiler::Instance()->End();
+	PROFILE_END();
 
 	////////////////////////////////
 	// Rendering Begin
 	////////////////////////////////
 
 	BeginFrame();
+
+	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 	uint64_t nextFenceValue = 0;
 	uint64_t lightCullingFence = 0;
@@ -143,7 +145,7 @@ void Graphics::Update()
 		data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
 		data.DepthStencilResolved = graph.ImportTexture("Depth Stencil Target", GetResolveDepthStencil());
 
-		Profiler::Instance()->Begin("Tiled Forward+");
+		GPU_PROFILE_SCOPE("TiledForwardPlus", pCommandContext);
 		// 1. depth prepass
 		// - depth only pass that renders the entire scene
 		// - optimization that prevents wasteful lighting calculations during the base pass
@@ -172,19 +174,13 @@ void Graphics::Update()
 					
 					renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					renderContext.SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-					renderContext.SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-
-					struct PerObjectData
-					{
-						Matrix WorldViewProjection;
-					} ObjectData;
 
 					renderContext.SetGraphicsPipelineState(m_pDepthPrepassPSO.get());
 					renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 					for (const Batch& b : m_OpaqueBatches)
 					{
-						ObjectData.WorldViewProjection = m_pCamera->GetViewProjection();
-						renderContext.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+						Matrix worldViewProjection = m_pCamera->GetViewProjection();
+						renderContext.SetDynamicConstantBufferView(0, &worldViewProjection, sizeof(Matrix));
 						b.pMesh->Draw(&renderContext);
 					}
 
@@ -246,21 +242,20 @@ void Graphics::Update()
 		int64_t fence = graph.Execute(this);
 		//WaitForFence(fence);
 
-		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 		// 3. light culling
 		//  - compute shader to buckets lights in tiles depending on their screen position
 		//  - require a depth buffer
 		//  - outputs a: - Texture2D containing a count and an offset of lights per tile.
 		//								- uint[] index buffer to indicate what are visible in each tile
 		{
-			Profiler::Instance()->Begin("Light Culling", pCommandContext);
+			GPU_PROFILE_SCOPE("LightCulling", pCommandContext);
 
-			Profiler::Instance()->Begin("Setup Light Data", pCommandContext);
-			uint32_t zero[] = { 0, 0 };
-			m_pLightIndexCounter->SetData(pCommandContext, &zero, sizeof(uint32_t) * 2);
-			m_pLightBuffer->SetData(pCommandContext, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
-			Profiler::Instance()->End(pCommandContext);
+			{
+				GPU_PROFILE_SCOPE("SetupLightData", pCommandContext);
+				uint32_t zero[] = { 0, 0 };
+				m_pLightIndexCounter->SetData(pCommandContext, &zero, sizeof(uint32_t) * 2);
+				m_pLightBuffer->SetData(pCommandContext, m_Lights.data(), sizeof(Light) * (uint32_t)m_Lights.size());
+			}
 
 			pCommandContext->InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
@@ -295,14 +290,13 @@ void Graphics::Update()
 			pCommandContext->SetDynamicDescriptor(2, 1, m_pLightBuffer->GetSRV());
 
 			pCommandContext->Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
-			Profiler::Instance()->End(pCommandContext);
 		}
 
 		// 4. shadow mapping
 		//  - renders the scene depth onto a separate depth buffer from the light's view
 		if (m_ShadowCasters > 0)
 		{
-			Profiler::Instance()->Begin("Shadows", pCommandContext);
+			GPU_PROFILE_SCOPE("Shadows", pCommandContext);
 
 			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
@@ -312,7 +306,7 @@ void Graphics::Update()
 
 			for (int i = 0; i < m_ShadowCasters; ++i)
 			{
-				Profiler::Instance()->Begin("Light View", pCommandContext);
+				GPU_PROFILE_SCOPE("Light View", pCommandContext);
 				const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
 				FloatRect viewport;
 				viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
@@ -320,7 +314,6 @@ void Graphics::Update()
 				viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
 				viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
 				pCommandContext->SetViewport(viewport);
-				pCommandContext->SetScissorRect(viewport);
 
 				struct PerObjectData
 				{
@@ -330,7 +323,7 @@ void Graphics::Update()
 
 				// opaque
 				{
-					Profiler::Instance()->Begin("Opaque", pCommandContext);
+					GPU_PROFILE_SCOPE("Opaque", pCommandContext);
 					pCommandContext->SetGraphicsPipelineState(m_pShadowPSO.get());
 					pCommandContext->SetGraphicsRootSignature(m_pShadowRS.get());
 
@@ -339,12 +332,11 @@ void Graphics::Update()
 					{
 						b.pMesh->Draw(pCommandContext);
 					}
-					Profiler::Instance()->End(pCommandContext);
 				}
 
 				// transparent
 				{
-					Profiler::Instance()->Begin("Transparent", pCommandContext);
+					GPU_PROFILE_SCOPE("Transparent", pCommandContext);
 					pCommandContext->SetGraphicsPipelineState(m_pShadowAlphaPSO.get());
 					pCommandContext->SetGraphicsRootSignature(m_pShadowAlphaRS.get());
 
@@ -354,22 +346,17 @@ void Graphics::Update()
 						pCommandContext->SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 						b.pMesh->Draw(pCommandContext);
 					}
-					Profiler::Instance()->End(pCommandContext);
 				}
-				Profiler::Instance()->End(pCommandContext);
 			}
 			pCommandContext->EndRenderPass();
-
-			Profiler::Instance()->End(pCommandContext);
 		}
 
 		// 5. base pass
 		//  - render the scene using the shadow mapping result and the light culling buffers
 		{
-			Profiler::Instance()->Begin("Base Pass", pCommandContext);
+			GPU_PROFILE_SCOPE("BasePass", pCommandContext);
 
 			pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-			pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 	
 			pCommandContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			pCommandContext->InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -391,7 +378,7 @@ void Graphics::Update()
 
 			// opaque
 			{
-				Profiler::Instance()->Begin("Opaque", pCommandContext);
+				GPU_PROFILE_SCOPE("Opaque", pCommandContext);
 				pCommandContext->SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
 				pCommandContext->SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
 
@@ -414,12 +401,11 @@ void Graphics::Update()
 
 					b.pMesh->Draw(pCommandContext);
 				}
-				Profiler::Instance()->End(pCommandContext);
 			}
 
 			// transparent
 			{
-				Profiler::Instance()->Begin("Transparent", pCommandContext);
+				GPU_PROFILE_SCOPE("Transparent", pCommandContext);
 				pCommandContext->SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
 				pCommandContext->SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
 
@@ -442,10 +428,7 @@ void Graphics::Update()
 
 					b.pMesh->Draw(pCommandContext);
 				}
-				Profiler::Instance()->End(pCommandContext);
 			}
-
-			Profiler::Instance()->End(pCommandContext);
 
 			pCommandContext->InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			pCommandContext->InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -454,144 +437,138 @@ void Graphics::Update()
 
 			pCommandContext->EndRenderPass();
 		}
-		Profiler::Instance()->End();
-
-		pCommandContext->Execute(false);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
-		Profiler::Instance()->Begin("Clustered Forward+");
 		ClusteredForwardInputResource resources;
 		resources.pOpaqueBatches = &m_OpaqueBatches;
 		resources.pTransparentBatches = &m_TransparentBatches;
 		resources.pRenderTarget = GetCurrentRenderTarget();
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
-		m_pClusteredForward->Execute(resources);
-		Profiler::Instance()->End();
+		m_pClusteredForward->Execute(pCommandContext, resources);
 	}
 
+	pCommandContext->Execute(false);
+
 	{
+		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
 		// 7. MSAA render target resolve
 		//  - we have to resolve a MSAA render target ourselves.
 		{
 			if (m_SampleCount > 1)
 			{
-				CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-				Profiler::Instance()->Begin("Resolve MSAA", pCommandContext);
+				GPU_PROFILE_BEGIN("ResolveMSAA", pCommandContext);
 
 				pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 				pCommandContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				pCommandContext->FlushResourceBarriers();
 				pCommandContext->GetCommandList()->ResolveSubresource(m_pHDRRenderTarget->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
 
-				Profiler::Instance()->End(pCommandContext);
-				nextFenceValue = pCommandContext->Execute(false);
+				GPU_PROFILE_END(pCommandContext);
 			}
 		}
 
 		// tonemap
 		{
-			CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-			Profiler::Instance()->Begin("Luminance Histogram", pCommandContext);
+			GPU_PROFILE_SCOPE("Tonemap", pCommandContext);
 
-			pCommandContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			pCommandContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			pCommandContext->FlushResourceBarriers();
-
-			uint32_t values[4] = {};
-			pCommandContext->ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV(), values);
-
-			pCommandContext->SetComputePipelineState(m_pLuminanceHistogramPSO.get());
-			pCommandContext->SetComputeRootSignature(m_pLuminanceHistogramRS.get());
-
-			struct HistogramParameters
+			// exposure adjustment
+			// luminance histogram, collect the pixel count into a 256 bins histogram with luminance
 			{
-				uint32_t Width;
-				uint32_t Height;
-				float MinLogLuminance;
-				float OneOverLogLuminanceRange;
-			} Parameters;
+				GPU_PROFILE_SCOPE("LuminanceHistogram", pCommandContext);
 
-			Parameters.Width = m_WindowWidth;
-			Parameters.Height = m_WindowHeight;
-			Parameters.MinLogLuminance = g_MinLogLuminance;
-			Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+				pCommandContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				pCommandContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				pCommandContext->FlushResourceBarriers();
 
-			pCommandContext->SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
-			pCommandContext->SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
-			pCommandContext->SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+				pCommandContext->ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
 
-			pCommandContext->Dispatch(ceil(m_WindowWidth / 16.0f), ceil(m_WindowHeight / 16.0f), 1);
-			Profiler::Instance()->End(pCommandContext);
+				pCommandContext->SetComputePipelineState(m_pLuminanceHistogramPSO.get());
+				pCommandContext->SetComputeRootSignature(m_pLuminanceHistogramRS.get());
 
+				struct HistogramParameters
+				{
+					uint32_t Width;
+					uint32_t Height;
+					float MinLogLuminance;
+					float OneOverLogLuminanceRange;
+				} Parameters;
 
+				Parameters.Width = m_WindowWidth;
+				Parameters.Height = m_WindowHeight;
+				Parameters.MinLogLuminance = g_MinLogLuminance;
+				Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
 
-			Profiler::Instance()->Begin("Average Luminance", pCommandContext);
+				pCommandContext->SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
+				pCommandContext->SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
+				pCommandContext->SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
-			pCommandContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			pCommandContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				pCommandContext->Dispatch(Math::RoundUp(m_WindowWidth / 16.0f), Math::RoundUp(m_WindowHeight / 16.0f), 1);
+			}
 
-			pCommandContext->SetComputePipelineState(m_pAverageLuminancePSO.get());
-			pCommandContext->SetComputeRootSignature(m_pAverageLuminanceRS.get());
-
-			struct AverageLuminanceParameters
+			// average luminance, compute the average luminance from the histogram
 			{
-				uint32_t PixelCount;
-				float MinLogLuminance;
-				float LogLuminanceRange;
-				float TimeDelta;
-				float Tau;
-			} AverageParameters;
+				GPU_PROFILE_SCOPE("AverageLuminance", pCommandContext);
 
-			AverageParameters.PixelCount = m_WindowWidth * m_WindowHeight;
-			AverageParameters.MinLogLuminance = g_MinLogLuminance;
-			AverageParameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
-			AverageParameters.TimeDelta = GameTimer::DeltaTime();
-			AverageParameters.Tau = g_Tau;
+				pCommandContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				pCommandContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			pCommandContext->SetComputeDynamicConstantBufferView(0, &AverageParameters, sizeof(AverageLuminanceParameters));
-			pCommandContext->SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
-			pCommandContext->SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
+				pCommandContext->SetComputePipelineState(m_pAverageLuminancePSO.get());
+				pCommandContext->SetComputeRootSignature(m_pAverageLuminanceRS.get());
 
-			pCommandContext->Dispatch(1, 1, 1);
-			Profiler::Instance()->End(pCommandContext);
+				struct AverageLuminanceParameters
+				{
+					uint32_t PixelCount;
+					float MinLogLuminance;
+					float LogLuminanceRange;
+					float TimeDelta;
+					float Tau;
+				} AverageParameters;
 
-			nextFenceValue = pCommandContext->Execute(false);
+				AverageParameters.PixelCount = m_WindowWidth * m_WindowHeight;
+				AverageParameters.MinLogLuminance = g_MinLogLuminance;
+				AverageParameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
+				AverageParameters.TimeDelta = GameTimer::DeltaTime();
+				AverageParameters.Tau = g_Tau;
+
+				pCommandContext->SetComputeDynamicConstantBufferView(0, &AverageParameters, sizeof(AverageLuminanceParameters));
+				pCommandContext->SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
+				pCommandContext->SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
+
+				pCommandContext->Dispatch(1, 1, 1);
+			}
+
+			{
+				GPU_PROFILE_SCOPE("Tonemapping", pCommandContext);
+
+				pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+				pCommandContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+				pCommandContext->SetGraphicsPipelineState(m_pToneMapPSO.get());
+				pCommandContext->SetGraphicsRootSignature(m_pToneMapRS.get());
+				pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+				pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				pCommandContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
+
+				pCommandContext->SetDynamicConstantBufferView(0, &g_WhitePoint, sizeof(float));
+				pCommandContext->SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
+				pCommandContext->SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
+				pCommandContext->Draw(0, 3);
+				pCommandContext->EndRenderPass();
+			}
 		}
 
-
-		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		Profiler::Instance()->Begin("Tonemap", pCommandContext);
-
-		pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-		pCommandContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-		pCommandContext->SetGraphicsPipelineState(m_pToneMapPSO.get());
-		pCommandContext->SetGraphicsRootSignature(m_pToneMapRS.get());
-		pCommandContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-		pCommandContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-		pCommandContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pCommandContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
-
-		pCommandContext->SetDynamicConstantBufferView(0, &g_WhitePoint, sizeof(float));
-		pCommandContext->SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
-		pCommandContext->SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
-		pCommandContext->Draw(0, 3);
-		pCommandContext->EndRenderPass();
-		Profiler::Instance()->End(pCommandContext);
-
-
-		Profiler::Instance()->Begin("UI", pCommandContext);
 		// 6. UI
 		//  - ImGui render, pretty straight forward
 		{
+			GPU_PROFILE_SCOPE("UI", pCommandContext);
 			UpdateImGui();
 			//ImGui::ShowDemoWindow();
 			//m_pClouds->RenderUI();
 			m_pImGuiRenderer->Render(*pCommandContext, GetCurrentBackbuffer());
 		}
-		Profiler::Instance()->End(pCommandContext);
 
 		pCommandContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 		pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
@@ -884,8 +861,8 @@ void Graphics::OnResize(int width, int height)
 
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource));
 
-	int frustumCountX = (int)ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
-	int frustumCountY = (int)ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
+	int frustumCountX = Math::RoundUp((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
+	int frustumCountY = Math::RoundUp((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
 	m_pLightGridOpaque->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 	m_pLightGridTransparent->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
@@ -1184,7 +1161,7 @@ void Graphics::UpdateImGui()
 		}
 
 		ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
-		ImGui::SliderFloat("Min Log Luminance", &g_MaxLogLuminance, -50, 50);
+		ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
 		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
 		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 

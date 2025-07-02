@@ -11,6 +11,11 @@ struct BufferUAVDesc
 	BufferUAVDesc(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN, bool raw = false, bool counter = false)
 		: Format(format), Raw(raw), Counter(counter) {}
 
+	static BufferUAVDesc CreateRaw()
+	{
+		return BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false);
+	}
+
 	DXGI_FORMAT Format;
 	bool Raw;
 	bool Counter;

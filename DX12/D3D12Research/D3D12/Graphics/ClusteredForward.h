@@ -10,6 +10,8 @@ class CommandSignature;
 class GpuParticles;
 struct Batch;
 class Graphics;
+class CommandContext;
+class UnorderedAccessView;
 
 struct ClusteredForwardInputResource
 {
@@ -28,7 +30,7 @@ public:
 
     void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-    void Execute(const ClusteredForwardInputResource& inputResource);
+    void Execute(CommandContext* pContext, const ClusteredForwardInputResource& inputResource);
 
 private:
     void SetupResources(Graphics* pGraphics);
@@ -56,11 +58,13 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparentPSO;
     std::unique_ptr<Buffer> m_pUniqueClusterBuffer;
+    UnorderedAccessView* m_pUniqueClusterBufferRawUAV{nullptr};
 
     // step 3: compact cluster list
     std::unique_ptr<RootSignature> m_pCompactClusterListRS;
     std::unique_ptr<ComputePipelineState> m_pCompactClusterListPSO;
     std::unique_ptr<Buffer> m_pCompactedClusterBuffer;
+    UnorderedAccessView* m_pCompactedClusterBufferRawUAV{nullptr};
 
     // step 4: update Indirect Dispatch Buffer
     std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
@@ -74,6 +78,7 @@ private:
     std::unique_ptr<Buffer> m_pLightIndexCounter;
     std::unique_ptr<Buffer> m_pLightIndexGrid;
     std::unique_ptr<Buffer> m_pLightGrid;
+    UnorderedAccessView* m_pLightGridRawUAV{nullptr};
 
     // alternative light culling
     std::unique_ptr<ComputePipelineState> m_pAlternativeLightCullingPSO;

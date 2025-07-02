@@ -99,6 +99,7 @@ void ImGuiRenderer::Render(CommandContext& context, GraphicsTexture* pRenderTarg
 		return;
 	}
 
+	GPU_PROFILE_SCOPE("RenderUI", &context);
 	context.SetGraphicsPipelineState(m_pPipelineStateObject.get());
 	context.SetGraphicsRootSignature(m_pRootSignature.get());
 
@@ -108,7 +109,6 @@ void ImGuiRenderer::Render(CommandContext& context, GraphicsTexture* pRenderTarg
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
 
-	Profiler::Instance()->Begin("Render UI", &context);
 	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::DontCare_DontCare));
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
@@ -130,6 +130,9 @@ void ImGuiRenderer::Render(CommandContext& context, GraphicsTexture* pRenderTarg
 				context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
 				if (pCmd->TextureId > 0)
 				{
+					/*ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(pCmd->TextureId);
+					context.InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);*/
+
 					D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle{};
 					cpuHandle.ptr = pCmd->TextureId;
 					context.SetDynamicDescriptor(1, 0, cpuHandle);
@@ -140,5 +143,4 @@ void ImGuiRenderer::Render(CommandContext& context, GraphicsTexture* pRenderTarg
 		}
 	}
 	context.EndRenderPass();
-	Profiler::Instance()->End(&context);
 }

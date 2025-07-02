@@ -33,6 +33,7 @@ void CSMain(CSInput input)
 
     GroupMemoryBarrierWithGroupSync();
 
+    // parallel reduction to get the sum of the histogram
     [unroll]
     for (uint histogramSampleIndex = (NUM_HISTOGRAM_BINS >> 1); histogramSampleIndex > 0; histogramSampleIndex >>= 1)
     {
@@ -48,6 +49,7 @@ void CSMain(CSInput input)
     {
         float weightedLogAverage = (gHistogramShared[0].x / max((float)cPixelCount - countForThisBin, 1.0)) - 1.0;
         float weightedAverageLuminance = exp2(((weightedLogAverage / 254.0) * cLogLuminanceRange) + cMinLogLuminance);
+        // exponential temporal smoothing 
         float luminanceLastFrame = uLuminanceOutput[uint2(0, 0)];
         float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1.0 - exp(-cTimeDelta / cTau));
         uLuminanceOutput[uint2(0, 0)] = adaptedLuminance;

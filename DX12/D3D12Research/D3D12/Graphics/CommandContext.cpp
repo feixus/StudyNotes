@@ -141,6 +141,15 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 }
 
+void CommandContext::InsertResourceBarrier(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state, D3D12_RESOURCE_STATES targetState)
+{
+	m_QueueBarriers[m_NumQueueBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(
+		pResource,
+		state,
+		targetState);
+	++m_NumQueueBarriers;
+}
+
 void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer, bool executeImmediate)
 {
 	m_QueueBarriers[m_NumQueueBarriers] = CD3DX12_RESOURCE_BARRIER::UAV(pBuffer ? pBuffer->GetResource() : nullptr);
@@ -513,6 +522,7 @@ void CommandContext::SetViewport(const FloatRect& rect, float minDepth, float ma
 	viewport.TopLeftY = (float)rect.Top;
 
 	m_pCommandList->RSSetViewports(1, &viewport);
+	SetScissorRect(rect);
 }
 
 void CommandContext::SetScissorRect(const FloatRect& rect)
@@ -526,26 +536,32 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 	m_pCommandList->RSSetScissorRects(1, &r);
 }
 
-void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32_t values[4])
+void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32_t* values)
 {
+	FlushResourceBarriers();
+
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
 	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values, 0, nullptr);
+	uint32_t zeros[4] = {0, 0, 0, 0};
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
 
-void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t values[4])
+void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values)
 {
 	ClearUavUInt(pBuffer, pUav->GetDescriptor(), values);
 }
 
-void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4])
+void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float* values)
 {
+	FlushResourceBarriers();
+
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
 	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values, 0, nullptr);
+	float zeros[4] = {0, 0, 0, 0};
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
 
-void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float values[4])
+void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values)
 {
 	ClearUavFloat(pBuffer, pUav->GetDescriptor(), values);
 }
