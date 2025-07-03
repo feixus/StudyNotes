@@ -23,7 +23,7 @@ void RGGraph::DumpGraphMermaid(const char* pPath) const
 	int linkIndex = 0;
 
 	int passIndex = 0;
-	for (const RGPassBase* pPass : m_RenderPasses)
+	for (const RGPass* pPass : m_RenderPasses)
 	{
 		stream << "Pass" << pPass->m_Id << "[";
 		stream << pPass->m_Name << "<br/>";
@@ -70,7 +70,7 @@ void RGGraph::DumpGraphMermaid(const char* pPath) const
 		stream << "\n";
 	}
 
-	for (RGPassBase* pPass : m_RenderPasses)
+	for (RGPass* pPass : m_RenderPasses)
 	{
 		for (RGResourceHandle write : pPass->m_Writes)
 		{
@@ -83,7 +83,7 @@ void RGGraph::DumpGraphMermaid(const char* pPath) const
 
 	for (const RGNode& node : m_RGNodes)
 	{
-		for (RGPassBase* pPass : m_RenderPasses)
+		for (RGPass* pPass : m_RenderPasses)
 		{
 			for (RGResourceHandle read : pPass->m_Reads)
 			{
@@ -118,7 +118,7 @@ void RGGraph::DumpGraphViz(const char* pPath) const
 
 	// pass declaration
 	int passIndex = 0;
-	for (const RGPassBase* pPass : m_RenderPasses)
+	for (const RGPass* pPass : m_RenderPasses)
 	{
 		stream << "Pass" << pPass->m_Id << " [";
 		stream << "shape=rectangle, style=\"filled, rounded\", margin=0.2, ";
@@ -168,7 +168,7 @@ void RGGraph::DumpGraphViz(const char* pPath) const
 	}
 
 	// writes
-	for (RGPassBase* pPass : m_RenderPasses)
+	for (RGPass* pPass : m_RenderPasses)
 	{
 		for (RGResourceHandle write : pPass->m_Writes)
 		{
@@ -182,7 +182,7 @@ void RGGraph::DumpGraphViz(const char* pPath) const
 	for (const RGNode& node : m_RGNodes)
 	{
 		stream << "Resource" << node.m_pResource->m_Id << "_" << node.m_Version << " -> {\n";
-		for (RGPassBase* pPass : m_RenderPasses)
+		for (RGPass* pPass : m_RenderPasses)
 		{
 			for (RGResourceHandle read : pPass->m_Reads)
 			{
