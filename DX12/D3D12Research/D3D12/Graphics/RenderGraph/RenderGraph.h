@@ -215,7 +215,7 @@ public:
 
     void DumpGraphViz(const char* pPath) const;
     void DumpGraphMermaid(const char* pPath) const;
-
+  
     RGResourceHandle MoveResource(RGResourceHandle from, RGResourceHandle to);
 
     template<typename Callback>

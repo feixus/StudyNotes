@@ -103,7 +103,7 @@ void ImGuiRenderer::Render(CommandContext& context, GraphicsTexture* pRenderTarg
 	context.SetGraphicsPipelineState(m_pPipelineStateObject.get());
 	context.SetGraphicsRootSignature(m_pRootSignature.get());
 
-	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
+	Matrix projectionMatrix = Math::CreateOrthographicMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

@@ -57,7 +57,7 @@ void Graphics::Initialize(HWND hWnd)
 
 	m_pCamera = std::make_unique<FreeCamera>(this);
 	m_pCamera->SetPosition(Vector3(0, 100, -15));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0));
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4, 0));
 	m_pCamera->SetNewPlane(400.f);
 	m_pCamera->SetFarPlane(2.f);
 	m_pCamera->SetViewport(0, 0, 1, 1);
@@ -106,7 +106,7 @@ void Graphics::Update()
 	//////////////////////////////////
 	LightData lightData;
 
-	Matrix projection = XMMatrixOrthographicLH(512, 512, 10000.f, 0.1f);
+	Matrix projection = Math::CreateOrthographicMatrix(512, 512, 10000.f, 0.1f);
 
 	m_ShadowCasters = 0;
 
@@ -372,7 +372,7 @@ void Graphics::Update()
 				
 				for (const Batch& b : m_OpaqueBatches)
 				{
-					objectData.World = XMMatrixIdentity();
+					objectData.World = Matrix::Identity;
 					objectData.WorldViewProjection = objectData.World * m_pCamera->GetViewProjection();
 					pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
@@ -399,7 +399,7 @@ void Graphics::Update()
 
 				for (const Batch& b : m_TransparentBatches)
 				{
-					objectData.World = XMMatrixIdentity();
+					objectData.World = Matrix::Identity;
 					objectData.WorldViewProjection = objectData.World * m_pCamera->GetViewProjection();
 					pCommandContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 

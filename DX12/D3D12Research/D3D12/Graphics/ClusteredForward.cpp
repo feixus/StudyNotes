@@ -342,7 +342,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 
 		    for (const Batch& b : *inputResource.pOpaqueBatches)
 		    {
-                objectData.World = XMMatrixIdentity();
+                objectData.World = Matrix::Identity;
 		        pContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
 			    pContext->SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
@@ -358,7 +358,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 
 			for (const Batch& b : *inputResource.pTransparentBatches)
 			{
-				objectData.World = XMMatrixIdentity();
+				objectData.World = Matrix::Identity;
 				pContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
 				pContext->SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
