@@ -165,7 +165,6 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRS;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowPSO;
-	std::unique_ptr<RootSignature> m_pShadowAlphaRS;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowAlphaPSO;
 
 	// light culling

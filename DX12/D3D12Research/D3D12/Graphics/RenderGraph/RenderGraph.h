@@ -118,11 +118,7 @@ public:
     RGPassResource(const RGPassResource& other) = delete;
     RGPassResource& operator=(const RGPassResource& other) = delete;
 
-    template<typename T>
-    T* GetResource(RGResourceHandle handle) const
-    {
-        return static_cast<T*>(GetResourceInternal(handle)->m_pPhysicalResource);
-    }
+    GraphicsTexture* GetTexture(RGResourceHandle handle) const;
 
 private:
     RGResource* GetResourceInternal(RGResourceHandle handle) const;

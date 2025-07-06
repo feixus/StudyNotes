@@ -374,7 +374,7 @@ int GraphicsTexture::GetRowDataSize(DXGI_FORMAT format, unsigned int width)
 	}
 }
 
-void GraphicsTexture::Create(CommandContext* pContext, const char* filePath, bool srgb)
+bool GraphicsTexture::Create(CommandContext* pContext, const char* filePath, bool srgb)
 {
 	Image img;
 	if (img.Load(filePath))
@@ -406,8 +406,10 @@ void GraphicsTexture::Create(CommandContext* pContext, const char* filePath, boo
 
 		Create(desc);
 		pContext->InitializeTexture(this, subresourceData.data(), 0, (int)subresourceData.size());
-		pContext->ExecuteAndReset(true);
+		return true;
 	}
+
+	return false;
 }
 
 void GraphicsTexture::SetData(CommandContext* pContext, const void* pData)

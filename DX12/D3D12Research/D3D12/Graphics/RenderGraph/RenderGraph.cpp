@@ -183,6 +183,9 @@ void RGGraph::Compile()
 
 int64_t RGGraph::Execute(Graphics* pGraphics)
 {
+    int exlFrequency = 4;
+    int i = 0;
+
     CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
     for (RGPass* pPass : m_RenderPasses)
@@ -191,6 +194,14 @@ int64_t RGGraph::Execute(Graphics* pGraphics)
         {
             ExecutePass(pPass, *pContext, m_pAllocator);
         }
+
+        ++i;
+        if (i == exlFrequency)
+        {
+            i = 0;
+            pContext->Execute(false);
+			pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		}
     }
 
     DestroyData();
@@ -238,6 +249,13 @@ RGResourceHandle RGGraph::MoveResource(RGResourceHandle from, RGResourceHandle t
     m_Aliases.push_back(ResourceAlias{from, to});
     ++node.m_pResource->m_Version;
     return CreateResourceNode(node.m_pResource);
+}
+
+GraphicsTexture* RGPassResource::GetTexture(RGResourceHandle handle) const
+{
+	const RGNode& node = m_Graph.GetResourceNode(handle);
+	RG_ASSERT(node.m_pResource->m_Type == RGResourceType::Texture, "Resource is not a texture");
+	return static_cast<GraphicsTexture*>(node.m_pResource->m_pPhysicalResource);
 }
 
 RGResource* RGPassResource::GetResourceInternal(RGResourceHandle handle) const

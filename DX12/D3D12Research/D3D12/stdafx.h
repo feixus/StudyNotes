@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <list>
 
+#include "Core/Delegates.h"
 #include "Core/GameTimer.h"
 #include "Core/BitField.h"
 #include "Math/MathTypes.h"

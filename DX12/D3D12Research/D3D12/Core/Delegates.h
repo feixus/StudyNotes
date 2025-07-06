@@ -92,7 +92,7 @@ private:
     template<std::size_t... Is>
     RetVal Execute_Internal(Args&&... args, std::index_sequence<Is...>)
     {
-        return (m_pOwner->*m_Function)(std::forward<Args>(args)..., std::get<Is>(m_Payload)...);
+        return (m_pObject->*m_Function)(std::forward<Args>(args)..., std::get<Is>(m_Payload)...);
     }
 
     T* m_pObject;
@@ -225,7 +225,7 @@ public:
 
 private:
     __int64 m_Id;
-    static __int64 CURRENT_ID{0};
+    inline static __int64 CURRENT_ID{0};
     static __int64 GetNewID();
 };
 
@@ -361,7 +361,7 @@ public:
     }
 
     Delegate(const Delegate& other) : m_Allocator(other.m_Allocator) {}
-    Delegate& operator=(const Delegate&)
+    Delegate& operator=(const Delegate& other)
     {
         Release();
         m_Allocator = other.m_Allocator;
@@ -523,4 +523,239 @@ private:
     // delegate gets allocated inline when its is smaller or equal than 64 bytes in size.
     // can be changed by preference
     InlineAllocator<Delegate::GetAllocatorStackSize()> m_Allocator;
+};
+
+#if CPP_DELEGATES_USE_OLD_NAMING
+template<typename RetVal, typename... Args>
+using SinglecastDelegate = Delegate<RetVal, Args...>;
+#endif
+
+// delegate that can be bound to by multiple objects
+template<typename... Args>
+class MulticastDelegate
+{
+public:
+	using DelegateT = Delegate<void, Args...>;
+
+private:
+    using DelegateHandlePair = std::pair<DelegateHandle, DelegateT>;
+
+public:
+    constexpr MulticastDelegate() : m_Locks(0) {}
+
+    ~MulticastDelegate() noexcept = default;
+
+	MulticastDelegate(const MulticastDelegate& other) = default;
+	MulticastDelegate& operator=(const MulticastDelegate& other) = default;
+
+    MulticastDelegate(MulticastDelegate&& other) noexcept
+        : m_Events(std::move(other.m_Events)), m_Locks(other.m_Locks)
+    {}
+
+    MulticastDelegate& operator=(MulticastDelegate&& other) noexcept
+    {
+        m_Events = std::move(other.m_Events);
+        m_Locks = other.m_Locks;
+        return *this;
+	}
+
+    inline DelegateHandle operator+=(DelegateT&& handler) noexcept
+    {
+		return Add(std::forward<DelegateT>(handler));
+	}
+
+    inline bool operator-=(DelegateHandle& handle)
+    {
+        return Remove(handle);
+    }
+
+    inline DelegateHandle Add(DelegateT&& handler) noexcept
+    {
+        // favour an empty space over a possible array relllocation
+        for (size_t i = 0; i < m_Events.size(); i++)
+        {
+            if (m_Events[i].first.IsValid() == false)
+            {
+                m_Events[i] = std::make_pair(DelegateHandle(true), std::move(handler));
+                return m_Events[i].first;
+            }
+        }
+
+        m_Events.push_back(std::make_pair(DelegateHandle(true), std::move(handler)));
+        return m_Events.back().first;
+    }
+
+	// bind a member function
+    template<typename T, typename... Args2>
+    inline DelegateHandle AddRaw(T* pObject, void(T::* pFunction)(Args..., Args2...), Args2&&... args)
+    {
+        return Add(DelegateT::CreateRaw(pObject, pFunction, std::forward<Args2>(args)...));
+    }
+
+	// bind a static/global function
+    template<typename... Args2>
+    inline DelegateHandle AddStatic(void(*pFunction)(Args..., Args2...), Args2&&... args)
+    {
+        return Add(DelegateT::CreateStatic(pFunction, std::forward<Args2>(args)...));
+	}
+
+	// bind a lambda
+    template<typename LambdaType, typename... Args2>
+    inline DelegateHandle AddLambda(LambdaType&& lambda, Args2&&... args)
+    {
+        return Add(DelegateT::CreateLambda(std::forward<LambdaType>(lambda), std::forward<Args2>(args)...));
+	}
+
+    // bind a member function with a shared pointer
+	template<typename T, typename... Args2>
+    inline DelegateHandle AddSP(std::shared_ptr<T> pObject, void(T::* pFunction)(Args..., Args2...), Args2&&... args)
+    {
+		return Add(DelegateT::CreateSP(pObject, pFunction, std::forward<Args2>(args)...));
+    }
+
+    // removes all handles thar are bound from a specific object
+	// ignored when pObject is nullptr
+    // note: only works on Raw and SP bindings
+    void RemoveObject(void* pObject)
+    {
+        if (pObject == nullptr)
+        {
+            return;
+		}
+
+        for (size_t i = m_Events.size() - 1; i >= 0 ; i--)
+        {
+            if (m_Events[i].second.GetOwner() == pObject)
+            {
+                if (IsLocked())
+                {
+                    m_Events[i].Clear();
+                }
+                else
+                {
+					std::swap(m_Events[i], m_Events[m_Events.size() - 1]);
+                    m_Events.pop_back();
+                }
+            }
+        }
+    }
+
+    // remove a function from the event list by the handle
+    bool Remove(DelegateHandle& handle)
+    {
+        if (handle.IsValid() == false)
+        {
+            return false;
+		}
+
+        for (size_t i = 0; i < m_Events.size(); i++)
+        {
+            if (m_Events[i].first == handle)
+            {
+                if (IsLocked())
+                {
+					m_Events[i].second.Clear();
+                }
+                else
+                {
+					std::swap(m_Events[i], m_Events[m_Events.size() - 1]);
+					m_Events.pop_back();
+                }
+				handle.Reset();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool IsBoundTo(const DelegateHandle& handle) const
+    {
+        if (handle.IsValid() == false)
+        {
+            return false;
+		}
+
+        for (const auto& event : m_Events)
+        {
+            if (event.first == handle)
+            {
+                return true;
+            }
+        }
+		return false;
+    }
+
+    // remove all the functions bound to the delegate
+    inline void RemoveAll()
+    {
+        if (IsLocked())
+        {
+            for (auto& event : m_Events)
+            {
+                event.second.Clear();
+            }
+        }
+        else
+        {
+            m_Events.clear();
+		}
+    }
+
+    void Compress(const size_t maxSpace = 0)
+    {
+        if (IsLocked())
+        {
+            return;
+        }
+
+        size_t toDelegate = 0;
+        for (size_t i = 0; i < m_Events.size() - toDelegate; ++i)
+        {
+            if (m_Events[i].first.IsValid() == false)
+            {
+				std::swap(m_Events[i], m_Events[m_Events.size() - toDelegate - 1]);
+				++toDelegate;
+            }
+            if (toDelegate > maxSpace)
+            {
+				m_Events.resize(m_Events.size() - toDelegate);
+            }
+        }
+    }
+
+    // execute all functions that are bound
+    inline void Broadcast(Args... args)
+    {
+        Lock();
+        for (const auto& event : m_Events)
+        {
+            if (event.first.IsValid())
+            {
+                event.second.Execute(std::forward<Args>(args)...);
+            }
+		}
+        UnLock();
+    }
+
+private:
+    inline void Lock()
+    {
+        ++m_Locks;
+    }
+
+    inline void Unlock()
+    {
+        assert(m_Locks > 0);
+        --m_Locks;
+    }
+
+    // returns true is the delegate is currently broadcasting
+    // if this is true, the order of the array should not be changed otherwise this causes undefined behavior
+    inline bool IsLocked() const
+    {
+        return m_Locks > 0;
+	}
+
+	std::vector<DelegateHandlePair> m_Events;
+    unsigned int m_Locks;
 };

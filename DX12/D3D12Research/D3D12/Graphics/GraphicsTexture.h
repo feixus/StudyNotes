@@ -188,7 +188,7 @@ public:
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
 	void Create(const TextureDesc& desc);
-	void Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
+	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
 	void CreateForSwapChain(ID3D12Resource* pTexture);
 	void SetData(CommandContext* pContext, const void* pData);
 

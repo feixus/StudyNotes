@@ -7,6 +7,9 @@ class Graphics;
 class RootSignature;
 class GraphicsPipelineState;
 class GraphicsTexture;
+class RGGraph;
+
+DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
 
 class ImGuiRenderer
 {
@@ -15,7 +18,10 @@ public:
 	~ImGuiRenderer();
 
 	void NewFrame();
-	void Render(CommandContext& context, GraphicsTexture* pRenderTarget);
+	void Render(RGGraph& graph, GraphicsTexture* pRenderTarget);
+	void Update();
+	DelegateHandle AddUpdateCallback(ImGuiCallbackDelegate&& callback);
+	void RemoveUpdateCallback(DelegateHandle handle);
 
 private:
 	static const uint32_t m_WindowWidth{ 1240 };
@@ -23,6 +29,8 @@ private:
 
 	void CreatePipeline();
 	void InitializeImGui();
+		
+	ImGuiCallback m_UpdateCallback;
 
 	Graphics* m_pGraphics;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
