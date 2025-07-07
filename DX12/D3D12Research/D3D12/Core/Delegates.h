@@ -9,7 +9,7 @@ using name = Delegate<void, __VA_ARGS__>
 using name = Delegate<retValue, __VA_ARGS__>
 
 #define DECLARE_MULTICAST_DELEGATE(name, ...) \
-using name = MulticastDelegate<__VA_ARGS__> \
+using name = MulticastDelegate<__VA_ARGS__>; \
 using name ## Delegate = MulticastDelegate<__VA_ARGS__>::DelegateT
 
 #define DECLARE_EVENT(name, ownerType, ...) \
@@ -29,7 +29,7 @@ class IDelegate
 public:
     IDelegate() = default;
     virtual ~IDelegate() noexcept = default;
-    virtual RetVal Execute(Args... args) = 0;
+    virtual RetVal Execute(Args&&... args) = 0;
     virtual void* GetOwner() const
     {
         return nullptr;
@@ -51,16 +51,17 @@ public:
 
     virtual RetVal Execute(Args&&... args) override
     {
-        return Execute_Internal(std::forward<Args>(args)..., std::index_sequence_for<Args2...>{});
+        std::apply(
+        [&](auto&&... payloadArgs) {
+            return std::invoke(m_Function, 
+                               std::forward<Args>(args)..., 
+                               std::forward<decltype(payloadArgs)>(payloadArgs)...);
+        },
+        m_Payload
+        );
     }
 
 private:
-    template<std::size_t... Is>
-    RetVal Execute_Internal(Args&&... args, std::index_sequence<Is...>)
-    {
-        return m_Function(std::forward<Args>(args)..., std::get<Is>(m_Payload)...);
-    }
-
     DelegateFunction m_Function;
     std::tuple<Args2...> m_Payload;
 };
@@ -80,7 +81,15 @@ public:
 
     virtual RetVal Execute(Args&&... args) override
     {
-        return Execute_Internal(std::forward<Args>(args)..., std::index_sequence_for<Args2...>{});
+		return std::apply(
+			[&](auto&&... payloadArgs) {
+				return std::invoke(m_Function, 
+					               m_pObject,
+					               std::forward<Args>(args)...,
+					               std::forward<decltype(payloadArgs)>(payloadArgs)...);
+			},
+			m_Payload
+		);
     }
 
     virtual void* GetOwner() const override
@@ -89,12 +98,6 @@ public:
     }
 
 private:
-    template<std::size_t... Is>
-    RetVal Execute_Internal(Args&&... args, std::index_sequence<Is...>)
-    {
-        return (m_pObject->*m_Function)(std::forward<Args>(args)..., std::get<Is>(m_Payload)...);
-    }
-
     T* m_pObject;
     DelegateFunction m_Function;
     std::tuple<Args2...> m_Payload;
@@ -113,16 +116,17 @@ public:
 
     virtual RetVal Execute(Args&&... args) override
     {
-        return Execute_Internal(std::forward<Args>(args)..., std::index_sequence_for<Args2...>{});
+        std::apply(
+        [&](auto&&... payloadArgs) {
+            return std::invoke(m_Lambda, 
+				               std::forward<Args>(args)...,
+				               std::forward(decltype(payloadArgs)(payloadArgs)...));
+        },
+        m_Payload
+        );
     }
 
 private:
-    template<std::size_t... Is>
-    RetVal Execute_Internal(Args&&... args, std::index_sequence<Is...>)
-    {
-        return (RetVal)(m_Lambda(std::forward<Args>(args)..., std::get<Is>(m_Payload)...));
-    }
-
     TLambda m_Lambda;
     std::tuple<Args2...> m_Payload;
 };
@@ -142,7 +146,21 @@ public:
 
     virtual RetVal Execute(Args&&... args) override
     {
-        return Execute_Internal(std::forward<Args>(args)..., std::index_sequence_for<Args2...>{});
+		if (m_pObject.expired())
+		{
+			return RetVal();
+		}
+
+		std::shared_ptr<T> pPinned = m_pObject.lock();
+        std::apply(
+        [&](auto&&... payloadArgs) {
+            return std::invoke(m_Function, 
+                               pPinned.get(), 
+                               std::forward<Args>(args)..., 
+                               std::forward<decltype(payloadArgs)>(payloadArgs)...);
+        },
+        m_Payload
+        );
     }
 
     virtual void* GetOwner() const override
@@ -156,17 +174,6 @@ public:
     }
 
 private:
-    template<std::size_t... Is>
-    RetVal Execute_Internal(Args&&... args, std::index_sequence<Is...>)
-    {
-        if (m_pObject.expired())
-        {
-            return RetVal();
-        }
-
-        std::shared_ptr<T> pPinned = m_pObject.lock();
-        return (pPinned.get()->*m_Function)(std::forward<Args>(args)..., std::get<Is>(m_Payload)...);
-    }
 
     std::weak_ptr<T> m_pObject;
     DelegateFunction m_Function;
@@ -734,7 +741,7 @@ public:
                 event.second.Execute(std::forward<Args>(args)...);
             }
 		}
-        UnLock();
+        Unlock();
     }
 
 private:

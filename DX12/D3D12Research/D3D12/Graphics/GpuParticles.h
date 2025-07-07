@@ -8,6 +8,7 @@ class ComputePipelineState;
 class GraphicsPipelineState;
 class RootSignature;
 class CommandContext;
+class RGGraph;
 
 class GpuParticles
 {
@@ -16,7 +17,7 @@ public:
     ~GpuParticles() = default;
 
     void Initialize();
-    void Simulate(CommandContext* pContext);
+    void Simulate(RGGraph& graph);
     void Render();
 
 private:

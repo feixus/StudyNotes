@@ -18,6 +18,7 @@ struct GSInput
     float4 color : COLOR;
     float4 center : CENTER;
     float4 extents : EXTENTS;
+    int lightCount : LIGHTCOUNT;
 };
 
 struct PSInput
@@ -37,8 +38,8 @@ GSInput VSMain(uint vertexId : SV_VertexID)
     output.center = aabb.Center;
     output.extents = aabb.Extents;
 
-    uint lightCount = tLightGrid[clusterIndex].y;
-    output.color = tHeatmapTexture.Load(uint3(lightCount * 15, 0, 0));
+    output.lightCount = tLightGrid[clusterIndex].y;
+    output.color = tHeatmapTexture.Load(uint3(output.lightCount * 15, 0, 0));
 
     return output;
 }
@@ -46,6 +47,11 @@ GSInput VSMain(uint vertexId : SV_VertexID)
 [maxvertexcount(16)]
 void GSMain(point GSInput input[1], inout TriangleStream<PSInput> outStream)
 {
+    if (input[0].lightCount == 0)
+    {
+        return;
+    }
+
     float4 center = input[0].center;
     float4 extents = input[0].extents;
 

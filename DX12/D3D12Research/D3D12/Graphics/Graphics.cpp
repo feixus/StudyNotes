@@ -324,8 +324,6 @@ void Graphics::Update()
 							context.EndRenderPass();
 						};
 				});
-
-			
 		}
 
 		// 5. base pass
@@ -426,7 +424,7 @@ void Graphics::Update()
 		resources.pRenderTarget = GetCurrentRenderTarget();
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
-		m_pClusteredForward->Execute(pCommandContext, resources);
+		m_pClusteredForward->Execute(graph, resources);
 	}
 
 	{
@@ -448,7 +446,7 @@ void Graphics::Update()
 		}
 		
 
-		// tonemap
+		// 8. tonemap
 		{
 			// exposure adjustment
 			// luminance histogram, collect the pixel count into a 256 bins histogram with luminance
@@ -548,7 +546,7 @@ void Graphics::Update()
 						};
 				});
 
-		// 6. UI
+		// 9. UI
 		//  - ImGui render, pretty straight forward
 		{
 			//ImGui::ShowDemoWindow();
@@ -562,10 +560,10 @@ void Graphics::Update()
 				return[=](CommandContext& context, const RGPassResource& resources)
 				{
 					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-					context.InsertResourceBarrier(GetCurrentBackbuffer, D3D12_RESOURCE_STATE_PRESENT);
+					context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
 				};
 			});
-		
+
 		graph.Compile();
 		if (gDumpRenderGraph)
 		{
@@ -574,6 +572,7 @@ void Graphics::Update()
 		}
 		nextFenceValue = graph.Execute(this);
 	}
+
 
 	/*m_pClouds->Render(m_pResolvedRenderTarget.get(), m_pResolveDepthStencil.get());
 
@@ -590,11 +589,12 @@ void Graphics::Update()
 		nextFenceValue = pCommandContext->Execute(false);
 	}*/
 
-	// 8. present
+	// 10. present
 	//  - set fence for the currently queued frame
 	//  - present the frame buffer
 	//  - wait for the next frame to be finished to start queueing work for it
 	EndFrame(nextFenceValue);
+}
 }
 
 void Graphics::Shutdown()
@@ -770,7 +770,9 @@ void Graphics::InitD3D()
 	m_pLightGridTransparent = std::make_unique<GraphicsTexture>(this, "Transparent Light Grid");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
+	
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
+	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 
 	m_pResourceAllocator = std::make_unique<RGResourceAllocator>(this);
 
@@ -883,10 +885,6 @@ void Graphics::InitializeAssets()
 
 	D3D12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	};
-	
-	D3D12_INPUT_ELEMENT_DESC depthOnlyAlphaInputElements[] = {
-			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
@@ -925,44 +923,34 @@ void Graphics::InitializeAssets()
 	// shadow mapping
 	// vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
+		
 		// opaque
-		{
-			Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain");
+			
+		// root signature
+		m_pShadowRS = std::make_unique<RootSignature>();
+		m_pShadowRS->FinalizeFromShader("Shadow Mapping RS", vertexShader, m_pDevice.Get());
 
-			// root signature
-			m_pShadowRS = std::make_unique<RootSignature>();
-			m_pShadowRS->FinalizeFromShader("Shadow Mapping RS", vertexShader, m_pDevice.Get());
-
-			// pipeline state
-			m_pShadowPSO = std::make_unique<GraphicsPipelineState>();
-			m_pShadowPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
-			m_pShadowPSO->SetRootSignature(m_pShadowRS->GetRootSignature());
-			m_pShadowPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pShadowPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1, 0);
-			m_pShadowPSO->SetCullMode(D3D12_CULL_MODE_NONE);
-			m_pShadowPSO->SetDepthBias(-1, -5.f, -4.f);
-			m_pShadowPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			m_pShadowPSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
-		}
-
+		// pipeline state
+		m_pShadowPSO = std::make_unique<GraphicsPipelineState>();
+		m_pShadowPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
+		m_pShadowPSO->SetRootSignature(m_pShadowRS->GetRootSignature());
+		m_pShadowPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pShadowPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1, 0);
+		m_pShadowPSO->SetCullMode(D3D12_CULL_MODE_NONE);
+		m_pShadowPSO->SetDepthBias(-1, -5.f, -4.f);
+		m_pShadowPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		m_pShadowPSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
+		
 		// transparent
-		{
-			Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain", { "ALPHA_BLEND" });
-			Shader pixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::PixelShader, "PSMain", { "ALPHA_BLEND" });
-
-			// pipeline state
-			m_pShadowAlphaPSO = std::make_unique<GraphicsPipelineState>();
-			m_pShadowAlphaPSO->SetInputLayout(depthOnlyAlphaInputElements, sizeof(depthOnlyAlphaInputElements) / sizeof(depthOnlyAlphaInputElements[0]));
-			m_pShadowAlphaPSO->SetRootSignature(m_pShadowRS->GetRootSignature());
-			m_pShadowAlphaPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pShadowAlphaPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-			m_pShadowAlphaPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1, 0);
-			m_pShadowAlphaPSO->SetCullMode(D3D12_CULL_MODE_NONE);
-			m_pShadowAlphaPSO->SetDepthBias(0, 0.f, 0.f);
-			m_pShadowAlphaPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
-		}
-
+		Shader alphaVertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain", { "ALPHA_BLEND" });
+		Shader alphaPixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::PixelShader, "PSMain", { "ALPHA_BLEND" });
+			
+		m_pShadowAlphaPSO = std::make_unique<GraphicsPipelineState>(*m_pShadowPSO);
+		m_pShadowAlphaPSO->SetVertexShader(alphaVertexShader.GetByteCode(), alphaVertexShader.GetByteCodeSize());
+		m_pShadowAlphaPSO->SetPixelShader(alphaPixelShader.GetByteCode(), alphaPixelShader.GetByteCodeSize());
+		m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
+		
 		m_pShadowMap = std::make_unique<GraphicsTexture>(this, "Shadow Map");
 		m_pShadowMap->Create(TextureDesc(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 	}
@@ -1111,7 +1099,7 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 	
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(400, (float)m_WindowHeight));
+	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	ImGui::Text("MS: %.4f", GameTimer::DeltaTime() * 1000.0f);
 	ImGui::SameLine(100);
@@ -1160,6 +1148,11 @@ void Graphics::UpdateImGui()
 		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
 		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 
+		if (ImGui::Button("Dump RenderGraph"))
+		{
+			gDumpRenderGraph = true;
+		}
+
 		ImGui::TreePop();
 	}
 
@@ -1200,7 +1193,7 @@ void Graphics::UpdateImGui()
 
 	static bool showOutputLog = true;
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::SetNextWindowPos(ImVec2(250, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
+	ImGui::SetNextWindowPos(ImVec2(300, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
 	ImGui::SetNextWindowSize(ImVec2(showOutputLog ? (float)(m_WindowWidth - 250) * 0.5f : (float)m_WindowWidth - 250, 250));
 	ImGui::SetNextWindowCollapsed(!showOutputLog);
 

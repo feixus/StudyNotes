@@ -12,6 +12,7 @@ struct Batch;
 class Graphics;
 class CommandContext;
 class UnorderedAccessView;
+class RGGraph;
 
 struct ClusteredForwardInputResource
 {
@@ -30,7 +31,7 @@ public:
 
     void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-    void Execute(CommandContext* pContext, const ClusteredForwardInputResource& inputResource);
+    void Execute(RGGraph& graph, const ClusteredForwardInputResource& inputResource);
 
 private:
     void SetupResources(Graphics* pGraphics);
