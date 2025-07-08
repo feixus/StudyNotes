@@ -21,7 +21,8 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	Release();
 	m_Desc = bufferDesc;
 
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer((int64_t)bufferDesc.ElementSize * bufferDesc.ElementCount);
+	int64_t width = Math::AlignUp<int64_t>((int64_t)bufferDesc.ElementSize * bufferDesc.ElementCount, 16);
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(width);
 
 	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
 	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource) == false)

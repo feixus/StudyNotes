@@ -10,6 +10,7 @@
 #include <d3dcompiler.h>
 #include <DirectXColors.h>
 #include <DirectXMath.h>
+#include <DXProgrammableCapture.h>
 
 #include <iostream>
 #include <vector>

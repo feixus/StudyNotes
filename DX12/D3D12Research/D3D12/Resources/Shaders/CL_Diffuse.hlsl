@@ -11,6 +11,7 @@
 cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 {
     float4x4 cWorld;
+    float4x4 cWorldViewProjection;
 }
 
 cbuffer PerFrameData : register(b1)
@@ -112,7 +113,7 @@ PSInput VSMain(VSInput input)
     
     result.positionWS = mul(float4(input.position, 1.0f), cWorld);
     result.positionVS = mul(result.positionWS, cView);
-    result.position = mul(result.positionVS, cProjection);
+    result.position = mul(float4(input.position, 1.0f), cWorldViewProjection);
     result.texCoord = input.texCoord;
     result.normal = normalize(mul(input.normal, (float3x3)cWorld));
     result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));

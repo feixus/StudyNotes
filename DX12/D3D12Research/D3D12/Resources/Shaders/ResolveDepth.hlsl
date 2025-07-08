@@ -25,17 +25,19 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
     uint2 dimensions;
     uint sampleCount;
     tInputTexture.GetDimensions(dimensions.x, dimensions.y, sampleCount);
-    float result = 1;
-    for (uint i = 0; i < sampleCount; i++)
+    if (dispatchThreadID.x < dimensions.x && dispatchThreadID.y < dimensions.y)
     {
-#if DEPTH_RESOLVE_MAX
-        result = max(result, tInputTexture.Load(dispatchThreadID.xy, i).r);
-#elif DEPTH_RESOLVE_MIN
-        result = min(result, tInputTexture.Load(dispatchThreadID.xy, i).r);
-#elif DEPTH_RESOLVE_AVERAGE
-        result += tInputTexture.Load(dispatchThreadID.xy, i).r / sampleCount;
-#endif
+        float result = 1;
+        for (uint i = 0; i < sampleCount; i++)
+        {
+        #if DEPTH_RESOLVE_MAX
+                result = max(result, tInputTexture.Load(dispatchThreadID.xy, i).r);
+        #elif DEPTH_RESOLVE_MIN
+                result = min(result, tInputTexture.Load(dispatchThreadID.xy, i).r);
+        #elif DEPTH_RESOLVE_AVERAGE
+                result += tInputTexture.Load(dispatchThreadID.xy, i).r / sampleCount;
+        #endif
+        }
+        uOutputTexture[dispatchThreadID.xy] = result;
     }
-	
-    uOutputTexture[dispatchThreadID.xy] = result;
 }

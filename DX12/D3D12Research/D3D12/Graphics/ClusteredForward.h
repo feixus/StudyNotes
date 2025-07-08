@@ -1,4 +1,5 @@
 #pragma once
+#include "RenderGraph/RenderGraph.h"
 
 class ComputePipelineState;
 class GraphicsPipelineState;
@@ -16,6 +17,7 @@ class RGGraph;
 
 struct ClusteredForwardInputResource
 {
+    RGResourceHandle DepthBuffer;
     GraphicsTexture* pRenderTarget;
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
@@ -47,7 +49,6 @@ private:
     uint32_t m_MaxClusters{0};
 
     std::unique_ptr<GraphicsTexture> m_pHeatMapTexture;
-    std::unique_ptr<GraphicsTexture> m_pDepthTexture;
 
     // step 1: AABB
     std::unique_ptr<RootSignature> m_pCreateAabbRS;
@@ -80,9 +81,6 @@ private:
     std::unique_ptr<Buffer> m_pLightIndexGrid;
     std::unique_ptr<Buffer> m_pLightGrid;
     UnorderedAccessView* m_pLightGridRawUAV{nullptr};
-
-    // alternative light culling
-    std::unique_ptr<ComputePipelineState> m_pAlternativeLightCullingPSO;
 
     // step 6: lighting
     std::unique_ptr<RootSignature> m_pDiffuseRS;

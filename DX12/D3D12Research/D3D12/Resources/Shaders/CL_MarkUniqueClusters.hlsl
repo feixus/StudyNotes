@@ -2,14 +2,19 @@
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
                 "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
+                "CBV(b1, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u1, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
-cbuffer Parameters : register(b0)
+cbuffer PerObjectParameters : register(b0)
 {
     float4x4 cWorldView;
-    float4x4 cProjection;
+    float4x4 cWorldViewProjection;
+}
+
+cbuffer Parameters : register(b1)
+{
     uint4 cClusterDimensions;
     float2 cClusterSize;
     float cSliceMagicA;
@@ -46,27 +51,18 @@ PS_Input MarkClusters_VS(VS_Input input)
 {
     PS_Input output = (PS_Input)0;
     output.positionVS = mul(float4(input.position, 1.0f), cWorldView);
-    output.position = mul(output.positionVS, cProjection);
+    output.position = mul(float4(input.position, 1.0f), cWorldViewProjection);
     output.texcoord = input.texcoord;
     return output;
 }
 
+[earlydepthstencil]
 void MarkClusters_PS(PS_Input input)
 {
     uint zSlice = GetSliceFromDepth(input.positionVS.z);
     uint2 clusterIndexXY = floor(input.position.xy / cClusterSize);
-    uint clusterIndex1D = clusterIndexXY.x + clusterIndexXY.y * cClusterDimensions.x + zSlice * cClusterDimensions.x * cClusterDimensions.y;
-
-#ifdef ALPHA_BLEND
-    float s = tDiffuseTexture.Sample(sDiffuseSampler, input.texcoord).a;
-    if (s < 0.01f)
-    {
-        discard;
-    }
-    uActiveCluster[clusterIndex1D] = ceil(s);
-#else
+    uint clusterIndex1D = clusterIndexXY.x + cClusterDimensions.x * (clusterIndexXY.y  + zSlice * cClusterDimensions.y);
     uActiveCluster[clusterIndex1D] = 1;
-#endif
 }
 
 
