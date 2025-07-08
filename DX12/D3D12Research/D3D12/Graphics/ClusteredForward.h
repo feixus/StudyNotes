@@ -14,15 +14,18 @@ class Graphics;
 class CommandContext;
 class UnorderedAccessView;
 class RGGraph;
+struct LightData;
 
 struct ClusteredForwardInputResource
 {
     RGResourceHandle DepthBuffer;
     GraphicsTexture* pRenderTarget;
+    GraphicsTexture* pShadowMap;
     const std::vector<Batch>* pOpaqueBatches;
     const std::vector<Batch>* pTransparentBatches;
     Buffer* pLightBuffer;
     Camera* pCamera;
+    LightData* pLightData;
 };
 
 class ClusteredForward

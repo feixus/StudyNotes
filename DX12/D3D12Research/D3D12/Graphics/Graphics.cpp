@@ -21,6 +21,7 @@
 #include "RenderGraph/RenderGraph.h"
 #include "RenderGraph/Blackboard.h"
 #include "RenderGraph/ResourceAllocator.h"
+#include "DebugRenderer.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -164,7 +165,7 @@ void Graphics::Update()
 					renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 					for (const Batch& b : m_OpaqueBatches)
 					{
-						Matrix worldViewProjection = m_pCamera->GetViewProjection();
+						Matrix worldViewProjection = b.WorldMatrix * m_pCamera->GetViewProjection();
 						renderContext.SetDynamicConstantBufferView(0, &worldViewProjection, sizeof(Matrix));
 						b.pMesh->Draw(&renderContext);
 					}
@@ -431,8 +432,12 @@ void Graphics::Update()
 		resources.pRenderTarget = GetCurrentRenderTarget();
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
+		resources.pShadowMap = m_pShadowMap.get();
+		resources.pLightData = &lightData;
 		m_pClusteredForward->Execute(graph, resources);
 	}
+
+	m_pDebugRenderer->Render(graph);
 
 	// 7. MSAA render target resolve
 	//  - we have to resolve a MSAA render target ourselves.
@@ -610,12 +615,6 @@ void Graphics::Shutdown()
 
 void Graphics::BeginFrame()
 {
-	if (m_StartPixCapture)
-	{
-		BeginPixCapture();
-		m_StartPixCapture = false;
-		m_EndPixCapture = true;
-	}
 	m_pImGuiRenderer->NewFrame();
 }
 
@@ -633,11 +632,7 @@ void Graphics::EndFrame(uint64_t fenceValue)
 	Profiler::Instance()->EndReadBack(m_Frame);
 	++m_Frame;
 
-	if (m_EndPixCapture)
-	{
-		EndPixCapture();
-		m_EndPixCapture = false;
-	}
+	m_pDebugRenderer->EndFrame();
 }
 
 void Graphics::InitD3D()
@@ -687,6 +682,7 @@ void Graphics::InitD3D()
 
 	// device
 	HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_pDevice)));
+	pAdapter.Reset();
 
 #if D3D_VALIDATION
 	ID3D12InfoQueue* pInfoQueue = nullptr;
@@ -791,6 +787,9 @@ void Graphics::InitD3D()
 	m_pClouds->Initialize();
 
 	OnResize(m_WindowWidth, m_WindowHeight);
+
+	m_pDebugRenderer = std::make_unique<DebugRenderer>(this);
+	m_pDebugRenderer->SetCamera(m_pCamera.get());
 }
 
 void Graphics::CreateSwapchain()
@@ -832,7 +831,7 @@ void Graphics::CreateSwapchain()
 
 void Graphics::OnResize(int width, int height)
 {
-	E_LOG(LogType::Info, "Graphics::OnResize()");
+	E_LOG(LogType::Info, "Viewport resized: %dx%d", width, height);
 	m_WindowWidth = width;
 	m_WindowHeight = height;
 
@@ -902,7 +901,7 @@ void Graphics::InitializeAssets()
 	// PBR diffuse passes
 	{
 		// shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { "SHADOW"});
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { "SHADOW" });
 		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "SHADOW" });
 
 		// root signature
@@ -1090,6 +1089,7 @@ void Graphics::InitializeAssets()
 		for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 		{
 			Batch b;
+			b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 			b.pMesh = m_pMesh->GetMesh(i);
 			b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
 			b.WorldMatrix = Matrix::Identity;
@@ -1145,7 +1145,7 @@ void Graphics::UpdateImGui()
 		ImGui::Checkbox("Visualize Clusters", &gVisualizeClusters);
 
 		ImGui::Separator();
-		ImGui::SliderInt("Lights", &m_DesiredLightCount, 0, 16384);
+		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 16384 * 4);
 		if (ImGui::Button("Generate Lights"))
 		{
 			RandomizeLights(m_DesiredLightCount);
@@ -1273,8 +1273,8 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(5.f, 9.f);
-		const float angle = Math::RandomRange(30.f, 60.f);
+		const float range = Math::RandomRange(8.f, 12.f);
+		const float angle = Math::RandomRange(40.f, 80.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
