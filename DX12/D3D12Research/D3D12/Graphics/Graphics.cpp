@@ -479,7 +479,7 @@ void Graphics::Update()
 							context.SetDynamicDescriptor(1, 0, pTonemapInput->GetUAV());
 							context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
-							context.Dispatch(Math::RoundUp(pTonemapInput->GetWidth() / 16.0f), Math::RoundUp(pTonemapInput->GetHeight() / 16.0f), 1);
+							context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 16), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 16), 1);
 						};
 				});
 		}
@@ -520,7 +520,7 @@ void Graphics::Update()
 						context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
 						context.SetDynamicDescriptor(2, 0, pTonemapInput->GetSRV());
 
-						context.Dispatch(Math::RoundUp(pTonemapInput->GetWidth() / 16.0f), Math::RoundUp(pTonemapInput->GetHeight() / 16.0f), 1);
+						context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 16), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 16));
 					};
 			});
 
@@ -901,10 +901,10 @@ void Graphics::OnResize(int width, int height)
 	}
 
 	m_pHDRRenderTarget->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
-	m_pDownscaledColor->Create(TextureDesc::Create2D(width / 2, height / 2, RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
-	int frustumCountX = Math::RoundUp((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
-	int frustumCountY = Math::RoundUp((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
+	int frustumCountX = Math::DivideAndRoundUp(m_WindowWidth, FORWARD_PLUS_BLOCK_SIZE);
+	int frustumCountY = Math::DivideAndRoundUp(m_WindowHeight, FORWARD_PLUS_BLOCK_SIZE);
 	m_pLightGridOpaque->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 	m_pLightGridTransparent->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
