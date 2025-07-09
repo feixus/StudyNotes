@@ -35,7 +35,7 @@ public:
 	explicit Image() = default;
 	virtual ~Image() = default;
 
-	bool Load(const std::string& filePath);
+	bool Load(const char* filePath);
 
 	bool SetSize(const int x, const int y, const int components);
 	bool SetData(const unsigned int* pPixels);
@@ -67,8 +67,8 @@ public:
 	static unsigned int TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb);
 
 private:
-	bool LoadDds(const std::string& inputStream);
-	bool LoadStbi(const std::string& inputStream);
+	bool LoadDds(const char* inputStream);
+	bool LoadStbi(const char* inputStream);
 
 	int m_Width{0};
 	int m_Height{0};

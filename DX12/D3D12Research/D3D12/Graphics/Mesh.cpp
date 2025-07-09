@@ -7,6 +7,7 @@
 #include "GraphicsBuffer.h"
 #include "CommandContext.h"
 #include "Graphics.h"
+#include "Core/Paths.h"
 
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {
@@ -23,9 +24,9 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	}
 
 	std::filesystem::path filePath(pFilePath);
-	std::filesystem::path dirPath = filePath.parent_path();
+	std::filesystem::path basePath = filePath.parent_path();
 
-	auto loadTexture = [pGraphics, pContext](std::filesystem::path basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
+	auto loadTexture = [&](aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
 		std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphics);
 
@@ -33,7 +34,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
 		bool success = ret == aiReturn_SUCCESS;
 		if (success)
-		{ 
+		{
 			std::filesystem::path texturePath = path.C_Str();
 			if (texturePath.is_absolute() || texturePath.has_root_path())
 			{
@@ -66,9 +67,9 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	for (uint32_t i = 0; i < pScene->mNumMaterials; ++i)
 	{
 		Material& m = m_Materials[i];
-		m.pDiffuseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_DIFFUSE, true);
-		m.pNormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMALS, false);
-		m.pSpecularTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_SPECULAR, false);
+		m.pDiffuseTexture = loadTexture(pScene->mMaterials[i], aiTextureType_DIFFUSE, true);
+		m.pNormalTexture = loadTexture(pScene->mMaterials[i], aiTextureType_NORMALS, false);
+		m.pSpecularTexture = loadTexture(pScene->mMaterials[i], aiTextureType_SPECULAR, false);
 		aiString p;
 		m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 	}

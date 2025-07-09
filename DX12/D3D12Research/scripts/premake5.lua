@@ -11,20 +11,14 @@ workspace (ENGINE_NAME)
     startproject (ENGINE_NAME)
     language "C++"
 	cppdialect "C++20"
-    defines { "_CONSOLE" }
+    defines { "x64" }
+    architecture ("x64")
     symbols ("On")
 	--kind ("ConsoleApp")
 	kind ("WindowedApp")
     characterset ("MBCS")
-	--flags { "MultiProcessorCompile" }
+	flags { "MultiProcessorCompile" }
 	rtti "Off"
-	
-	filter { "system:windows" }
-		defines { "PLATFORM_WINDOWS" }
-
-    filter "platforms:x64"
-		defines {"x64"}
-		architecture ("x64")
 
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
@@ -48,7 +42,7 @@ project (ENGINE_NAME)
 
     -- Windows SDK & toolset (Visual Studio only)
     filter {"system:windows", "action:vs*"}
-        toolset "v143"
+        --toolset "v143"
     filter {}
 
 
@@ -60,11 +54,7 @@ project (ENGINE_NAME)
         SOURCE_DIR .. "**.inl",
         SOURCE_DIR .. "**.c",
         SOURCE_DIR .. "**.natvis",
-        SOURCE_DIR .. "**.hlsl*",
     }
-
-    filter ("files:" .. SOURCE_DIR .. "Resources/**")
-        flags { "ExcludeFromBuild" }
 
     filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }

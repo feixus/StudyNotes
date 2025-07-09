@@ -1,14 +1,9 @@
 #include "stdafx.h"
 #include "Shader.h"
 #include "Core/Paths.h"
+#include <dxcapi.h>
 
 #define USE_SHADER_LINE_DIRECTIVE 1
-#define DXC_COMPILER 1
-
-#if DXC_COMPILER
-#pragma comment(lib, "dxcompiler.lib")
-#endif
-
 
 Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
 {
@@ -109,30 +104,27 @@ bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryP
 
 bool Shader::CompileDxc(const std::string& source, const char* pTarget, const char* pEntryPoint, const std::vector<std::string>& defines)
 {
+	ComPtr<IDxcLibrary> pLibrary;
+	HR(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pLibrary)));
+	ComPtr<IDxcCompiler> pCompiler;
+	HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&pCompiler)));
 
-#if DXC_COMPILER
-	IDxcLibrary* pLibrary;
-	DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pLibrary));
-	IDxcCompiler* pCompiler;
-	DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&pCompiler));
+	ComPtr<IDxcBlobEncoding> pSource;
+	HR(pLibrary->CreateBlobWithEncodingFromPinned(source.data(), (uint32_t)source.size(), CP_UTF8, pSource.GetAddressOf()));
 
-	IDxcBlobEncoding* pSource;
-	HR(pLibrary->CreateBlobWithEncodingFromPinned(source.data(), (uint32_t)source.size(), CP_UTF8, &pSource));
-
-	size_t written = 0;
 	wchar_t target[256];
-	mbstowcs_s(&written, target, pTarget, 256);
+	ToWidechar(pTarget, target, 256);
 
 	LPCWSTR pArgs[] = {
 		L"/Zpr",			// use row-major packing for matrices in constant buffers and structures
-#ifdef _DEBUG
-		L"-Zi",				// enable debug info
-		L"-Qembed_debug",   // embed debug info into output
-		L"Od",				// disable optimization
-#else
-		L"O3",				// enable optimization
-#endif	
 		L"/WX",				// treat warnings as errors
+#ifdef _DEBUG
+		L"/Zi",				// enable debug info
+		L"/Qembed_debug",   // embed debug info into output
+		L"/Od",				// disable optimization
+#else
+		L"/O3",				// enable optimization
+#endif	
 	};
 
 	std::vector<std::wstring> dDefineNames;
@@ -159,33 +151,44 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 	}
 
 	wchar_t fileName[256], entryPoint[256];
-	mbstowcs_s(&written, fileName, m_Path.c_str(), 256);
-	mbstowcs_s(&written, entryPoint, pEntryPoint, 256);
+	ToWidechar(m_Path.c_str(), fileName, 256);
+	ToWidechar(pEntryPoint, entryPoint, 256);
 
-	IDxcOperationResult* pCompileResult;
-	HR(pCompiler->Compile(pSource, fileName, entryPoint, target, pArgs, sizeof(pArgs) / sizeof(pArgs[0]), dxcDefines.data(), (uint32_t)dxcDefines.size(), nullptr, &pCompileResult));
+	ComPtr<IDxcOperationResult> pCompileResult;
+	HR(pCompiler->Compile(pSource.Get(), fileName, entryPoint, target, pArgs, sizeof(pArgs) / sizeof(pArgs[0]), dxcDefines.data(), (uint32_t)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
 
-	HRESULT hrCompilation;
-	pCompileResult->GetStatus(&hrCompilation);
-	if (hrCompilation != S_OK)
+	auto checkResult = [&](IDxcOperationResult* pResult) {
+		HRESULT hrCompilation;
+		HR(pResult->GetStatus(&hrCompilation));
+		if (hrCompilation != S_OK)
+		{
+			ComPtr<IDxcBlobEncoding> pPrintBlob, pRintBlob8;
+			HR(pResult->GetErrorBuffer(pPrintBlob.GetAddressOf()));
+			pLibrary->GetBlobAsUtf8(pPrintBlob.Get(), pRintBlob8.GetAddressOf());
+			E_LOG(LogType::Error, "Shader compilation failed: %s", (char*)pRintBlob8->GetBufferPointer());
+			return false;
+		}
+		return true;
+	};
+
+	if (!checkResult(pCompileResult.Get()))
 	{
-		IDxcBlobEncoding* pPrintBlob, * pRintBlob8;
-		HR(pCompileResult->GetErrorBuffer(&pPrintBlob));
-		pLibrary->GetBlobAsUtf8(pPrintBlob, &pRintBlob8);
-		E_LOG(LogType::Error, "Shader compilation failed: %s", (char*)pRintBlob8->GetBufferPointer());
-		pRintBlob8->Release();
-		pPrintBlob->Release();
 		return false;
 	}
 
-	pCompileResult->GetResult(m_pByteCodeDxc.GetAddressOf());
+	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
+	pCompileResult->GetResult(pBlob);
 
-	pCompileResult->Release();
+	ComPtr<IDxcValidator> pValidator;
+	DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(&pValidator));
+	pValidator->Validate(*pBlob, DxcValidatorFlags_InPlaceEdit, &pCompileResult);
+
+	if (!checkResult(pCompileResult.Get()))
+	{
+		return false;
+	}
 
 	return true;
-#else
-	return false;
-#endif
 }
 
 bool Shader::CompileFxc(const std::string& source, const char* pTarget, const char* pEntryPoint, const std::vector<std::string>& defines)
@@ -265,20 +268,10 @@ void Shader::AddGlobalShaderDefine(const std::string& name, const std::string& v
 
 void* Shader::GetByteCode() const
 {
-	if (m_pByteCodeDxc)
-	{
-		return m_pByteCodeDxc->GetBufferPointer();
-	}
-
 	return m_pByteCode->GetBufferPointer();
 }
 
 uint32_t Shader::GetByteCodeSize() const
 {
-	if (m_pByteCodeDxc)
-	{
-		return (uint32_t)m_pByteCodeDxc->GetBufferSize();
-	}
-
 	return (uint32_t)m_pByteCode->GetBufferSize();
 }

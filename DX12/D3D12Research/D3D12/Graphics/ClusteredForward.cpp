@@ -61,6 +61,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	{
 		GPU_PROFILE_SCOPE("CreateAABBs", pContext);
 
+        pContext->InsertResourceBarrier(m_pAabbBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
 		pContext->SetComputePipelineState(m_pCreateAabbPSO.get());
 		pContext->SetComputeRootSignature(m_pCreateAabbRS.get());
 

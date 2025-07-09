@@ -24,7 +24,7 @@ void Console::Startup()
     consoleInstance->m_ConvertBuffer = new char[consoleInstance->m_ConvertBufferSize];
 }
 
-bool Console::LogHRESULT(const std::string& source, HRESULT hr)
+bool Console::LogHRESULT(const char* source, HRESULT hr)
 {
     if (FAILED(hr))
     {
@@ -33,38 +33,20 @@ bool Console::LogHRESULT(const std::string& source, HRESULT hr)
             hr = HRESULT_CODE(hr);
         }
 
-        std::stringstream message;
-        if (source.size() != 0)
-        {
-            message << "Source: ";
-            message << source;
-            message << "\n";
-        }
-        message << "Message: ";
-
         char* errorMsg;
-        if (FormatMessageA(
+        FormatMessageA(
             FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
             nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            (LPSTR)&errorMsg, 0, nullptr) != 0)
-        {
-            OutputDebugString(errorMsg);
-            message << errorMsg;
-        }
+            (LPSTR)&errorMsg, 0, nullptr);
 
-        Log(message.str(), LogType::Error);
+        LogFormat(LogType::Error, "Source: %s\n Message: %s", source, errorMsg);
         return true;
     }
 
     return false;
 }
 
-bool Console::LogHRESULT(char* source, HRESULT hr)
-{
-    return LogHRESULT(std::string(source), hr);
-}
-
-void Console::Log(const std::string& message, LogType type)
+void Console::Log(const char* message, LogType type)
 {
     if ((int)type < (int)consoleInstance->m_Verbosity)
     {
@@ -102,10 +84,14 @@ void Console::Log(const std::string& message, LogType type)
             break;
     }
 
+    stream << message;
+    const std::string output = stream.str();
+    std::cout << output << std::endl;
+    OutputDebugStringA(output.c_str());
+    OutputDebugStringA("\n");
+
     if (consoleInstance->m_ConsoleHandle)
     {
-        stream << message;
-        std::cout << stream.str() << std::endl;
         SetConsoleTextAttribute(consoleInstance->m_ConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     }
 
@@ -130,16 +116,6 @@ void Console::LogFormat(LogType type, const char* format, ...)
     va_list args;
     va_start(args, format);
     _vsnprintf_s(&consoleInstance->m_ConvertBuffer[0], consoleInstance->m_ConvertBufferSize, consoleInstance->m_ConvertBufferSize, format, args);
-    va_end(args);
-    Log(&consoleInstance->m_ConvertBuffer[0], type);
-}
-
-void Console::LogFormat(LogType type, const std::string& format, ...)
-{
-    va_list args;
-    const char* f = format.c_str();
-    va_start(args, f);
-    _vsnprintf_s(&consoleInstance->m_ConvertBuffer[0], consoleInstance->m_ConvertBufferSize, consoleInstance->m_ConvertBufferSize, f, args);
     va_end(args);
     Log(&consoleInstance->m_ConvertBuffer[0], type);
 }

@@ -26,6 +26,7 @@ function AddAssimp()
 end
 
 function AddDxc()
+	links { "dxcompiler" }
 	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
 	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
 end

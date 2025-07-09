@@ -102,7 +102,6 @@ public:
 	void EndTimer(CommandContext* pContext);
 
 	void PopulateTimes(int frameIndex);
-	void LogTimes(int frameIndex, void(*pLogFunction)(const char* pText), int depth = 0, bool isRoot = false);
 	void RenderImGui(int frameIndex);
 
 	bool HashChild(const char* pName);

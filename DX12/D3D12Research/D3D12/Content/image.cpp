@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Image.h"
+#include "Core/Paths.h"
 
 #define STBI_NO_GIF
 #define STBI_NO_PIC
@@ -11,10 +12,9 @@
 #include "External/stb/stb_image_write.h"
 
 
-bool Image::Load(const std::string& filePath)
+bool Image::Load(const char* filePath)
 {
-	std::filesystem::path fs(filePath);
-	std::filesystem::path extension = fs.extension();
+	const std::string extension = Paths::GetFileExtension(filePath);
 	bool success = false;
 	if (extension == ".dds")
 	{
@@ -231,7 +231,7 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 //  +-----------------------+
 //  | Image Data            |
 //  +-----------------------+
-bool Image::LoadDds(const std::string& inputStream)
+bool Image::LoadDds(const char* inputStream)
 {
 	std::ifstream file(inputStream, std::ios::binary);
 
@@ -490,16 +490,16 @@ bool Image::LoadDds(const std::string& inputStream)
 	return true;
 }
 
-bool Image::LoadStbi(const std::string& inputStream)
+bool Image::LoadStbi(const char* inputStream)
 {
 	m_Components = 4;
 	m_Depth = 1;
 	int components = 0;
 
-	m_IsHdr = stbi_is_hdr(inputStream.c_str());
+	m_IsHdr = stbi_is_hdr(inputStream);
 	if (m_IsHdr)
 	{
-		float* pPixels = stbi_loadf(inputStream.c_str(), &m_Width, &m_Height, &components, m_Components);
+		float* pPixels = stbi_loadf(inputStream, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -514,7 +514,7 @@ bool Image::LoadStbi(const std::string& inputStream)
 	}
 	else
 	{
-		unsigned char* pPixels = stbi_load(inputStream.c_str(), &m_Width, &m_Height, &components, m_Components);
+		unsigned char* pPixels = stbi_load(inputStream, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;

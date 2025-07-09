@@ -77,8 +77,6 @@ void Graphics::Initialize(HWND hWnd)
 
 void Graphics::Update()
 {
-	PIX_CAPTURE_SCOPE();
-
 	PROFILE_BEGIN("UpdateGameState");
 
 	m_pCamera->Update();
@@ -353,6 +351,14 @@ void Graphics::Update()
 						context.BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Clear_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
 
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+						context.SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
+
+						context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+						context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
+						context.SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
+						context.SetDynamicDescriptor(4, 1, m_pLightGridOpaque->GetSRV());
+						context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
+						context.SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
 
 						struct PerObjectData
 						{
@@ -364,15 +370,7 @@ void Graphics::Update()
 						{
 							GPU_PROFILE_SCOPE("Opaque", &context);
 							context.SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
-							context.SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
-
-							context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-							context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
-							context.SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
-							context.SetDynamicDescriptor(4, 1, m_pLightGridOpaque->GetSRV());
-							context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
-							context.SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
-
+							
 							for (const Batch& b : m_OpaqueBatches)
 							{
 								objectData.World = b.WorldMatrix;
@@ -391,15 +389,7 @@ void Graphics::Update()
 						{
 							GPU_PROFILE_SCOPE("Transparent", &context);
 							context.SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
-							context.SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
-
-							context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-							context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
-							context.SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
-							context.SetDynamicDescriptor(4, 1, m_pLightGridTransparent->GetSRV());
-							context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferTransparent->GetSRV());
-							context.SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
-
+							
 							for (const Batch& b : m_TransparentBatches)
 							{
 								objectData.World = b.WorldMatrix;
@@ -611,6 +601,7 @@ void Graphics::Shutdown()
 {
 	// wait for all the GPU work to finish
 	IdleGPU();
+	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
 void Graphics::BeginFrame()
@@ -876,6 +867,8 @@ void Graphics::OnResize(int width, int height)
 	int frustumCountY = Math::RoundUp((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
 	m_pLightGridOpaque->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 	m_pLightGridTransparent->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+
+	m_pCamera->SetDirty();
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 	m_pClouds->OnSwapchainCreated(width, height);

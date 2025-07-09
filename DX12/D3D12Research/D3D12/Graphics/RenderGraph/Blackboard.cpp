@@ -17,9 +17,10 @@ RGBlackboard& RGBlackboard::Branch()
 	return b;
 }
 
-void* RGBlackboard::GetData(const std::string& name)
+void* RGBlackboard::GetData(const char* name)
 {
-	auto it = m_DataMap.find(name);
+	StringHash nameHash(name);
+	auto it = m_DataMap.find(nameHash);
 	if (it != m_DataMap.end())
 	{
 		return it->second;
