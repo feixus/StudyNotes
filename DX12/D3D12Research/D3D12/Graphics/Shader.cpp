@@ -3,7 +3,9 @@
 #include "Core/Paths.h"
 #include <dxcapi.h>
 
+#ifndef USE_SHADER_LINE_DIRECTIVE
 #define USE_SHADER_LINE_DIRECTIVE 1
+#endif
 
 Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
 {

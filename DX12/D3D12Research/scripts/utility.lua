@@ -27,6 +27,7 @@ end
 
 function AddDxc()
 	links { "dxcompiler" }
+	includedirs (ROOT .. "D3D12/External/Dxc")
 	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
 	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
 end
