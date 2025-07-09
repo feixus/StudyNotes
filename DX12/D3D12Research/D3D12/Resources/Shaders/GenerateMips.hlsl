@@ -1,8 +1,8 @@
 #include "Common.hlsli"
 
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 1, space = 0), visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(UAV(u0, numDescriptors = 1, space = 0), visibility = SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
                 "StaticSampler(s0, visibility = SHADER_VISIBILITY_ALL, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT)"
 
 #define BLOCK_SIZE 16

@@ -8,7 +8,7 @@ function AddPix()
 	filter {}
 	includedirs (ROOT .. "D3D12/External/Pix/include")
 	libdirs (ROOT .. "D3D12/External/Pix/lib")
-	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
 	links { "WinPixEventRuntime" }
 end
 
@@ -21,15 +21,15 @@ function AddAssimp()
 	filter {}
 	includedirs (ROOT .. "D3D12/External/Assimp/include")
 	libdirs	(ROOT .. "D3D12/External/Assimp/lib/x64")
-	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Assimp\\bin\\x64\\assimp-vc143-mt.dll\" \"$(OutDir)\"") }
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Assimp\\bin\\x64\\assimp-vc143-mt.dll\" \"$(OutDir)\"") }
 	links { "assimp-vc143-mt" }
 end
 
 function AddDxc()
 	links { "dxcompiler" }
 	includedirs (ROOT .. "D3D12/External/Dxc")
-	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
-	postbuildcommands { ("copy \"$(SolutionDir)D3D12/External\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
 end
 
 newaction {

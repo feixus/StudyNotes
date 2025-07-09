@@ -130,7 +130,7 @@ void Graphics::Update()
 	{
 		RGResourceHandle DepthStencil;
 		RGResourceHandle DepthStencilResolved;
-	} sceneData;
+	} sceneData{};
 
 	sceneData.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
 	sceneData.DepthStencilResolved = graph.ImportTexture("Depth Stencil Target", GetResolveDepthStencil());
@@ -294,7 +294,7 @@ void Graphics::Update()
 								struct PerObjectData
 								{
 									Matrix WorldViewProjection;
-								} ObjectData;
+								} ObjectData{};
 
 								{
 									GPU_PROFILE_SCOPE("Opaque", &context);
@@ -364,7 +364,7 @@ void Graphics::Update()
 						{
 							Matrix World;
 							Matrix WorldViewProjection;
-						} objectData;
+						} objectData{};
 
 						{
 							GPU_PROFILE_SCOPE("Opaque", &context);
@@ -447,17 +447,56 @@ void Graphics::Update()
 
 	// 8. tonemap
 	{
+        bool downscaleTonemap = true;
+		GraphicsTexture* pTonemapInput = downscaleTonemap ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
+		RGResourceHandle toneMappingInput = graph.ImportTexture("Tonemap Input", pTonemapInput);
+
+		if (downscaleTonemap)
+		{
+			graph.AddPass("Downsample Color", [&](RGPassBuilder& builder)
+				{
+					builder.NeverCull();
+					toneMappingInput = builder.Write(toneMappingInput);
+
+					return[=](CommandContext& context, const RGPassResource& resources)
+						{
+							GraphicsTexture* pTonemapInput = resources.GetTexture(toneMappingInput);
+							context.InsertResourceBarrier(pTonemapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+							context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+							context.SetComputePipelineState(m_pGenerateMipsPSO.get());
+							context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+
+							struct DownscaleParameters
+							{
+								uint32_t TargetDimensions[2];
+							} Parameters{};
+
+							Parameters.TargetDimensions[0] = pTonemapInput->GetWidth();
+							Parameters.TargetDimensions[1] = pTonemapInput->GetHeight();
+
+							context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
+							context.SetDynamicDescriptor(1, 0, pTonemapInput->GetUAV());
+							context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+
+							context.Dispatch(Math::RoundUp(pTonemapInput->GetWidth() / 16.0f), Math::RoundUp(pTonemapInput->GetHeight() / 16.0f), 1);
+						};
+				});
+		}
+
 		// exposure adjustment
 		// luminance histogram, collect the pixel count into a 256 bins histogram with luminance
 		graph.AddPass("Luminance Histogram", [&](RGPassBuilder& builder)
 			{
 				builder.NeverCull();
+				toneMappingInput = builder.Read(toneMappingInput);
 
 				return[=](CommandContext& context, const RGPassResource& resources)
 					{
+						GraphicsTexture* pTonemapInput = resources.GetTexture(toneMappingInput);
+
 						context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-						context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						context.FlushResourceBarriers();
+						context.InsertResourceBarrier(pTonemapInput, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 						context.ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
 
@@ -472,16 +511,16 @@ void Graphics::Update()
 							float OneOverLogLuminanceRange;
 						} Parameters;
 
-						Parameters.Width = m_WindowWidth;
-						Parameters.Height = m_WindowHeight;
+						Parameters.Width = pTonemapInput->GetWidth();
+						Parameters.Height = pTonemapInput->GetHeight();
 						Parameters.MinLogLuminance = g_MinLogLuminance;
 						Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
 
 						context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
 						context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
-						context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+						context.SetDynamicDescriptor(2, 0, pTonemapInput->GetSRV());
 
-						context.Dispatch(Math::RoundUp(m_WindowWidth / 16.0f), Math::RoundUp(m_WindowHeight / 16.0f), 1);
+						context.Dispatch(Math::RoundUp(pTonemapInput->GetWidth() / 16.0f), Math::RoundUp(pTonemapInput->GetHeight() / 16.0f), 1);
 					};
 			});
 
@@ -507,7 +546,7 @@ void Graphics::Update()
 							float Tau;
 						} AverageParameters;
 
-						AverageParameters.PixelCount = m_WindowWidth * m_WindowHeight;
+						AverageParameters.PixelCount = pTonemapInput->GetWidth() * pTonemapInput->GetHeight();
 						AverageParameters.MinLogLuminance = g_MinLogLuminance;
 						AverageParameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
 						AverageParameters.TimeDelta = GameTimer::DeltaTime();
@@ -530,6 +569,7 @@ void Graphics::Update()
 
 						context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 						context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+						context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 						context.SetGraphicsPipelineState(m_pToneMapPSO.get());
 						context.SetGraphicsRootSignature(m_pToneMapRS.get());
@@ -761,6 +801,7 @@ void Graphics::InitD3D()
 	}
 	
 	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
+	m_pDownscaledColor = std::make_unique<GraphicsTexture>(this, "Downscaled HDR Target");
 
 	m_pLightGridOpaque = std::make_unique<GraphicsTexture>(this, "Opaque Light Grid");
 	m_pLightGridTransparent = std::make_unique<GraphicsTexture>(this, "Transparent Light Grid");
@@ -860,6 +901,7 @@ void Graphics::OnResize(int width, int height)
 	}
 
 	m_pHDRRenderTarget->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
+	m_pDownscaledColor->Create(TextureDesc::Create2D(width / 2, height / 2, RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
 	int frustumCountX = Math::RoundUp((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::RoundUp((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);

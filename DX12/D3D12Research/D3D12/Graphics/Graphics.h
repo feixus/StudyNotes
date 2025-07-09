@@ -227,6 +227,7 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffuseAlphaPSO;
 
 	// Tonemapping
+	std::unique_ptr<GraphicsTexture> m_pDownscaledColor;
 	std::unique_ptr<RootSignature> m_pLuminanceHistogramRS;
 	std::unique_ptr<ComputePipelineState> m_pLuminanceHistogramPSO;
 	std::unique_ptr<RootSignature> m_pAverageLuminanceRS;

@@ -212,7 +212,6 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
     SetD3DObjectName(m_pRootSignature.Get(), pName);
 }
 
-
 void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, ID3D12Device* pDevice)
 {
     ComPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
@@ -229,7 +228,7 @@ void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, 
     memcpy(m_StaticSamplers.data(), pDesc->Desc_1_1.pStaticSamplers, m_StaticSamplers.size() * sizeof(D3D12_STATIC_SAMPLER_DESC));
     memcpy(m_RootParameters.data(), pDesc->Desc_1_1.pParameters, m_RootParameters.size() * sizeof(D3D12_ROOT_PARAMETER1));
 
-    for (uint32_t i = 0; i < pDesc->Desc_1_1.NumParameters; i++)
+    for (uint32_t i = 0; i < m_NumParameters; i++)
     {
         const D3D12_ROOT_PARAMETER1& rootParameter = pDesc->Desc_1_1.pParameters[i];
         if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)

@@ -17,7 +17,7 @@ workspace (ENGINE_NAME)
 	--kind ("ConsoleApp")
 	kind ("WindowedApp")
     characterset ("MBCS")
-	flags { "MultiProcessorCompile" }
+	flags { "MultiProcessorCompile", "ShadowedVariables" }
 	rtti "Off"
 
 	filter "configurations:Debug"
@@ -27,6 +27,10 @@ workspace (ENGINE_NAME)
 	filter "configurations:Release"
 		defines { "RELEASE" }
 		optimize ("Full")
+        linktimeoptimization "On"  -- LTO
+        flags { "NoIncrementalLink" }
+
+    filter {}
 
 project (ENGINE_NAME)
     location (ROOT .. ENGINE_NAME)
@@ -59,6 +63,8 @@ project (ENGINE_NAME)
     filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
 	filter {}
+
+    postbuildcommands { "{COPY} \"$(ProjectDir)Resources\" \"$(OutDir)Resources\"" }
 
     ---- External libraries ----
 	AddAssimp()
