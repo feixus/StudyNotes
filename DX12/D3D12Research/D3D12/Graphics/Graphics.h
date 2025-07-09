@@ -20,6 +20,7 @@ struct Material;
 class Camera;
 class RGResourceAllocator;
 class DebugRenderer;
+class UnorderedAccessView;
 
 struct Batch
 {
@@ -206,6 +207,7 @@ private:
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<Buffer> m_pLightIndexCounter;
+	UnorderedAccessView* m_pLightIndexCounterRawUAV{nullptr};
 	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
 	std::unique_ptr<GraphicsTexture> m_pLightGridOpaque;
 	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparent;

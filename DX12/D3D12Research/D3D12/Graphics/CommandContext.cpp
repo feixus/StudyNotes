@@ -241,7 +241,7 @@ void CommandContext::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLA
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
 	assert(!m_InRenderPass);
-	assert(renderPassInfo.DepthStencilTarget.Target || (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::DontCare_DontCare && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::DontCare_DontCare));
+	assert(renderPassInfo.DepthStencilTarget.Target || (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::NoAccess && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::NoAccess));
 
 	auto ExtractBeginAccess = [](RenderPassAccess access) -> D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE
 	{
@@ -250,6 +250,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		case RenderTargetLoadAction::DontCare: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
 		case RenderTargetLoadAction::Load: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
 		case RenderTargetLoadAction::Clear: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+		case RenderTargetLoadAction::NoAccess: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS;
 		}
 		return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS;
 	};
@@ -261,6 +262,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		case RenderTargetStoreAction::DontCare: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
 		case RenderTargetStoreAction::Store: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
 		case RenderTargetStoreAction::Resolve: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE;
+		case RenderTargetStoreAction::NoAccess: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 		}
 		return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 	};
@@ -346,7 +348,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		}
 
 		FlushResourceBarriers();
-		pCmd->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), &renderPassDepthStencilDesc, renderPassFlags);
+		pCmd->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
 	}
 	else
 #endif

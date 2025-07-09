@@ -22,6 +22,7 @@
 #include "RenderGraph/Blackboard.h"
 #include "RenderGraph/ResourceAllocator.h"
 #include "DebugRenderer.h"
+#include "ResourceViews.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -35,8 +36,6 @@
 #define GPU_VALIDATION 0
 #endif
 
-bool gSortOpaqueMeshes = true;
-bool gSortTransparentMeshes = true;
 bool gDumpRenderGraph = true;
 
 float g_WhitePoint = 4;
@@ -227,6 +226,9 @@ void Graphics::Update()
 						}
 
 						context.InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+						context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounterRawUAV);
 
 						context.SetComputePipelineState(m_pComputeLightCullPipeline.get());
 						context.SetComputeRootSignature(m_pComputeLightCullRS.get());
@@ -294,7 +296,6 @@ void Graphics::Update()
 									Matrix WorldViewProjection;
 								} ObjectData;
 
-								// opaque
 								{
 									GPU_PROFILE_SCOPE("Opaque", &context);
 									context.SetGraphicsPipelineState(m_pShadowPSO.get());
@@ -309,7 +310,6 @@ void Graphics::Update()
 									}
 								}
 
-								// transparent
 								{
 									GPU_PROFILE_SCOPE("Transparent", &context);
 									context.SetGraphicsPipelineState(m_pShadowAlphaPSO.get());
@@ -366,7 +366,6 @@ void Graphics::Update()
 							Matrix WorldViewProjection;
 						} objectData;
 
-						// opaque
 						{
 							GPU_PROFILE_SCOPE("Opaque", &context);
 							context.SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
@@ -385,7 +384,6 @@ void Graphics::Update()
 							}
 						}
 
-						// transparent
 						{
 							GPU_PROFILE_SCOPE("Transparent", &context);
 							context.SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
@@ -537,7 +535,7 @@ void Graphics::Update()
 						context.SetGraphicsRootSignature(m_pToneMapRS.get());
 						context.SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-						context.BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
+						context.BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess));
 
 						context.SetDynamicConstantBufferView(0, &g_WhitePoint, sizeof(float));
 						context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
@@ -1063,6 +1061,7 @@ void Graphics::InitializeAssets()
 
 		m_pLightIndexCounter = std::make_unique<Buffer>(this, "Light Index Counter");
 		m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32_t)));
+		m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
 		m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(this, "Light List Opaque");
 		m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
 		m_pLightIndexListBufferTransparent = std::make_unique<Buffer>(this, "Light List Transparent");

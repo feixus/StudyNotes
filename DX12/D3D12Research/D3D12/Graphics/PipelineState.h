@@ -47,8 +47,6 @@ public:
 			uint32_t stencilRef, uint8_t compareMask, uint8_t writeMask);
 
 	// rasterizer state
-	void SetScissorEnabled(bool enabled);
-	void SetMultisampleEnabled(bool enabled);
 	void SetFillMode(D3D12_FILL_MODE fillMode);
 	void SetCullMode(D3D12_CULL_MODE cullMode);
 	void SetLineAntialias(bool lineAntialias);
