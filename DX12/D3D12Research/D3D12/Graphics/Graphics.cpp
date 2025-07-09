@@ -652,11 +652,11 @@ void Graphics::InitD3D()
 
 	// look for an adapter
 	uint32_t adapter = 0;
-	ComPtr<IDXGIAdapter1> pAdapter;
+	ComPtr<IDXGIAdapter4> pAdapter;
 	while (m_pFactory->EnumAdapterByGpuPreference(adapter, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&pAdapter)) != DXGI_ERROR_NOT_FOUND)
 	{
-		DXGI_ADAPTER_DESC1 desc;
-		pAdapter->GetDesc1(&desc);
+		DXGI_ADAPTER_DESC3 desc;
+		pAdapter->GetDesc3(&desc);
 
 		if (!(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE))
 		{
@@ -815,7 +815,7 @@ void Graphics::CreateSwapchain()
 		&swapchainDesc,
 		&fsDesc,
 		nullptr,
-		&pSwapChain));
+		pSwapChain.GetAddressOf()));
 
 	pSwapChain.As(&m_pSwapchain);
 }
@@ -1068,6 +1068,19 @@ void Graphics::InitializeAssets()
 		m_pLightIndexListBufferTransparent = std::make_unique<Buffer>(this, "Light List Transparent");
 		m_pLightIndexListBufferTransparent->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Light Buffer");
+	}
+
+	// mip generation
+	{
+		Shader computeShader("Resources/Shaders/GenerateMips.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		m_pGenerateMipsRS = std::make_unique<RootSignature>();
+		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips RS", computeShader, m_pDevice.Get());
+
+		m_pGenerateMipsPSO = std::make_unique<ComputePipelineState>();
+		m_pGenerateMipsPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pGenerateMipsPSO->SetRootSignature(m_pGenerateMipsRS->GetRootSignature());
+		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
 	}
 
 	// geometry

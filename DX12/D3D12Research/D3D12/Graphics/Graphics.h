@@ -234,6 +234,10 @@ private:
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
 	std::unique_ptr<GraphicsTexture> m_pAverageLuminance;
 
+	// mip generation
+	std::unique_ptr<RootSignature> m_pGenerateMipsRS;
+	std::unique_ptr<ComputePipelineState> m_pGenerateMipsPSO;
+
 	// light data
 	int m_ShadowCasters{0};
 	std::vector<Light> m_Lights;
