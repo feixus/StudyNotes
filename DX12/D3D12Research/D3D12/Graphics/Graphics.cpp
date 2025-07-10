@@ -74,6 +74,9 @@ void Graphics::Initialize(HWND hWnd)
 	RandomizeLights(m_DesiredLightCount);
 }
 
+static bool written = false;
+static Vector4 randoms[64];
+
 void Graphics::Update()
 {
 	PROFILE_BEGIN("UpdateGameState");
@@ -153,17 +156,30 @@ void Graphics::Update()
 					const TextureDesc& desc = pDepthStencil->GetDesc();
 
 					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					renderContext.InsertResourceBarrier(m_pMSAANormals.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-					renderContext.BeginRenderPass(RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store));
+					RenderPassInfo info = RenderPassInfo(m_pMSAANormals.get(), RenderPassAccess::DontCare_Resolve, pDepthStencil, RenderPassAccess::Clear_Store);
+					info.RenderTargets[0].ResolveTarget = m_pNormals.get();
+
+					renderContext.BeginRenderPass(info);
 					renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					renderContext.SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+					renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
 
 					renderContext.SetGraphicsPipelineState(m_pDepthPrepassPSO.get());
 					renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
+
+					struct Parameters
+					{
+						Matrix World;
+						Matrix WorldViewProj;
+					} constBuffer{};
+
 					for (const Batch& b : m_OpaqueBatches)
 					{
-						Matrix worldViewProjection = b.WorldMatrix * m_pCamera->GetViewProjection();
-						renderContext.SetDynamicConstantBufferView(0, &worldViewProjection, sizeof(Matrix));
+						constBuffer.World = b.WorldMatrix;
+						constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
+						
+						renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 						b.pMesh->Draw(&renderContext);
 					}
 
@@ -200,9 +216,63 @@ void Graphics::Update()
 					renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
 
 					renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+					renderContext.FlushResourceBarriers();
 				};
 			});
 	}
+
+	graph.AddPass("SSAO", [&](RGPassBuilder& builder)
+		{
+			builder.NeverCull();
+			sceneData.DepthStencilResolved = builder.Read(sceneData.DepthStencilResolved);
+			return [=](CommandContext& renderContext, const RGPassResource& resources)
+			{
+				renderContext.InsertResourceBarrier(resources.GetTexture(sceneData.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetComputeRootSignature(m_pSSAORS.get());
+				renderContext.SetComputePipelineState(m_pSSAOPSO.get());
+
+				struct ShaderParameters
+				{
+					Vector4 RandomVectors[64];
+					Matrix ViewInverse;
+					Matrix ProjectionInverse;
+					Matrix Projection;
+					uint32_t Dimensions[2]{};
+				} shaderParameters;
+
+				for (int i = 0; i < 64; i++)
+				{
+					if (!written)
+					{
+						randoms[i] = Vector4(Math::RandVector());
+					}
+					shaderParameters.RandomVectors[i] = randoms[i];
+				}
+				written = true;
+
+				shaderParameters.ViewInverse = m_pCamera->GetViewInverse();
+				shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
+				shaderParameters.Projection = m_pCamera->GetProjection();
+				shaderParameters.Dimensions[0] = m_WindowWidth;
+				shaderParameters.Dimensions[1] = m_WindowHeight;
+
+				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
+				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, resources.GetTexture(sceneData.DepthStencilResolved)->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pNormals->GetSRV());
+
+				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 16);
+				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 16);
+				renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
+
+				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(resources.GetTexture(sceneData.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			};
+		});
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
@@ -802,6 +872,9 @@ void Graphics::InitD3D()
 	
 	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
 	m_pDownscaledColor = std::make_unique<GraphicsTexture>(this, "Downscaled HDR Target");
+	m_pMSAANormals = std::make_unique<GraphicsTexture>(this, "MSAA Normals");
+	m_pNormals = std::make_unique<GraphicsTexture>(this, "Normals");
+	m_pSSAOTarget = std::make_unique<GraphicsTexture>(this, "SSAO Target");
 
 	m_pLightGridOpaque = std::make_unique<GraphicsTexture>(this, "Opaque Light Grid");
 	m_pLightGridTransparent = std::make_unique<GraphicsTexture>(this, "Transparent Light Grid");
@@ -903,6 +976,10 @@ void Graphics::OnResize(int width, int height)
 	m_pHDRRenderTarget->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
+	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
+	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
+	m_pSSAOTarget->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+
 	int frustumCountX = Math::DivideAndRoundUp(m_WindowWidth, FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::DivideAndRoundUp(m_WindowHeight, FORWARD_PLUS_BLOCK_SIZE);
 	m_pLightGridOpaque->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
@@ -1001,7 +1078,8 @@ void Graphics::InitializeAssets()
 	// depth prepass
 	// simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader vertexShader("Resources/Shaders/Prepass.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader pixelShader("Resources/Shaders/Prepass.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		// root signature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>();
@@ -1009,10 +1087,11 @@ void Graphics::InitializeAssets()
 
 		// pipeline state
 		m_pDepthPrepassPSO = std::make_unique<GraphicsPipelineState>();
-		m_pDepthPrepassPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
+		m_pDepthPrepassPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 		m_pDepthPrepassPSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		m_pDepthPrepassPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pDepthPrepassPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pDepthPrepassPSO->SetRenderTargetFormat(DXGI_FORMAT_R32G32B32A32_FLOAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
 	}
@@ -1124,6 +1203,19 @@ void Graphics::InitializeAssets()
 		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
 	}
 
+	// SSAO
+	{
+		Shader computeShader("Resources/Shaders/SSAO.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		m_pSSAORS = std::make_unique<RootSignature>();
+		m_pSSAORS->FinalizeFromShader("SSAO RS", computeShader, m_pDevice.Get());
+
+		m_pSSAOPSO = std::make_unique<ComputePipelineState>();
+		m_pSSAOPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pSSAOPSO->SetRootSignature(m_pSSAORS->GetRootSignature());
+		m_pSSAOPSO->Finalize("SSAO PSO", m_pDevice.Get());
+	}
+
 	// geometry
 	{
 		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
@@ -1155,6 +1247,9 @@ void Graphics::InitializeAssets()
 void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
+
+	ImTextureID user_texture_id = m_pSSAOTarget->GetSRV().ptr;
+	ImGui::Image(user_texture_id, ImVec2((float)Math::DivideAndRoundUp(m_WindowWidth, 2), (float)Math::DivideAndRoundUp(m_WindowHeight, 2)));
 	
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
@@ -1192,7 +1287,7 @@ void Graphics::UpdateImGui()
 		ImGui::Checkbox("Visualize Clusters", &gVisualizeClusters);
 
 		ImGui::Separator();
-		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 16384 * 4);
+		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 16384 * 10);
 		if (ImGui::Button("Generate Lights"))
 		{
 			RandomizeLights(m_DesiredLightCount);
@@ -1320,7 +1415,7 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(8.f, 12.f);
+		const float range = Math::RandomRange(4.f, 6.f);
 		const float angle = Math::RandomRange(40.f, 80.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;

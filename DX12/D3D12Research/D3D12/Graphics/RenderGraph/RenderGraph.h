@@ -20,7 +20,7 @@ class RGResource
 {
 public:
     RGResource(const char* pName, int id, bool isImported, RGResourceType type, void* pResource)
-        : m_Name(pName), m_Id(id), m_IsImported(isImported), m_Type(type), m_pPhysicalResource(pResource) {}
+        : m_Name(pName), m_Id(id), m_IsImported(isImported), m_Type(type), m_pPhysicalResource(pResource), m_Version(0) {}
 
     const char* m_Name;
     int m_Id;

@@ -167,7 +167,7 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 			ComPtr<IDxcBlobEncoding> pPrintBlob, pRintBlob8;
 			HR(pResult->GetErrorBuffer(pPrintBlob.GetAddressOf()));
 			pLibrary->GetBlobAsUtf8(pPrintBlob.Get(), pRintBlob8.GetAddressOf());
-			E_LOG(LogType::Error, "Shader compilation failed: %s", (char*)pRintBlob8->GetBufferPointer());
+			E_LOG(LogType::Error, "%s: compilation failed: %s", m_Path.c_str(), (char*)pRintBlob8->GetBufferPointer());
 			return false;
 		}
 		return true;

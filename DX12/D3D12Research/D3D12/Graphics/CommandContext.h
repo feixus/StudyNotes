@@ -53,6 +53,7 @@ enum class RenderPassAccess : uint8_t
 	Load_DontCare = COMBINE_ACTIONS(Load, DontCare),
 	Clear_Resolve = COMBINE_ACTIONS(Clear, Resolve),
 	Load_Resolve = COMBINE_ACTIONS(Load, Resolve),
+	DontCare_Resolve = COMBINE_ACTIONS(DontCare, Resolve),
 	NoAccess = COMBINE_ACTIONS(NoAccess, NoAccess),
 #undef COMBINE_ACTIONS
 };

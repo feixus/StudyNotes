@@ -167,6 +167,8 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
+	std::unique_ptr<GraphicsTexture> m_pMSAANormals;
+	std::unique_ptr<GraphicsTexture> m_pNormals;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
@@ -236,6 +238,11 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pToneMapPSO;
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
 	std::unique_ptr<GraphicsTexture> m_pAverageLuminance;
+
+	// SSAO
+	std::unique_ptr<GraphicsTexture> m_pSSAOTarget;
+	std::unique_ptr<RootSignature> m_pSSAORS;
+	std::unique_ptr<ComputePipelineState> m_pSSAOPSO;
 
 	// mip generation
 	std::unique_ptr<RootSignature> m_pGenerateMipsRS;

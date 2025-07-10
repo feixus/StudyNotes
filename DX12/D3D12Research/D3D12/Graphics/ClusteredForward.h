@@ -19,13 +19,13 @@ struct LightData;
 struct ClusteredForwardInputResource
 {
     RGResourceHandle DepthBuffer;
-    GraphicsTexture* pRenderTarget;
-    GraphicsTexture* pShadowMap;
-    const std::vector<Batch>* pOpaqueBatches;
-    const std::vector<Batch>* pTransparentBatches;
-    Buffer* pLightBuffer;
-    Camera* pCamera;
-    LightData* pLightData;
+    GraphicsTexture* pRenderTarget{nullptr};
+    GraphicsTexture* pShadowMap{nullptr};
+    const std::vector<Batch>* pOpaqueBatches{};
+    const std::vector<Batch>* pTransparentBatches{};
+    Buffer* pLightBuffer{nullptr};
+    Camera* pCamera{nullptr};
+    LightData* pLightData{nullptr};
 };
 
 class ClusteredForward
