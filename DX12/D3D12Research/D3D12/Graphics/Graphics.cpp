@@ -241,7 +241,10 @@ void Graphics::Update()
 					Matrix ViewInverse;
 					Matrix ProjectionInverse;
 					Matrix Projection;
+					Matrix View;
 					uint32_t Dimensions[2]{};
+					float Near{1.0f};
+					float Far{0.0f};
 				} shaderParameters;
 
 				for (int i = 0; i < 64; i++)
@@ -249,6 +252,8 @@ void Graphics::Update()
 					if (!written)
 					{
 						randoms[i] = Vector4(Math::RandVector());
+						randoms[i].z = abs(randoms[i].z);
+						randoms[i].Normalize();
 					}
 					shaderParameters.RandomVectors[i] = randoms[i];
 				}
@@ -257,8 +262,11 @@ void Graphics::Update()
 				shaderParameters.ViewInverse = m_pCamera->GetViewInverse();
 				shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
 				shaderParameters.Projection = m_pCamera->GetProjection();
+				shaderParameters.View = m_pCamera->GetView();
 				shaderParameters.Dimensions[0] = m_WindowWidth;
 				shaderParameters.Dimensions[1] = m_WindowHeight;
+				shaderParameters.Near = m_pCamera->GetFar();
+				shaderParameters.Far = m_pCamera->GetNear();
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
@@ -1248,9 +1256,11 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
+	ImGui::Begin("SSAO");
 	ImTextureID user_texture_id = m_pSSAOTarget->GetSRV().ptr;
 	ImGui::Image(user_texture_id, ImVec2((float)Math::DivideAndRoundUp(m_WindowWidth, 2), (float)Math::DivideAndRoundUp(m_WindowHeight, 2)));
-	
+	ImGui::End();
+
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
