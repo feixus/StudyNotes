@@ -19,6 +19,7 @@ public:
 	inline Type GetType() const { return m_Type; }
 	void* GetByteCode() const;
 	uint32_t GetByteCodeSize() const;
+	const std::vector<std::string>& GetDependencies() const { return m_Dependencies; }
 
 	static void AddGlobalShaderDefine(const std::string& name, const std::string& value = "1");
 
@@ -33,6 +34,7 @@ private:
 
 	inline static std::vector<std::pair<std::string, std::string>> m_GlobalShaderDefines;
 
+	std::vector<std::string> m_Dependencies;
 	std::string m_Path;
 	ComPtr<ID3DBlob> m_pByteCode;
 	Type m_Type{ Type::MAX };

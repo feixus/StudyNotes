@@ -87,8 +87,7 @@ bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryP
 {
 	std::stringstream shadersource;
 	std::vector<StringHash> includes;
-	std::vector<std::string> dependencies;
-	if (!ProcessSource(pFilePath, shadersource, includes, dependencies))
+	if (!ProcessSource(pFilePath, shadersource, includes, m_Dependencies))
 	{
 		return false;
 	}

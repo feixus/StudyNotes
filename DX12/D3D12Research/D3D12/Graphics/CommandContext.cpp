@@ -155,7 +155,7 @@ void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* p
 	D3D12_RESOURCE_STATES sourceState = pSource->GetResourceState();
 	D3D12_RESOURCE_STATES destState = pDest->GetResourceState();
 	InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	InsertResourceBarrier(pDest, D3D12_RESOURCE_STATE_COPY_DEST);
+	InsertResourceBarrier(pDest, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	m_pCommandList->CopyResource(pDest->GetResource(), pSource->GetResource());
 	InsertResourceBarrier(pSource, sourceState);
 	InsertResourceBarrier(pDest, destState);
@@ -426,10 +426,19 @@ void CommandContext::EndRenderPass()
 			const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
 			if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
-				InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				uint32_t subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
-				ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
+				if (data.Target->GetDesc().SampleCount > 1)
+				{
+					InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+					InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+					uint32_t subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
+					ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
+				}
+				else
+				{
+					FlushResourceBarriers();
+					CopyResource(data.Target, data.ResolveTarget);
+					FlushResourceBarriers();
+				}
 			}
 		}
 	}
