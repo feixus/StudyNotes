@@ -74,9 +74,6 @@ void Graphics::Initialize(HWND hWnd)
 	RandomizeLights(m_DesiredLightCount);
 }
 
-static bool written = false;
-static Vector4 randoms[64];
-
 void Graphics::Update()
 {
 	PROFILE_BEGIN("UpdateGameState");
@@ -180,6 +177,7 @@ void Graphics::Update()
 						constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
 						
 						renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+						renderContext.SetDynamicDescriptor(1, 0, b.pMaterial->pNormalTexture->GetSRV());
 						b.pMesh->Draw(&renderContext);
 					}
 
@@ -230,6 +228,7 @@ void Graphics::Update()
 			{
 				renderContext.InsertResourceBarrier(resources.GetTexture(sceneData.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pNoiseTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				renderContext.SetComputeRootSignature(m_pSSAORS.get());
@@ -237,44 +236,44 @@ void Graphics::Update()
 
 				struct ShaderParameters
 				{
-					Vector4 RandomVectors[64];
-					Matrix ViewInverse;
+					Vector4 RandomVectors[32];
 					Matrix ProjectionInverse;
 					Matrix Projection;
 					Matrix View;
 					uint32_t Dimensions[2]{};
-					float Near{1.0f};
-					float Far{0.0f};
 				} shaderParameters;
 
-				for (int i = 0; i < 64; i++)
+				static bool written = false;
+				static Vector4 randoms[32];
+				if (!written)
 				{
-					if (!written)
+					for (int i = 0; i < 32; i++)
 					{
-						randoms[i] = Vector4(Math::RandVector());
-						randoms[i].z = abs(randoms[i].z);
-						randoms[i].Normalize();
+						{
+							randoms[i] = Vector4(Math::RandVector());
+							randoms[i].z = Math::Lerp(0.1f, 1.0f, abs(randoms[i].z));
+							randoms[i].Normalize();
+							randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
+						}
 					}
-					shaderParameters.RandomVectors[i] = randoms[i];
+					written = true;
 				}
-				written = true;
+				memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * 32);
 
-				shaderParameters.ViewInverse = m_pCamera->GetViewInverse();
 				shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
 				shaderParameters.Projection = m_pCamera->GetProjection();
 				shaderParameters.View = m_pCamera->GetView();
-				shaderParameters.Dimensions[0] = m_WindowWidth;
-				shaderParameters.Dimensions[1] = m_WindowHeight;
-				shaderParameters.Near = m_pCamera->GetFar();
-				shaderParameters.Far = m_pCamera->GetNear();
+				shaderParameters.Dimensions[0] = m_pSSAOTarget->GetWidth();
+				shaderParameters.Dimensions[1] = m_pSSAOTarget->GetHeight();
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, resources.GetTexture(sceneData.DepthStencilResolved)->GetSRV());
 				renderContext.SetDynamicDescriptor(2, 1, m_pNormals->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 2, m_pNoiseTexture->GetSRV());
 
-				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 16);
-				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 16);
+				int dispatchGroupX = Math::DivideAndRoundUp(m_pSSAOTarget->GetWidth(), 16);
+				int dispatchGroupY = Math::DivideAndRoundUp(m_pSSAOTarget->GetHeight(), 16);
 				renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
 
 				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -769,7 +768,7 @@ void Graphics::InitD3D()
 	// look for an adapter
 	uint32_t adapter = 0;
 	ComPtr<IDXGIAdapter4> pAdapter;
-	while (m_pFactory->EnumAdapterByGpuPreference(adapter, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&pAdapter)) != DXGI_ERROR_NOT_FOUND)
+	while (m_pFactory->EnumAdapterByGpuPreference(adapter++, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND)
 	{
 		DXGI_ADAPTER_DESC3 desc;
 		pAdapter->GetDesc3(&desc);
@@ -781,10 +780,6 @@ void Graphics::InitD3D()
 			E_LOG(LogType::Info, "Using %s", name);
 			break;
 		}
-
-		pAdapter->Release();
-		pAdapter = nullptr;
-		++adapter;
 	}
 
 	// device
@@ -986,7 +981,7 @@ void Graphics::OnResize(int width, int height)
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
 	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
-	m_pSSAOTarget->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pSSAOTarget->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	int frustumCountX = Math::DivideAndRoundUp(m_WindowWidth, FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::DivideAndRoundUp(m_WindowHeight, FORWARD_PLUS_BLOCK_SIZE);
@@ -1224,14 +1219,11 @@ void Graphics::InitializeAssets()
 		m_pSSAOPSO->Finalize("SSAO PSO", m_pDevice.Get());
 	}
 
+	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 	// geometry
 	{
-		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-		
 		m_pMesh = std::make_unique<Mesh>();
 		m_pMesh->Load("Resources/sponza/sponza.dae", this, pCommandContext);
-
-		pCommandContext->Execute(true);
 
 		for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 		{
@@ -1250,6 +1242,11 @@ void Graphics::InitializeAssets()
 			}
 		}
 	}
+
+	m_pNoiseTexture = std::make_unique<GraphicsTexture>(this, "Noise Texture");
+	m_pNoiseTexture->Create(pCommandContext, "Resources/Textures/Noise.png", false);
+
+	pCommandContext->Execute(true);
 }
 
 void Graphics::UpdateImGui()
@@ -1258,7 +1255,7 @@ void Graphics::UpdateImGui()
 
 	ImGui::Begin("SSAO");
 	ImTextureID user_texture_id = m_pSSAOTarget->GetSRV().ptr;
-	ImGui::Image(user_texture_id, ImVec2((float)Math::DivideAndRoundUp(m_WindowWidth, 2), (float)Math::DivideAndRoundUp(m_WindowHeight, 2)));
+	ImGui::Image(user_texture_id, ImVec2(m_pSSAOTarget->GetWidth(), m_pSSAOTarget->GetHeight()));
 	ImGui::End();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
