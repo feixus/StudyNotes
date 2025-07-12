@@ -199,7 +199,7 @@ int64_t RGGraph::Execute(Graphics* pGraphics)
         if (i == exlFrequency)
         {
             i = 0;
-            pContext->Execute(false);
+            pContext->Execute(true);
 			pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		}
     }
