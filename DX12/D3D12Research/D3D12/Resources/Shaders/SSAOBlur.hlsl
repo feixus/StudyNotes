@@ -5,14 +5,14 @@
                 "DescriptorTable(SRV(t0, numDescriptors = 2), visibility = SHADER_VISIBILITY_ALL), " \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP)"
 
-#define THREAD_GROUP_SIZE 16
+#define THREAD_GROUP_SIZE 256
 #define KERNEL_LENGTH 4
 #define BLUR_WEIGHTS 2 * KERNEL_LENGTH + 1
 #define GS_CACHE_SIZE (KERNEL_LENGTH + THREAD_GROUP_SIZE + KERNEL_LENGTH)
 
 cbuffer ShaderParameters : register(b0)
 {
-    uint2 cInvDimensions;
+    float2 cInvDimensions;
     int cHorizontal;
     float cFar;
     float cNear;
