@@ -21,6 +21,7 @@ struct ClusteredForwardInputResource
     RGResourceHandle DepthBuffer;
     GraphicsTexture* pRenderTarget{nullptr};
     GraphicsTexture* pShadowMap{nullptr};
+    GraphicsTexture* pAO{nullptr};
     const std::vector<Batch>* pOpaqueBatches{};
     const std::vector<Batch>* pTransparentBatches{};
     Buffer* pLightBuffer{nullptr};

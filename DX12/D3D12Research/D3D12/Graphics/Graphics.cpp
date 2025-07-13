@@ -44,6 +44,10 @@ float g_MinLogLuminance = -10.0f;
 float g_MaxLogLuminance = 2.0f;
 float g_Tau = 10;
 
+float g_AoPower = 3;
+float g_AoThreshold = 0.0025f;
+float g_AoRadius = 0.25f;
+
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
@@ -224,37 +228,48 @@ void Graphics::Update()
 				renderContext.SetComputeRootSignature(m_pSSAORS.get());
 				renderContext.SetComputePipelineState(m_pSSAOPSO.get());
 
+				constexpr int ssaoRandomVectors = 64;
 				struct ShaderParameters
 				{
-					Vector4 RandomVectors[32];
+					Vector4 RandomVectors[ssaoRandomVectors];
 					Matrix ProjectionInverse;
 					Matrix Projection;
 					Matrix View;
 					uint32_t Dimensions[2]{};
+					float Near{0.0f};
+					float Far{0.0f};
+					float Power{0.0f};
+					float Radius{0.0f};
+					float Threshold{0.0f};
 				} shaderParameters;
 
 				static bool written = false;
-				static Vector4 randoms[32];
+				static Vector4 randoms[ssaoRandomVectors];
 				if (!written)
 				{
-					for (int i = 0; i < 32; i++)
+					for (int i = 0; i < ssaoRandomVectors; i++)
 					{
 						{
 							randoms[i] = Vector4(Math::RandVector());
-							randoms[i].z = Math::Lerp(0.1f, 1.0f, abs(randoms[i].z));
+							randoms[i].z = Math::Lerp(0.1f, 0.8f, abs(randoms[i].z));
 							randoms[i].Normalize();
-							randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
+							randoms[i] *= Math::Lerp(0.2f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
 						}
 					}
 					written = true;
 				}
-				memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * 32);
+				memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * ssaoRandomVectors);
 
 				shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
 				shaderParameters.Projection = m_pCamera->GetProjection();
 				shaderParameters.View = m_pCamera->GetView();
 				shaderParameters.Dimensions[0] = m_pSSAOTarget->GetWidth();
 				shaderParameters.Dimensions[1] = m_pSSAOTarget->GetHeight();
+				shaderParameters.Near = m_pCamera->GetNear();
+				shaderParameters.Far = m_pCamera->GetFar();
+				shaderParameters.Power = g_AoPower;
+				shaderParameters.Radius = g_AoRadius;
+				shaderParameters.Threshold = g_AoThreshold;
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
@@ -266,8 +281,54 @@ void Graphics::Update()
 				int dispatchGroupY = Math::DivideAndRoundUp(m_pSSAOTarget->GetHeight(), 16);
 				renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
 
-				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(resources.GetTexture(sceneData.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			};
+		});
+
+	graph.AddPass("Blur SSAO", [&](RGPassBuilder& builder)
+		{
+			builder.NeverCull();
+			return [=](CommandContext& renderContext, const RGPassResource& resources)
+			{
+				renderContext.InsertResourceBarrier(m_pSSAOBlurred.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				
+				renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
+				renderContext.SetComputePipelineState(m_pSSAOBlurPSO.get());
+
+				struct ShaderParameters
+				{
+					float Dimensions[2]{};
+					uint32_t Horizontal{0};
+					float Far{0.0f};
+					float Near{0.0f};
+				} shaderParameters;
+
+				shaderParameters.Horizontal = 1;
+				shaderParameters.Dimensions[0] = 1.0f / m_pSSAOTarget->GetWidth();
+				shaderParameters.Dimensions[1] = 1.0f / m_pSSAOTarget->GetHeight();
+				shaderParameters.Far = m_pCamera->GetFar();
+				shaderParameters.Near = m_pCamera->GetNear();
+				
+				GraphicsTexture* pDepth = m_SampleCount == 1 ? m_pDepthStencil.get() : m_pResolveDepthStencil.get();
+				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
+				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOBlurred->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pSSAOTarget->GetSRV());
+
+				renderContext.Dispatch(Math::DivideAndRoundUp(m_pSSAOBlurred->GetWidth(), 256), m_pSSAOBlurred->GetHeight());
+
+				renderContext.InsertResourceBarrier(m_pSSAOBlurred.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pSSAOBlurred->GetSRV());
+
+				shaderParameters.Horizontal = 0;
+				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
+
+                renderContext.Dispatch(m_pSSAOBlurred->GetWidth(), Math::DivideAndRoundUp(m_pSSAOBlurred->GetHeight(), 256));
 			};
 		});
 
@@ -363,6 +424,7 @@ void Graphics::Update()
 		resources.pCamera = m_pCamera.get();
 		resources.pShadowMap = m_pShadowMap.get();
 		resources.pLightData = &lightData;
+		resources.pAO = m_pSSAOTarget.get();
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
@@ -742,6 +804,7 @@ void Graphics::InitD3D()
 	m_pMSAANormals = std::make_unique<GraphicsTexture>(this, "MSAA Normals");
 	m_pNormals = std::make_unique<GraphicsTexture>(this, "Normals");
 	m_pSSAOTarget = std::make_unique<GraphicsTexture>(this, "SSAO Target");
+	m_pSSAOBlurred = std::make_unique<GraphicsTexture>(this, "SSAO Blurred");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
@@ -843,7 +906,8 @@ void Graphics::OnResize(int width, int height)
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
 	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
-	m_pSSAOTarget->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pSSAOTarget->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pSSAOBlurred->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pCamera->SetDirty();
 
@@ -1024,6 +1088,19 @@ void Graphics::InitializeAssets()
 		m_pSSAOPSO->Finalize("SSAO PSO", m_pDevice.Get());
 	}
 
+	// SSAO Blur
+	{
+		Shader computeShader("Resources/Shaders/SSAOBlur.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		m_pSSAOBlurRS = std::make_unique<RootSignature>();
+		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur RS", computeShader, m_pDevice.Get());
+
+		m_pSSAOBlurPSO = std::make_unique<ComputePipelineState>();
+		m_pSSAOBlurPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pSSAOBlurPSO->SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
+		m_pSSAOBlurPSO->Finalize("SSAO Blur PSO", m_pDevice.Get());
+	}
+
 	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 	// geometry
 	{
@@ -1119,6 +1196,10 @@ void Graphics::UpdateImGui()
 		ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
 		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
 		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
+
+		ImGui::SliderFloat("AO Power", &g_AoPower, 1, 10);
+		ImGui::SliderFloat("AO Threshold", &g_AoThreshold, 0, 0.025f);
+		ImGui::SliderFloat("AO Radius", &g_AoRadius, 0.1f, 5.0f);
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{

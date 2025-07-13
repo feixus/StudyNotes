@@ -106,6 +106,12 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 	return plane;
 }
 
+float LinearizeDepth(float z, float near, float far)
+{
+	float z_n = 2.0 * z - 1.0;
+	return 2.0 * far * near / (near + far - z_n * (near - far));
+}
+
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 {
 	aabb.Center = float4((minimum + maximum) * 0.5f, 0);

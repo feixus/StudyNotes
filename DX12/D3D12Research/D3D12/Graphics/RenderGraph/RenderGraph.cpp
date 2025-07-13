@@ -94,15 +94,11 @@ void RGGraph::Compile()
         for (RGPass* pPass : m_RenderPasses)
         {
             // make all renderpasses that read from "From" also read from "To"
-            for (RGResourceHandle& handle : pPass->m_Reads)
+            if (pPass->ReadsFrom(alias.From))
             {
-                if (pPass->ReadsFrom(alias.From) )
+                if (pPass->ReadsFrom(alias.To) == false)
                 {
-                    if (pPass->ReadsFrom(alias.To) == false)
-                    {
-                        pPass->m_Reads.push_back(alias.To);
-                    }
-                    break;
+                    pPass->m_Reads.push_back(alias.To);
                 }
             }
 
@@ -198,9 +194,9 @@ int64_t RGGraph::Execute(Graphics* pGraphics)
         ++i;
         if (i == exlFrequency)
         {
-            i = 0;
             pContext->Execute(true);
 			pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+            i = 0;
 		}
     }
 

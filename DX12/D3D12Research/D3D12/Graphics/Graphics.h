@@ -229,8 +229,11 @@ private:
 	// SSAO
 	std::unique_ptr<GraphicsTexture> m_pNoiseTexture;
 	std::unique_ptr<GraphicsTexture> m_pSSAOTarget;
+	std::unique_ptr<GraphicsTexture> m_pSSAOBlurred;
 	std::unique_ptr<RootSignature> m_pSSAORS;
 	std::unique_ptr<ComputePipelineState> m_pSSAOPSO;
+	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
+	std::unique_ptr<ComputePipelineState> m_pSSAOBlurPSO;
 
 	// mip generation
 	std::unique_ptr<RootSignature> m_pGenerateMipsRS;

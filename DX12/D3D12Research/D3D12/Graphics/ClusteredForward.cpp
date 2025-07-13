@@ -306,6 +306,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                 context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
                 context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(inputResource.DepthBuffer), RenderPassAccess::Load_DontCare));
                 context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
@@ -323,6 +324,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                     context.SetDynamicDescriptor(4, 1, m_pLightGrid->GetSRV());
                     context.SetDynamicDescriptor(4, 2, m_pLightIndexGrid->GetSRV());
                     context.SetDynamicDescriptor(4, 3, inputResource.pLightBuffer->GetSRV());
+                    context.SetDynamicDescriptor(4, 4, inputResource.pAO->GetSRV());
 
                     for (const Batch& b : *inputResource.pOpaqueBatches)
                     {
@@ -526,8 +528,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
             { "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         };
 
-        Shader vertexShader = Shader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { "SHADOW" });
-        Shader pixelShader = Shader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "SHADOW" });
+        Shader vertexShader = Shader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
+        Shader pixelShader = Shader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
 
         m_pDiffuseRS = std::make_unique<RootSignature>();
         m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
