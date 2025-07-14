@@ -24,7 +24,9 @@
 #include <assert.h>
 #include <filesystem>
 #include <list>
+#include <unordered_map>
 
+#include "Core/CommandLine.h"
 #include "Core/Delegates.h"
 #include "Core/GameTimer.h"
 #include "Core/BitField.h"

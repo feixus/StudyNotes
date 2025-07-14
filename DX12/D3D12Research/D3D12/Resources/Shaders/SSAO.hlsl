@@ -1,7 +1,6 @@
 #include "Common.hlsli"
 
 #define SSAO_SAMPLES 64
-#define SSAO_SAMPLES_ACTUAL 16
 
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
@@ -21,6 +20,7 @@ cbuffer ShaderParameters : register(b0)
     float cAoPower;
     float cAoRadius;
     float cAoDepthThreshold;
+    int cAoSamples;
 }
 
 Texture2D tDepthTexture : register(t0);
@@ -57,9 +57,8 @@ void CSMain(CS_INPUT input)
     float3x3 TBN = float3x3(tangent, bitangent, normal);
 
     float occlusion = 0;
-    int kernelSize = SSAO_SAMPLES_ACTUAL;
 
-    for (int i = 0; i < kernelSize; i++)
+    for (int i = 0; i < cAoSamples; i++)
     {
         float3 newViewPos = viewPos.xyz + mul(cRandomVectors[i].xyz, TBN) * cAoRadius;
         float4 newTexCoord = mul(float4(newViewPos, 1), cProjection);
@@ -79,6 +78,6 @@ void CSMain(CS_INPUT input)
             occlusion += rangeCheck * (newViewPos.z >= sampleViewPos.z + 0.025f ? 1 : 0);
         }
     }
-    occlusion = occlusion / kernelSize;
+    occlusion = occlusion / cAoSamples;
     uAmbientOcclusion[input.DispatchThreadId.xy] = pow(saturate(1 - occlusion), cAoPower);
 }
