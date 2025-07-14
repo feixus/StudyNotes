@@ -83,4 +83,5 @@ inline constexpr ENUMTYPE& operator &= (ENUMTYPE& a, ENUMTYPE b) throw() { retur
 inline constexpr ENUMTYPE operator ~ (ENUMTYPE a) throw() { return ENUMTYPE(~((EnumFlagSize<ENUMTYPE>::type)a)); } \
 inline constexpr ENUMTYPE operator ^ (ENUMTYPE a, ENUMTYPE b) throw() { return ENUMTYPE(((EnumFlagSize<ENUMTYPE>::type)a) ^ ((EnumFlagSize<ENUMTYPE>::type)b)); } \
 inline constexpr ENUMTYPE& operator ^= (ENUMTYPE& a, ENUMTYPE b) throw() { return (ENUMTYPE&)(((EnumFlagSize<ENUMTYPE>::type&)a) ^= ((EnumFlagSize<ENUMTYPE>::type)b)); } \
-inline constexpr bool Any(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) == b;}
+inline constexpr bool Any(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) != (ENUMTYPE)0;} \
+inline constexpr bool All(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) == b; }

@@ -25,7 +25,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(width);
 
 	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
-	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource) == false)
+	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure) == false)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 	}
@@ -44,6 +44,10 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	{
 		m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 		heapType = D3D12_HEAP_TYPE_UPLOAD;
+	}
+	if (Any(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+	{
+		m_CurrentState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 	}
 
 	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, heapType);

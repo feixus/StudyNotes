@@ -20,6 +20,7 @@ enum class BufferFlag
 	Structured = 1 << 4,
 	ByteAddress = 1 << 5,
 	IndirectArgument = 1 << 6,
+	AccelerationStructure = 1 << 7,
 
 	MAX = 1 << 7
 };
@@ -72,6 +73,16 @@ struct BufferDesc
 		desc.ElementCount = elements;
 		desc.ElementSize = sizeof(IndirectParameters);
 		desc.Usage = usage | BufferFlag::IndirectArgument | BufferFlag::UnorderedAccess;
+		return desc;
+	}
+
+	static BufferDesc CreateAccelerationStructure(int bytes, BufferFlag usage = BufferFlag::None)
+	{
+		assert(bytes % 4 == 0);
+		BufferDesc desc;
+		desc.ElementCount = bytes / 4;
+		desc.ElementSize = 4;
+		desc.Usage = usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 

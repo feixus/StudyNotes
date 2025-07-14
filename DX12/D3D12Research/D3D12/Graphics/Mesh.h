@@ -19,6 +19,9 @@ public:
     int GetMaterialId() const { return m_MaterialId; }
     const BoundingBox& GetBounds() const { return m_Bounds; }
 
+    Buffer* GetVertexBuffer() const { return m_pVertexBuffer.get(); }
+    Buffer* GetIndexBuffer() const { return m_pIndexBuffer.get(); }
+
 private:
     int m_MaterialId{};
     int m_IndexCount{};
