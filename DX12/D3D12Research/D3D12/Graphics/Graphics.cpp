@@ -1233,6 +1233,7 @@ void Graphics::InitializeAssets()
 			asDesc.ScratchAccelerationStructureData = pTLASScratch->GetGpuHandle();
 			asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 			asDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
+			asDesc.Inputs.InstanceDescs = pDescriptorsBuffer->GetGpuHandle();
 			asDesc.Inputs.NumDescs = 1;
 			asDesc.SourceAccelerationStructureData = 0;
 
@@ -1248,9 +1249,9 @@ void Graphics::InitializeAssets()
 			pMissSignature->Finalize("Ray MissHit RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 			pDummySignature->Finalize("Ray Dummy Global RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 			
-			ShaderLibrary rayGenShader("Resources/RayTracingShaders/RayGen.hlsl");
-			ShaderLibrary hitShader("Resources/RayTracingShaders/Hit.hlsl");
-			ShaderLibrary missShader("Resources/RayTracingShaders/Miss.hlsl");
+			ShaderLibrary rayGenShader("Resources/Shaders/RayTracingShaders/RayGen.hlsl");
+			ShaderLibrary hitShader("Resources/Shaders/RayTracingShaders/Hit.hlsl");
+			ShaderLibrary missShader("Resources/Shaders/RayTracingShaders/Miss.hlsl");
 
 			CD3DX12_STATE_OBJECT_DESC desc(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE);
 			{
@@ -1286,24 +1287,24 @@ void Graphics::InitializeAssets()
 				CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pMissRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
 				pMissRs->SetRootSignature(pMissSignature->GetRootSignature());
 				CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pMissAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-				pRayGenAssociation->AddExport(L"Miss");
-				pRayGenAssociation->SetSubobjectToAssociate(*pMissRs);
+				pMissAssociation->AddExport(L"Miss");
+				pMissAssociation->SetSubobjectToAssociate(*pMissRs);
 
 				CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pHitRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
 				pMissRs->SetRootSignature(pHitSignature->GetRootSignature());
 				CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pHitAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-				pRayGenAssociation->AddExport(L"HitGroup");
-				pRayGenAssociation->SetSubobjectToAssociate(*pHitRs);
+				pHitAssociation->AddExport(L"HitGroup");
+				pHitAssociation->SetSubobjectToAssociate(*pHitRs);
 			}
 
 			{
 				CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT* pRtConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
 				pRtConfig->Config(4 * sizeof(float), 2 * sizeof(float));
 
-				CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT* pRtPipelineConfig = desc.CreateSubobject< CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
+				CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT* pRtPipelineConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
 				pRtPipelineConfig->Config(1);
 
-				CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT* pGlobalRs = desc.CreateSubobject< CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
+				CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT* pGlobalRs = desc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
 				pGlobalRs->SetRootSignature(pDummySignature->GetRootSignature());
 			}
 			D3D12_STATE_OBJECT_DESC stateObject = *desc;
@@ -1372,7 +1373,7 @@ void Graphics::InitializeAssets()
 			rayDesc.RayGenerationShaderRecord.SizeInBytes = 64;
 
 			pContext->InsertResourceBarrier(pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			pContext->ClearUavUInt(pOutputTexture.get(), pOutputRawUAV);
+			//pContext->ClearUavUInt(pOutputTexture.get(), pOutputRawUAV);
 			pContext->FlushResourceBarriers();
 
 			pCmd->SetPipelineState1(pPipeline.Get());
