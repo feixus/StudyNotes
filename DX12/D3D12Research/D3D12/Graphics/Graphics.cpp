@@ -1161,19 +1161,27 @@ void Graphics::InitializeAssets()
 		DescriptorHandle uavHandle = pDescriptorAllocator->AllocateTransientDescriptor(2);
 		DescriptorHandle srvHandle = uavHandle + pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
+		std::unique_ptr<Buffer> pVertexBuffer = std::make_unique<Buffer>(this, "Vertex Buffer");
+		Vector3 positions[] = {
+			{ 0.0f, 0.25f, 0.0f},
+			{ 0.25f, -0.25f, 0.0f},
+			{ -0.25f, -0.25f, 0.0f},
+		};
+		pVertexBuffer->Create(BufferDesc::CreateVertexBuffer(3, sizeof(Vector3)));
+		pVertexBuffer->SetData(pContext, positions, ARRAYSIZE(positions));
+
 		// bottom level acceleration structure
 		{
-			SubMesh* pMesh = m_pMesh->GetMesh(0);
 			D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 			geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 			geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-			geometryDesc.Triangles.IndexBuffer = pMesh->GetIndexBuffer()->GetGpuHandle();
-			geometryDesc.Triangles.IndexCount = pMesh->GetIndexBuffer()->GetDesc().ElementCount;
-			geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+			geometryDesc.Triangles.IndexBuffer = 0;
+			geometryDesc.Triangles.IndexCount = 0;
+			geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_UNKNOWN;
 			geometryDesc.Triangles.Transform3x4 = 0;
-			geometryDesc.Triangles.VertexBuffer.StartAddress = pMesh->GetVertexBuffer()->GetGpuHandle();
-			geometryDesc.Triangles.VertexBuffer.StrideInBytes = pMesh->GetVertexBuffer()->GetDesc().ElementSize;
-			geometryDesc.Triangles.VertexCount = pMesh->GetVertexBuffer()->GetDesc().ElementCount;
+			geometryDesc.Triangles.VertexBuffer.StartAddress = pVertexBuffer->GetGpuHandle();
+			geometryDesc.Triangles.VertexBuffer.StrideInBytes = pVertexBuffer->GetDesc().ElementSize;
+			geometryDesc.Triangles.VertexCount = pVertexBuffer->GetDesc().ElementCount;
 			geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
@@ -1187,9 +1195,9 @@ void Graphics::InitializeAssets()
 			pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
 			pBLASScratch = std::make_unique<Buffer>(this, "BLAS Scratch Buffer");
-			pBLASScratch->Create(BufferDesc::CreateByteAddress((uint32_t)info.ScratchDataSizeInBytes, BufferFlag::UnorderedAccess));
+			pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<int>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
 			pBLAS = std::make_unique<Buffer>(this, "BLAS");
-			pBLAS->Create(BufferDesc::CreateAccelerationStructure((uint32_t)info.ResultDataMaxSizeInBytes, BufferFlag::UnorderedAccess));
+			pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<int>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
 
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
 			asDesc.Inputs = prebuildInfo;
@@ -1212,9 +1220,9 @@ void Graphics::InitializeAssets()
 			pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
 			pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
-			pTLASScratch->Create(BufferDesc::CreateByteAddress((uint32_t)info.ScratchDataSizeInBytes, BufferFlag::None));
+			pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<int>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
 			pTLAS = std::make_unique<Buffer>(this, "TLAS");
-			pTLAS->Create(BufferDesc::CreateAccelerationStructure((uint32_t)info.ResultDataMaxSizeInBytes));
+			pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<int>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 			
 			pDescriptorsBuffer = std::make_unique<Buffer>(this, "Descriptors Buffer");
 			pDescriptorsBuffer->Create(BufferDesc::CreateVertexBuffer(1, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::Upload));
@@ -1324,6 +1332,7 @@ void Graphics::InitializeAssets()
 			pDevice->CopyDescriptorsSimple(1, srvHandle.GetCpuHandle(), pTLAS->GetSRV()->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
 
+		int rayGenSize = 0;
 		// shader binding
 		{
 			int64_t progIdSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
@@ -1337,7 +1346,7 @@ void Graphics::InitializeAssets()
 
 				std::wstring EntryPoint;
 				std::vector<void*> InputData;
-				int Size;
+				int Size{0};
 			};
 
 			std::vector<SBTEntry> entries;
@@ -1350,6 +1359,7 @@ void Graphics::InitializeAssets()
 				entry.Size = Math::AlignUp<int64_t>(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT + 8 * entry.InputData.size(), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
 				totalSize += entry.Size;
 			}
+			rayGenSize = entries[0].Size;
 
 			pShaderBindingTable->Create(BufferDesc::CreateVertexBuffer(Math::AlignUp<int64_t>(totalSize, 256), 1, BufferFlag::Upload));
 			char* pData = (char*)pShaderBindingTable->Map();
@@ -1370,7 +1380,7 @@ void Graphics::InitializeAssets()
 			rayDesc.Height = pOutputTexture->GetHeight();
 			rayDesc.Depth = 1;
 			rayDesc.RayGenerationShaderRecord.StartAddress = pShaderBindingTable->GetGpuHandle();
-			rayDesc.RayGenerationShaderRecord.SizeInBytes = 64;
+			rayDesc.RayGenerationShaderRecord.SizeInBytes = rayGenSize;
 
 			pContext->InsertResourceBarrier(pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			//pContext->ClearUavUInt(pOutputTexture.get(), pOutputRawUAV);
