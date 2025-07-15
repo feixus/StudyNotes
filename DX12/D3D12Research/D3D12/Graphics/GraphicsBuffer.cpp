@@ -69,7 +69,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 		}
 	}
 
-	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource))
+	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
 		CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN));
 	}

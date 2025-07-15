@@ -76,7 +76,7 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateAccelerationStructure(int bytes, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateAccelerationStructure(uint32_t bytes, BufferFlag usage = BufferFlag::None)
 	{
 		assert(bytes % 4 == 0);
 		BufferDesc desc;

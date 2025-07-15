@@ -155,6 +155,8 @@ public:
 	
 	void ResolveResource(GraphicsTexture* pSource, uint32_t sourceSubResource, GraphicsTexture* pTarget, uint32_t targetSubResource, DXGI_FORMAT format);
 	
+	void PrepareDraw(DescriptorTableType type);
+
 	// a more structured way for applications to decalare data dependencies and output targets for a set of rendering operations. 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();

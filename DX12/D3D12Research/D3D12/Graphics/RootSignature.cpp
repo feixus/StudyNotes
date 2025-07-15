@@ -74,7 +74,7 @@ void RootSignature::SetDescriptorTable(uint32_t rootIndex, uint32_t rangeCount, 
     rootParameter.ShaderVisibility = visibility;
 }
 
-void RootSignature::SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIndex, uint32_t startshaderRegister, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count)
+void RootSignature::SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIndex, uint32_t startshaderRegister, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, uint32_t heapSlotOffset)
 {
     assert(rangeIndex < MAX_NUM_DESCRIPTORS);
     D3D12_DESCRIPTOR_RANGE1& range = m_DescriptorTableRanges[rootIndex][rangeIndex];
@@ -82,14 +82,14 @@ void RootSignature::SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIn
     range.NumDescriptors = count;
     range.BaseShaderRegister = startshaderRegister;
     range.RegisterSpace = 0;
-    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    range.OffsetInDescriptorsFromTableStart = heapSlotOffset;
     range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 }
 
 void RootSignature::SetDescriptorTableSimple(uint32_t rootIndex, uint32_t startshaderRegister, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, D3D12_SHADER_VISIBILITY visibility)
 {
     SetDescriptorTable(rootIndex, 1, visibility);
-    SetDescriptorTableRange(rootIndex, 0, startshaderRegister, type, count);
+    SetDescriptorTableRange(rootIndex, 0, startshaderRegister, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 }
 
 void RootSignature::AddStaticSampler(uint32_t shaderRegister, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility)
@@ -177,24 +177,28 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		}
     }
 
-    if (shaderVisibility[(uint32_t)Shader::Type::VertexShader] == false)
+    // it's illegal to have RS flags if it's a local root signature
+    if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
     {
-        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
-    }
+        if (shaderVisibility[(uint32_t)Shader::Type::VertexShader] == false)
+        {
+            flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
+        }
 
-    if (shaderVisibility[(uint32_t)Shader::Type::PixelShader] == false)
-    {
-        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-    }
+        if (shaderVisibility[(uint32_t)Shader::Type::PixelShader] == false)
+        {
+            flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+        }
 
-    if (shaderVisibility[(uint32_t)Shader::Type::GeometryShader] == false)
-    {
-        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-    }
+        if (shaderVisibility[(uint32_t)Shader::Type::GeometryShader] == false)
+        {
+            flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+        }
 
-    //#todo tesellation not supported yet
-    flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
-    flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+        //#todo tesellation not supported yet
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+    }
 
     constexpr uint32_t recommendedDwords = 12;
     uint32_t dwords = GetDWordSize();
@@ -207,7 +211,13 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
     desc.Init_1_1(m_NumParameters, m_RootParameters.data(), (uint32_t)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 
     ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
-    HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
+    D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
+    if (pErrorBlob)
+    {
+        std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
+        std::wcout << errorMsg << std::endl;
+        assert(false);
+    }
     HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
     SetD3DObjectName(m_pRootSignature.Get(), pName);
 }

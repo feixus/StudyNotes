@@ -189,42 +189,32 @@ void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESO
 
 void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	PrepareDraw(DescriptorTableType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
 // GPU-driven rendering
 void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments, DescriptorTableType type)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(type);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(type);
+	PrepareDraw(type);
 	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	PrepareDraw(DescriptorTableType::Graphics);
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
 void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	PrepareDraw(DescriptorTableType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex, int instanceStart)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	PrepareDraw(DescriptorTableType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
@@ -582,6 +572,13 @@ void CommandContext::ResolveResource(GraphicsTexture* pSource, uint32_t sourceSu
 {
 	FlushResourceBarriers();
 	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, format);
+}
+
+void CommandContext::PrepareDraw(DescriptorTableType type)
+{
+	FlushResourceBarriers();
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(type);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(type);
 }
 
 void CommandContext::SetComputePipelineState(ComputePipelineState* pPipelineState)
