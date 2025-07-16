@@ -47,6 +47,7 @@ public:
 
 	void* GetByteCode() const { return m_pByteCode->GetBufferPointer(); }
 	uint32_t GetByteCodeSize() const { return (uint32_t)m_pByteCode->GetBufferSize(); }
+	ID3DBlob* GetBlob() const { return m_pByteCode.Get(); }
 
 private:
 	std::vector<std::string> m_Dependencies;

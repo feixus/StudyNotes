@@ -162,7 +162,6 @@ private:
 	int m_SampleCount{1};
 	int m_SampleQuality{0};
 
-
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pHDRRenderTarget;
@@ -189,8 +188,8 @@ private:
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
-	bool m_StartPixCapture{false};
-	bool m_EndPixCapture{false};
+
+	std::unique_ptr<GraphicsTexture> m_pRayTracingOutput;
 
 	// synchronization objects
 	uint32_t m_CurrentBackBufferIndex{0};

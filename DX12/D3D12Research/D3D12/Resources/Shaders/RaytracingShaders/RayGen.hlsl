@@ -17,17 +17,16 @@ void RayGen()
     // often maps to pixels, so this culd represent a pixel coordinate
     uint2 launchIndex = DispatchRaysIndex();
     float2 dims = float2(DispatchRaysDimensions().xy);
-    float2 d = (((float2)launchIndex.xy + 0.5f) / dims.xy) * 2 + 1;
+    float2 d = ((launchIndex.xy + 0.5f) / dims.xy) * 2.f - 1.f;
     
+    // define a ray, consisting of origin, direction, and the min-max distance values
     RayDesc ray;
     ray.Origin = float3(d.x, -d.y, 1);
     ray.Direction = float3(0, 0, -1);
     ray.TMin = 0;
-    ray.TMax = 1000;
-    
-    payload.colorAndDistance.xy = (float2)launchIndex.xy / dims.xy;
+    ray.TMax = 100000;
 
-    /* trace the ray
+    // trace the ray
     TraceRay(
         // parameter name: AccelerationStructure,  acceleration structure
         SceneBVH,
@@ -67,6 +66,6 @@ void RayGen()
         // payload associated to the ray, which will be used to  communicate between the hit/miss shaders and the raygen
         payload
     );
-    */
+    
     gOutput[launchIndex] = float4(payload.colorAndDistance.rgb, 1.0f);
 }

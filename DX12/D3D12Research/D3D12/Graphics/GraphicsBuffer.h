@@ -56,11 +56,11 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateByteAddress(uint32_t bytes, BufferFlag usage = BufferFlag::ShaderResource)
+	static BufferDesc CreateByteAddress(uint64_t bytes, BufferFlag usage = BufferFlag::ShaderResource)
 	{
 		assert(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = bytes / 4;
+		desc.ElementCount = (uint32_t)bytes / 4;
 		desc.ElementSize = 4;
 		desc.Usage = usage | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess;
 		return desc;
@@ -76,11 +76,11 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateAccelerationStructure(uint32_t bytes, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateAccelerationStructure(uint64_t bytes, BufferFlag usage = BufferFlag::None)
 	{
 		assert(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = bytes / 4;
+		desc.ElementCount = (uint32_t)bytes / 4;
 		desc.ElementSize = 4;
 		desc.Usage = usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
 		return desc;
