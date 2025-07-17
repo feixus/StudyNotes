@@ -37,7 +37,7 @@
 #endif
 
 #ifndef GPU_VALIDATION
-#define GPU_VALIDATION 0
+#define GPU_VALIDATION 1
 #endif
 
 bool gDumpRenderGraph = true;
@@ -1180,13 +1180,13 @@ void Graphics::InitializeAssets()
 			Vector4 Color;
 		};
 
-		Vertex vertices[] = {
-			{{  0.0f,   0.25f, 0.0f }, { 1, 0, 0, 1} },
-			{{  0.25f, -0.25f, 0.0f }, { 0, 1, 0, 1} },
-			{{ -0.25f, -0.25f, 0.0f }, { 0, 0, 1, 1} },
+		Vector3 vertices[] = {
+			{  0.0f,   0.25f, 0.0f },
+			{  0.25f, -0.25f, 0.0f },
+			{ -0.25f, -0.25f, 0.0f },
 		};
-		pVertexBuffer->Create(BufferDesc::CreateVertexBuffer(ARRAYSIZE(vertices), sizeof(Vertex), BufferFlag::ShaderResource));
-		pVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * ARRAYSIZE(vertices));
+		pVertexBuffer->Create(BufferDesc::CreateVertexBuffer(ARRAYSIZE(vertices), sizeof(Vector3), BufferFlag::ShaderResource));
+		pVertexBuffer->SetData(pContext, vertices, sizeof(Vector3) * ARRAYSIZE(vertices));
 
 		// bottom level acceleration structure
 		{
@@ -1281,7 +1281,8 @@ void Graphics::InitializeAssets()
 			pRayGenSignature->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
 			pRayGenSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
 			pRayGenSignature->Finalize("Ray Gen RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-			pHitSignature->SetShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+			//pHitSignature->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
+			//pHitSignature->SetShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 			pHitSignature->Finalize("Ray Hit RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 			pMissSignature->Finalize("Ray MissHit RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 			pDummySignature->Finalize("Ray Dummy Global RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
@@ -1328,7 +1329,7 @@ void Graphics::InitializeAssets()
 				pMissAssociation->SetSubobjectToAssociate(*pMissRs);
 
 				CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pHitRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-				pMissRs->SetRootSignature(pHitSignature->GetRootSignature());
+				pHitRs->SetRootSignature(pHitSignature->GetRootSignature());
 				CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pHitAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
 				pHitAssociation->AddExport(L"HitGroup");
 				pHitAssociation->SetSubobjectToAssociate(*pHitRs);
@@ -1362,10 +1363,10 @@ void Graphics::InitializeAssets()
 		}
 
 		uint64_t rayGenSize = 0;
-		nv_helpers_dx12::ShaderBindingTableGenerator sbtGenerator;
+		//nv_helpers_dx12::ShaderBindingTableGenerator sbtGenerator;
 		// shader binding
 		{
-			/*uint64_t progIdSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+			uint64_t progIdSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
 			uint64_t totalSize = 0;
 
 			struct SBTEntry
@@ -1403,15 +1404,15 @@ void Graphics::InitializeAssets()
 				memcpy(pData + progIdSize, entry.InputData.data(), entry.InputData.size() * 8);
 				pData += entry.Size;
 			}
-			pShaderBindingTable->UnMap(); */
+			pShaderBindingTable->UnMap();
 
-			sbtGenerator.AddMissProgram(L"Miss", {});
+			/*sbtGenerator.AddMissProgram(L"Miss", {});
 			sbtGenerator.AddRayGenerationProgram(L"RayGen", { reinterpret_cast<uint64_t*>(uavHandle.GetGpuHandle().ptr),
 								reinterpret_cast<uint64_t*>(srvHandle.GetGpuHandle().ptr) });
-			sbtGenerator.AddHitGroup(L"HitGroup", { (void*)pVertexBuffer->GetGpuHandle() });
+			sbtGenerator.AddHitGroup(L"HitGroup", { reinterpret_cast<void*>(pVertexBuffer->GetSRV()->GetDescriptor().ptr)});
 			uint64_t size = sbtGenerator.ComputeSBTSize();
 			pShaderBindingTable->Create(BufferDesc::CreateVertexBuffer(1, (int32_t)Math::AlignUp<uint64_t>(size, 256), BufferFlag::Upload));
-			sbtGenerator.Generate(pShaderBindingTable->GetResource(), pPipelineProperties.Get());
+			sbtGenerator.Generate(pShaderBindingTable->GetResource(), pPipelineProperties.Get());*/
 		}
 
 		// dispatch rays
@@ -1420,14 +1421,17 @@ void Graphics::InitializeAssets()
 			rayDesc.Width = m_pRayTracingOutput->GetWidth();
 			rayDesc.Height = m_pRayTracingOutput->GetHeight();
 			rayDesc.Depth = 1;
-			rayDesc.RayGenerationShaderRecord.StartAddress = pShaderBindingTable->GetGpuHandle();
+			/*rayDesc.RayGenerationShaderRecord.StartAddress = pShaderBindingTable->GetGpuHandle();
 			rayDesc.RayGenerationShaderRecord.SizeInBytes = sbtGenerator.GetRayGenSectionSize();
 			rayDesc.MissShaderTable.StartAddress = pShaderBindingTable->GetGpuHandle() + sbtGenerator.GetRayGenSectionSize();
 			rayDesc.MissShaderTable.SizeInBytes = sbtGenerator.GetMissSectionSize();
 			rayDesc.MissShaderTable.StrideInBytes = sbtGenerator.GetMissEntrySize();
 			rayDesc.HitGroupTable.StartAddress = Math::AlignUp<uint64_t>(pShaderBindingTable->GetGpuHandle() + sbtGenerator.GetRayGenSectionSize() + sbtGenerator.GetMissSectionSize(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
 			rayDesc.HitGroupTable.SizeInBytes = Math::AlignUp<uint64_t>(sbtGenerator.GetHitGroupSectionSize(), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-			rayDesc.HitGroupTable.StrideInBytes = sbtGenerator.GetHitGroupEntrySize();
+			rayDesc.HitGroupTable.StrideInBytes = Math::AlignUp<uint64_t>(sbtGenerator.GetHitGroupEntrySize(), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);*/
+
+			rayDesc.RayGenerationShaderRecord.StartAddress = pShaderBindingTable->GetGpuHandle();
+			rayDesc.RayGenerationShaderRecord.SizeInBytes = rayGenSize;
 
 			pContext->InsertResourceBarrier(m_pRayTracingOutput.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			//pContext->ClearUavUInt(m_pRayTracingOutput.get(), pOutputRawUAV);

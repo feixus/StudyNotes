@@ -26,8 +26,10 @@ void RayGen()
     ray.TMin = 0;
     ray.TMax = 100000;
 
+    payload.colorAndDistance.xy = (float2) launchIndex.xy / dims.xy;
+    
     // trace the ray
-    TraceRay(
+    /*TraceRay(
         // parameter name: AccelerationStructure,  acceleration structure
         SceneBVH,
         
@@ -66,6 +68,6 @@ void RayGen()
         // payload associated to the ray, which will be used to  communicate between the hit/miss shaders and the raygen
         payload
     );
-    
+    */
     gOutput[launchIndex] = float4(payload.colorAndDistance.rgb, 1.0f);
 }
