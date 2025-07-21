@@ -22,6 +22,7 @@ class RGResourceAllocator;
 class DebugRenderer;
 class UnorderedAccessView;
 class TiledForward;
+class Raytracing;
 
 struct Batch
 {
@@ -106,6 +107,7 @@ public:
 
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
 	bool UseRenderPasses() const;
+	bool SupportsRaytracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
 	bool IsFenceComplete(uint64_t fenceValue);
 
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
@@ -184,12 +186,11 @@ private:
 	std::unique_ptr<RGResourceAllocator> m_pResourceAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
+	std::unique_ptr<Raytracing> m_pRaytracing;
 	std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
-
-	std::unique_ptr<GraphicsTexture> m_pRayTracingOutput;
 
 	// synchronization objects
 	uint32_t m_CurrentBackBufferIndex{0};

@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <crtdbg.h>
 
+#include <filesystem>
+#include <shlobj.h>
+
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
 const int gMsaaSampleCount = 1;
@@ -218,6 +221,7 @@ private:
 			OnPause(false);
 			m_IsResizing = false;
 			m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+			break;
 		}
 		case WM_DESTROY:
 			PostQuitMessage(0);
@@ -264,11 +268,50 @@ private:
 	std::unique_ptr<Graphics> m_pGraphics;
 };
 
+static std::wstring GetLatestWinPixGpuCapturerPath()
+{
+	LPWSTR programFilesPath = nullptr;
+	SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, NULL, &programFilesPath);
+
+	std::filesystem::path pixInstallationPath = programFilesPath;
+	pixInstallationPath /= "Microsoft PIX";
+
+	std::wstring newestVersionFound;
+
+	for (auto const& directory_entry : std::filesystem::directory_iterator(pixInstallationPath))
+	{
+		if (directory_entry.is_directory())
+		{
+			if (newestVersionFound.empty() || newestVersionFound < directory_entry.path().filename().c_str())
+			{
+				newestVersionFound = directory_entry.path().filename().c_str();
+			}
+		}
+	}
+
+	if (newestVersionFound.empty())
+	{
+		// TODO: Error, no PIX installation found
+	}
+
+	return pixInstallationPath / newestVersionFound / L"WinPixGpuCapturer.dll";
+}
+
 //int main()
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	CommandLine::Parse(lpCmdLine);
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+
+	// Check to see if a copy of WinPixGpuCapturer.dll has already been injected into the application.
+	// This may happen if the application is launched through the PIX UI. 
+	/*if (GetModuleHandle("WinPixGpuCapturer.dll") == 0)
+	{
+		std::wstring aa = GetLatestWinPixGpuCapturerPath();
+		char name[256];
+		ToMultibyte(aa.c_str(), name, 256);
+		LoadLibrary(name);
+	}*/
 
 	Console::Startup();
 	E_LOG(LogType::Info, "Startup hello dx12");

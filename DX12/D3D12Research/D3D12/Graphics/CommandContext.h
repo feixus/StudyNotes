@@ -1,6 +1,7 @@
 #pragma once
 #include "GraphicsResource.h"
 #include "OnlineDescriptorAllocator.h"
+#include "DynamicResourceAllocator.h"
 
 class Graphics;
 class GraphicsResource;
@@ -189,6 +190,9 @@ public:
 	void SetScissorRect(const FloatRect& rect);
 
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
+
+	DynamicAllocation AllocateTransientMemory(uint64_t size);
+	DescriptorHandle AllocateTransientDescriptor(uint32_t count, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 private:
 	void BindDescriptorHeaps();

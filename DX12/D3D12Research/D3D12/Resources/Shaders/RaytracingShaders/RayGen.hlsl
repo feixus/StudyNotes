@@ -6,6 +6,12 @@ RWTexture2D<float4> gOutput : register(u0);
 // raytracing acceleration structure, accessed as a SRV
 RaytracingAccelerationStructure SceneBVH : register(t0);
 
+cbuffer CameraParams : register(b0)
+{
+    float4x4 cViewInverse;
+    float4x4 cProjectionInverse;
+}
+
 [shader("raygeneration")]
 void RayGen()
 {
@@ -21,15 +27,14 @@ void RayGen()
     
     // define a ray, consisting of origin, direction, and the min-max distance values
     RayDesc ray;
-    ray.Origin = float3(d.x, -d.y, 1);
-    ray.Direction = float3(0, 0, -1);
+    ray.Origin = mul(cViewInverse, float4(0, 0, 0, 1));
+    float4 target = mul(cProjectionInverse, float4(d.x, -d.y, 1, 1));
+    ray.Direction = mul(cViewInverse, float4(target.xyz, 0));
     ray.TMin = 0;
     ray.TMax = 100000;
-
-    payload.colorAndDistance.xy = (float2) launchIndex.xy / dims.xy;
     
     // trace the ray
-    /*TraceRay(
+    TraceRay(
         // parameter name: AccelerationStructure,  acceleration structure
         SceneBVH,
         
@@ -68,6 +73,6 @@ void RayGen()
         // payload associated to the ray, which will be used to  communicate between the hit/miss shaders and the raygen
         payload
     );
-    */
+    
     gOutput[launchIndex] = float4(payload.colorAndDistance.rgb, 1.0f);
 }
