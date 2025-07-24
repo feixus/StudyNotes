@@ -57,6 +57,7 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
             }
 
             nv_helpers_dx12::ShaderBindingTableGenerator sbtGenerator;
+            DynamicAllocation sbtAllocation;
             // shader binding
             {
                 DescriptorHandle descriptors = context.AllocateTransientDescriptor(2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -88,12 +89,8 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
                     });
                 sbtGenerator.AddHitGroup(L"HitGroup", {});
 
-                uint64_t size = sbtGenerator.ComputeSBTSize();
-                if (size > m_pShaderBindingTable->GetSize())
-                {
-                    m_pShaderBindingTable->Create(BufferDesc::CreateVertexBuffer(1, (int32_t)Math::AlignUp<uint64_t>(size, 256), BufferFlag::Upload));
-                }
-                sbtGenerator.Generate(m_pShaderBindingTable->GetResource(), m_pStateObjectProperties.Get());
+                sbtAllocation = context.AllocateTransientMemory(sbtGenerator.ComputeSBTSize());
+                sbtGenerator.Generate(sbtAllocation.pMappedMemory, m_pStateObjectProperties.Get());
             }
 
             // dispatch rays
@@ -102,17 +99,17 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
                 rayDesc.Width = m_pOutputTexture->GetWidth();
                 rayDesc.Height = m_pOutputTexture->GetHeight();
                 rayDesc.Depth = 1;
-                rayDesc.RayGenerationShaderRecord.StartAddress = m_pShaderBindingTable->GetGpuHandle();
+                rayDesc.RayGenerationShaderRecord.StartAddress = sbtAllocation.GpuHandle;
                 rayDesc.RayGenerationShaderRecord.SizeInBytes = sbtGenerator.GetRayGenSectionSize();
-                rayDesc.MissShaderTable.StartAddress = m_pShaderBindingTable->GetGpuHandle() + sbtGenerator.GetRayGenSectionSize();
+                rayDesc.MissShaderTable.StartAddress = sbtAllocation.GpuHandle + sbtGenerator.GetRayGenSectionSize();
                 rayDesc.MissShaderTable.SizeInBytes = sbtGenerator.GetMissSectionSize();
                 rayDesc.MissShaderTable.StrideInBytes = sbtGenerator.GetMissEntrySize();
-                rayDesc.HitGroupTable.StartAddress = Math::AlignUp<uint64_t>(m_pShaderBindingTable->GetGpuHandle() + sbtGenerator.GetRayGenSectionSize() + sbtGenerator.GetMissSectionSize(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-                rayDesc.HitGroupTable.SizeInBytes = Math::AlignUp<uint64_t>(sbtGenerator.GetHitGroupSectionSize(), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-                rayDesc.HitGroupTable.StrideInBytes = Math::AlignUp<uint64_t>(sbtGenerator.GetHitGroupEntrySize(), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
+                rayDesc.HitGroupTable.StartAddress = sbtAllocation.GpuHandle + sbtGenerator.GetRayGenSectionSize() + sbtGenerator.GetMissSectionSize();
+                rayDesc.HitGroupTable.SizeInBytes = sbtGenerator.GetHitGroupSectionSize();
+                rayDesc.HitGroupTable.StrideInBytes = sbtGenerator.GetHitGroupEntrySize();
 
                 context.InsertResourceBarrier(m_pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                //context.ClearUavUInt(m_pOutputTexture.get(), pOutputRawUAV);
+                context.ClearUavUInt(m_pOutputTexture.get(), pOutputRawUAV);
                 context.FlushResourceBarriers();
 
                 pCmd->SetPipelineState1(m_pStateObject.Get());
@@ -232,7 +229,6 @@ void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh,
 
 void Raytracing::SetupResources(Graphics* pGraphics)
 {
-    m_pShaderBindingTable = std::make_unique<Buffer>(pGraphics, "Shader Binding Table");
     m_pOutputTexture = std::make_unique<GraphicsTexture>(pGraphics, "Raytracing Output");
 }
 

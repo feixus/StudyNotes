@@ -50,6 +50,4 @@ private:
 
     std::unique_ptr<GraphicsTexture> m_pOutputTexture;
     UnorderedAccessView* pOutputRawUAV{};
-
-    std::unique_ptr<Buffer> m_pShaderBindingTable;
 };
