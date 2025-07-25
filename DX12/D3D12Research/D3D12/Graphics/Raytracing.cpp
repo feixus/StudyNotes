@@ -159,26 +159,28 @@ void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh,
             geometries.push_back(geometryDesc);
         }
 
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
-        prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-        prebuildInfo.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-        prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-        prebuildInfo.NumDescs = (uint32_t)geometries.size();
-        prebuildInfo.pGeometryDescs = geometries.data();
-
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
+			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
+			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
+			.NumDescs = (uint32_t)geometries.size(),
+			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+			.pGeometryDescs = geometries.data(),
+        };
+        
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
         pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
         m_pBLASScratch = std::make_unique<Buffer>(pGraphics, "BLAS Scratch Buffer");
-        m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
+        m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
         m_pBLAS = std::make_unique<Buffer>(pGraphics, "BLAS");
-        m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
+        m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
-        asDesc.Inputs = prebuildInfo;
-        asDesc.DestAccelerationStructureData = m_pBLAS->GetGpuHandle();
-        asDesc.ScratchAccelerationStructureData = m_pBLASScratch->GetGpuHandle();
-        asDesc.SourceAccelerationStructureData = 0;
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
+            .DestAccelerationStructureData = m_pBLAS->GetGpuHandle(),
+            .Inputs = prebuildInfo,
+            .SourceAccelerationStructureData = 0,
+            .ScratchAccelerationStructureData = m_pBLASScratch->GetGpuHandle(),
+        };
 
         pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
         context.InsertUavBarrier(m_pBLAS.get(), true);
@@ -186,11 +188,12 @@ void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh,
 
     // top level acceleration structure
     {
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
-        prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-        prebuildInfo.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-        prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-        prebuildInfo.NumDescs = 1;
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
+            .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
+            .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
+            .NumDescs = 1,
+            .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+        };
 
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
         pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
@@ -212,15 +215,18 @@ void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh,
         memcpy(pInstanceDesc->Transform, &Matrix::Identity, 12 * sizeof(float));
         m_pDescriptorsBuffer->UnMap();
 
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
-        asDesc.DestAccelerationStructureData = m_pTLAS->GetGpuHandle();
-        asDesc.ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle();
-        asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-        asDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-        asDesc.Inputs.InstanceDescs = m_pDescriptorsBuffer->GetGpuHandle();
-        asDesc.Inputs.NumDescs = 1;
-        asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-        asDesc.SourceAccelerationStructureData = 0;
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
+            .DestAccelerationStructureData = m_pTLAS->GetGpuHandle(),
+            .Inputs = {
+                .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
+                .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
+                .NumDescs = 1,
+                .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+                .InstanceDescs = m_pDescriptorsBuffer->GetGpuHandle(),
+            },
+            .SourceAccelerationStructureData = 0,
+            .ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle(),
+        };
 
         pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
         context.InsertUavBarrier(m_pTLAS.get(), true);

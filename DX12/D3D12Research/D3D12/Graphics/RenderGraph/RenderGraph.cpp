@@ -179,24 +179,21 @@ void RGGraph::Compile()
 
 int64_t RGGraph::Execute(Graphics* pGraphics)
 {
-    int exlFrequency = 4;
-    int i = 0;
+    int exlFrequency = 1;
 
     CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-    for (RGPass* pPass : m_RenderPasses)
+    for (size_t i = 0; i < m_RenderPasses.size(); i++)
     {
-        if (pPass->m_References > 0)
+        if (m_RenderPasses[i]->m_References > 0)
         {
-            ExecutePass(pPass, *pContext, m_pAllocator);
+            ExecutePass(m_RenderPasses[i], *pContext, m_pAllocator);
         }
 
-        ++i;
         if (i == exlFrequency)
         {
             pContext->Execute(true);
 			pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-            i = 0;
 		}
     }
 
