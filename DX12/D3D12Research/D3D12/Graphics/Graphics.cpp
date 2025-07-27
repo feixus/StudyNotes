@@ -600,6 +600,9 @@ void Graphics::Update()
 		RaytracingInputResources resources{};
 		resources.pCamera = m_pCamera.get();
 		resources.pRenderTarget = GetCurrentBackbuffer();
+		resources.pNormalTexture = m_pNormals.get();
+		resources.pDepthTexture = GetResolveDepthStencil();
+		resources.pNoiseTexture = m_pNoiseTexture.get();
 		m_pRaytracing->Execute(graph, resources);
 	}
 
@@ -771,6 +774,14 @@ void Graphics::InitD3D()
 		m_RenderPassTier = options.RenderPassesTier;
 		m_RayTracingTier = options.RaytracingTier;
 	}
+
+	D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
+		.HighestShaderModel = D3D_SHADER_MODEL_6_9
+	};
+	m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(shaderModelSupport));
+	m_ShaderModelMajor = shaderModelSupport.HighestShaderModel >> 0x4;
+	m_ShaderModelMinor = shaderModelSupport.HighestShaderModel & 0xF;
+	E_LOG(LogType::Info, "D3D12 Shader Model %d.%d", m_ShaderModelMajor, m_ShaderModelMinor);
 
 	// check msaa support
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
@@ -1412,6 +1423,14 @@ void Graphics::FreeCommandList(CommandContext * pCommandContext)
 {
 	std::scoped_lock lockGuard(m_ContextAllocationMutex);
 	m_FreeCommandContexts[pCommandContext->GetType()].push(pCommandContext);
+}
+
+bool Graphics::GetShaderModel(int& major, int& minor) const
+{
+	bool supported = m_ShaderModelMajor > major || (m_ShaderModelMajor == major && m_ShaderModelMinor >= minor);
+	major = m_ShaderModelMajor;
+	minor = m_ShaderModelMinor;
+	return supported;
 }
 
 void Graphics::IdleGPU()

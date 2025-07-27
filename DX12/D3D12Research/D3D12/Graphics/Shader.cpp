@@ -105,10 +105,13 @@ bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryP
 
 bool Shader::CompileDxc(const std::string& source, const char* pTarget, const char* pEntryPoint, const std::vector<std::string>& defines)
 {
-	ComPtr<IDxcLibrary> pLibrary;
-	HR(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pLibrary)));
-	ComPtr<IDxcCompiler> pCompiler;
-	HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&pCompiler)));
+	static ComPtr<IDxcLibrary> pLibrary;
+	static ComPtr<IDxcCompiler> pCompiler;
+	if (!pCompiler)
+	{
+		HR(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pLibrary)));
+		HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&pCompiler)));
+	}
 
 	ComPtr<IDxcBlobEncoding> pSource;
 	HR(pLibrary->CreateBlobWithEncodingFromPinned(source.data(), (uint32_t)source.size(), CP_UTF8, pSource.GetAddressOf()));
@@ -134,6 +137,9 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 	};
 
 	bool debugShaders = CommandLine::GetBool("DebugShaders");
+#ifdef _DEBUG
+	debugShaders = true;
+#endif
 	pCompileArguments = debugShaders ? &pArgsDebug[0] : &pArgs[0];
 	numCompileArguments = debugShaders ? ARRAYSIZE(pArgsDebug) : ARRAYSIZE(pArgs);
 
@@ -167,36 +173,19 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 	ComPtr<IDxcOperationResult> pCompileResult;
 	HR(pCompiler->Compile(pSource.Get(), fileName, entryPoint, target, const_cast<LPCWSTR*>(pCompileArguments), numCompileArguments, dxcDefines.data(), (uint32_t)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
 
-	auto checkResult = [&](IDxcOperationResult* pResult) {
-		HRESULT hrCompilation;
-		HR(pResult->GetStatus(&hrCompilation));
-		if (hrCompilation != S_OK)
-		{
-			ComPtr<IDxcBlobEncoding> pPrintBlob, pRintBlob8;
-			HR(pResult->GetErrorBuffer(pPrintBlob.GetAddressOf()));
-			pLibrary->GetBlobAsUtf8(pPrintBlob.Get(), pRintBlob8.GetAddressOf());
-			E_LOG(LogType::Error, "%s: compilation failed: %s", m_Path.c_str(), (char*)pRintBlob8->GetBufferPointer());
-			return false;
-		}
-		return true;
-	};
-
-	if (!checkResult(pCompileResult.Get()))
+	HRESULT hrCompilation;
+	HR(pCompileResult->GetStatus(&hrCompilation));
+	if (hrCompilation != S_OK)
 	{
+		ComPtr<IDxcBlobEncoding> pPrintBlob, pRintBlob8;
+		HR(pCompileResult->GetErrorBuffer(pPrintBlob.GetAddressOf()));
+		pLibrary->GetBlobAsUtf8(pPrintBlob.Get(), pRintBlob8.GetAddressOf());
+		E_LOG(LogType::Error, "%s: compilation failed: %s", m_Path.c_str(), (char*)pRintBlob8->GetBufferPointer());
 		return false;
 	}
 
 	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
 	pCompileResult->GetResult(pBlob);
-
-	ComPtr<IDxcValidator> pValidator;
-	DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(&pValidator));
-	pValidator->Validate(*pBlob, DxcValidatorFlags_InPlaceEdit, &pCompileResult);
-
-	if (!checkResult(pCompileResult.Get()))
-	{
-		return false;
-	}
 
 	return true;
 }
@@ -326,8 +315,15 @@ ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::strin
 	wchar_t fileName[256];
 	ToWidechar(m_Path.c_str(), fileName, 256);
 
+	static const constexpr LPCWSTR pArgs[] = 
+	{
+		L"/Zpr",			// use row-major packing for matrices in constant buffers and structures
+		L"/WX",				// treat warnings as errors
+		L"/O3",				// enable optimization
+	};
+
 	ComPtr<IDxcOperationResult> pCompileResult;
-	HR(pCompiler->Compile(pSource.Get(), fileName, L"", L"lib_6_3", nullptr, 0, dxcDefines.data(), (uint32_t)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
+	HR(pCompiler->Compile(pSource.Get(), fileName, L"", L"lib_6_3", const_cast<LPCWSTR*>(pArgs), std::size(pArgs), dxcDefines.data(), (uint32_t)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
 
 	auto checkResult = [&](IDxcOperationResult* pResult) {
 		HRESULT hrCompilation;

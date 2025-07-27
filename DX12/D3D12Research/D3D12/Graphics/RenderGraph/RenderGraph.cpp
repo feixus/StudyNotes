@@ -190,7 +190,7 @@ int64_t RGGraph::Execute(Graphics* pGraphics)
             ExecutePass(m_RenderPasses[i], *pContext, m_pAllocator);
         }
 
-        if (i == exlFrequency)
+        if (i % exlFrequency == 0)
         {
             pContext->Execute(true);
 			pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);

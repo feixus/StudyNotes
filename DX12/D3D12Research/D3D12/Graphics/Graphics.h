@@ -108,6 +108,7 @@ public:
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
 	bool UseRenderPasses() const;
 	bool SupportsRaytracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
+	bool GetShaderModel(int& major, int& minor) const;
 	bool IsFenceComplete(uint64_t fenceValue);
 
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
@@ -160,6 +161,8 @@ private:
 
 	D3D12_RENDER_PASS_TIER m_RenderPassTier{D3D12_RENDER_PASS_TIER_0};
 	D3D12_RAYTRACING_TIER m_RayTracingTier{D3D12_RAYTRACING_TIER_NOT_SUPPORTED};
+	int m_ShaderModelMajor{-1};
+	int m_ShaderModelMinor{-1};
 
 	int m_SampleCount{1};
 	int m_SampleQuality{0};

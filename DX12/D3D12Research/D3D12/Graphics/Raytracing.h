@@ -9,12 +9,14 @@ class GraphicsTexture;
 class Camera;
 class CommandContext;
 class Buffer;
-class UnorderedAccessView;
 class RGGraph;
 
 struct RaytracingInputResources
 {
     GraphicsTexture* pRenderTarget{};
+    GraphicsTexture* pNormalTexture{};
+    GraphicsTexture* pDepthTexture{};
+    GraphicsTexture* pNoiseTexture{};
     Camera* pCamera{};
 };
 
@@ -49,5 +51,4 @@ private:
     ComPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;
 
     std::unique_ptr<GraphicsTexture> m_pOutputTexture;
-    UnorderedAccessView* pOutputRawUAV{};
 };

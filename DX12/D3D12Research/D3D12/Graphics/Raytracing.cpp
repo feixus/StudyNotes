@@ -33,7 +33,6 @@ void Raytracing::OnSwapchainCreated(int windowWidth, int windowHeight)
         return;
     }
     m_pOutputTexture->Create(TextureDesc::Create2D(windowWidth, windowHeight, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess));
-    m_pOutputTexture->CreateUAV(&pOutputRawUAV, TextureUAVDesc(0));
 }
 
 void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputResources)
@@ -60,32 +59,75 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
             DynamicAllocation sbtAllocation;
             // shader binding
             {
-                DescriptorHandle descriptors = context.AllocateTransientDescriptor(2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                context.InsertResourceBarrier(inputResources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                context.InsertResourceBarrier(inputResources.pNormalTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                context.InsertResourceBarrier(m_pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                
+                const int descriptorsToAllocate = 5; // UAV + TLAS + Normal SRV + Depth SRV + Noise SRV
+                int totalAllocatedDescriptors = 0;
+    
+                DescriptorHandle descriptors = context.AllocateTransientDescriptor(descriptorsToAllocate, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                 ID3D12Device* pDevice = m_pGraphics->GetDevice();
 
-                DescriptorHandle renderTargetUAV = descriptors;
-                pDevice->CopyDescriptorsSimple(1, renderTargetUAV.GetCpuHandle(), m_pOutputTexture->GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                DescriptorHandle tlasSRV = descriptors;
-                pDevice->CopyDescriptorsSimple(1, tlasSRV.GetCpuHandle(), m_pTLAS->GetSRV()->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                auto pfCopyDescriptors = [&](const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& sourceDescriptor)
+                {
+                    DescriptorHandle originalHandle = descriptors;
+                    for (size_t i = 0; i < sourceDescriptor.size(); i++)
+                    {
+                        if (totalAllocatedDescriptors >= descriptorsToAllocate)
+                        {
+                            assert(false);
+                        }
 
+                        pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), sourceDescriptor[i], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                        descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                        totalAllocatedDescriptors++;
+                    }
+                    return originalHandle;
+                };
+
+                DescriptorHandle renderTargetUAV = pfCopyDescriptors({ m_pOutputTexture->GetUAV() });
+                DescriptorHandle tlasSRV = pfCopyDescriptors({ m_pTLAS->GetSRV()->GetDescriptor() });
+                DescriptorHandle textureSRV = pfCopyDescriptors({ inputResources.pNormalTexture->GetSRV(),
+                                                                inputResources.pDepthTexture->GetSRV(),
+                                                                inputResources.pNoiseTexture->GetSRV() });
+
+                constexpr const int numRandomVectors = 64;
                 struct CameraParameters
                 {
                     Matrix ViewInverse;
                     Matrix ProjectionInverse;
+                    Vector4 RandomVectors[numRandomVectors];
                 } cameraData;
+
+                static bool written = false;
+                static Vector4 randoms[numRandomVectors];
+                if (!written)
+                {
+                    for (int i = 0; i < numRandomVectors; i++)
+                    {
+                        randoms[i] = Vector4(Math::RandVector());
+                        randoms[i].z = Math::Lerp(0.1f, 0.8f, (float)abs(randoms[i].z));
+                        randoms[i].Normalize();
+                        randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
+                    }
+                    written = true;
+                }
+                memcpy(cameraData.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
+
                 cameraData.ViewInverse = inputResources.pCamera->GetViewInverse();
                 cameraData.ProjectionInverse = inputResources.pCamera->GetProjectionInverse();
 
                 DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(CameraParameters));
-                memcpy((char*)allocation.pMappedMemory + allocation.Offset, &cameraData, sizeof(CameraParameters));
+                memcpy((char*)allocation.pMappedMemory, &cameraData, sizeof(CameraParameters));
 
                 sbtGenerator.AddMissProgram(L"Miss", {});
                 sbtGenerator.AddRayGenerationProgram(L"RayGen", 
                     {
+                        reinterpret_cast<uint64_t*>(allocation.GpuHandle),
                         reinterpret_cast<uint64_t*>(renderTargetUAV.GetGpuHandle().ptr),
                         reinterpret_cast<uint64_t*>(tlasSRV.GetGpuHandle().ptr),
-                        reinterpret_cast<uint64_t*>(allocation.GpuHandle + allocation.Offset)
+                        reinterpret_cast<uint64_t*>(textureSRV.GetGpuHandle().ptr),
                     });
                 sbtGenerator.AddHitGroup(L"HitGroup", {});
 
@@ -108,18 +150,22 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
                 rayDesc.HitGroupTable.SizeInBytes = sbtGenerator.GetHitGroupSectionSize();
                 rayDesc.HitGroupTable.StrideInBytes = sbtGenerator.GetHitGroupEntrySize();
 
-                context.InsertResourceBarrier(m_pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                context.ClearUavUInt(m_pOutputTexture.get(), pOutputRawUAV);
-                context.FlushResourceBarriers();
-
                 pCmd->SetPipelineState1(m_pStateObject.Get());
-                pCmd->DispatchRays(&rayDesc);
 
-                GPU_PROFILE_SCOPE("Copy Target", &context);
-                context.CopyResource(m_pOutputTexture.get(), inputResources.pRenderTarget);
+                context.FlushResourceBarriers();
+                pCmd->DispatchRays(&rayDesc);
             }
         };
     });
+
+    graph.AddPass("Copy Target", [&](RGPassBuilder& builder)
+        {
+            builder.NeverCull();
+            return[=](CommandContext& context, const RGPassResource& passResources)
+                {
+                    context.CopyResource(m_pOutputTexture.get(), inputResources.pRenderTarget);
+                };
+        });
 }
 
 void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context)
@@ -243,9 +289,10 @@ void Raytracing::SetupPipelines(Graphics* pGraphics)
     // raytracing pipeline
     {
         m_pRayGenSignature = std::make_unique<RootSignature>();
-        m_pRayGenSignature->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-        m_pRayGenSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
-        m_pRayGenSignature->SetConstantBufferView(2, 0, D3D12_SHADER_VISIBILITY_ALL);
+        m_pRayGenSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+        m_pRayGenSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
+        m_pRayGenSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
+        m_pRayGenSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
         m_pRayGenSignature->Finalize("Ray Gen RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
         m_pHitSignature = std::make_unique<RootSignature>();
