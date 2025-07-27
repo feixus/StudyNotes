@@ -1,10 +1,10 @@
 #include "Common.hlsl"
 
 #define RPP 64
-#define RPP_ACTUAL 1
+#define RPP_ACTUAL 8
 
 // raytracing output texture, accessed as a UAV
-RWTexture2D<float4> gOutput : register(u0);
+RWTexture2D<float> gOutput : register(u0);
 
 // raytracing acceleration structure, accessed as a SRV
 RaytracingAccelerationStructure SceneBVH : register(t0);
@@ -100,5 +100,5 @@ void RayGen()
         totalHits += payload.hit;
     }
 
-    gOutput[launchIndex] = float4((1 - (float)totalHits / RPP_ACTUAL).xxx, 1.0f);
+    gOutput[launchIndex] = 1 - (float)totalHits / RPP_ACTUAL;
 }

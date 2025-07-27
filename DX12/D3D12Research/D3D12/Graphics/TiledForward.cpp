@@ -40,7 +40,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
     //  - require a depth buffer
     //  - outputs a: - Texture2D containing a count and an offset of lights per tile.
     //								- uint[] index buffer to indicate what are visible in each tile
-    graph.AddPass("Light Culling", [&](RGPassBuilder& builder)
+    graph.AddPass("Tiled Light Culling", [&](RGPassBuilder& builder)
         {
             builder.NeverCull();
             builder.Read(inputResource.ResolvedDepthBuffer);
@@ -50,10 +50,10 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                     GraphicsTexture* pDepthTexture = passResources.GetTexture(inputResource.ResolvedDepthBuffer);
                     context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                     context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                    context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-                    context.InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-                    context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-                    context.InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                    context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    context.InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    context.InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
                     context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounterRawUAV);
 
@@ -201,12 +201,12 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
     Shader computeShader("Resources/Shaders/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
 
     m_pComputeLightCullRS = std::make_unique<RootSignature>();
-    m_pComputeLightCullRS->FinalizeFromShader("Light Culling", computeShader, pGraphics->GetDevice());
+    m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", computeShader, pGraphics->GetDevice());
 
     m_pComputeLightCullPipeline = std::make_unique<ComputePipelineState>();
     m_pComputeLightCullPipeline->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
     m_pComputeLightCullPipeline->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-    m_pComputeLightCullPipeline->Finalize("Compute Light Culling Pipeline", pGraphics->GetDevice());
+    m_pComputeLightCullPipeline->Finalize("Tiled Light Culling PSO", pGraphics->GetDevice());
 
     m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
     m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32_t)));

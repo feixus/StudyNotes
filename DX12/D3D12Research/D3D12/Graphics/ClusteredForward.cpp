@@ -222,7 +222,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
             };
         });
 
-    graph.AddPass("Light Culling", [&](RGPassBuilder& builder)
+    graph.AddPass("Clustered Light Culling", [&](RGPassBuilder& builder)
         {
             builder.NeverCull();
             return[=](CommandContext& context, const RGPassResource& passResources)
