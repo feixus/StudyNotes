@@ -7,4 +7,5 @@ Build
 *.filters
 *.user
 *.vscode
+*.pdb
 imgui.ini

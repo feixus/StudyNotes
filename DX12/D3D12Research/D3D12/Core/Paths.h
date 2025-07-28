@@ -36,4 +36,6 @@ struct Paths
   static std::string EngineIniFile();
 
   static std::string WorkingDirectory();
+
+  static bool CreateDirectoryTree(const std::string& path);
 };

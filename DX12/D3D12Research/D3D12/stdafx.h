@@ -33,6 +33,7 @@
 #include "Core/BitField.h"
 #include "Math/MathTypes.h"
 #include "Math/MathHelp.h"
+#include <External/Dxc/dxcapi.h>
 #include "External/Imgui/imgui.h"
 #include "Core/Console.h"
 #include "Graphics/D3DUtils.h"

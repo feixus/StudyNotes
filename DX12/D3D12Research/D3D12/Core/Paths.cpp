@@ -143,3 +143,8 @@ std::string Paths::WorkingDirectory()
     GetModuleFileName(nullptr, path, sizeof(path));
     return path;
 }
+
+bool Paths::CreateDirectoryTree(const std::string& path)
+{
+    return std::filesystem::create_directories(path);
+}
