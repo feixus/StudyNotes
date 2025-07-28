@@ -120,7 +120,7 @@ void Graphics::Update()
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
-	RGGraph graph(m_pResourceAllocator.get());
+	RGGraph graph(this);
 
 	struct MainData
 	{
@@ -631,7 +631,7 @@ void Graphics::Update()
 		graph.DumpGraphMermaid("graph.html");
 		gDumpRenderGraph = false;
 	}
-	nextFenceValue = graph.Execute(this);
+	nextFenceValue = graph.Execute();
 	
 
 	/*m_pClouds->Render(m_pResolvedRenderTarget.get(), m_pResolveDepthStencil.get());

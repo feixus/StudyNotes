@@ -199,14 +199,14 @@ private:
 class RGGraph
 {
 public:
-    RGGraph(RGResourceAllocator* pAllocator);
+    RGGraph(Graphics* pAllocator);
     ~RGGraph();
 
     RGGraph(const RGGraph& other) = delete;
     RGGraph& operator=(const RGGraph& other) = delete;
 
     void Compile();
-    int64_t Execute(Graphics* pGraphics);
+    int64_t Execute();
     void Present(RGResourceHandle resource);
 
     void DumpGraphViz(const char* pPath) const;
@@ -222,9 +222,10 @@ public:
         RGPass* pPass = new RGPass(*this, pName, (int)m_RenderPasses.size());
         RGPassBuilder builder(*this, *pPass);
         pPass->SetCallback<ExecuteCallback>(std::move(passCallback(builder)));
-        m_RenderPasses.push_back(pPass);
-        return *pPass;
+        return AddPass(pPass);
     }
+
+    RGPass& AddPass(RGPass* pPass);
 
     RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc)
     {
@@ -282,13 +283,13 @@ public:
     }
 
 private:
-    void ExecutePass(RGPass* pPass, CommandContext& renderContext, RGResourceAllocator* pAllocator);
-    void PrepareResources(RGPass* pPass, RGResourceAllocator* pAllocator);
-    void ReleaseResources(RGPass* pPass, RGResourceAllocator* pAllocator);
+    void ExecutePass(RGPass* pPass, CommandContext& renderContext);
+    void PrepareResources(RGPass* pPass);
+    void ReleaseResources(RGPass* pPass);
     void DestroyData();
 
-    void ConditionallyCreateResource(RGResource* pResource, RGResourceAllocator* pAllocator);
-    void ConditionallyDestroyResource(RGResource* pResource, RGResourceAllocator* pAllocator);
+    void ConditionallyCreateResource(RGResource* pResource);
+    void ConditionallyReleaseResource(RGResource* pResource);
 
     struct ResourceAlias
     {
@@ -296,7 +297,11 @@ private:
         RGResourceHandle To;
     };
 
-    RGResourceAllocator* m_pAllocator;
+    Graphics* m_pGraphics;
+    std::unique_ptr<RGResourceAllocator> m_pAllocator;
+    uint64_t m_LastFenceValue{0};
+    bool m_ImmediateMode{false};
+
     std::vector<ResourceAlias> m_Aliases;
     std::vector<RGPass*> m_RenderPasses;
     std::vector<RGResource*> m_Resources;
