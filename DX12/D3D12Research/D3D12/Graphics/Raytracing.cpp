@@ -32,7 +32,6 @@ void Raytracing::OnSwapchainCreated(int windowWidth, int windowHeight)
     {
         return;
     }
-    m_pOutputTexture->Create(TextureDesc::Create2D(windowWidth, windowHeight, DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 }
 
 void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputResources)
@@ -55,7 +54,8 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
             {
                 context.InsertResourceBarrier(inputResources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 context.InsertResourceBarrier(inputResources.pNormalTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                context.InsertResourceBarrier(m_pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(inputResources.pNoiseTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(inputResources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 
                 const int descriptorsToAllocate = 5; // UAV + TLAS + Normal SRV + Depth SRV + Noise SRV
                 int totalAllocatedDescriptors = 0;
@@ -80,7 +80,7 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
                     return originalHandle;
                 };
 
-                DescriptorHandle renderTargetUAV = pfCopyDescriptors({ m_pOutputTexture->GetUAV() });
+                DescriptorHandle renderTargetUAV = pfCopyDescriptors({ inputResources.pRenderTarget->GetUAV() });
                 DescriptorHandle tlasSRV = pfCopyDescriptors({ m_pTLAS->GetSRV()->GetDescriptor() });
                 DescriptorHandle textureSRV = pfCopyDescriptors({ inputResources.pNormalTexture->GetSRV(),
                                                                 inputResources.pDepthTexture->GetSRV(),
@@ -98,6 +98,8 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
                 static Vector4 randoms[numRandomVectors];
                 if (!written)
                 {
+                    srand(2);
+                    written = true;
                     for (int i = 0; i < numRandomVectors; i++)
                     {
                         randoms[i] = Vector4(Math::RandVector());
@@ -105,7 +107,6 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
                         randoms[i].Normalize();
                         randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
                     }
-                    written = true;
                 }
                 memcpy(cameraData.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
 
@@ -132,8 +133,8 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
             // dispatch rays
             {
                 D3D12_DISPATCH_RAYS_DESC rayDesc{};
-                rayDesc.Width = m_pOutputTexture->GetWidth();
-                rayDesc.Height = m_pOutputTexture->GetHeight();
+                rayDesc.Width = inputResources.pRenderTarget->GetWidth();
+                rayDesc.Height = inputResources.pRenderTarget->GetHeight();
                 rayDesc.Depth = 1;
                 rayDesc.RayGenerationShaderRecord.StartAddress = sbtAllocation.GpuHandle;
                 rayDesc.RayGenerationShaderRecord.SizeInBytes = sbtGenerator.GetRayGenSectionSize();
@@ -146,28 +147,11 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& inputRe
 
                 pCmd->SetPipelineState1(m_pStateObject.Get());
 
-                context.InsertResourceBarrier(m_pOutputTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-                context.FlushResourceBarriers();
+                context.PrepareDraw(DescriptorTableType::Compute);
                 pCmd->DispatchRays(&rayDesc);
             }
         };
     });
-
-    ImGui::Begin("RTAO");
-    Vector2 image((float)m_pOutputTexture->GetWidth(), float(m_pOutputTexture->GetHeight()));
-    Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
-    float width = windowSize.x;
-    float height = image.y * (width / image.x);
-    if (image.x / width < image.y / height)
-    {
-        width = image.x / image.y * windowSize.y;
-        height = windowSize.y;
-    }
-
-    ImTextureID user_texture_id = m_pOutputTexture->GetSRV().ptr;
-    ImGui::Image(user_texture_id, ImVec2(width, height));
-    ImGui::End();
-    
 }
 
 void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context)
@@ -280,7 +264,6 @@ void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh,
 
 void Raytracing::SetupResources(Graphics* pGraphics)
 {
-    m_pOutputTexture = std::make_unique<GraphicsTexture>(pGraphics, "Raytracing Output");
 }
 
 void Raytracing::SetupPipelines(Graphics* pGraphics)

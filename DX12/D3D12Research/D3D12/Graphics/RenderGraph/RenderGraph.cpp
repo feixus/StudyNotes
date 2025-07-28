@@ -179,7 +179,7 @@ void RGGraph::Compile()
 
 int64_t RGGraph::Execute(Graphics* pGraphics)
 {
-    int exlFrequency = 1;
+    int exlFrequency = 4;
 
     CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -192,7 +192,7 @@ int64_t RGGraph::Execute(Graphics* pGraphics)
 
         if (i % exlFrequency == 0)
         {
-            pContext->Execute(true);
+            pContext->Execute(false);
 			pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		}
     }

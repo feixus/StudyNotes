@@ -14,6 +14,7 @@ DescriptorHandle OnlineDescriptorAllocator::AllocateTransientDescriptor(int coun
 {
     GetHeap();
     assert(HasSpace(count));
+    m_pOwner->SetDescriptorHeap(GetHeap(), m_Type);
     return Allocate(count);
 }
 

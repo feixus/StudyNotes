@@ -49,6 +49,4 @@ private:
 
     ComPtr<ID3D12StateObject> m_pStateObject;
     ComPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;
-
-    std::unique_ptr<GraphicsTexture> m_pOutputTexture;
 };
