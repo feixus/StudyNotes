@@ -9,10 +9,6 @@ public:
 	static bool CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32_t shaderSourceSize,
 					ID3DBlob** pOutput, const char* pEntryPoint = "", const char* pTarget = "",
 					const std::vector<std::string>& defines = {});
-	static void AddGlobalShaderDefine(const std::string& name, const std::string& value = "1");
-
-private:
-	inline static std::vector<std::pair<std::string, std::string>> m_GlobalShaderDefines;
 };
 
 class ShaderBase

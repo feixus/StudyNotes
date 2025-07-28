@@ -32,10 +32,11 @@ struct Batch
 	BoundingBox Bounds;
 };
 
+constexpr const int MAX_SHADOW_CASTERS = 8;
 struct LightData
 {
-	Matrix LightViewProjections[8];
-	Vector4 ShadowMapOffsets[8];
+	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
+	Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 };
 
 enum class RenderPath
@@ -126,8 +127,6 @@ public:
 
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
-	static const int32_t FORWARD_PLUS_BLOCK_SIZE = 16;
-	static const int32_t MAX_SHADOW_CASTERS = 8;
 	static const int32_t SHADOW_MAP_SIZE = 4096;
 	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
