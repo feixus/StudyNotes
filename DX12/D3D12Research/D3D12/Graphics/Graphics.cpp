@@ -782,7 +782,7 @@ void Graphics::InitD3D()
 	}
 
 	D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
-		.HighestShaderModel = D3D_SHADER_MODEL_6_7
+		.HighestShaderModel = D3D_SHADER_MODEL_6_6
 	};
 	m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(shaderModelSupport));
 	m_ShaderModelMajor = shaderModelSupport.HighestShaderModel >> 0x4;
@@ -939,8 +939,8 @@ void Graphics::OnResize(int width, int height)
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
 	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
-	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 1), Math::DivideAndRoundUp(height, 1), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess | TextureFlag::RenderTarget));
-	m_pAmbientOcclusionIntermediate->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 1), Math::DivideAndRoundUp(height, 1), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess | TextureFlag::RenderTarget));
+	m_pAmbientOcclusionIntermediate->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pCamera->SetDirty();
 
@@ -1170,7 +1170,7 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
-	ImGui::Begin("SSAO");
+	ImGui::Begin("Ambient Occlusion: " + g_ShowRaytraced ? "RTAO" : "SSAO");
 	Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
 	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 	float width = windowSize.x;

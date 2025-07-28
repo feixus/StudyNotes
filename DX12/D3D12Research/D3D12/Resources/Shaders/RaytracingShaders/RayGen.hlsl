@@ -1,7 +1,7 @@
 #include "Common.hlsl"
 
 #define RPP 64
-#define RPP_ACTUAL 8
+#define RPP_ACTUAL 4
 
 // raytracing output texture, accessed as a UAV
 RWTexture2D<float> gOutput : register(u0);
@@ -13,6 +13,9 @@ Texture2D tNormals : register(t1);
 Texture2D tDepth : register(t2);
 Texture2D tNoise : register(t3);
 
+SamplerState sSceneSampler : register(s0);
+SamplerState sTexSampler : register(s1);
+
 cbuffer ShaderParameters : register(b0)
 {
     float4x4 cViewInverse;
@@ -23,26 +26,22 @@ cbuffer ShaderParameters : register(b0)
 [shader("raygeneration")]
 void RayGen()
 {
-    // initialize the ray payload
     HitInfo payload;
     payload.hit = 1;
 
-    // get the location within the dispatched 2D grid of work items
-    // often maps to pixels, so this culd represent a pixel coordinate
     uint2 launchIndex = DispatchRaysIndex().xy;
-
-    float depth = tDepth[launchIndex].r;
-
     float2 texCoord = (float2)launchIndex / DispatchRaysDimensions().xy;
+
+    float depth = tDepth.SampleLevel(sSceneSampler, texCoord, 0).r;
+    float3 normal = tNormals.SampleLevel(sTexSampler, texCoord, 0).rgb;
+    float3 noise = tNoise.SampleLevel(sTexSampler, texCoord, 0).rgb;
+
     float4 clip = float4(float2(texCoord.x, 1.0 - texCoord.y) * 2.f - 1.f, depth, 1.0);
     float4 view = mul(clip, cProjectionInverse);
     view /= view.w;
     float4 world = mul(view, cViewInverse);
 
-    float3 normal = normalize(tNormals[launchIndex].rgb);
-
-    float3 randomVec = normalize(float3(tNoise[texCoord * 2048 % 256].xy * 2 - 1, 0));
-    float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
+    float3 tangent = normalize(noise - normal * dot(noise, normal));
     float3 bitangent = cross(normal, tangent);
     float3x3 TBN = float3x3(tangent, bitangent, normal);
 
@@ -52,9 +51,9 @@ void RayGen()
         float3 n = mul(cRandomVectors[i].xyz, TBN);
         RayDesc ray;
         ray.Origin = world.xyz;
-        ray.Direction = normalize(n);
+        ray.Direction = n;
         ray.TMin = 0.001f;
-        ray.TMax = length(n);
+        ray.TMax = 1;
 
         // trace the ray
         TraceRay(

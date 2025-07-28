@@ -10,7 +10,7 @@ Buffer::Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_ST
 {}
 
 Buffer::Buffer(Graphics* pGraphics, const char* pName) 
-	: GraphicsResource(pGraphics), m_pName(pName)
+	: GraphicsResource(pGraphics), m_Name(pName)
 {}
 
 Buffer::~Buffer()
@@ -52,10 +52,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 
 	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, heapType);
 
-	if (m_pName)
-	{
-		SetName(m_pName);
-	}
+	SetName(m_Name.c_str());
 
 	if (Any(bufferDesc.Usage, BufferFlag::UnorderedAccess))
 	{

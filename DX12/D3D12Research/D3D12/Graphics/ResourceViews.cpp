@@ -191,7 +191,9 @@ void UnorderedAccessView::Create(Buffer* pBuffer, const BufferUAVDesc& desc)
     {
         if (!m_pCounter)
         {
-            m_pCounter = std::make_unique<Buffer>(m_pParent->GetGraphics(), "Counter");
+            std::stringstream str;
+            str << pBuffer->GetName() << " - Counter";
+            m_pCounter = std::make_unique<Buffer>(m_pParent->GetGraphics(), str.str().c_str());
         }
         m_pCounter->Create(BufferDesc::CreateByteAddress(4));
     }

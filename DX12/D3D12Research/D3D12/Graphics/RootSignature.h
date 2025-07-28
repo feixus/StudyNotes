@@ -43,8 +43,8 @@ public:
 	uint32_t GetDWordSize() const;
 
 private:
-	std::vector<D3D12_ROOT_PARAMETER1> m_RootParameters;
-	std::vector<std::array<D3D12_DESCRIPTOR_RANGE1, MAX_RANGES_PER_TABLE>> m_DescriptorTableRanges;
+	std::vector<D3D12_ROOT_PARAMETER> m_RootParameters;
+	std::vector<std::array<D3D12_DESCRIPTOR_RANGE, MAX_RANGES_PER_TABLE>> m_DescriptorTableRanges;
 	std::vector<uint32_t> m_DescriptorTableSizes;
 	std::vector<D3D12_STATIC_SAMPLER_DESC> m_StaticSamplers;
 	ComPtr<ID3D12RootSignature> m_pRootSignature;

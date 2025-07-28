@@ -93,9 +93,7 @@ inline void SetD3DObjectName(ID3D12Object* pObject, const char* pName)
 {
 	if (pObject)
 	{
-		wchar_t name[256];
-		ToWidechar(pName, name, 256);
-		pObject->SetName(name);
+		pObject->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)strlen(pName), pName);
 	}
 }
 
