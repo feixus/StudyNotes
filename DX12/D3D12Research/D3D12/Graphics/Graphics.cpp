@@ -24,7 +24,7 @@
 #include "RenderGraph/ResourceAllocator.h"
 #include "DebugRenderer.h"
 #include "ResourceViews.h"
-#include "Raytracing.h"
+#include "RTAO.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -79,6 +79,8 @@ void Graphics::Initialize(HWND hWnd)
 
 	InitD3D();
 	InitializeAssets();
+
+	g_ShowRaytraced = SupportsRaytracing();
 
 	RandomizeLights(m_DesiredLightCount);
 }
@@ -840,7 +842,7 @@ void Graphics::InitD3D()
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
-	m_pRaytracing = std::make_unique<Raytracing>(this);
+	m_pRaytracing = std::make_unique<RTAO>(this);
 	
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
@@ -1170,21 +1172,6 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
-	ImGui::Begin("Ambient Occlusion: " + g_ShowRaytraced ? "RTAO" : "SSAO");
-	Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
-	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
-	float width = windowSize.x;
-	float height = windowSize.x * image.y / image.x;
-	if (image.x / windowSize.x < image.y / windowSize.y)
-	{
-		width = image.x / image.y * windowSize.y;
-		height = windowSize.y;
-	}
-
-	ImTextureID user_texture_id = m_pAmbientOcclusion->GetSRV().ptr;
-	ImGui::Image(user_texture_id, ImVec2(width, height));
-	ImGui::End();
-
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
@@ -1283,8 +1270,6 @@ void Graphics::UpdateImGui()
 
 	ImGui::End();
 
-	
-
 	static bool showOutputLog = true;
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 	ImGui::SetNextWindowPos(ImVec2(300, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
@@ -1330,8 +1315,24 @@ void Graphics::UpdateImGui()
 		pRootNode->RenderImGui(m_Frame);
 		ImGui::End();
 	}
-
 	ImGui::PopStyleVar();
+
+	std::string title = "Ambient Occlusion: " + std::string(g_ShowRaytraced ? "RTAO" : "SSAO");
+	ImGui::Begin(title.c_str());
+	Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
+	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+	float width = windowSize.x;
+	float height = windowSize.x * image.y / image.x;
+	if (image.x / windowSize.x < image.y / windowSize.y)
+	{
+		width = image.x / image.y * windowSize.y;
+		height = windowSize.y;
+	}
+
+	ImTextureID user_texture_id = m_pAmbientOcclusion->GetSRV().ptr;
+	ImGui::Image(user_texture_id, ImVec2(width, height));
+	ImGui::End();
+	
 }
 
 void Graphics::RandomizeLights(int count)

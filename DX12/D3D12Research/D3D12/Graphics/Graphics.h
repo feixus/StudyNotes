@@ -22,7 +22,7 @@ class RGResourceAllocator;
 class DebugRenderer;
 class UnorderedAccessView;
 class TiledForward;
-class Raytracing;
+class RTAO;
 
 struct Batch
 {
@@ -191,7 +191,7 @@ private:
 	std::unique_ptr<RGResourceAllocator> m_pResourceAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
-	std::unique_ptr<Raytracing> m_pRaytracing;
+	std::unique_ptr<RTAO> m_pRaytracing;
 	std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
 	uint32_t m_WindowWidth;

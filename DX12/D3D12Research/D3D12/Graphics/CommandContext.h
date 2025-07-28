@@ -192,7 +192,7 @@ public:
 
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
-	DynamicAllocation AllocateTransientMemory(uint64_t size);
+	DynamicAllocation AllocateTransientMemory(uint64_t size, const void* pData = nullptr);
 	DescriptorHandle AllocateTransientDescriptor(uint32_t count, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 private:

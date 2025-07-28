@@ -1,5 +1,3 @@
-#include "Common.hlsl"
-
 #define RPP 64
 #define RPP_ACTUAL 4
 
@@ -23,11 +21,34 @@ cbuffer ShaderParameters : register(b0)
     float4 cRandomVectors[RPP];
 }
 
+struct RayPayload
+{
+    float hitDistance;
+};
+
+float4 ClipToWorld(float4 clip)
+{
+    float4 view = mul(clip, cProjectionInverse);
+    view /= view.w;
+    return mul(view, cViewInverse);
+}
+
+[shader("closesthit")]
+void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
+{
+    payload.hitDistance = RayTCurrent();
+}
+
+[shader("miss")]
+void Miss(inout RayPayload payload : SV_RayPayload)
+{
+   payload.hitDistance = 0;
+}
+
 [shader("raygeneration")]
 void RayGen()
 {
-    HitInfo payload;
-    payload.hit = 1;
+    RayPayload payload = (RayPayload)0;
 
     uint2 launchIndex = DispatchRaysIndex().xy;
     float2 texCoord = (float2)launchIndex / DispatchRaysDimensions().xy;
@@ -37,30 +58,28 @@ void RayGen()
     float3 noise = tNoise.SampleLevel(sTexSampler, texCoord, 0).rgb;
 
     float4 clip = float4(float2(texCoord.x, 1.0 - texCoord.y) * 2.f - 1.f, depth, 1.0);
-    float4 view = mul(clip, cProjectionInverse);
-    view /= view.w;
-    float4 world = mul(view, cViewInverse);
+    float4 world = ClipToWorld(clip);
 
     float3 tangent = normalize(noise - normal * dot(noise, normal));
     float3 bitangent = cross(normal, tangent);
     float3x3 TBN = float3x3(tangent, bitangent, normal);
 
-    int totalHits = 0;
+    float accumulateAo = 0;
     for (int i = 0; i < RPP_ACTUAL; i++)
     {
         float3 n = mul(cRandomVectors[i].xyz, TBN);
         RayDesc ray;
-        ray.Origin = world.xyz;
+        ray.Origin = world.xyz + 0.001f * n;
         ray.Direction = n;
-        ray.TMin = 0.001f;
-        ray.TMax = 1;
+        ray.TMin = 0.0f;
+        ray.TMax = 1.0f;
 
         // trace the ray
         TraceRay(
-            // parameter name: AccelerationStructure,  acceleration structure
+            // AccelerationStructure
             SceneBVH,
             
-            // parameter name: RayFlags, specify the behavior upon hitting a surface
+            // RayFlags
             RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE,
             
             // parameter name: InstanceInclusionMask
@@ -96,8 +115,9 @@ void RayGen()
             payload
         );
 
-        totalHits += payload.hit;
+        accumulateAo += payload.hitDistance != 0;
     }
 
-    gOutput[launchIndex] = 1 - (float)totalHits / RPP_ACTUAL;
+    accumulateAo /= RPP_ACTUAL;
+    gOutput[launchIndex] = 1 - accumulateAo;
 }
