@@ -20,14 +20,14 @@ Clouds::Clouds(Graphics* pGraphics) : GraphicsObject(pGraphics)
 void Clouds::Initialize()
 {
 	{
-		Shader shader("Resources/Shaders/WorleyNoise.hlsl", Shader::Type::ComputeShader, "WorleyNoiseCS");
+		Shader shader("Resources/Shaders/WorleyNoise.hlsl", Shader::Type::Compute, "WorleyNoiseCS");
 		
 		m_pWorleyNoiseRS = std::make_unique<RootSignature>();
 		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pWorleyNoiseRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pWorleyNoiseRS->Finalize("Worley Noise RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-		m_pWorleyNoisePS = std::make_unique<ComputePipelineState>();
+		m_pWorleyNoisePS = std::make_unique<PipelineState>();
 		m_pWorleyNoisePS->SetComputeShader(shader.GetByteCode(), shader.GetByteCodeSize());
 		m_pWorleyNoisePS->SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
 		m_pWorleyNoisePS->Finalize("Worley Noise PS", m_pGraphics->GetDevice());
@@ -37,8 +37,8 @@ void Clouds::Initialize()
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{
-		Shader vertexShader("Resources/Shaders/Clouds.hlsl", Shader::Type::VertexShader, "VSMain");
-		Shader pixelShader("Resources/Shaders/Clouds.hlsl", Shader::Type::PixelShader, "PSMain");
+		Shader vertexShader("Resources/Shaders/Clouds.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader pixelShader("Resources/Shaders/Clouds.hlsl", Shader::Type::Pixel, "PSMain");
 		m_pCloudsRS = std::make_unique<RootSignature>();
 		m_pCloudsRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pCloudsRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
@@ -60,7 +60,7 @@ void Clouds::Initialize()
 			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		m_pCloudsPS = std::make_unique<GraphicsPipelineState>();
+		m_pCloudsPS = std::make_unique<PipelineState>();
 		m_pCloudsPS->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pCloudsPS->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 		m_pCloudsPS->SetInputLayout(quadIL, _countof(quadIL));
@@ -102,7 +102,7 @@ void Clouds::Initialize()
 		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		Profiler::Instance()->Begin("Clouds_Render", pContext);
 
-		pContext->SetComputePipelineState(m_pWorleyNoisePS.get());
+		pContext->SetPipelineState(m_pWorleyNoisePS.get());
 		pContext->SetComputeRootSignature(m_pWorleyNoiseRS.get());
 
 		struct
@@ -185,7 +185,7 @@ void Clouds::Render(GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTextu
 
 		pContext->BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, m_pIntermediateDepth.get(), RenderPassAccess::Clear_Store));
 
-		pContext->SetGraphicsPipelineState(m_pCloudsPS.get());
+		pContext->SetPipelineState(m_pCloudsPS.get());
 		pContext->SetGraphicsRootSignature(m_pCloudsRS.get());
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

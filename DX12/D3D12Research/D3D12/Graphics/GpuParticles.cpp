@@ -71,63 +71,63 @@ void GpuParticles::Initialize()
     m_pSimpleDrawCommandSignature->Finalize("Simple Draw", m_pGraphics->GetDevice());
 
     {
-        Shader computerShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::ComputeShader, "UpdateSimulationParameters", { "COMPILE_UPDATE_PARAMETERS" });
+        Shader computerShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::Compute, "UpdateSimulationParameters", { "COMPILE_UPDATE_PARAMETERS" });
         m_pPrepareArgumentsRS = std::make_unique<RootSignature>();
         m_pPrepareArgumentsRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
         m_pPrepareArgumentsRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, D3D12_SHADER_VISIBILITY_ALL);
         m_pPrepareArgumentsRS->Finalize("Prepare Particle Arguments RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
-        m_pPrepareArgumentsPSO = std::make_unique<ComputePipelineState>();
+        m_pPrepareArgumentsPSO = std::make_unique<PipelineState>();
         m_pPrepareArgumentsPSO->SetComputeShader(computerShader.GetByteCode(), computerShader.GetByteCodeSize());
         m_pPrepareArgumentsPSO->SetRootSignature(m_pPrepareArgumentsRS->GetRootSignature());
         m_pPrepareArgumentsPSO->Finalize("Prepare Particle Arguments PSO", m_pGraphics->GetDevice());
     }
 
     {
-        Shader computerShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::ComputeShader, "Emit", { "COMPILE_EMITTER" });
+        Shader computerShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::Compute, "Emit", { "COMPILE_EMITTER" });
         m_pEmitRS = std::make_unique<RootSignature>();
         m_pEmitRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
         m_pEmitRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4, D3D12_SHADER_VISIBILITY_ALL);
         m_pEmitRS->Finalize("Particles Emit RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
-        m_pEmitPSO = std::make_unique<ComputePipelineState>();
+        m_pEmitPSO = std::make_unique<PipelineState>();
         m_pEmitPSO->SetComputeShader(computerShader.GetByteCode(), computerShader.GetByteCodeSize());
         m_pEmitPSO->SetRootSignature(m_pEmitRS->GetRootSignature());
         m_pEmitPSO->Finalize("Particles Emit PSO", m_pGraphics->GetDevice());
     }
 
     {
-        Shader simulateShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::ComputeShader, "Simulate", { "COMPILE_SIMULATE" });
+        Shader simulateShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::Compute, "Simulate", { "COMPILE_SIMULATE" });
         m_pSimulateRS = std::make_unique<RootSignature>();
         m_pSimulateRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
         m_pSimulateRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 5, D3D12_SHADER_VISIBILITY_ALL);
         m_pSimulateRS->Finalize("Particles Simulate RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
-        m_pSimulatePSO = std::make_unique<ComputePipelineState>();
+        m_pSimulatePSO = std::make_unique<PipelineState>();
         m_pSimulatePSO->SetComputeShader(simulateShader.GetByteCode(), simulateShader.GetByteCodeSize());
         m_pSimulatePSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
         m_pSimulatePSO->Finalize("Particles Simulate PSO", m_pGraphics->GetDevice());        
     }
 
     {
-        Shader simulateShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::ComputeShader, "SimulateEnd", { "COMPILE_SIMULATE_END" });
+        Shader simulateShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::Compute, "SimulateEnd", { "COMPILE_SIMULATE_END" });
         m_pSimulateEndRS = std::make_unique<RootSignature>();
         m_pSimulateEndRS->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
         m_pSimulateEndRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
         m_pSimulateEndRS->Finalize("Particles Simulate End RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
-        m_pSimulateEndPSO = std::make_unique<ComputePipelineState>();
+        m_pSimulateEndPSO = std::make_unique<PipelineState>();
         m_pSimulateEndPSO->SetComputeShader(simulateShader.GetByteCode(), simulateShader.GetByteCodeSize());
         m_pSimulateEndPSO->SetRootSignature(m_pSimulateEndRS->GetRootSignature());
         m_pSimulateEndPSO->Finalize("Particles Simulate End PSO", m_pGraphics->GetDevice());
     }
 
     {
-		Shader vertexShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::VertexShader, "VSMain");
-		Shader pixelShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::PixelShader, "PSMain");
+		Shader vertexShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader pixelShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::Pixel, "PSMain");
 
 		m_pParticleRenderRS = std::make_unique<RootSignature>();
         m_pParticleRenderRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
         m_pParticleRenderRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_VERTEX);
         m_pParticleRenderRS->Finalize("Particles Render RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-		m_pParticleRenderPSO = std::make_unique<GraphicsPipelineState>();
+		m_pParticleRenderPSO = std::make_unique<PipelineState>();
 		m_pParticleRenderPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pParticleRenderPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 		m_pParticleRenderPSO->SetRootSignature(m_pParticleRenderRS->GetRootSignature());
@@ -148,7 +148,7 @@ void GpuParticles::Simulate(RGGraph& graph)
 			builder.NeverCull();
 			return[=](CommandContext& context, const RGPassResource& passResources)
             {
-                    context.SetComputePipelineState(m_pPrepareArgumentsPSO.get());
+                    context.SetPipelineState(m_pPrepareArgumentsPSO.get());
                     context.SetComputeRootSignature(m_pPrepareArgumentsRS.get());
 
                     context.InsertResourceBarrier(m_pCounterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -186,7 +186,7 @@ void GpuParticles::Simulate(RGGraph& graph)
 			builder.NeverCull();
 			return[=](CommandContext& context, const RGPassResource& passResources)
             {
-                    context.SetComputePipelineState(m_pEmitPSO.get());
+                    context.SetPipelineState(m_pEmitPSO.get());
                     context.SetComputeRootSignature(m_pEmitRS.get());
 
                     D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
@@ -214,7 +214,7 @@ void GpuParticles::Simulate(RGGraph& graph)
 			builder.NeverCull();
 			return[=](CommandContext& context, const RGPassResource& passResources)
             {
-					context.SetComputePipelineState(m_pSimulatePSO.get());
+					context.SetPipelineState(m_pSimulatePSO.get());
                     context.SetComputeRootSignature(m_pSimulateRS.get());
 
                     struct Parameters
@@ -251,7 +251,7 @@ void GpuParticles::Simulate(RGGraph& graph)
                 context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 context.InsertResourceBarrier(m_pCounterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-                context.SetComputePipelineState(m_pSimulateEndPSO.get());
+                context.SetPipelineState(m_pSimulateEndPSO.get());
                 context.SetComputeRootSignature(m_pSimulateEndRS.get());
 
                 context.SetDynamicDescriptor(0, 0, m_pCounterBuffer->GetSRV());
@@ -275,7 +275,7 @@ void GpuParticles::Simulate(RGGraph& graph)
 
                     context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_Store));
 
-                    context.SetGraphicsPipelineState(m_pParticleRenderPSO.get());
+                    context.SetPipelineState(m_pParticleRenderPSO.get());
                     context.SetGraphicsRootSignature(m_pParticleRenderRS.get());
 
                     Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());

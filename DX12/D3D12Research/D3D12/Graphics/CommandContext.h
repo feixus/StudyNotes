@@ -10,8 +10,7 @@ class Buffer;
 class BufferUAV;
 class OnlineDescriptorAllocator;
 class RootSignature;
-class GraphicsPipelineState;
-class ComputePipelineState;
+class PipelineState;
 class DynamicResourceAllocator;
 class GraphicsCommandContext;
 class ComputeCommandContext;
@@ -165,7 +164,7 @@ public:
 
 	// bindings
 	void SetComputeRootSignature(RootSignature* pRootSignature);
-	void SetComputePipelineState(ComputePipelineState* pPipelineState);
+	void SetPipelineState(PipelineState* pPipelineState);
 	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 
@@ -177,7 +176,6 @@ public:
 	void SetDynamicSamplerDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
 
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
-	void SetGraphicsPipelineState(GraphicsPipelineState* pPipelineState);
 
 	void SetGraphicsRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	void SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize);

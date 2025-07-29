@@ -445,11 +445,6 @@ void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
 }
 
-void CommandContext::SetGraphicsPipelineState(GraphicsPipelineState* pPipelineState)
-{
-	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
-}
-
 void CommandContext::SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
@@ -582,7 +577,7 @@ void CommandContext::PrepareDraw(DescriptorTableType type)
 	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(type);
 }
 
-void CommandContext::SetComputePipelineState(ComputePipelineState* pPipelineState)
+void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 {
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
 }

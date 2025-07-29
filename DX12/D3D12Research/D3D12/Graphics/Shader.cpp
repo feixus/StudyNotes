@@ -60,11 +60,17 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	if (debugShaders)
 	{
 		arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
-		arguments.push_back(L"-Qstrip_debug");
+		arguments.push_back(L"-Qembed_debug");
 	}
 	else
 	{
 		arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
+		arguments.push_back(L"-Qstrip_debug");
+
+		wchar_t symbolsPath[256];
+		ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
+		arguments.push_back(L"/Fd");
+		arguments.push_back(symbolsPath);
 	}
 
 	arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS);
@@ -72,11 +78,6 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	arguments.push_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
 
 	arguments.push_back(L"-Qstrip_reflect");
-
-	wchar_t symbolsPath[256];
-	ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
-	arguments.push_back(L"/Fd");
-	arguments.push_back(symbolsPath);
 
 	for (size_t i = 0; i < wDefines.size(); i++)
 	{
@@ -322,16 +323,16 @@ std::string Shader::GetShaderTarget(Type shaderType, char shaderModelMajor, char
 	char out[16];
 	switch (shaderType)
 	{
-	case Type::VertexShader:
+	case Type::Vertex:
 		sprintf_s(out, "vs_%d_%d", shaderModelMajor, shaderModelMinor);
 		break;
-	case Type::PixelShader:
+	case Type::Pixel:
 		sprintf_s(out, "ps_%d_%d", shaderModelMajor, shaderModelMinor);
 		break;
-	case Type::GeometryShader:
+	case Type::Geometry:
 		sprintf_s(out, "gs_%d_%d", shaderModelMajor, shaderModelMinor);
 		break;
-	case Type::ComputeShader:
+	case Type::Compute:
 		sprintf_s(out, "cs_%d_%d", shaderModelMajor, shaderModelMinor);
 		break;
 	case Type::MAX:

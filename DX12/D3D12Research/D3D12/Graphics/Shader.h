@@ -32,10 +32,10 @@ public:
 
 	enum class Type : uint8_t
 	{
-		VertexShader,
-		PixelShader,
-		GeometryShader,
-		ComputeShader,
+		Vertex,
+		Pixel,
+		Geometry,
+		Compute,
 		MAX
 	};
 

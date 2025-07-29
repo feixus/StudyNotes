@@ -130,13 +130,13 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
         switch (rootParameter.ShaderVisibility)
         {
         case D3D12_SHADER_VISIBILITY_VERTEX:
-            shaderVisibility[(uint32_t)Shader::Type::VertexShader] = true;
+            shaderVisibility[(uint32_t)Shader::Type::Vertex] = true;
             break;
         case D3D12_SHADER_VISIBILITY_PIXEL:
-            shaderVisibility[(uint32_t)Shader::Type::PixelShader] = true;
+            shaderVisibility[(uint32_t)Shader::Type::Pixel] = true;
             break;
         case D3D12_SHADER_VISIBILITY_GEOMETRY:
-            shaderVisibility[(uint32_t)Shader::Type::GeometryShader] = true;
+            shaderVisibility[(uint32_t)Shader::Type::Geometry] = true;
             break;
         case D3D12_SHADER_VISIBILITY_ALL:
             for (bool& v : shaderVisibility)
@@ -180,17 +180,17 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
     // it's illegal to have RS flags if it's a local root signature
     if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
     {
-        if (shaderVisibility[(uint32_t)Shader::Type::VertexShader] == false)
+        if (shaderVisibility[(uint32_t)Shader::Type::Vertex] == false)
         {
             flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
         }
 
-        if (shaderVisibility[(uint32_t)Shader::Type::PixelShader] == false)
+        if (shaderVisibility[(uint32_t)Shader::Type::Pixel] == false)
         {
             flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
         }
 
-        if (shaderVisibility[(uint32_t)Shader::Type::GeometryShader] == false)
+        if (shaderVisibility[(uint32_t)Shader::Type::Geometry] == false)
         {
             flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
         }

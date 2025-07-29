@@ -5,7 +5,7 @@
 class CommandContext;
 class Graphics;
 class RootSignature;
-class GraphicsPipelineState;
+class PipelineState;
 class GraphicsTexture;
 class RGGraph;
 
@@ -33,7 +33,7 @@ private:
 	ImGuiCallback m_UpdateCallback;
 
 	Graphics* m_pGraphics;
-	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
+	std::unique_ptr<PipelineState> m_pPipelineStateObject;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsTexture> m_pFontTexture;
 };

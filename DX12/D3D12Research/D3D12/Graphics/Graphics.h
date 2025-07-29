@@ -8,8 +8,7 @@ class DynamicAllocationManager;
 class ImGuiRenderer;
 class GraphicsBuffer;
 class RootSignature;
-class GraphicsPipelineState;
-class ComputePipelineState;
+class PipelineState;
 class GraphicsTexture;
 class Mesh;
 class Buffer;
@@ -209,25 +208,25 @@ private:
 	// shadow mapping
 	std::unique_ptr<GraphicsTexture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRS;
-	std::unique_ptr<GraphicsPipelineState> m_pShadowPSO;
-	std::unique_ptr<GraphicsPipelineState> m_pShadowAlphaPSO;
+	std::unique_ptr<PipelineState> m_pShadowPSO;
+	std::unique_ptr<PipelineState> m_pShadowAlphaPSO;
 
 	// depth prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
-	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPSO;
+	std::unique_ptr<PipelineState> m_pDepthPrepassPSO;
 
 	// MSAA depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
-	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
+	std::unique_ptr<PipelineState> m_pResolveDepthPSO;
 
 	// Tonemapping
 	std::unique_ptr<GraphicsTexture> m_pDownscaledColor;
 	std::unique_ptr<RootSignature> m_pLuminanceHistogramRS;
-	std::unique_ptr<ComputePipelineState> m_pLuminanceHistogramPSO;
+	std::unique_ptr<PipelineState> m_pLuminanceHistogramPSO;
 	std::unique_ptr<RootSignature> m_pAverageLuminanceRS;
-	std::unique_ptr<ComputePipelineState> m_pAverageLuminancePSO;
+	std::unique_ptr<PipelineState> m_pAverageLuminancePSO;
 	std::unique_ptr<RootSignature> m_pToneMapRS;
-	std::unique_ptr<GraphicsPipelineState> m_pToneMapPSO;
+	std::unique_ptr<PipelineState> m_pToneMapPSO;
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
 	std::unique_ptr<GraphicsTexture> m_pAverageLuminance;
 
@@ -236,13 +235,13 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusion;
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusionIntermediate;
 	std::unique_ptr<RootSignature> m_pSSAORS;
-	std::unique_ptr<ComputePipelineState> m_pSSAOPSO;
+	std::unique_ptr<PipelineState> m_pSSAOPSO;
 	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
-	std::unique_ptr<ComputePipelineState> m_pSSAOBlurPSO;
+	std::unique_ptr<PipelineState> m_pSSAOBlurPSO;
 
 	// mip generation
 	std::unique_ptr<RootSignature> m_pGenerateMipsRS;
-	std::unique_ptr<ComputePipelineState> m_pGenerateMipsPSO;
+	std::unique_ptr<PipelineState> m_pGenerateMipsPSO;
 
 	// light data
 	int m_ShadowCasters{0};

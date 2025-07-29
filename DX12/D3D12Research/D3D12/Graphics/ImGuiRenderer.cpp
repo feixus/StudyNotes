@@ -116,8 +116,8 @@ void ImGuiRenderer::InitializeImGui()
 void ImGuiRenderer::CreatePipeline()
 {
 	// shaders
-	Shader vertexShader("Resources/Shaders/imgui.hlsl", Shader::Type::VertexShader, "VSMain");
-	Shader pixelShader("Resources/Shaders/imgui.hlsl", Shader::Type::PixelShader, "PSMain");
+	Shader vertexShader("Resources/Shaders/imgui.hlsl", Shader::Type::Vertex, "VSMain");
+	Shader pixelShader("Resources/Shaders/imgui.hlsl", Shader::Type::Pixel, "PSMain");
 
 	// root signature
 	m_pRootSignature = std::make_unique<RootSignature>();
@@ -131,7 +131,7 @@ void ImGuiRenderer::CreatePipeline()
 	};
 
 	// pipeline state
-	m_pPipelineStateObject = std::make_unique<GraphicsPipelineState>();
+	m_pPipelineStateObject = std::make_unique<PipelineState>();
 	m_pPipelineStateObject->SetBlendMode(BlendMode::Alpha, false);
 	m_pPipelineStateObject->SetDepthWrite(false);
 	m_pPipelineStateObject->SetDepthEnable(false);
@@ -158,7 +158,7 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResource& resources)
 			{
-				context.SetGraphicsPipelineState(m_pPipelineStateObject.get());
+				context.SetPipelineState(m_pPipelineStateObject.get());
 				context.SetGraphicsRootSignature(m_pRootSignature.get());
 
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0, 0.0f, 1.0f);

@@ -4,8 +4,7 @@
 class Graphics;
 class RootSignature;
 class CommandContext;
-class ComputePipelineState;
-class GraphicsPipelineState;
+class PipelineState;
 class GraphicsBuffer;
 class GraphicsTexture;
 class Buffer;
@@ -34,7 +33,6 @@ public:
 
     void OnSwapchainCreated(int windowWidth, int windowHeight);
     void Execute(RGGraph& graph, const TiledForwardInputResource& inputResource);
-    void GetData(Buffer** pLightListOpaque, GraphicsTexture** pLightGridOpaque, Buffer** pLightListTransparent, GraphicsTexture** pLightGridTransparent);
 
 private:
 	void SetupResources(Graphics* pGraphics);
@@ -44,7 +42,7 @@ private:
 
 	// light culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
-	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
+	std::unique_ptr<PipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<Buffer> m_pLightIndexCounter;
 	UnorderedAccessView* m_pLightIndexCounterRawUAV{nullptr};
 	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
@@ -52,8 +50,8 @@ private:
 	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparent;
 	std::unique_ptr<GraphicsTexture> m_pLightGridTransparent;
 
-	//PBR
-	std::unique_ptr<RootSignature> m_pPBRDiffuseRS;
-	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffusePSO;
-	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffuseAlphaPSO;
+	// diffuse
+	std::unique_ptr<RootSignature> m_pDiffuseRS;
+	std::unique_ptr<PipelineState> m_pDiffusePSO;
+	std::unique_ptr<PipelineState> m_pDiffuseAlphaPSO;
 };

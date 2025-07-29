@@ -1,45 +1,58 @@
 #include "stdafx.h"
 #include "PipelineState.h"
 
-GraphicsPipelineState::GraphicsPipelineState()
+PipelineState::PipelineState()
 {
 	m_Desc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-	m_Desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	m_Desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT);
 	m_Desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	m_Desc.SampleDesc.Count = 1;
-	m_Desc.SampleDesc.Quality = 0;
-    m_Desc.SampleMask = UINT_MAX;
+	m_Desc.SampleDesc = DefaultSampleDesc();
+    m_Desc.SampleMask = DefaultSampleMask();
 	m_Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	m_Desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
     m_Desc.NodeMask = 0;
 }
 
-void GraphicsPipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality)
+PipelineState::PipelineState(const PipelineState& other) : m_Desc(other.m_Desc)
+{}
+
+void PipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
+{
+    ComPtr<ID3D12Device2> pDevice2;
+    HR(pDevice->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())));
+
+    D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {
+        .SizeInBytes = sizeof(m_Desc),
+        .pPipelineStateSubobjectStream = &m_Desc,
+    };
+    HR(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())));
+
+	SetD3DObjectName(m_pPipelineState.Get(), pName);
+}
+
+void PipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality)
 {
 	SetRenderTargetFormats(&rtvFormat, 1, dsvFormat, msaa, msaaQuality);
 }
 
-void GraphicsPipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32_t count, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality)
+void PipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32_t count, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality)
 {
-    m_Desc.NumRenderTargets = count;
+    D3D12_RT_FORMAT_ARRAY* pFormatArray = &m_Desc.RTVFormats;
+    pFormatArray->NumRenderTargets = count;
     for (uint32_t i = 0; i < count; i++)
     {
-        m_Desc.RTVFormats[i] = rtvFormats[i];
+        pFormatArray->RTFormats[i] = rtvFormats[i];
     }
-    m_Desc.SampleDesc.Count = msaa;
-    m_Desc.SampleDesc.Quality = msaaQuality;
+    DXGI_SAMPLE_DESC* pSampleDesc = &m_Desc.SampleDesc;
+    pSampleDesc->Count = msaa;
+    pSampleDesc->Quality = msaaQuality;
     m_Desc.DSVFormat = dsvFormat;
 }
 
-void GraphicsPipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
+void PipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alphaToCoverage*/)
 {
-	pDevice->CreateGraphicsPipelineState(&m_Desc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf()));
-    SetD3DObjectName(m_pPipelineState.Get(), pName);
-}
-
-void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alphaToCoverage*/)
-{
-    D3D12_RENDER_TARGET_BLEND_DESC& desc = m_Desc.BlendState.RenderTarget[0];
+    CD3DX12_BLEND_DESC* pBlendDesc = &m_Desc.BlendState;
+    D3D12_RENDER_TARGET_BLEND_DESC& desc = pBlendDesc->RenderTarget[0];
     desc.RenderTargetWriteMask = 0xf;
     desc.BlendEnable = blendMode == BlendMode::Replace ? false : true;
 
@@ -123,113 +136,97 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
     }
 }
 
-void GraphicsPipelineState::SetDepthEnable(bool enabled)
+void PipelineState::SetDepthEnable(bool enabled)
 {
-	m_Desc.DepthStencilState.DepthEnable = enabled;
+    CD3DX12_DEPTH_STENCIL_DESC1* pDssDesc = &m_Desc.DepthStencilState;
+    pDssDesc->DepthEnable = enabled;
 }
 
-void GraphicsPipelineState::SetDepthWrite(bool enabled)
+void PipelineState::SetDepthWrite(bool enabled)
 {
-	m_Desc.DepthStencilState.DepthWriteMask = enabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+    CD3DX12_DEPTH_STENCIL_DESC1* pDssDesc = &m_Desc.DepthStencilState;
+    pDssDesc->DepthWriteMask = enabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
 }
 
-void GraphicsPipelineState::SetDepthTest(const D3D12_COMPARISON_FUNC func)
+void PipelineState::SetDepthTest(const D3D12_COMPARISON_FUNC func)
 {
-	m_Desc.DepthStencilState.DepthFunc = func;
+    CD3DX12_DEPTH_STENCIL_DESC1* pDssDesc = &m_Desc.DepthStencilState;
+    pDssDesc->DepthFunc = func;
 }
 
-void GraphicsPipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, uint32_t /*stencilRef*/, uint8_t compareMask, uint8_t writeMask)
+void PipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, uint32_t /*stencilRef*/, uint8_t compareMask, uint8_t writeMask)
 {
-	m_Desc.DepthStencilState.StencilEnable = stencilEnabled;
-	m_Desc.DepthStencilState.FrontFace.StencilFunc = mode;
-	m_Desc.DepthStencilState.FrontFace.StencilPassOp = pass;
-	m_Desc.DepthStencilState.FrontFace.StencilFailOp = fail;
-	m_Desc.DepthStencilState.FrontFace.StencilDepthFailOp = zFail;
-	m_Desc.DepthStencilState.StencilReadMask = compareMask;
-	m_Desc.DepthStencilState.StencilWriteMask = writeMask;
-	m_Desc.DepthStencilState.BackFace = m_Desc.DepthStencilState.FrontFace;
+    CD3DX12_DEPTH_STENCIL_DESC1* pDssDesc = &m_Desc.DepthStencilState;
+    pDssDesc->StencilEnable = stencilEnabled;
+    pDssDesc->FrontFace.StencilFunc = mode;
+    pDssDesc->FrontFace.StencilPassOp = pass;
+    pDssDesc->FrontFace.StencilFailOp = fail;
+    pDssDesc->FrontFace.StencilDepthFailOp = zFail;
+    pDssDesc->StencilReadMask = compareMask;
+    pDssDesc->StencilWriteMask = writeMask;
+    pDssDesc->BackFace = pDssDesc->FrontFace;
 }
 
-void GraphicsPipelineState::SetFillMode(D3D12_FILL_MODE fillMode)
+void PipelineState::SetFillMode(D3D12_FILL_MODE fillMode)
 {
-	m_Desc.RasterizerState.FillMode = fillMode;
+    CD3DX12_RASTERIZER_DESC* pRsDesc = &m_Desc.RasterizerState;
+    pRsDesc->FillMode = fillMode;
 }
 
-void GraphicsPipelineState::SetCullMode(D3D12_CULL_MODE cullMode)
+void PipelineState::SetCullMode(D3D12_CULL_MODE cullMode)
 {
-	m_Desc.RasterizerState.CullMode = cullMode;
+    CD3DX12_RASTERIZER_DESC* pRsDesc = &m_Desc.RasterizerState;
+    pRsDesc->CullMode = cullMode;
 }
 
-void GraphicsPipelineState::SetLineAntialias(bool lineAntialias)
+void PipelineState::SetLineAntialias(bool lineAntialias)
 {
-	m_Desc.RasterizerState.AntialiasedLineEnable = lineAntialias;
+    CD3DX12_RASTERIZER_DESC* pRsDesc = &m_Desc.RasterizerState;
+    pRsDesc->AntialiasedLineEnable = lineAntialias;
 }
 
-void GraphicsPipelineState::SetDepthBias(int depthBias, float depthBiasClamp, float slopeScaledDepthBias)
+void PipelineState::SetDepthBias(int depthBias, float depthBiasClamp, float slopeScaledDepthBias)
 {
     // final depth = depthFromInterpolation + (slopeScaledDepthBias * max(abs(dz/dx), abs(dz/dy))) + depthBias * r. (r is the 1/2^n, such as 1/16777216 for 24-bit)
-    m_Desc.RasterizerState.SlopeScaledDepthBias = slopeScaledDepthBias;
-    m_Desc.RasterizerState.DepthBias = depthBias;
-    m_Desc.RasterizerState.DepthBiasClamp = depthBiasClamp;
+    CD3DX12_RASTERIZER_DESC* pRsDesc = &m_Desc.RasterizerState;
+    pRsDesc->SlopeScaledDepthBias = slopeScaledDepthBias;
+    pRsDesc->DepthBias = depthBias;
+    pRsDesc->DepthBiasClamp = depthBiasClamp;
 }
 
-void GraphicsPipelineState::SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32_t count)
+void PipelineState::SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32_t count)
 {
-	m_Desc.InputLayout.NumElements = count;
-	m_Desc.InputLayout.pInputElementDescs = pElements;
+    D3D12_INPUT_LAYOUT_DESC* pIlDesc = &m_Desc.InputLayout;
+    pIlDesc->NumElements = count;
+    pIlDesc->pInputElementDescs = pElements;
 }
 
-void GraphicsPipelineState::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology)
+void PipelineState::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology)
 {
 	m_Desc.PrimitiveTopologyType = topology;
 }
 
-void GraphicsPipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)
+void PipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)
 {
 	m_Desc.pRootSignature = pRootSignature;
 }
 
-void GraphicsPipelineState::SetVertexShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetVertexShader(const void* pByteCode, uint32_t byteCodeLength)
 {
-	m_Desc.VS.pShaderBytecode = pByteCode;
-	m_Desc.VS.BytecodeLength = byteCodeLength;
+	m_Desc.VS = {pByteCode, byteCodeLength };
 }
 
-void GraphicsPipelineState::SetPixelShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetPixelShader(const void* pByteCode, uint32_t byteCodeLength)
 {
-	m_Desc.PS.pShaderBytecode = pByteCode;
-	m_Desc.PS.BytecodeLength = byteCodeLength;
+	m_Desc.PS = {pByteCode, byteCodeLength };
 }
 
-void GraphicsPipelineState::SetGeometryShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetGeometryShader(const void* pByteCode, uint32_t byteCodeLength)
 {
-	m_Desc.GS.pShaderBytecode = pByteCode;
-	m_Desc.GS.BytecodeLength = byteCodeLength;
+	m_Desc.GS = { pByteCode, byteCodeLength };
 }
 
-ComputePipelineState::ComputePipelineState()
+void PipelineState::SetComputeShader(const void* pByteCode, uint32_t byteCodeLength)
 {
-    m_Desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-}
-
-ComputePipelineState::ComputePipelineState(const ComputePipelineState& other)
-        : m_Desc(other.m_Desc)
-{
-}
-
-void ComputePipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
-{
-    pDevice->CreateComputePipelineState(&m_Desc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf()));
-    SetD3DObjectName(m_pPipelineState.Get(), pName);
-}
-
-void ComputePipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)
-{
-    m_Desc.pRootSignature = pRootSignature;
-}
-
-void ComputePipelineState::SetComputeShader(const void* pByteCode, uint32_t byteCodeLength)
-{
-    m_Desc.CS.pShaderBytecode = pByteCode;
-    m_Desc.CS.BytecodeLength = byteCodeLength;
+    m_Desc.CS = { pByteCode, byteCodeLength };
 }
