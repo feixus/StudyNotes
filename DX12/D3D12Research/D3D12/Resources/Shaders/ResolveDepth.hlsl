@@ -1,5 +1,7 @@
 #include "Common.hlsli"
 
+#define BLOCK_SIZE 16
+
 #define RootSig "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL)"
 

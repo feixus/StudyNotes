@@ -385,9 +385,6 @@ void Graphics::Update()
 					renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 
 					renderContext.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
-
-					// for imgui
-					renderContext.InsertResourceBarrier(m_pAmbientOcclusion.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 				};
 			});
 	}
@@ -1408,15 +1405,15 @@ void Graphics::RandomizeLights(int count)
 	int randomLightsStartIndex = lightIndex + 1;
 	for (int i = randomLightsStartIndex; i < m_Lights.size(); i++)
 	{
-		Vector4 color(Math::RandomRange(0.f, 1.f), Math::RandomRange(0.f, 1.f), Math::RandomRange(0.f, 1.f), 1);
+		Vector4 color(Math::RandomRange(0.6f, 1.f), Math::RandomRange(0.6f, 1.f), Math::RandomRange(0.6f, 1.f), 1);
 
 		Vector3 position;
 		position.x = Math::RandomRange(-sceneBounds.Extents.x, sceneBounds.Extents.x) + sceneBounds.Center.x;
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(4.f, 6.f);
-		const float angle = Math::RandomRange(40.f, 80.f);
+		const float range = Math::RandomRange(40.f, 60.f);
+		const float angle = Math::RandomRange(60.f, 120.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
