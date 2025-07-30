@@ -134,7 +134,7 @@ void Graphics::Update()
 	uint64_t nextFenceValue = 0;
 	uint64_t lightCullingFence = 0;
 
-	// 1. depth prepass
+	// depth prepass
 	// - depth only pass that renders the entire scene
 	// - optimization that prevents wasteful lighting calculations during the base pass
 	// - required for light culling
@@ -149,17 +149,51 @@ void Graphics::Update()
 					const TextureDesc& desc = pDepthStencil->GetDesc();
 
 					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-					renderContext.InsertResourceBarrier(m_pMSAANormals.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-					RenderPassInfo info = RenderPassInfo(m_pMSAANormals.get(), RenderPassAccess::Clear_Resolve, pDepthStencil, RenderPassAccess::Clear_Store);
-					info.RenderTargets[0].ResolveTarget = m_pNormals.get();
-
+					RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
 					renderContext.BeginRenderPass(info);
 					renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
 
 					renderContext.SetPipelineState(m_pDepthPrepassPSO.get());
 					renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
+
+					struct Parameters
+					{
+						Matrix WorldViewProj;
+					} constBuffer{};
+
+					for (const Batch& b : m_OpaqueBatches)
+					{
+						constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
+						renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+						b.pMesh->Draw(&renderContext);
+					}
+
+					renderContext.EndRenderPass();
+				};
+		});
+
+	// normals
+	graph.AddPass("Normals", [&](RGPassBuilder& builder)
+		{
+			builder.NeverCull();
+			sceneData.DepthStencil = builder.Write(sceneData.DepthStencil);
+
+			return [=](CommandContext& renderContext, const RGPassResource& resources)
+				{
+					GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
+					const TextureDesc& desc = pDepthStencil->GetDesc();
+
+					renderContext.InsertResourceBarrier(m_pMSAANormals.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+					RenderPassInfo info = RenderPassInfo(m_pMSAANormals.get(), RenderPassAccess::Clear_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
+					renderContext.BeginRenderPass(info);
+					renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
+
+					renderContext.SetPipelineState(m_pNormalsPSO.get());
+					renderContext.SetGraphicsRootSignature(m_pNormalsRS.get());
 
 					struct Parameters
 					{
@@ -171,17 +205,24 @@ void Graphics::Update()
 					{
 						constBuffer.World = b.WorldMatrix;
 						constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
-						
+
 						renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 						renderContext.SetDynamicDescriptor(1, 0, b.pMaterial->pNormalTexture->GetSRV());
 						b.pMesh->Draw(&renderContext);
 					}
 
 					renderContext.EndRenderPass();
+
+					if (m_SampleCount > 1)
+					{
+						renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
+						renderContext.InsertResourceBarrier(m_pMSAANormals.get(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+						renderContext.ResolveResource(m_pMSAANormals.get(), 0, m_pNormals.get(), 0, m_pNormals->GetFormat());
+					}
 				};
 		});
 
-	// 2. [OPTIONAL] depth resolve
+	// [with MSAA] depth resolve
 	//  - if MSAA is enabled, run a compute shader to resolve the depth buffer
 	if (m_SampleCount > 1)
 	{
@@ -351,7 +392,7 @@ void Graphics::Update()
 			});
 	}
 
-	// 4. shadow mapping
+	// shadow mapping
 	//  - renders the scene depth onto a separate depth buffer from the light's view
 	if (m_ShadowCasters > 0)
 	{
@@ -447,9 +488,9 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
-	m_pDebugRenderer->Render(graph);
+	DebugRenderer::Instance().Render(graph);
 
-	// 7. MSAA render target resolve
+	// MSAA render target resolve
 	//  - we have to resolve a MSAA render target ourselves.
 	if (m_SampleCount > 1)
 	{
@@ -466,7 +507,7 @@ void Graphics::Update()
 			});
 	}
 
-	// 8. tonemap
+	// tonemap
 	{
         bool downscaleTonemap = true;
 		GraphicsTexture* pTonemapInput = downscaleTonemap ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
@@ -607,7 +648,7 @@ void Graphics::Update()
 			});
 	}
 
-	// 9. UI
+	// UI
 	//  - ImGui render, pretty straight forward
 	{
 		//ImGui::ShowDemoWindow();
@@ -649,7 +690,7 @@ void Graphics::Update()
 		nextFenceValue = pCommandContext->Execute(false);
 	}*/
 
-	// 10. present
+	// present
 	//  - set fence for the currently queued frame
 	//  - present the frame buffer
 	//  - wait for the next frame to be finished to start queueing work for it
@@ -682,7 +723,7 @@ void Graphics::EndFrame(uint64_t fenceValue)
 	Profiler::Instance()->EndReadBack(m_Frame);
 	++m_Frame;
 
-	m_pDebugRenderer->EndFrame();
+	DebugRenderer::Instance().EndFrame();
 }
 
 void Graphics::InitD3D()
@@ -849,8 +890,8 @@ void Graphics::InitD3D()
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
-	m_pDebugRenderer = std::make_unique<DebugRenderer>(this);
-	m_pDebugRenderer->SetCamera(m_pCamera.get());
+	DebugRenderer::Instance().Initialize(this);
+	DebugRenderer::Instance().SetCamera(m_pCamera.get());
 }
 
 void Graphics::CreateSwapchain()
@@ -1004,8 +1045,7 @@ void Graphics::InitializeAssets()
 	// depth prepass
 	// simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader vertexShader("Resources/Shaders/Prepass.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/Prepass.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
 
 		// root signature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>();
@@ -1013,13 +1053,33 @@ void Graphics::InitializeAssets()
 
 		// pipeline state
 		m_pDepthPrepassPSO = std::make_unique<PipelineState>();
-		m_pDepthPrepassPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+		m_pDepthPrepassPSO->SetInputLayout(depthOnlyInputElements, std::size(depthOnlyInputElements));
 		m_pDepthPrepassPSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		m_pDepthPrepassPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pDepthPrepassPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pDepthPrepassPSO->SetRenderTargetFormat(DXGI_FORMAT_R32G32B32A32_FLOAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
+		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pDepthPrepassPSO->Finalize("Depth Prepass PSO", m_pDevice.Get());
+	}
+
+	// normals
+	{
+		Shader vertexShader("Resources/Shaders/OutputNormals.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader pixelShader("Resources/Shaders/OutputNormals.hlsl", Shader::Type::Pixel, "PSMain");
+
+		// root signature
+		m_pNormalsRS = std::make_unique<RootSignature>();
+		m_pNormalsRS->FinalizeFromShader("Normals RS", vertexShader, m_pDevice.Get());
+
+		// pipeline state
+		m_pNormalsPSO = std::make_unique<PipelineState>();
+		m_pNormalsPSO->SetInputLayout(inputElements, std::size(inputElements));
+		m_pNormalsPSO->SetRootSignature(m_pNormalsRS->GetRootSignature());
+		m_pNormalsPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pNormalsPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pNormalsPSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+		m_pNormalsPSO->SetDepthWrite(false);
+		m_pNormalsPSO->SetRenderTargetFormat(DXGI_FORMAT_R32G32B32A32_FLOAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pNormalsPSO->Finalize("Normals PSO", m_pDevice.Get());
 	}
 
 	// luminance histogram

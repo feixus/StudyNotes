@@ -72,9 +72,9 @@ struct DebugSphere
 class DebugRenderer
 {
 public:
-    DebugRenderer(Graphics* pGraphics);
-    ~DebugRenderer();
+    static DebugRenderer& Instance();
 
+    void Initialize(Graphics* pGraphics);
     void Render(RGGraph& graph);
     void EndFrame();
 
@@ -97,6 +97,8 @@ public:
     void AddLight(const Light& light);
 
 private:
+    DebugRenderer() = default;
+
     Graphics* m_pGraphics;
     const Camera* m_pCamera{nullptr};
 

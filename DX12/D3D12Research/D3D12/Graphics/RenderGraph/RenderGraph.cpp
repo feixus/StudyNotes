@@ -210,15 +210,15 @@ int64_t RGGraph::Execute()
             ExecutePass(m_RenderPasses[i], *pContext);
         }
 
-        if (i % exlFrequency == 0)
+        if (i % exlFrequency == 0 || i == m_RenderPasses.size() - 1)
         {
-            pContext->Execute(false);
+            m_LastFenceValue = pContext->Execute(false);
 			pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		}
     }
 
     DestroyData();
-    return pContext->Execute(false);
+    return m_LastFenceValue;
 }
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& renderContext)

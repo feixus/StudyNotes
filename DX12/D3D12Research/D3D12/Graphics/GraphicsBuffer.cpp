@@ -75,7 +75,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 void Buffer::SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint32_t offset /*= 0*/)
 {
 	assert(dataSize + offset <= GetSize());
-	pContext->InitializeBuffer(this, pData, dataSize);
+	pContext->InitializeBuffer(this, pData, dataSize, offset);
 }
 
 void* Buffer::Map(uint32_t subResource /*= 0*/, uint64_t readFrom /*= 0*/, uint64_t readTo /*= 0*/)

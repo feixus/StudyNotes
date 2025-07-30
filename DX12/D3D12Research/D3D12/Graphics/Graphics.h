@@ -18,7 +18,6 @@ class ClusteredForward;
 struct Material;
 class Camera;
 class RGResourceAllocator;
-class DebugRenderer;
 class UnorderedAccessView;
 class TiledForward;
 class RTAO;
@@ -190,7 +189,6 @@ private:
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
 	std::unique_ptr<RTAO> m_pRaytracing;
-	std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
@@ -214,6 +212,10 @@ private:
 	// depth prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
 	std::unique_ptr<PipelineState> m_pDepthPrepassPSO;
+
+	// normals rendering
+	std::unique_ptr<RootSignature> m_pNormalsRS;
+	std::unique_ptr<PipelineState> m_pNormalsPSO;
 
 	// MSAA depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;

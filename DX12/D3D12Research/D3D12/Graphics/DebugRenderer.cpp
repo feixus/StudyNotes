@@ -11,37 +11,39 @@
 #include "RenderGraph/RenderGraph.h"
 #include "CommandContext.h"
 
-DebugRenderer::DebugRenderer(Graphics* pGraphics)
-    : m_pGraphics(pGraphics)
+DebugRenderer& DebugRenderer::Instance()
 {
-    D3D12_INPUT_ELEMENT_DESC inputElements[] = {
-        D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
-
-    // shaders
-    Shader vertexShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::Vertex, "VSMain");
-    Shader pixelShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::Pixel, "PSMain");
-
-    // root signature
-    m_pRS = std::make_unique<RootSignature>();
-    m_pRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
-
-    // opaque
-    m_pTrianglesPSO = std::make_unique<PipelineState>();
-    m_pTrianglesPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-    m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
-    m_pTrianglesPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-    m_pTrianglesPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-    m_pTrianglesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-    m_pTrianglesPSO->SetDepthWrite(true);
-    m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-    m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
-    m_pTrianglesPSO->Finalize("Debug Triangles", pGraphics->GetDevice());
+    static DebugRenderer instance;
+    return instance;
 }
 
-DebugRenderer::~DebugRenderer()
+void DebugRenderer::Initialize(Graphics* pGraphics)
 {
+    m_pGraphics = pGraphics;
+	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
+		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
+	// shaders
+	Shader vertexShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::Vertex, "VSMain");
+	Shader pixelShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::Pixel, "PSMain");
+
+	// root signature
+	m_pRS = std::make_unique<RootSignature>();
+	m_pRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
+
+	// opaque
+	m_pTrianglesPSO = std::make_unique<PipelineState>();
+	m_pTrianglesPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+	m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
+	m_pTrianglesPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+	m_pTrianglesPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+	m_pTrianglesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+	m_pTrianglesPSO->SetDepthWrite(true);
+	m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
+	m_pTrianglesPSO->Finalize("Debug Triangles", pGraphics->GetDevice());
 }
 
 void DebugRenderer::Render(RGGraph& graph)

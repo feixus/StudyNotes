@@ -19,16 +19,21 @@ public:
     int GetMaterialId() const { return m_MaterialId; }
     const BoundingBox& GetBounds() const { return m_Bounds; }
 
-    Buffer* GetVertexBuffer() const { return m_pVertexBuffer.get(); }
-    Buffer* GetIndexBuffer() const { return m_pIndexBuffer.get(); }
+    uint32_t GetVertexByteOffset() const { return m_VertexByteOffset; }
+    uint32_t GetIndexByteOffset() const { return m_IndexByteOffset; }
+    uint32_t GetVertexCount() const { return m_VertexCount; }
+    uint32_t GetIndexCount() const { return m_IndexCount; }
 
 private:
     int m_MaterialId{};
-    int m_IndexCount{};
-    int m_VertexCount{};
+    uint32_t m_IndexCount{};
+    uint32_t m_VertexCount{};
+    uint32_t m_IndexOffset{};
+    uint32_t m_VertexOffset{};
+    uint32_t m_VertexByteOffset{};
+    uint32_t m_IndexByteOffset{};
     BoundingBox m_Bounds;
-    std::unique_ptr<Buffer> m_pVertexBuffer;
-    std::unique_ptr<Buffer> m_pIndexBuffer;
+    Mesh* m_pParent;
 };
 
 struct Material
@@ -48,9 +53,12 @@ public:
 	SubMesh* GetMesh(int index) const { return m_Meshes[index].get(); }
     const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
-private:
-    std::unique_ptr<SubMesh> LoadMesh(aiMesh* pMesh, Graphics* pGraphics, CommandContext* pContext);
+	Buffer* GetVertexBuffer() const { return m_pVertexBuffer.get(); }
+	Buffer* GetIndexBuffer() const { return m_pIndexBuffer.get(); }
 
+private:
     std::vector<std::unique_ptr<SubMesh>> m_Meshes;
     std::vector<Material> m_Materials;
+    std::unique_ptr<Buffer> m_pVertexBuffer;
+    std::unique_ptr<Buffer> m_pIndexBuffer;
 };

@@ -4,42 +4,46 @@ classDef unreferenced stroke:#fee,stroke-width:1px;
 classDef referencedResource fill:#bef,stroke:#333,stroke-width:2px;
 classDef importedResource fill:#9bd,stroke:#333,stroke-width:2px;
 Pass0[Depth Prepass<br/>Refs: 2<br/>Index: 0]:::referencedPass
-Pass1[SSAO<br/>Refs: 1<br/>Index: 1]:::referencedPass
-Pass2[Blur SSAO<br/>Refs: 1<br/>Index: 2]:::referencedPass
-Pass3[Shadows<br/>Refs: 1<br/>Index: 3]:::referencedPass
-Pass4[Mark Clusters<br/>Refs: 1<br/>Index: 4]:::referencedPass
-Pass5[Compact Clusters<br/>Refs: 1<br/>Index: 5]:::referencedPass
-Pass6[Update Indirect Arguments<br/>Refs: 1<br/>Index: 6]:::referencedPass
-Pass7[Clustered Light Culling<br/>Refs: 1<br/>Index: 7]:::referencedPass
-Pass8[Base Pass<br/>Refs: 1<br/>Index: 8]:::referencedPass
-Pass9[Prepare Arguments<br/>Refs: 1<br/>Index: 9]:::referencedPass
-Pass10[Emit Particles<br/>Refs: 1<br/>Index: 10]:::referencedPass
-Pass11[Simulate Particles<br/>Refs: 1<br/>Index: 11]:::referencedPass
-Pass12[Simulate End<br/>Refs: 1<br/>Index: 12]:::referencedPass
-Pass13[Draw Particles<br/>Refs: 1<br/>Index: 13]:::referencedPass
-Pass14[Downsample Color<br/>Refs: 2<br/>Index: 14]:::referencedPass
-Pass15[Luminance Histogram<br/>Refs: 1<br/>Index: 15]:::referencedPass
-Pass16[Average Luminance<br/>Refs: 1<br/>Index: 16]:::referencedPass
-Pass17[Tonemap<br/>Refs: 1<br/>Index: 17]:::referencedPass
-Pass18[RenderUI<br/>Refs: 1<br/>Index: 18]:::referencedPass
-Pass19[Temp Barriers<br/>Refs: 1<br/>Index: 19]:::referencedPass
-Resource0_0([Depth Stencil<br/>Id: 0<br/>Refs: 3]):::importedResource
+Pass1[Normals<br/>Refs: 2<br/>Index: 1]:::referencedPass
+Pass2[SSAO<br/>Refs: 1<br/>Index: 2]:::referencedPass
+Pass3[Blur SSAO<br/>Refs: 1<br/>Index: 3]:::referencedPass
+Pass4[Shadows<br/>Refs: 1<br/>Index: 4]:::referencedPass
+Pass5[Mark Clusters<br/>Refs: 1<br/>Index: 5]:::referencedPass
+Pass6[Compact Clusters<br/>Refs: 1<br/>Index: 6]:::referencedPass
+Pass7[Update Indirect Arguments<br/>Refs: 1<br/>Index: 7]:::referencedPass
+Pass8[Clustered Light Culling<br/>Refs: 1<br/>Index: 8]:::referencedPass
+Pass9[Base Pass<br/>Refs: 1<br/>Index: 9]:::referencedPass
+Pass10[Prepare Arguments<br/>Refs: 1<br/>Index: 10]:::referencedPass
+Pass11[Emit Particles<br/>Refs: 1<br/>Index: 11]:::referencedPass
+Pass12[Simulate Particles<br/>Refs: 1<br/>Index: 12]:::referencedPass
+Pass13[Simulate End<br/>Refs: 1<br/>Index: 13]:::referencedPass
+Pass14[Draw Particles<br/>Refs: 1<br/>Index: 14]:::referencedPass
+Pass15[Downsample Color<br/>Refs: 2<br/>Index: 15]:::referencedPass
+Pass16[Luminance Histogram<br/>Refs: 1<br/>Index: 16]:::referencedPass
+Pass17[Average Luminance<br/>Refs: 1<br/>Index: 17]:::referencedPass
+Pass18[Tonemap<br/>Refs: 1<br/>Index: 18]:::referencedPass
+Pass19[RenderUI<br/>Refs: 1<br/>Index: 19]:::referencedPass
+Pass20[Temp Barriers<br/>Refs: 1<br/>Index: 20]:::referencedPass
+Resource0_0([Depth Stencil<br/>Id: 0<br/>Refs: 4]):::importedResource
 Resource1_0([Resolved Depth Stencil<br/>Id: 1<br/>Refs: 1]):::importedResource
-Resource0_1([Depth Stencil<br/>Id: 0<br/>Refs: 3]):::importedResource
+Resource0_1([Depth Stencil<br/>Id: 0<br/>Refs: 4]):::importedResource
+Resource0_2([Depth Stencil<br/>Id: 0<br/>Refs: 4]):::importedResource
 Resource2_0([Tonemap Input<br/>Id: 2<br/>Refs: 2]):::importedResource
 Resource2_1([Tonemap Input<br/>Id: 2<br/>Refs: 2]):::importedResource
 Pass0 --> Resource0_1
 linkStyle 0 stroke:#f82,stroke-width:2px;
-Pass14 --> Resource2_1
+Pass1 --> Resource0_2
 linkStyle 1 stroke:#f82,stroke-width:2px;
+Pass15 --> Resource2_1
+linkStyle 2 stroke:#f82,stroke-width:2px;
 
-Resource1_0 --> Pass1
-linkStyle 2 stroke:#9c9,stroke-width:2px;
-Resource0_1 --> Pass4
+Resource1_0 --> Pass2
 linkStyle 3 stroke:#9c9,stroke-width:2px;
-Resource0_1 --> Pass8
+Resource0_2 --> Pass5
 linkStyle 4 stroke:#9c9,stroke-width:2px;
-Resource2_1 --> Pass15
+Resource0_2 --> Pass9
 linkStyle 5 stroke:#9c9,stroke-width:2px;
+Resource2_1 --> Pass16
+linkStyle 6 stroke:#9c9,stroke-width:2px;
 
 </div>
