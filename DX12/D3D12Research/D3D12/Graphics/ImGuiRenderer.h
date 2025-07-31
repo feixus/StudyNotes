@@ -1,6 +1,6 @@
 #pragma once
 
-#include "DescriptorHandle.h"
+#include "Graphics/Core/DescriptorHandle.h"
 
 class CommandContext;
 class Graphics;

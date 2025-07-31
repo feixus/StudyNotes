@@ -1,9 +1,9 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
-#include "Graphics/Graphics.h"
-#include "Graphics/CommandContext.h"
-#include "Graphics/Profiler.h"
 #include "ResourceAllocator.h"
+#include "Graphics/Profiler.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/CommandContext.h"
 
 RGResourceHandle RGPassBuilder::Read(const RGResourceHandle& resource)
 {

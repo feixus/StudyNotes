@@ -5,26 +5,26 @@
 #include "CommandContext.h"
 #include "OfflineDescriptorAllocator.h"
 #include "DynamicResourceAllocator.h"
-#include "ImGuiRenderer.h"
 #include "GraphicsTexture.h"
 #include "GraphicsBuffer.h"
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "Shader.h"
-#include "Mesh.h"
-#include "Core/Input.h"
-#include "Profiler.h"
-#include "ClusteredForward.h"
-#include "TiledForward.h"
-#include "Scene/Camera.h"
-#include "Clouds.h"
-#include <DXProgrammableCapture.h>
-#include "RenderGraph/RenderGraph.h"
-#include "RenderGraph/Blackboard.h"
-#include "RenderGraph/ResourceAllocator.h"
-#include "DebugRenderer.h"
 #include "ResourceViews.h"
-#include "RTAO.h"
+#include "Core/Input.h"
+#include "Scene/Camera.h"
+#include "Graphics/ImGuiRenderer.h"
+#include "Graphics/Mesh.h"
+#include "Graphics/Profiler.h"
+#include "Graphics/ClusteredForward.h"
+#include "Graphics/TiledForward.h"
+#include "Graphics/Clouds.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/Blackboard.h"
+#include "Graphics/RenderGraph/ResourceAllocator.h"
+#include "Graphics/DebugRenderer.h"
+#include "Graphics/RTAO.h"
+#include "Graphics/SSAO.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -44,11 +44,6 @@ float g_WhitePoint = 4;
 float g_MinLogLuminance = -10.0f;
 float g_MaxLogLuminance = 2.0f;
 float g_Tau = 10;
-
-float g_AoPower = 3;
-float g_AoThreshold = 0.0025f;
-float g_AoRadius = 0.25f;
-int g_AoSamples = 16;
 
 bool g_ShowRaytraced = false;
 
@@ -259,134 +254,24 @@ void Graphics::Update()
 
 	if (g_ShowRaytraced)
 	{
-		RaytracingInputResources resources{};
+		RtaoInputResources resources{};
 		resources.pCamera = m_pCamera.get();
 		resources.pRenderTarget = m_pAmbientOcclusion.get();
 		resources.pNormalTexture = m_pNormals.get();
 		resources.pDepthTexture = GetResolveDepthStencil();
 		resources.pNoiseTexture = m_pNoiseTexture.get();
-		m_pRaytracing->Execute(graph, resources);
+		m_pRTAO->Execute(graph, resources);
 	}
 	else
 	{
-		graph.AddPass("SSAO", [&](RGPassBuilder& builder)
-			{
-				builder.NeverCull();
-				sceneData.DepthStencilResolved = builder.Read(sceneData.DepthStencilResolved);
-				return [=](CommandContext& renderContext, const RGPassResource& resources)
-				{
-					renderContext.InsertResourceBarrier(resources.GetTexture(sceneData.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pNoiseTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pAmbientOcclusion.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					renderContext.SetComputeRootSignature(m_pSSAORS.get());
-					renderContext.SetPipelineState(m_pSSAOPSO.get());
-
-					constexpr int ssaoRandomVectors = 64;
-					struct ShaderParameters
-					{
-						Vector4 RandomVectors[ssaoRandomVectors];
-						Matrix ProjectionInverse;
-						Matrix Projection;
-						Matrix View;
-						uint32_t Dimensions[2]{};
-						float Near{0.0f};
-						float Far{0.0f};
-						float Power{0.0f};
-						float Radius{0.0f};
-						float Threshold{0.0f};
-						int Samples{0};
-					} shaderParameters;
-
-					static Vector4 randoms[ssaoRandomVectors];
-					static bool written = false;
-					if (!written)
-					{
-						srand(0);
-						written = true;
-						for (int i = 0; i < ssaoRandomVectors; i++)
-						{
-							randoms[i] = Vector4(Math::RandVector());
-							randoms[i].z = Math::Lerp(0.1f, 0.8f, abs(randoms[i].z));
-							randoms[i].Normalize();
-							randoms[i] *= Math::Lerp(0.2f, 1.0f, (float)pow(Math::RandomRange(0.f, 1.f), 2));
-						}
-					}
-					memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * ssaoRandomVectors);
-
-					shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
-					shaderParameters.Projection = m_pCamera->GetProjection();
-					shaderParameters.View = m_pCamera->GetView();
-					shaderParameters.Dimensions[0] = m_pAmbientOcclusion->GetWidth();
-					shaderParameters.Dimensions[1] = m_pAmbientOcclusion->GetHeight();
-					shaderParameters.Near = m_pCamera->GetNear();
-					shaderParameters.Far = m_pCamera->GetFar();
-					shaderParameters.Power = g_AoPower;
-					shaderParameters.Radius = g_AoRadius;
-					shaderParameters.Threshold = g_AoThreshold;
-					shaderParameters.Samples = g_AoSamples;
-
-					renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-					renderContext.SetDynamicDescriptor(1, 0, m_pAmbientOcclusion->GetUAV());
-					renderContext.SetDynamicDescriptor(2, 0, resources.GetTexture(sceneData.DepthStencilResolved)->GetSRV());
-					renderContext.SetDynamicDescriptor(2, 1, m_pNormals->GetSRV());
-					renderContext.SetDynamicDescriptor(2, 2, m_pNoiseTexture->GetSRV());
-
-					int dispatchGroupX = Math::DivideAndRoundUp(m_pAmbientOcclusion->GetWidth(), 16);
-					int dispatchGroupY = Math::DivideAndRoundUp(m_pAmbientOcclusion->GetHeight(), 16);
-					renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
-
-					renderContext.InsertResourceBarrier(resources.GetTexture(sceneData.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				};
-			});
-
-		graph.AddPass("Blur SSAO", [&](RGPassBuilder& builder)
-			{
-				builder.NeverCull();
-				return [=](CommandContext& renderContext, const RGPassResource& resources)
-				{
-					renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					renderContext.InsertResourceBarrier(m_pAmbientOcclusion.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-				
-					renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
-					renderContext.SetPipelineState(m_pSSAOBlurPSO.get());
-
-					struct ShaderParameters
-					{
-						float Dimensions[2]{};
-						uint32_t Horizontal{0};
-						float Far{0.0f};
-						float Near{0.0f};
-					} shaderParameters;
-
-					shaderParameters.Horizontal = 1;
-					shaderParameters.Dimensions[0] = 1.0f / m_pAmbientOcclusion->GetWidth();
-					shaderParameters.Dimensions[1] = 1.0f / m_pAmbientOcclusion->GetHeight();
-					shaderParameters.Far = m_pCamera->GetFar();
-					shaderParameters.Near = m_pCamera->GetNear();
-				
-					GraphicsTexture* pDepth = m_SampleCount == 1 ? m_pDepthStencil.get() : m_pResolveDepthStencil.get();
-					renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-					renderContext.SetDynamicDescriptor(1, 0, m_pAmbientOcclusionIntermediate->GetUAV());
-					renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
-					renderContext.SetDynamicDescriptor(2, 1, m_pAmbientOcclusion->GetSRV());
-
-					renderContext.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
-
-					renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pAmbientOcclusion.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					renderContext.SetDynamicDescriptor(1, 0, m_pAmbientOcclusion->GetUAV());
-					renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
-					renderContext.SetDynamicDescriptor(2, 1, m_pAmbientOcclusionIntermediate->GetSRV());
-
-					shaderParameters.Horizontal = 0;
-					renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-
-					renderContext.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
-				};
-			});
+		SsaoInputResources ssaoResources = {
+			.pRenderTarget = m_pAmbientOcclusion.get(),
+			.pNormalsTexture = m_pNormals.get(),
+			.pDepthTexture = m_pResolveDepthStencil.get(),
+			.pNoiseTexture = m_pNoiseTexture.get(),
+			.pCamera = m_pCamera.get(),
+		};
+		m_pSSAO->Execute(graph, ssaoResources);
 	}
 
 	// shadow mapping
@@ -871,11 +756,11 @@ void Graphics::InitD3D()
 	m_pMSAANormals = std::make_unique<GraphicsTexture>(this, "MSAA Normals");
 	m_pNormals = std::make_unique<GraphicsTexture>(this, "Normals");
 	m_pAmbientOcclusion = std::make_unique<GraphicsTexture>(this, "SSAO Target");
-	m_pAmbientOcclusionIntermediate = std::make_unique<GraphicsTexture>(this, "SSAO Blurred");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
-	m_pRaytracing = std::make_unique<RTAO>(this);
+	m_pRTAO = std::make_unique<RTAO>(this);
+	m_pSSAO = std::make_unique<SSAO>(this);
 	
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
@@ -975,13 +860,13 @@ void Graphics::OnResize(int width, int height)
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
 	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
 	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess | TextureFlag::RenderTarget));
-	m_pAmbientOcclusionIntermediate->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pCamera->SetDirty();
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 	m_pTiledForward->OnSwapchainCreated(width, height);
-	m_pRaytracing->OnSwapchainCreated(width, height);
+	m_pRTAO->OnSwapchainCreated(width, height);
+	m_pSSAO->OnSwapchainCreated(width, height);
 	m_pClouds->OnSwapchainCreated(width, height);
 }
 
@@ -1163,32 +1048,6 @@ void Graphics::InitializeAssets()
 		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
 	}
 
-	// SSAO
-	{
-		Shader computeShader("Resources/Shaders/SSAO.hlsl", Shader::Type::Compute, "CSMain");
-
-		m_pSSAORS = std::make_unique<RootSignature>();
-		m_pSSAORS->FinalizeFromShader("SSAO RS", computeShader, m_pDevice.Get());
-
-		m_pSSAOPSO = std::make_unique<PipelineState>();
-		m_pSSAOPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pSSAOPSO->SetRootSignature(m_pSSAORS->GetRootSignature());
-		m_pSSAOPSO->Finalize("SSAO PSO", m_pDevice.Get());
-	}
-
-	// SSAO Blur
-	{
-		Shader computeShader("Resources/Shaders/SSAOBlur.hlsl", Shader::Type::Compute, "CSMain");
-
-		m_pSSAOBlurRS = std::make_unique<RootSignature>();
-		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur RS", computeShader, m_pDevice.Get());
-
-		m_pSSAOBlurPSO = std::make_unique<PipelineState>();
-		m_pSSAOBlurPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pSSAOBlurPSO->SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
-		m_pSSAOBlurPSO->Finalize("SSAO Blur PSO", m_pDevice.Get());
-	}
-
 	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	// geometry
 	{
@@ -1216,7 +1075,7 @@ void Graphics::InitializeAssets()
 	m_pNoiseTexture = std::make_unique<GraphicsTexture>(this, "Noise Texture");
 	m_pNoiseTexture->Create(pCommandContext, "Resources/Textures/Noise.png", false);
 
-	m_pRaytracing->GenerateAccelerationStructure(this, m_pMesh.get(), *pCommandContext);
+	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), *pCommandContext);
 	pCommandContext->Execute(true);
 }
 
@@ -1265,11 +1124,6 @@ void Graphics::UpdateImGui()
 		ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
 		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
 		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
-
-		ImGui::SliderFloat("AO Power", &g_AoPower, 1, 10);
-		ImGui::SliderFloat("AO Threshold", &g_AoThreshold, 0, 0.025f);
-		ImGui::SliderFloat("AO Radius", &g_AoRadius, 0.1f, 5.0f);
-		ImGui::SliderInt("AO Samples", &g_AoSamples, 0, 64);
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{

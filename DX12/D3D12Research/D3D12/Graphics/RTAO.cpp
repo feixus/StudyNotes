@@ -1,18 +1,18 @@
 #include "stdafx.h"
 #include "RTAO.h"
-#include "Graphics/Shader.h"
-#include "Graphics/Graphics.h"
-#include "Graphics/Mesh.h"
-#include "Graphics/PipelineState.h"
-#include "Graphics/RootSignature.h"
-#include "Graphics/CommandContext.h"
-#include "Graphics/CommandQueue.h"
-#include "Graphics/GraphicsBuffer.h"
-#include "Graphics/GraphicsTexture.h"
-#include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
-#include "ResourceViews.h"
+#include "Graphics/Mesh.h"
+#include "Graphics/Profiler.h"
 #include "RenderGraph/RenderGraph.h"
+#include "Graphics/Core/Shader.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/RootSignature.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/CommandQueue.h"
+#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/GraphicsTexture.h"
+#include "Graphics/Core/ResourceViews.h"
 
 class ShaderBindingTable
 {
@@ -149,7 +149,7 @@ void RTAO::OnSwapchainCreated(int windowWidth, int windowHeight)
     }
 }
 
-void RTAO::Execute(RGGraph& graph, const RaytracingInputResources& inputResources)
+void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
 {
 	if (!m_pGraphics->SupportsRaytracing())
 	{

@@ -1,5 +1,5 @@
 #pragma once
-#include "Light.h"
+#include "../Light.h"
 
 class CommandQueue;
 class CommandContext;
@@ -21,6 +21,7 @@ class RGResourceAllocator;
 class UnorderedAccessView;
 class TiledForward;
 class RTAO;
+class SSAO;
 
 struct Batch
 {
@@ -188,7 +189,8 @@ private:
 	std::unique_ptr<RGResourceAllocator> m_pResourceAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
-	std::unique_ptr<RTAO> m_pRaytracing;
+	std::unique_ptr<RTAO> m_pRTAO;
+	std::unique_ptr<SSAO> m_pSSAO;
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
@@ -235,11 +237,6 @@ private:
 	// SSAO
 	std::unique_ptr<GraphicsTexture> m_pNoiseTexture;
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusion;
-	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusionIntermediate;
-	std::unique_ptr<RootSignature> m_pSSAORS;
-	std::unique_ptr<PipelineState> m_pSSAOPSO;
-	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
-	std::unique_ptr<PipelineState> m_pSSAOBlurPSO;
 
 	// mip generation
 	std::unique_ptr<RootSignature> m_pGenerateMipsRS;

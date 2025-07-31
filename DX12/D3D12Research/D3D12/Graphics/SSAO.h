@@ -1,0 +1,43 @@
+#pragma once
+
+#include "RenderGraph/RenderGraph.h"
+class Mesh;
+class Graphics;
+class RootSignature;
+class GraphicsTexture;
+class Camera;
+class CommandContext;
+class Buffer;
+class PipelineState;
+
+struct SsaoInputResources
+{
+	GraphicsTexture* pRenderTarget{ nullptr };
+	GraphicsTexture* pNormalsTexture{ nullptr };
+	GraphicsTexture* pDepthTexture{ nullptr };
+	GraphicsTexture* pNoiseTexture{ nullptr };
+	Camera* pCamera{ nullptr };
+};
+
+class SSAO
+{
+public:
+	SSAO(Graphics* pGraphics);
+
+	void OnSwapchainCreated(int widowWidth, int windowHeight);
+
+	void Execute(RGGraph& graph, const SsaoInputResources& inputResources);
+
+private:
+	void SetupResources(Graphics* pGraphics);
+	void SetupPipelines(Graphics* pGraphics);
+
+	Graphics* m_pGraphics{};
+
+	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusionIntermediate;
+
+	std::unique_ptr<RootSignature> m_pSSAORS;
+	std::unique_ptr<PipelineState> m_pSSAOPSO;
+	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
+	std::unique_ptr<PipelineState> m_pSSAOBlurPSO;
+};

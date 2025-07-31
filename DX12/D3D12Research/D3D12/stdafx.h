@@ -4,14 +4,15 @@
 #include <wrl/client.h>
 
 #include <d3d12.h>
-//#define D3DX12_NO_STATE_OBJECT_HELPERS
-#include "Graphics/d3dx12.h"
 #include <dxgi1_6.h>
 #include <d3dcompiler.h>
 #include <DXProgrammableCapture.h>
-
 #include <DirectXColors.h>
 #include <DirectXMath.h>
+
+#include "External/d3dx12/d3dx12.h"
+#include "External/imgui/imgui.h"
+#include <External/Dxc/dxcapi.h>
 
 #include <iostream>
 #include <vector>
@@ -27,17 +28,15 @@
 #include <list>
 #include <unordered_map>
 
+#include "Math/MathTypes.h"
+#include "Math/MathHelp.h"
 #include "Core/CommandLine.h"
 #include "Core/Delegates.h"
 #include "Core/GameTimer.h"
 #include "Core/BitField.h"
-#include "Math/MathTypes.h"
-#include "Math/MathHelp.h"
-#include <External/Dxc/dxcapi.h>
-#include "External/Imgui/imgui.h"
 #include "Core/Console.h"
-#include "Graphics/D3DUtils.h"
 #include "Core/StringHash.h"
+#include "Graphics/Core/D3DUtils.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;

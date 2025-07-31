@@ -11,7 +11,7 @@ class CommandContext;
 class Buffer;
 class RGGraph;
 
-struct RaytracingInputResources
+struct RtaoInputResources
 {
     GraphicsTexture* pRenderTarget{};
     GraphicsTexture* pNormalTexture{};
@@ -27,7 +27,7 @@ public:
 
     void OnSwapchainCreated(int widowWidth, int windowHeight);
 
-    void Execute(RGGraph& graph, const RaytracingInputResources& inputResources);
+    void Execute(RGGraph& graph, const RtaoInputResources& inputResources);
     void GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context);
 
 private:

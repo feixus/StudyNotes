@@ -1,16 +1,15 @@
 #include "stdafx.h"
 #include "ImGuiRenderer.h"
-#include "CommandContext.h"
-#include "D3DUtils.h"
-#include "Graphics.h"
-#include "Shader.h"
-#include "RootSignature.h"
-#include "PipelineState.h"
-#include "OfflineDescriptorAllocator.h"
 #include "Core/Input.h"
-#include "GraphicsTexture.h"
 #include "Profiler.h"
 #include "RenderGraph/RenderGraph.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/Shader.h"
+#include "Graphics/Core/RootSignature.h"
+#include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/OfflineDescriptorAllocator.h"
+#include "Graphics/Core/GraphicsTexture.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)

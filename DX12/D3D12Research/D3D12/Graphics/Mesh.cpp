@@ -3,11 +3,11 @@
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
-#include "GraphicsTexture.h"
-#include "GraphicsBuffer.h"
-#include "CommandContext.h"
-#include "Graphics.h"
 #include "Core/Paths.h"
+#include "Graphics/Core/GraphicsTexture.h"
+#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/Graphics.h"
 
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {

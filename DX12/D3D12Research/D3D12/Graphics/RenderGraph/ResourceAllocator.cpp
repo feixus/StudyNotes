@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "ResourceAllocator.h"
-#include "Graphics/GraphicsTexture.h"
+#include "Graphics/Core/GraphicsTexture.h"
 
 
 GraphicsTexture* RGResourceAllocator::CreateTexture(const TextureDesc& desc)

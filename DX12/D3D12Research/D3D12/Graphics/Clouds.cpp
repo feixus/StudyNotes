@@ -1,14 +1,14 @@
 #include "stdafx.h"
 #include "Clouds.h"
-#include "Shader.h"
-#include "PipelineState.h"
-#include "RootSignature.h"
-#include "Graphics.h"
-#include "GraphicsTexture.h"
-#include "CommandContext.h"
 #include "Profiler.h"
 #include "Scene/Camera.h"
-#include "GraphicsBuffer.h"
+#include "Graphics/Core/Shader.h"
+#include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/RootSignature.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/GraphicsTexture.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/GraphicsBuffer.h"
 
 static const int Resolution = 256;
 static const int MaxPoints = 256;

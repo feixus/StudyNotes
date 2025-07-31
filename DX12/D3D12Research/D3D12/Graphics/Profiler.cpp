@@ -1,8 +1,8 @@
 #include "stdafx.h"
 #include "Profiler.h"
-#include "CommandContext.h"
-#include "CommandQueue.h"
-#include "GraphicsBuffer.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/CommandQueue.h"
+#include "Graphics/Core/GraphicsBuffer.h"
 
 #define USE_PIX
 #ifdef USE_PIX

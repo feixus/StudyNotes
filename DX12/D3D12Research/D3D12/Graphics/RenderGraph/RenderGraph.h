@@ -1,6 +1,6 @@
 #pragma once
-#include "Graphics/GraphicsTexture.h"
-#include "Graphics/GraphicsBuffer.h"
+#include "Graphics/Core/GraphicsTexture.h"
+#include "Graphics/Core/GraphicsBuffer.h"
 #include "RenderGraphDefinition.h"
 
 class Graphics;
