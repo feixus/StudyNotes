@@ -12,8 +12,12 @@ OnlineDescriptorAllocator::OnlineDescriptorAllocator(Graphics* pGraphics, Comman
 
 DescriptorHandle OnlineDescriptorAllocator::AllocateTransientDescriptor(int count)
 {
-    GetHeap();
-    assert(HasSpace(count));
+    if (!HasSpace(count))
+    {
+        ReleaseHeap();
+        UnbindAll();
+    }
+
     m_pOwner->SetDescriptorHeap(GetHeap(), m_Type);
     return Allocate(count);
 }

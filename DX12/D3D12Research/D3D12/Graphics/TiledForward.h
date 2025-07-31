@@ -11,7 +11,7 @@ class Buffer;
 class Camera;
 class UnorderedAccessView;
 struct Batch;
-struct LightData;
+struct ShadowData;
 
 struct TiledForwardInputResource
 {
@@ -23,7 +23,7 @@ struct TiledForwardInputResource
     const std::vector<Batch>* pTransparentBatches{};
     Buffer* pLightBuffer{nullptr};
     Camera* pCamera{nullptr};
-    LightData* pLightData{nullptr};
+	ShadowData* pShadowData{nullptr};
 };
 
 class TiledForward

@@ -130,7 +130,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                     context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
                     context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-                    context.SetDynamicConstantBufferView(2, inputResource.pLightData, sizeof(LightData));
+                    context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
 
                     context.SetDynamicDescriptor(4, 0, inputResource.pShadowMap->GetSRV());
                     context.SetDynamicDescriptor(4, 3, inputResource.pLightBuffer->GetSRV());

@@ -17,6 +17,17 @@ RGBlackboard& RGBlackboard::Branch()
 	return b;
 }
 
+void RGBlackboard::Merge(const RGBlackboard& other, bool overrideExisting)
+{
+	for (auto& element : other.m_DataMap)
+	{
+		if (overrideExisting || m_DataMap.find(element.first) == m_DataMap.end())
+		{
+			m_DataMap.insert(element);
+		}
+	}
+}
+
 void* RGBlackboard::GetData(const char* name)
 {
 	StringHash nameHash(name);

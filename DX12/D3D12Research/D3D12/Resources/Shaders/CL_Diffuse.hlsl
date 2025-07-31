@@ -66,14 +66,6 @@ uint GetSliceFromDepth(float depth)
     return (uint)(cSliceMagicA * log(depth) - cSliceMagicB);
 }
 
-int GetLightCount(float4 vPos, float4 wPos)
-{
-    uint zSlice = GetSliceFromDepth(vPos.z);
-    uint2 clusterIndexXY = floor(wPos.xy / cClusterSize);
-    uint clusterIndex1D = clusterIndexXY.x + clusterIndexXY.y * cClusterDimensions.x + zSlice * cClusterDimensions.x * cClusterDimensions.y;
-    return tLightGrid[clusterIndex1D].y;
-}
-
 LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
     uint3 clusterIndex3D = uint3(floor(pos.xy / cClusterSize), GetSliceFromDepth(vPos.z));
@@ -89,24 +81,11 @@ LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V, fl
         Light light = Lights[lightIndex];
 
         LightResult result = DoLight(light, specularColor, diffuseColor, roughness, wPos, N, V);
-        totalResult.Diffuse += result.Diffuse * light.Color.rgb * light.Color.a;
-        totalResult.Specular += result.Specular * light.Color.rgb * light.Color.a;
+        totalResult.Diffuse += result.Diffuse;
+        totalResult.Specular += result.Specular;
     }
 
     return totalResult;
-}
-
-float3 CalculateNormal(float3 N, float3 T, float3 BT, float2 texCoord, bool invertY)
-{
-    float3x3 normalMatrix = float3x3(T, BT, N);
-    float3 sampleNormal = myNormalTexture.Sample(myDiffuseSampler, texCoord).rgb;
-    sampleNormal.xy = sampleNormal.xy * 2.0f - 1.0f;
-    if (invertY)
-    {
-        sampleNormal.y = -sampleNormal.y;
-    }
-    sampleNormal = normalize(sampleNormal);
-    return mul(sampleNormal, normalMatrix);
 }
 
 [RootSignature(RootSig)]
@@ -129,21 +108,24 @@ PSInput VSMain(VSInput input)
 float4 PSMain(PSInput input) : SV_TARGET
 {
     float4 baseColor = myDiffuseTexture.Sample(myDiffuseSampler, input.texCoord);
-    float3 specular = 1;
+    float3 specular = 0.5f;
     float metalness = 0;
-    float r = lerp(0.3f, 1.0f, 1 - mySpecularTexture.Sample(myDiffuseSampler, input.texCoord).r);
+    float r = 0.5f;
 
-    float3 diffuseColor = baseColor.rgb * (1 - metalness);
+    float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
     float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
-    float3 N = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, false);
+    float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
+    float3 N = TangentSpaceNormalMapping(myNormalTexture, myDiffuseSampler, TBN, input.texCoord, false);
     float3 V = normalize(cViewInverse[3].xyz - input.positionWS.xyz);
     
     LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, N, V, diffuseColor, specularColor, r);
 
     float3 color = lightResults.Diffuse + lightResults.Specular;
+
+    // constant ambient
     float ao = tAO.Sample(myDiffuseSampler, (float2)input.position.xy / cScreenDimensions).r;
-    color += ApplyAmbientLight(diffuseColor, ao, 0.1f);
+    color += ApplyAmbientLight(diffuseColor, ao, 0.01f);
     
     return float4(color, baseColor.a);
 }

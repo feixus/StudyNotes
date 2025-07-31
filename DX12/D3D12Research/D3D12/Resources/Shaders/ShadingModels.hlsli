@@ -5,21 +5,15 @@ float DielectricSpecularToF0(float specular)
     return 0.08f * specular;
 }
 
-float3 ComputeF0(float specular, float3 baseColor, float metallic)
+// note from Filament: vec3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + baseColor * metallic
+float3 ComputeF0(float specular, float3 baseColor, float metalness)
 {
-    return lerp(DielectricSpecularToF0(specular).xxx, baseColor, metallic.xxx);
+    return lerp(DielectricSpecularToF0(specular).xxx, baseColor, metalness.xxx);
 }
 
-float Pow4(float x)
+float3 ComputeDiffuseColor(float3 baseColor, float metalness)
 {
-    float xx = x * x;
-    return xx * xx;
-}
-
-float Pow5(float x)
-{
-    float xx = x * x;
-    return xx * xx * x;
+    return baseColor * (1.0f - metalness);
 }
 
 float3 Diffuse_Lambert(float3 albedo)
@@ -61,6 +55,22 @@ struct LightResult
     float3 Specular;
 };
 
+// microfacet specular BRDF model
+/*
+        D * F * G
+    --------------------  = D * Vis * F
+        4 * NoL * NoV
+
+
+                G
+    Vis = -------------------
+            4 * NoL * NoV
+
+- F(l, h) - Fresnel Reflectance - what fraction of light is reflected as opposed to refracted (how reflective is the surface)
+- D(h) - Normal Distribution Function - how many microfacets are pointing in the right direction
+- G(l, v, h) - Geometry/ShadowMasking Function - how many light rays are actually reaching the view
+*/
+
 float3 SpecularGGX(float Roughness, float3 SpecularColor, float NoL, float NoH, float NoV, float VoH)
 {
     float a2 = Pow4(Roughness);
@@ -89,9 +99,8 @@ LightResult DefaultLitBxDF(float3 SpecularColor, float Roughness, float3 Diffuse
 
     float3 H = normalize(V + L);
     float NoH = saturate(dot(N, H));
-    float NoV = dot(N, V);
+    float NoV = saturate(abs(dot(N, V)) + 1e-5);
     float VoH = saturate(dot(V, H));
-    NoV = saturate(abs(NoV) + 1e-5);
 
     lighting.Diffuse = (Falloff * NoL) * Diffuse_Lambert(DiffuseColor);
     lighting.Specular = (Falloff * NoL) * SpecularGGX(Roughness, SpecularColor, NoL, NoH, NoV, VoH);

@@ -96,7 +96,7 @@ void Graphics::Update()
 
 	// shadow map partitioning
 	//////////////////////////////////
-	LightData lightData;
+	ShadowData lightData;
 
 	Matrix projection = Math::CreateOrthographicMatrix(512, 512, 10000.f, 0.1f);
 
@@ -352,7 +352,7 @@ void Graphics::Update()
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
 		resources.pShadowMap = m_pShadowMap.get();
-		resources.pLightData = &lightData;
+		resources.pShadowData = &lightData;
 		m_pTiledForward->Execute(graph, resources);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
@@ -365,7 +365,7 @@ void Graphics::Update()
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
 		resources.pShadowMap = m_pShadowMap.get();
-		resources.pLightData = &lightData;
+		resources.pShadowData = &lightData;
 		resources.pAO = m_pAmbientOcclusion.get();
 		m_pClusteredForward->Execute(graph, resources);
 	}

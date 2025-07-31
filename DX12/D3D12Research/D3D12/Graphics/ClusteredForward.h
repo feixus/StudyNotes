@@ -13,7 +13,7 @@ class Graphics;
 class CommandContext;
 class UnorderedAccessView;
 class RGGraph;
-struct LightData;
+struct ShadowData;
 
 struct ClusteredForwardInputResource
 {
@@ -25,7 +25,7 @@ struct ClusteredForwardInputResource
     const std::vector<Batch>* pTransparentBatches{};
     Buffer* pLightBuffer{nullptr};
     Camera* pCamera{nullptr};
-    LightData* pLightData{nullptr};
+    ShadowData* pShadowData{nullptr};
 };
 
 class ClusteredForward
