@@ -1253,7 +1253,7 @@ void Graphics::RandomizeLights(int count)
 	
 	Vector3 dir(-300, -300, -300);
 	dir.Normalize();
-	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), dir, 0.1f);
+	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), dir, 100.0f);
 	m_Lights[lightIndex].ShadowIndex = 0;
 
 	int randomLightsStartIndex = lightIndex + 1;
@@ -1273,10 +1273,10 @@ void Graphics::RandomizeLights(int count)
 		switch (type)
 		{
 		case Light::Type::Point:
-			m_Lights[i] = Light::Point(position, range, 4.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(position, range, 30.0f, color);
 			break;
 		case Light::Type::Spot:
-			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, 4.0f, 0.5f, color);
+			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, angle - Math::RandomRange(0.0f, angle * 0.5f), 30.0f, color);
 			break;
 		case Light::Type::Directional:
 		case Light::Type::MAX:

@@ -83,7 +83,6 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
 #endif
 
         LightResult result = DoLight(light, specularColor, diffuseColor, roughness, wPos, N, V);
-
         totalResult.Diffuse += result.Diffuse;
         totalResult.Specular += result.Specular;
     }

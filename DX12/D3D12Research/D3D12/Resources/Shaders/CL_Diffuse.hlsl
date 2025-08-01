@@ -125,7 +125,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     // constant ambient
     float ao = tAO.Sample(myDiffuseSampler, (float2)input.position.xy / cScreenDimensions).r;
-    color += ApplyAmbientLight(diffuseColor, ao, 0.01f);
+    color += ApplyAmbientLight(diffuseColor, ao, 10.0f);
     
     return float4(color, baseColor.a);
 }

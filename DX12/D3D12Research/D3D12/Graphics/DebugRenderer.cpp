@@ -369,7 +369,7 @@ void DebugRenderer::AddLight(const Light& light)
         }
         case Light::Type::Spot:
         {
-            AddWireCone(light.Position, light.Direction, light.Range, Math::ToDegrees * acos(light.CosHalfAngle), 10, Color(1, 1, 0, 1));
+            AddWireCone(light.Position, light.Direction, light.Range, Math::ToDegrees * acos(light.SpotlightAngles.y), 10, Color(1, 1, 0, 1));
             break;
         }
     }

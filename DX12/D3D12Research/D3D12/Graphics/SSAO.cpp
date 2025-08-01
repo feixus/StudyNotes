@@ -12,18 +12,10 @@
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/ResourceViews.h"
 
-float g_AoPower = 3;
-float g_AoThreshold = 0.0025f;
-float g_AoRadius = 0.25f;
-int g_AoSamples = 16;
-
 SSAO::SSAO(Graphics* pGraphics) : m_pGraphics(pGraphics)
 {
-	if (!pGraphics->SupportsRaytracing())
-	{
-		SetupResources(pGraphics);
-		SetupPipelines(pGraphics);
-	}
+	SetupResources(pGraphics);
+	SetupPipelines(pGraphics);
 }
 
 void SSAO::OnSwapchainCreated(int widowWidth, int windowHeight)
@@ -33,6 +25,18 @@ void SSAO::OnSwapchainCreated(int widowWidth, int windowHeight)
 
 void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 {
+	float g_AoPower = 3;
+	float g_AoThreshold = 0.0025f;
+	float g_AoRadius = 0.5;
+	int g_AoSamples = 16;
+
+	ImGui::Begin("AO Parameters");
+	ImGui::SliderFloat("AO Power", &g_AoPower, 0, 10);
+	ImGui::SliderFloat("AO Threshold", &g_AoThreshold, 0.0001f, 0.01f);
+	ImGui::SliderFloat("AO Radius", &g_AoRadius, 0, 2);
+	ImGui::SliderInt("AO Samples", &g_AoSamples, 1, 64);
+	ImGui::End();
+
 	graph.AddPass("SSAO", [&](RGPassBuilder& builder)
 		{
 			builder.NeverCull();
@@ -49,7 +53,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 					constexpr int ssaoRandomVectors = 64;
 					struct ShaderParameters
 					{
-						Vector4 RandomVectors[ssaoRandomVectors];
 						Matrix ProjectionInverse;
 						Matrix Projection;
 						Matrix View;
@@ -60,23 +63,7 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 						float Radius{ 0.0f };
 						float Threshold{ 0.0f };
 						int Samples{ 0 };
-					} shaderParameters;
-
-					static Vector4 randoms[ssaoRandomVectors];
-					static bool written = false;
-					if (!written)
-					{
-						srand(0);
-						written = true;
-						for (int i = 0; i < ssaoRandomVectors; i++)
-						{
-							randoms[i] = Vector4(Math::RandVector());
-							randoms[i].z = Math::Lerp(0.1f, 0.8f, abs(randoms[i].z));
-							randoms[i].Normalize();
-							randoms[i] *= Math::Lerp(0.2f, 1.0f, (float)pow(Math::RandomRange(0.f, 1.f), 2));
-						}
-					}
-					memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * ssaoRandomVectors);
+					} shaderParameters{};
 
 					shaderParameters.ProjectionInverse = inputResources.pCamera->GetProjectionInverse();
 					shaderParameters.Projection = inputResources.pCamera->GetProjection();

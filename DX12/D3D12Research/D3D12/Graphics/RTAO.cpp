@@ -156,6 +156,16 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
 		return;
 	}
 
+    static float g_AoPower = 3;
+    static float g_AoRadius = 0.5f;
+    static int g_AoSamples = 1;
+
+	ImGui::Begin("AO Parameters");
+	ImGui::SliderFloat("AO Power", &g_AoPower, 0, 10);
+	ImGui::SliderFloat("AO Radius", &g_AoRadius, 0, 2);
+	ImGui::SliderInt("AO Samples", &g_AoSamples, 1, 64);
+	ImGui::End();
+
     graph.AddPass("Raytracing", [&](RGPassBuilder& builder)
     {
         builder.NeverCull();
@@ -197,12 +207,15 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
                                                                 inputResources.pNoiseTexture->GetSRV() });
 
                 constexpr const int numRandomVectors = 64;
-                struct CameraParameters
+                struct Parameters
                 {
                     Matrix ViewInverse;
                     Matrix ProjectionInverse;
                     Vector4 RandomVectors[numRandomVectors];
-                } cameraData;
+                    float Power;
+                    float Radius;
+                    int32_t Samples;
+                } parameters;
 
                 static bool written = false;
                 static Vector4 randoms[numRandomVectors];
@@ -218,12 +231,15 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
                         randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
                     }
                 }
-                memcpy(cameraData.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
+                memcpy(parameters.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
 
-                cameraData.ViewInverse = inputResources.pCamera->GetViewInverse();
-                cameraData.ProjectionInverse = inputResources.pCamera->GetProjectionInverse();
+                parameters.ViewInverse = inputResources.pCamera->GetViewInverse();
+                parameters.ProjectionInverse = inputResources.pCamera->GetProjectionInverse();
+                parameters.Power = g_AoPower;
+                parameters.Radius = g_AoRadius;
+                parameters.Samples = g_AoSamples;
 
-				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(CameraParameters), &cameraData);
+				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(Parameters), &parameters);
 
                 D3D12_DISPATCH_RAYS_DESC rayDesc{};
                 rayDesc.Width = inputResources.pRenderTarget->GetWidth();

@@ -1,7 +1,6 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
 
-#define PCF_KERNEL_SIZE 3
 #define SHADOWMAP_DX 0.000244140625f
 #define MAX_SHADOW_CASTERS 8
 
@@ -35,31 +34,52 @@ float DoShadow(float3 wPos, int shadowMapIndex)
     lightPos.x = lightPos.x / 2.0f + 0.5f;
     lightPos.y = lightPos.y / -2.0f + 0.5f;
     lightPos.z += 0.0001f;
-    
-    float shadowFactor = 0;
-    int hKernel = (PCF_KERNEL_SIZE - 1) / 2;
         
     float2 shadowMapStart = cShadowMapOffsets[shadowMapIndex].xy;
     float normalizeShadowMapSize = cShadowMapOffsets[shadowMapIndex].z;
         
-    for (int x = -hKernel; x <= hKernel; x++)
-    {
-        for (int y = -hKernel; y <= hKernel; y++)
-        {
-            float2 texCoord = shadowMapStart + lightPos.xy * normalizeShadowMapSize + float2(SHADOWMAP_DX * x, SHADOWMAP_DX * y);
-            shadowFactor += tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z);
-        }
-    }
+    float2 texCoord = shadowMapStart + lightPos.xy * normalizeShadowMapSize;
 
-    return shadowFactor / (PCF_KERNEL_SIZE * PCF_KERNEL_SIZE);
+    const float Dilation = 2.0f;
+    float d1 = Dilation * SHADOWMAP_DX * 0.125f;
+    float d2 = Dilation * SHADOWMAP_DX * 0.875f;
+    float d3 = Dilation * SHADOWMAP_DX * 0.625f;
+    float d4 = Dilation * SHADOWMAP_DX * 0.375f;
+    float result = (
+        2.0f * tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d2,  d1), lightPos.z),
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d1, -d2), lightPos.z),
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d2, -d1), lightPos.z),
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d1,  d2), lightPos.z),
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d4,  d3), lightPos.z),
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d3, -d4), lightPos.z),
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d4, -d3), lightPos.z),
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d3,  d4), lightPos.z)
+    ) / 10.0f;
+
+    return result * result;
 }
 
 #endif
 
-float DoAttenuation(Light light, float distance)
+// Angle >= Umbra -> 0
+// Angle < Penumbra -> 1
+// gradient between Umbra and Penumbra
+float DirectionalAttenuation(float3 L, float3 direction, float cosUmbra, float cosPenumbra)
 {
-    //smoothstep: cubic hermite polynomial
-    return 1.0f - smoothstep(light.Range * light.Attenuation, light.Range, distance);
+    float cosAngle = dot(-normalize(L), direction);
+    float falloff = saturate((cosAngle - cosPenumbra) / (cosUmbra - cosPenumbra));
+    return falloff * falloff;
+}
+
+// distance between rays is proportional to distance squared
+// extra windowing function to make light radius finite
+float RadialAttenuation(float3 L, float range)
+{
+    float distSq = dot(L, L);
+    float rangeSq = Square(range);
+    float windowing = Square(saturate(1 - Square(distSq * Square(rcp(range)))));
+    return (rangeSq / (distSq + 1)) * windowing;
 }
 
 float GetAttenuation(Light light, float3 wPos)
@@ -68,18 +88,11 @@ float GetAttenuation(Light light, float3 wPos)
     if (light.Type >= LIGHT_POINT)
     {
         float3 L = light.Position - wPos;
-        float d = length(L);
-        L = L / d;
-        attenuation *= DoAttenuation(light, d);
+        attenuation *= RadialAttenuation(L, light.Range);
 
         if (light.Type >= LIGHT_SPOT)
         {
-            float minCos = light.CosSpotLightAngle;
-            float maxCos = lerp(minCos, 1.0f, 1 - light.Attenuation);
-            float cosAngle = dot(-L, light.Direction);
-            float spotFalloff = smoothstep(minCos, maxCos, cosAngle);
-
-            attenuation *= spotFalloff;
+            attenuation *= DirectionalAttenuation(L, light.Direction, light.SpotlightAngles.y, light.SpotlightAngles.x);
         }
     }
     return attenuation;
@@ -105,8 +118,9 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
     }
 #endif
 
-    result.Diffuse *= light.Color.rgb * light.Color.w;
-    result.Specular *= light.Color.rgb * light.Color.w;
+    float4 color = light.GetColor();
+    result.Diffuse *= color.rgb * light.Intensity;
+    result.Specular *= color.rgb * light.Intensity;
 
     return result;
 }

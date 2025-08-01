@@ -1,5 +1,6 @@
+#include "RNG.hlsli"
+
 #define RPP 64
-#define RPP_ACTUAL 4
 
 // raytracing output texture, accessed as a UAV
 RWTexture2D<float> gOutput : register(u0);
@@ -19,6 +20,9 @@ cbuffer ShaderParameters : register(b0)
     float4x4 cViewInverse;
     float4x4 cProjectionInverse;
     float4 cRandomVectors[RPP];
+    float cPower;
+    float cRadius;
+    int cSamples;
 }
 
 struct RayPayload
@@ -51,28 +55,31 @@ void RayGen()
     RayPayload payload = (RayPayload)0;
 
     uint2 launchIndex = DispatchRaysIndex().xy;
+    uint launchIndexId = launchIndex.x + launchIndex.y * DispatchRaysDimensions().x;
     float2 texCoord = (float2)launchIndex / DispatchRaysDimensions().xy;
 
     float depth = tDepth.SampleLevel(sSceneSampler, texCoord, 0).r;
     float3 normal = tNormals.SampleLevel(sTexSampler, texCoord, 0).rgb;
-    float3 noise = tNoise.SampleLevel(sTexSampler, texCoord, 0).rgb;
+
+    uint state = SeedThread(launchIndexId);
+    float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
 
     float4 clip = float4(float2(texCoord.x, 1.0 - texCoord.y) * 2.f - 1.f, depth, 1.0);
     float4 world = ClipToWorld(clip);
 
-    float3 tangent = normalize(noise - normal * dot(noise, normal));
+    float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
     float3 bitangent = cross(normal, tangent);
     float3x3 TBN = float3x3(tangent, bitangent, normal);
 
     float accumulateAo = 0;
-    for (int i = 0; i < RPP_ACTUAL; i++)
+    for (int i = 0; i < cSamples; i++)
     {
-        float3 n = mul(cRandomVectors[i].xyz, TBN);
+        float3 n = mul(cRandomVectors[Random(state, 0, RPP - 1)].xyz, TBN);
         RayDesc ray;
         ray.Origin = world.xyz + 0.001f * n;
         ray.Direction = n;
         ray.TMin = 0.0f;
-        ray.TMax = 1.0f;
+        ray.TMax = cRadius;
 
         // trace the ray
         TraceRay(
@@ -118,6 +125,6 @@ void RayGen()
         accumulateAo += payload.hitDistance != 0;
     }
 
-    accumulateAo /= RPP_ACTUAL;
-    gOutput[launchIndex] = 1 - accumulateAo;
+    accumulateAo /= cSamples;
+    gOutput[launchIndex] = pow(1 - accumulateAo, cPower);
 }
