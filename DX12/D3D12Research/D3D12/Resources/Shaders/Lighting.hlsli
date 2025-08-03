@@ -68,7 +68,7 @@ float DoShadow(float3 wPos, int shadowMapIndex)
 float DirectionalAttenuation(float3 L, float3 direction, float cosUmbra, float cosPenumbra)
 {
     float cosAngle = dot(-normalize(L), direction);
-    float falloff = saturate((cosAngle - cosPenumbra) / (cosUmbra - cosPenumbra));
+    float falloff = saturate((cosAngle - cosUmbra) / (cosPenumbra - cosUmbra));
     return falloff * falloff;
 }
 
