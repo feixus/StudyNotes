@@ -259,7 +259,7 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
 
                 ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
                 pCmd->SetPipelineState1(m_pStateObject.Get());
-                context.PrepareDraw(DescriptorTableType::Compute);
+                //context.PrepareDraw(DescriptorTableType::Compute);
                 pCmd->DispatchRays(&rayDesc);
             }
         };

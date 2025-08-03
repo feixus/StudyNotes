@@ -7,10 +7,10 @@ struct Light
     int Enabled;
 	float3 Direction;
 	int Type;
-	float Range;
 	float2 SpotlightAngles;
 	uint Color;
 	float Intensity;
+	float Range;
     int ShadowIndex;
 
 	float4 GetColor()
