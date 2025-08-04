@@ -267,7 +267,7 @@ void Graphics::Update()
 		SsaoInputResources ssaoResources = {
 			.pRenderTarget = m_pAmbientOcclusion.get(),
 			.pNormalsTexture = m_pNormals.get(),
-			.pDepthTexture = m_pResolveDepthStencil.get(),
+			.pDepthTexture = GetResolveDepthStencil(),
 			.pNoiseTexture = m_pNoiseTexture.get(),
 			.pCamera = m_pCamera.get(),
 		};
@@ -354,6 +354,8 @@ void Graphics::Update()
 		resources.pShadowMap = m_pShadowMap.get();
 		resources.pShadowData = &lightData;
 		m_pTiledForward->Execute(graph, resources);
+
+
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
@@ -391,7 +393,7 @@ void Graphics::Update()
 
 	// tonemap
 	{
-        bool downscaleTonemap = true;
+        bool downscaleTonemap = false;
 		GraphicsTexture* pTonemapInput = downscaleTonemap ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
 		RGResourceHandle toneMappingInput = graph.ImportTexture("Tonemap Input", pTonemapInput);
 
@@ -1235,7 +1237,7 @@ void Graphics::UpdateImGui()
 		height = windowSize.y;
 	}
 
-	ImTextureID user_texture_id = m_pAmbientOcclusion->GetSRV().ptr;
+	ImTextureID user_texture_id = m_pAverageLuminance->GetSRV().ptr;
 	ImGui::Image(user_texture_id, ImVec2(width, height));
 	ImGui::End();
 	

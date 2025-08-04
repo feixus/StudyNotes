@@ -41,7 +41,7 @@ float3 convertXYZ2Yxy(float3 xyz)
 {
     //  https://web.archive.org/web/20191027010144/http://www.brucelindbloom.com/index.html?Eqn_XYZ_to_xyY.html
     float inv = 1.0 / dot(xyz, float3(1, 1, 1));
-    return float3(xyz.y, xyz.x * inv, xyz.z * inv);
+    return float3(xyz.y, xyz.x * inv, xyz.y * inv);
 }
 
 float3 convertYxy2XYZ(float3 _Yxy)
