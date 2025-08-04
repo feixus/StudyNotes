@@ -9,10 +9,9 @@
 CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	: GraphicsObject(pGraphics),
 	m_NextFenceValue((uint64_t)type << 56 | 1),			// set the command list type nested in fence value
-	m_LastCompletedFenceValue((uint64_t)type << 56),
-	m_Type(type)
+	m_LastCompletedFenceValue((uint64_t)type << 56)
 {
-	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics, m_Type);
+	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics, type);
 
 	D3D12_COMMAND_QUEUE_DESC desc = {};
 	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;

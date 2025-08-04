@@ -127,7 +127,6 @@ void Graphics::Update()
 	sceneData.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolveDepthStencil());
 
 	uint64_t nextFenceValue = 0;
-	uint64_t lightCullingFence = 0;
 
 	// depth prepass
 	// - depth only pass that renders the entire scene
@@ -259,7 +258,6 @@ void Graphics::Update()
 		resources.pRenderTarget = m_pAmbientOcclusion.get();
 		resources.pNormalTexture = m_pNormals.get();
 		resources.pDepthTexture = GetResolveDepthStencil();
-		resources.pNoiseTexture = m_pNoiseTexture.get();
 		m_pRTAO->Execute(graph, resources);
 	}
 	else
@@ -268,7 +266,6 @@ void Graphics::Update()
 			.pRenderTarget = m_pAmbientOcclusion.get(),
 			.pNormalsTexture = m_pNormals.get(),
 			.pDepthTexture = GetResolveDepthStencil(),
-			.pNoiseTexture = m_pNoiseTexture.get(),
 			.pCamera = m_pCamera.get(),
 		};
 		m_pSSAO->Execute(graph, ssaoResources);
@@ -1074,9 +1071,6 @@ void Graphics::InitializeAssets()
 		}
 	}
 
-	m_pNoiseTexture = std::make_unique<GraphicsTexture>(this, "Noise Texture");
-	m_pNoiseTexture->Create(pCommandContext, "Resources/Textures/Noise.png", false);
-
 	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), *pCommandContext);
 	pCommandContext->Execute(true);
 }
@@ -1237,7 +1231,7 @@ void Graphics::UpdateImGui()
 		height = windowSize.y;
 	}
 
-	ImTextureID user_texture_id = m_pAverageLuminance->GetSRV().ptr;
+	ImTextureID user_texture_id = m_pAmbientOcclusion->GetSRV().ptr;
 	ImGui::Image(user_texture_id, ImVec2(width, height));
 	ImGui::End();
 	

@@ -266,6 +266,7 @@ RGResourceHandle RGGraph::MoveResource(RGResourceHandle from, RGResourceHandle t
 
 GraphicsTexture* RGPassResource::GetTexture(RGResourceHandle handle) const
 {
+    RG_ASSERT(m_Pass.ReadsFrom(handle) || m_Pass.WritesTo(handle), "Pass does not read or write to this resource");
 	const RGNode& node = m_Graph.GetResourceNode(handle);
 	RG_ASSERT(node.m_pResource->m_Type == RGResourceType::Texture, "Resource is not a texture");
 	return static_cast<GraphicsTexture*>(node.m_pResource->m_pPhysicalResource);

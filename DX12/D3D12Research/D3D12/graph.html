@@ -20,35 +20,31 @@ Pass13[Simulate Particles<br/>Refs: 1<br/>Index: 13]:::referencedPass
 Pass14[Simulate End<br/>Refs: 1<br/>Index: 14]:::referencedPass
 Pass15[Draw Particles<br/>Refs: 1<br/>Index: 15]:::referencedPass
 Pass16[Resolve MSAA<br/>Refs: 1<br/>Index: 16]:::referencedPass
-Pass17[Downsample Color<br/>Refs: 2<br/>Index: 17]:::referencedPass
-Pass18[Luminance Histogram<br/>Refs: 1<br/>Index: 18]:::referencedPass
-Pass19[Average Luminance<br/>Refs: 1<br/>Index: 19]:::referencedPass
-Pass20[Tonemap<br/>Refs: 1<br/>Index: 20]:::referencedPass
-Pass21[RenderUI<br/>Refs: 1<br/>Index: 21]:::referencedPass
-Pass22[Temp Barriers<br/>Refs: 1<br/>Index: 22]:::referencedPass
+Pass17[Luminance Histogram<br/>Refs: 1<br/>Index: 17]:::referencedPass
+Pass18[Average Luminance<br/>Refs: 1<br/>Index: 18]:::referencedPass
+Pass19[Tonemap<br/>Refs: 1<br/>Index: 19]:::referencedPass
+Pass20[RenderUI<br/>Refs: 1<br/>Index: 20]:::referencedPass
+Pass21[Temp Barriers<br/>Refs: 1<br/>Index: 21]:::referencedPass
 Resource0_0([Depth Stencil<br/>Id: 0<br/>Refs: 5]):::importedResource
 Resource1_0([Resolved Depth Stencil<br/>Id: 1<br/>Refs: 1]):::importedResource
 Resource0_1([Depth Stencil<br/>Id: 0<br/>Refs: 5]):::importedResource
 Resource0_2([Depth Stencil<br/>Id: 0<br/>Refs: 5]):::importedResource
 Resource1_1([Resolved Depth Stencil<br/>Id: 1<br/>Refs: 1]):::importedResource
-Resource2_0([Tonemap Input<br/>Id: 2<br/>Refs: 2]):::importedResource
-Resource2_1([Tonemap Input<br/>Id: 2<br/>Refs: 2]):::importedResource
+Resource2_0([Tonemap Input<br/>Id: 2<br/>Refs: 1]):::importedResource
 Pass0 --> Resource0_1
 linkStyle 0 stroke:#f82,stroke-width:2px;
 Pass1 --> Resource0_2
 linkStyle 1 stroke:#f82,stroke-width:2px;
 Pass2 --> Resource1_1
 linkStyle 2 stroke:#f82,stroke-width:2px;
-Pass17 --> Resource2_1
-linkStyle 3 stroke:#f82,stroke-width:2px;
 
 Resource0_2 --> Pass2
-linkStyle 4 stroke:#9c9,stroke-width:2px;
+linkStyle 3 stroke:#9c9,stroke-width:2px;
 Resource0_2 --> Pass6
-linkStyle 5 stroke:#9c9,stroke-width:2px;
+linkStyle 4 stroke:#9c9,stroke-width:2px;
 Resource0_2 --> Pass10
+linkStyle 5 stroke:#9c9,stroke-width:2px;
+Resource2_0 --> Pass17
 linkStyle 6 stroke:#9c9,stroke-width:2px;
-Resource2_1 --> Pass18
-linkStyle 7 stroke:#9c9,stroke-width:2px;
 
 </div>

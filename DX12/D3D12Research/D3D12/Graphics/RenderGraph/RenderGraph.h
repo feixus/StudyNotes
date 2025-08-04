@@ -20,7 +20,7 @@ class RGResource
 {
 public:
     RGResource(const char* pName, int id, bool isImported, RGResourceType type, void* pResource)
-        : m_Name(pName), m_Id(id), m_IsImported(isImported), m_Type(type), m_pPhysicalResource(pResource), m_Version(0) {}
+        : m_Name(pName), m_Id(id), m_IsImported(isImported), m_Version(0), m_Type(type), m_pPhysicalResource(pResource), m_References(0) {}
 
     const char* m_Name;
     int m_Id;
@@ -30,7 +30,7 @@ public:
     void* m_pPhysicalResource;
 
     // render graph compile-time values
-    int m_References{0};
+    int m_References;
 };
 
 class RGTexture : public RGResource
@@ -130,6 +130,7 @@ private:
 class IPassExecutor
 {
 public:
+    virtual ~IPassExecutor() = default;
     virtual void Execute(const RGPassResource& resources, CommandContext& renderContext) = 0;
 };
 

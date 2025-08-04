@@ -12,7 +12,7 @@
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/ResourceViews.h"
 
-SSAO::SSAO(Graphics* pGraphics) : m_pGraphics(pGraphics)
+SSAO::SSAO(Graphics* pGraphics)
 {
 	SetupResources(pGraphics);
 	SetupPipelines(pGraphics);
@@ -44,7 +44,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 				{
 					renderContext.InsertResourceBarrier(inputResources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(inputResources.pNormalsTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(inputResources.pNoiseTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(inputResources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					renderContext.SetComputeRootSignature(m_pSSAORS.get());
@@ -81,7 +80,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 					renderContext.SetDynamicDescriptor(1, 0, inputResources.pRenderTarget->GetUAV());
 					renderContext.SetDynamicDescriptor(2, 0, inputResources.pDepthTexture->GetSRV());
 					renderContext.SetDynamicDescriptor(2, 1, inputResources.pNormalsTexture->GetSRV());
-					renderContext.SetDynamicDescriptor(2, 2, inputResources.pNoiseTexture->GetSRV());
 
 					int dispatchGroupX = Math::DivideAndRoundUp(inputResources.pRenderTarget->GetWidth(), 16);
 					int dispatchGroupY = Math::DivideAndRoundUp(inputResources.pRenderTarget->GetHeight(), 16);

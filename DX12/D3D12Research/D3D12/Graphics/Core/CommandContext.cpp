@@ -373,7 +373,6 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		for (uint32_t i = 0; i < renderPassInfo.RenderTargetCount; i++)
 		{
 			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
-			uint32_t subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
 			if (ExtractBeginAccess(data.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 			{
 				assert(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);

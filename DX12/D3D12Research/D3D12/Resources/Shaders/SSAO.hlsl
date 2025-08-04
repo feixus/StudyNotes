@@ -6,7 +6,7 @@
 
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 3), visibility = SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 2), visibility = SHADER_VISIBILITY_ALL), " \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), " \
                 "StaticSampler(s1, filter = FILTER_COMPARISON_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_ALL)"
 
@@ -26,9 +26,7 @@ cbuffer ShaderParameters : register(b0)
 
 Texture2D tDepthTexture : register(t0);
 Texture2D tNormalsTexture : register(t1);
-Texture2D tNoiseTexture : register(t2);
 SamplerState sSampler : register(s0);
-SamplerState sPointSampler : register(s1);
 
 RWTexture2D<float> uAmbientOcclusion : register(u0);
 
@@ -67,21 +65,19 @@ void CSMain(CS_INPUT input)
         float3 newViewPos = viewPos.xyz + mul(hemispherePoint, TBN) * cAoRadius;
         float4 newTexCoord = mul(float4(newViewPos, 1), cProjection);
         newTexCoord.xyz /= newTexCoord.w;
-        newTexCoord.xyz = newTexCoord.xyz * 0.5 + 0.5;
+        newTexCoord.xy = newTexCoord.xy * float2(0.5, -0.5) + float2(0.5, 0.5);
 
         if (newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
         {
-            newTexCoord.y = 1 - newTexCoord.y; // Flip Y coordinate
-
             float sampleDepth = tDepthTexture.SampleLevel(sSampler, newTexCoord.xy, 0).r;
             float4 sampleViewPos = ScreenToView(float4(newTexCoord.xy, sampleDepth, 1), float2(1, 1), cProjectionInverse);
 
             // discard the long distance samples
-            float rangeCheck = smoothstep(0.0f, 1.0f, cAoRadius / (abs(viewPos.z - sampleViewPos.z) + 0.001f));
+            float rangeCheck = smoothstep(0.0f, 1.0f, cAoRadius / (viewPos.z - sampleViewPos.z));
             // add depth bias to avoid self-occlusion
-            occlusion += rangeCheck * (newViewPos.z >= sampleViewPos.z + 0.025f ? 1 : 0);
+            occlusion += rangeCheck * (newViewPos.z >= (sampleViewPos.z + cAoDepthThreshold));
         }
     }
-    occlusion = occlusion / cAoSamples;
+    occlusion /= cAoSamples;
     uAmbientOcclusion[input.DispatchThreadId.xy] = pow(saturate(1 - occlusion), cAoPower);
 }

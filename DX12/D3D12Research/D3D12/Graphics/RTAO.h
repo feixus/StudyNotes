@@ -16,7 +16,6 @@ struct RtaoInputResources
     GraphicsTexture* pRenderTarget{};
     GraphicsTexture* pNormalTexture{};
     GraphicsTexture* pDepthTexture{};
-    GraphicsTexture* pNoiseTexture{};
     Camera* pCamera{};
 };
 

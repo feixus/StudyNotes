@@ -10,10 +10,8 @@ RaytracingAccelerationStructure SceneBVH : register(t0);
 
 Texture2D tNormals : register(t1);
 Texture2D tDepth : register(t2);
-Texture2D tNoise : register(t3);
 
 SamplerState sSceneSampler : register(s0);
-SamplerState sTexSampler : register(s1);
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -59,7 +57,7 @@ void RayGen()
     float2 texCoord = (float2)launchIndex / DispatchRaysDimensions().xy;
 
     float depth = tDepth.SampleLevel(sSceneSampler, texCoord, 0).r;
-    float3 normal = tNormals.SampleLevel(sTexSampler, texCoord, 0).rgb;
+    float3 normal = tNormals.SampleLevel(sSceneSampler, texCoord, 0).rgb;
 
     uint state = SeedThread(launchIndexId);
     float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
@@ -87,7 +85,7 @@ void RayGen()
             SceneBVH,
             
             // RayFlags
-            RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE,
+            RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE,
             
             // parameter name: InstanceInclusionMask
             // instance inclusion mask used to mask out some geometry to this ray by and-ing the mask with a geometry mask

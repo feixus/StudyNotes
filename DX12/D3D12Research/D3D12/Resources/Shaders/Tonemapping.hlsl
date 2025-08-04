@@ -24,7 +24,7 @@ float3 convertRGB2XYZ(float3 rgb)
     xyz.x = dot(float3(0.4124, 0.3576, 0.1805), rgb);  // rougnly corresponds to red-green perception
     xyz.y = dot(float3(0.2126, 0.7152, 0.0722), rgb);  // represents luminance(brightness)
     xyz.z = dot(float3(0.0193, 0.1192, 0.9505), rgb);  // roughly corresponds to blue-yellow perception
-    // XYZ can used as an intermediate space for color space conversion
+    // device-independent: XYZ can used as an intermediate space for color space conversion
     return xyz;
 }
 

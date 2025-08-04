@@ -173,6 +173,19 @@ struct TextureDesc
 		desc.Dimension = dimension;
 		return desc;
 	}
+
+	bool operator==(const TextureDesc& other) const
+	{
+		return Width == other.Width &&
+			Height == other.Height &&
+			DepthOrArraySize == other.DepthOrArraySize &&
+			Mips == other.Mips &&
+			SampleCount == other.SampleCount &&
+			Format == other.Format &&
+			Usage == other.Usage &&
+			ClearBindingValue == other.ClearBindingValue &&
+			Dimension == other.Dimension;
+	}
 };
 
 class GraphicsTexture : public GraphicsResource
@@ -188,7 +201,7 @@ public:
 	int GetMipLevels() const { return m_Desc.Mips; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
-	void Create(const TextureDesc& desc);
+	void Create(const TextureDesc& desc, ID3D12Heap* pHeap = nullptr, uint64_t offset = 0);
 	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
 	bool Create(CommandContext* pContext, const Image& image, bool srgb = false);
 	void CreateForSwapChain(ID3D12Resource* pTexture);
@@ -217,10 +230,6 @@ private:
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv{D3D12_DEFAULT};
-	
-	int m_SrvUavDescriptorSize{0};
-	int m_RtvDescriptorSize{0};
-	int m_DsvDescriptorSize{0};
 
 	const char* m_pName{nullptr};
 };

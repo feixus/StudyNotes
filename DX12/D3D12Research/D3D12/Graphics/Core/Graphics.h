@@ -82,9 +82,9 @@ public:
 	Graphics(uint32_t width, uint32_t height, int sampleCount = 1);
 	~Graphics();
 
-	virtual void Initialize(HWND hWnd);
-	virtual void Update();
-	virtual void Shutdown();
+	void Initialize(HWND hWnd);
+	void Update();
+	void Shutdown();
 
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
@@ -148,7 +148,7 @@ private:
 	int m_Frame{0};
 	std::array<float, 180> m_FrameTimes{};
 
-	int m_DesiredLightCount = 128;
+	int m_DesiredLightCount = 20;
 
 	std::unique_ptr<Camera> m_pCamera;
 
@@ -235,7 +235,6 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pAverageLuminance;
 
 	// SSAO
-	std::unique_ptr<GraphicsTexture> m_pNoiseTexture;
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusion;
 
 	// mip generation

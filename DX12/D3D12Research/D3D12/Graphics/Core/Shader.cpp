@@ -60,18 +60,18 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	if (debugShaders)
 	{
 		arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
-		arguments.push_back(L"-Qembed_debug");
 	}
 	else
 	{
 		arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
-		arguments.push_back(L"-Qstrip_debug");
-
-		wchar_t symbolsPath[256];
-		ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
-		arguments.push_back(L"/Fd");
-		arguments.push_back(symbolsPath);
 	}
+
+	arguments.push_back(L"-Qstrip_debug");
+
+	wchar_t symbolsPath[256];
+	ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
+	arguments.push_back(L"/Fd");
+	arguments.push_back(symbolsPath);
 
 	arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS);
 	arguments.push_back(DXC_ARG_DEBUG);
@@ -122,7 +122,7 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 		}
 	}
 
-#if 0
+#if 1
 	// symbols
 	{
 		ComPtr<IDxcBlob> pDebugData;
@@ -293,7 +293,7 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 {
 	m_Path = pFilePath;
 	m_Type = shaderType;
-	Compile(pFilePath, shaderType, pEntryPoint, 6, 0, defines);
+	Compile(pFilePath, shaderType, pEntryPoint, 6, 3, defines);
 }
 
 bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string>& defines)
@@ -346,7 +346,7 @@ std::string Shader::GetShaderTarget(Type shaderType, char shaderModelMajor, char
 ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines)
 {
 	m_Path = pFilePath;
-	Compile(pFilePath, 6, 3, defines);
+	Compile(pFilePath, 6, 0, defines);
 }
 
 std::string ShaderLibrary::GetShaderTarget(char shaderModelMajor, char shaderModelMinor)

@@ -15,7 +15,6 @@ struct SsaoInputResources
 	GraphicsTexture* pRenderTarget{ nullptr };
 	GraphicsTexture* pNormalsTexture{ nullptr };
 	GraphicsTexture* pDepthTexture{ nullptr };
-	GraphicsTexture* pNoiseTexture{ nullptr };
 	Camera* pCamera{ nullptr };
 };
 
@@ -31,9 +30,7 @@ public:
 private:
 	void SetupResources(Graphics* pGraphics);
 	void SetupPipelines(Graphics* pGraphics);
-
-	Graphics* m_pGraphics{};
-
+	
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusionIntermediate;
 
 	std::unique_ptr<RootSignature> m_pSSAORS;

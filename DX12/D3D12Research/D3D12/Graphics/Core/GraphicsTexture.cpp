@@ -35,17 +35,13 @@ D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetDSV(bool writeable) const
 	return writeable ? m_Rtv : m_ReadOnlyDsv;
 }
 
-void GraphicsTexture::Create(const TextureDesc& textureDesc)
+void GraphicsTexture::Create(const TextureDesc& textureDesc, ID3D12Heap* pHeap, uint64_t offset)
 {
 	m_Desc = textureDesc;
 	TextureFlag depthAndRt = TextureFlag::RenderTarget | TextureFlag::DepthStencil;
 	assert(All(textureDesc.Usage, depthAndRt) == false);
 
 	Release();
-
-	m_SrvUavDescriptorSize = m_pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_RtvDescriptorSize = m_pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	m_DsvDescriptorSize = m_pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
 	m_CurrentState = D3D12_RESOURCE_STATE_COMMON;
 
@@ -131,7 +127,14 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc)
 
 	D3D12_RESOURCE_ALLOCATION_INFO info = m_pGraphics->GetDevice()->GetResourceAllocationInfo(0, 1, &desc);
 
-	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
+	if (pHeap)
+	{
+		m_pGraphics->GetDevice()->CreatePlacedResource(pHeap, offset, &desc, m_CurrentState, pClearValue, IID_PPV_ARGS(&m_pResource));
+	}
+	else
+	{
+		m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
+	}
 
 	if (Any(textureDesc.Usage, TextureFlag::ShaderResource))
 	{
