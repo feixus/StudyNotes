@@ -43,7 +43,7 @@ struct PSInput
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
     float3 bitangent : TEXCOORD1;
-    float test : TEST;
+    float clipPosZ : CLIPPOS;
 };
 
 Texture2D myDiffuseTexture : register(t0);
@@ -60,7 +60,7 @@ StructuredBuffer<uint> tLightIndexList : register(t5);
 StructuredBuffer<Light> Lights : register(t6);
 
 
-LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness, float poop)
+LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness, float clipPosZ)
 {
 #if FORWARD_PLUS
     uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
@@ -83,7 +83,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
 
 #endif
 
-        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, wPos, N, V, poop);
+        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, N, V, clipPosZ);
         totalResult.Diffuse += result.Diffuse;
         totalResult.Specular += result.Specular;
     }
@@ -101,7 +101,7 @@ PSInput VSMain(VSInput input)
     result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
     result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
     result.positionWS = mul(float4(input.position, 1.0f), cWorld).xyz;
-    result.test = result.position.z;
+    result.clipPosZ = result.position.z;
     return result;
 }
 
@@ -119,7 +119,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     float3 N = TangentSpaceNormalMapping(myNormalTexture, myDiffuseSampler, TBN, input.texCoord, true);
     float3 V = normalize(cViewInverse[3].xyz - input.positionWS);
     
-    LightResult lightResults = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r, input.test);
+    LightResult lightResults = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r, input.clipPosZ);
 
     float3 color = lightResults.Diffuse + lightResults.Specular;
 

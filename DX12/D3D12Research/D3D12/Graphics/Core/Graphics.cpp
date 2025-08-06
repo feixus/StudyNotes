@@ -38,8 +38,6 @@
 #define GPU_VALIDATION 0
 #endif
 
-Camera gCam{nullptr};
-
 bool gDumpRenderGraph = true;
 
 float g_WhitePoint = 4;
@@ -50,7 +48,7 @@ float g_Tau = 10;
 bool g_ShowRaytraced = false;
 bool g_ShowLightGeometry = false;
 
-Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
+Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount) :
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
 }
@@ -69,7 +67,6 @@ void Graphics::Initialize(HWND hWnd)
 	m_pCamera->SetNewPlane(400.f);
 	m_pCamera->SetFarPlane(10.f);
 	m_pCamera->SetViewport(0, 0, 1, 1);
-	gCam = *m_pCamera;
 
 	InitD3D();
 	InitializeAssets();
@@ -93,33 +90,28 @@ void Graphics::Update()
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist > bDist;
-	});
+		});
 
 	std::sort(m_OpaqueBatches.begin(), m_OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist < bDist;
-	});
+		});
 
 	// shadow map partitioning
 	//////////////////////////////////
-	Matrix projection = Math::CreateOrthographicMatrix(512, 512, 10000.f, 0.1f);
 
 	m_ShadowCasters = 0;
 	ShadowData lightData;
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, Vector3::Zero, Vector3::Up)) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.f, 1.f, 0);
-	++m_ShadowCasters;
-
-	gCam = *m_pCamera;
 
 	uint32_t numCascades = 4;
-	float cascadeRatio = pow(gCam.GetNear() / gCam.GetFar(), 1.0f / numCascades);
-	std::vector<float> splits;
-	splits.push_back(gCam.GetFar());
+	constexpr uint32_t MAX_CASCADES = 4;
+	float zPartitioningRatio = pow(m_pCamera->GetNear() / m_pCamera->GetFar(), 1.0f / numCascades);
+	std::array<float, MAX_CASCADES + 1> cascadeDepths;
+	cascadeDepths[0] = m_pCamera->GetFar();
 	for (uint32_t i = 1; i <= numCascades; i++)
 	{
-		splits.push_back(splits[i - 1] * cascadeRatio);
+		cascadeDepths[i] = cascadeDepths[i - 1] * zPartitioningRatio;
 	}
 
 	Matrix lightMatrix = XMMatrixLookToLH(m_Lights[0].Position, m_Lights[0].Direction, Vector3::Up);
@@ -127,69 +119,71 @@ void Graphics::Update()
 
 	for (uint32_t i = 0; i < numCascades; i++)
 	{
-		float minZ = splits[i];
-		float maxZ = splits[i + 1];
-		float minY = minZ * tan(gCam.GetFoV() / 2);
-		float maxY = maxZ * tan(gCam.GetFoV() / 2);
-		float minX = minZ * tan((gCam.GetFoV() * gCam.GetViewport().GetAspect()) / 2);
-		float maxX = maxZ * tan((gCam.GetFoV() * gCam.GetViewport().GetAspect()) / 2);
-		Vector3 points[] = {
+		float minZ = cascadeDepths[i];
+		float maxZ = cascadeDepths[i + 1];
+		float minY = minZ * tan(m_pCamera->GetFoV() / 2);
+		float maxY = maxZ * tan(m_pCamera->GetFoV() / 2);
+		float minX = minZ * tan((m_pCamera->GetFoV() * m_pCamera->GetViewport().GetAspect()) / 2);
+		float maxX = maxZ * tan((m_pCamera->GetFoV() * m_pCamera->GetViewport().GetAspect()) / 2);
+		Vector3 frustumCorners[] = {
 				Vector3(-minX, -minY, minZ),
 				Vector3(-minX,  minY, minZ),
-				Vector3( minX,  minY, minZ),
-				Vector3( minX, -minY, minZ),
+				Vector3(minX,  minY, minZ),
+				Vector3(minX, -minY, minZ),
 				Vector3(-maxX, -maxY, maxZ),
 				Vector3(-maxX,  maxY, maxZ),
-				Vector3( maxX,  maxY, maxZ),
-				Vector3( maxX, -maxY, maxZ),
+				Vector3(maxX,  maxY, maxZ),
+				Vector3(maxX, -maxY, maxZ),
 		};
 
-		Vector3 minNum(1000000);
-		Vector3 maxNum(-1000000);
+		Vector3 minNum(FLT_MAX);
+		Vector3 maxNum(FLT_MIN);
 
-		for (Vector3& point : points)
+		for (Vector3& point : frustumCorners)
 		{
-			point = Vector3::Transform(point, gCam.GetViewInverse());
+			point = Vector3::Transform(point, m_pCamera->GetViewInverse());
 			point = Vector3::Transform(point, lightMatrix);
 
-			minNum.x = Math::Min(point.x, minNum.x);
-			maxNum.x = Math::Max(point.x, maxNum.x);
-			minNum.y = Math::Min(point.y, minNum.y);
-			maxNum.y = Math::Max(point.y, maxNum.y);
-			minNum.z = Math::Min(point.z, minNum.z);
-			maxNum.z = Math::Max(point.z, maxNum.z);
+			minNum = Vector3::Min(point, minNum);
+			maxNum = Vector3::Max(point, maxNum);
 		}
 
+#if 0
+		// bounding sphere to keep the projection size constant
+		Vector3 center = (minNum + maxNum) * 0.5f;
+		Vector3 extents = (maxNum - minNum) * 0.5f;
+		float radius = sqrtf(extents.Dot(extents));
+
+		minNum.x = center.x - radius;
+		minNum.y = center.y - radius;
+		maxNum.x = center.x + radius;
+		maxNum.y = center.y + radius;
+#endif
+
+		// snap projection to shadowmap texels to avoid flickering edges
 		Vector3 viewSize = maxNum - minNum;
 		Vector3 unitsPerPixel = viewSize / (m_pShadowMap->GetWidth() * 0.5f);
-		minNum.x /= unitsPerPixel.x;
-		minNum.x = floor(minNum.x);
-		minNum.x *= unitsPerPixel.x;
-		minNum.y /= unitsPerPixel.y;
-		minNum.y = floor(minNum.y);
-		minNum.y *= unitsPerPixel.y;
 
-		maxNum.x /= unitsPerPixel.x;
-		maxNum.x = floor(maxNum.x);
-		maxNum.x *= unitsPerPixel.x;
-		maxNum.y /= unitsPerPixel.y;
-		maxNum.y = floor(maxNum.y);
-		maxNum.y *= unitsPerPixel.y;
-		
+		DirectX::XMVECTOR _min = minNum;
+		_min = DirectX::XMVectorDivide(_min, unitsPerPixel);
+		_min = DirectX::XMVectorFloor(_min);
+		minNum = DirectX::XMVectorMultiply(_min, unitsPerPixel);
+		DirectX::XMVECTOR _max = maxNum;
+		_max = DirectX::XMVectorDivide(_max, unitsPerPixel);
+		_max = DirectX::XMVectorFloor(_max);
+		maxNum = DirectX::XMVectorMultiply(_max, unitsPerPixel);
+
 		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minNum.x, maxNum.x, minNum.y, maxNum.y, maxNum.z, 0);
 
 		lightData.LightViewProjections[i] = lightMatrix * projectionMatrix;
-		lightData.CascadeDepths[i] = splits[i + 1];
+		lightData.CascadeDepths[i] = Vector4::Transform(Vector4(0, 0, cascadeDepths[i + 1], 1), m_pCamera->GetProjection()).z;
+		m_ShadowCasters++;
 	}
-
-	m_ShadowCasters = 4;
 
 	lightData.ShadowMapOffsets[0] = Vector4(0.0f, 0, 0.5f, 0);
 	lightData.ShadowMapOffsets[1] = Vector4(0.5f, 0, 0.5f, 0);
 	lightData.ShadowMapOffsets[2] = Vector4(0.0f, 0.5f, 0.5f, 0);
 	lightData.ShadowMapOffsets[3] = Vector4(0.5f, 0.5f, 0.5f, 0);
-
-	DebugRenderer::Instance().AddLight(m_Lights[0]);
 
 	PROFILE_END();
 
@@ -309,27 +303,27 @@ void Graphics::Update()
 				sceneData.DepthStencilResolved = builder.Write(sceneData.DepthStencilResolved);
 
 				return [=](CommandContext& renderContext, const RGPassResource& resources)
-				{
-					GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
-					GraphicsTexture* pDepthStencilResolve = resources.GetTexture(sceneData.DepthStencilResolved);
+					{
+						GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
+						GraphicsTexture* pDepthStencilResolve = resources.GetTexture(sceneData.DepthStencilResolved);
 
-					renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+						renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
-					renderContext.SetPipelineState(m_pResolveDepthPSO.get());
+						renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
+						renderContext.SetPipelineState(m_pResolveDepthPSO.get());
 
-					renderContext.SetDynamicDescriptor(0, 0, pDepthStencilResolve->GetUAV());
-					renderContext.SetDynamicDescriptor(1, 0, pDepthStencil->GetSRV());
+						renderContext.SetDynamicDescriptor(0, 0, pDepthStencilResolve->GetUAV());
+						renderContext.SetDynamicDescriptor(1, 0, pDepthStencil->GetSRV());
 
-					int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 16);
-					int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 16);
-					renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
+						int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 16);
+						int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 16);
+						renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
 
-					renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
-					renderContext.FlushResourceBarriers();
-				};
+						renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+						renderContext.FlushResourceBarriers();
+					};
 			});
 	}
 
@@ -393,7 +387,7 @@ void Graphics::Update()
 								for (const Batch& b : m_OpaqueBatches)
 								{
 									ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
-									
+
 									context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 									b.pMesh->Draw(&context);
 								}
@@ -408,7 +402,7 @@ void Graphics::Update()
 								for (const Batch& b : m_TransparentBatches)
 								{
 									ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
-									
+
 									context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 									context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 									b.pMesh->Draw(&context);
@@ -477,7 +471,7 @@ void Graphics::Update()
 
 	// tonemap
 	{
-        bool downscaleTonemap = false;
+		bool downscaleTonemap = false;
 		GraphicsTexture* pTonemapInput = downscaleTonemap ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
 		RGResourceHandle toneMappingInput = graph.ImportTexture("Tonemap Input", pTonemapInput);
 
@@ -628,10 +622,10 @@ void Graphics::Update()
 		{
 			builder.NeverCull();
 			return[=](CommandContext& context, const RGPassResource& resources)
-			{
-				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-				context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
-			};
+				{
+					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+					context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
+				};
 		});
 
 	graph.Compile();
@@ -641,7 +635,7 @@ void Graphics::Update()
 		gDumpRenderGraph = false;
 	}
 	nextFenceValue = graph.Execute();
-	
+
 
 	/*m_pClouds->Render(m_pResolvedRenderTarget.get(), m_pResolveDepthStencil.get());
 
@@ -746,37 +740,37 @@ void Graphics::InitD3D()
 	if (HR(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
 	{
 		// Suppress whole categories of messages
- 		//D3D12_MESSAGE_CATEGORY Categories[] = {};
- 
- 		// Suppress messages based on their severity level
- 		D3D12_MESSAGE_SEVERITY Severities[] =
- 		{
- 			D3D12_MESSAGE_SEVERITY_INFO
- 		};
- 
- 		// Suppress individual messages by their ID
- 		D3D12_MESSAGE_ID DenyIds[] =
- 		{
- 			// This occurs when there are uninitialized descriptors in a descriptor table, even when a
- 			// shader does not access the missing descriptors.  I find this is common when switching
- 			// shader permutations and not wanting to change much code to reorder resources.
- 			D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
- 		};
- 
- 		D3D12_INFO_QUEUE_FILTER NewFilter = {};
- 		//NewFilter.DenyList.NumCategories = _countof(Categories);
- 		//NewFilter.DenyList.pCategoryList = Categories;
- 		NewFilter.DenyList.NumSeverities = _countof(Severities);
- 		NewFilter.DenyList.pSeverityList = Severities;
- 		NewFilter.DenyList.NumIDs = _countof(DenyIds);
- 		NewFilter.DenyList.pIDList = DenyIds;
- 
- #if 1
-		HR(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
- #endif
+		//D3D12_MESSAGE_CATEGORY Categories[] = {};
 
- 		pInfoQueue->PushStorageFilter(&NewFilter);
- 		pInfoQueue->Release();
+		// Suppress messages based on their severity level
+		D3D12_MESSAGE_SEVERITY Severities[] =
+		{
+			D3D12_MESSAGE_SEVERITY_INFO
+		};
+
+		// Suppress individual messages by their ID
+		D3D12_MESSAGE_ID DenyIds[] =
+		{
+			// This occurs when there are uninitialized descriptors in a descriptor table, even when a
+			// shader does not access the missing descriptors.  I find this is common when switching
+			// shader permutations and not wanting to change much code to reorder resources.
+			D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
+		};
+
+		D3D12_INFO_QUEUE_FILTER NewFilter = {};
+		//NewFilter.DenyList.NumCategories = _countof(Categories);
+		//NewFilter.DenyList.pCategoryList = Categories;
+		NewFilter.DenyList.NumSeverities = _countof(Severities);
+		NewFilter.DenyList.pSeverityList = Severities;
+		NewFilter.DenyList.NumIDs = _countof(DenyIds);
+		NewFilter.DenyList.pIDList = DenyIds;
+
+#if 1
+		HR(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
+#endif
+
+		pInfoQueue->PushStorageFilter(&NewFilter);
+		pInfoQueue->Release();
 	}
 #endif
 
@@ -836,7 +830,7 @@ void Graphics::InitD3D()
 		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture>(this, "MSAA Render Target");
 		m_pResolvedRenderTarget = std::make_unique<GraphicsTexture>(this, "Resolved Render Target");
 	}
-	
+
 	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
 	m_pDownscaledColor = std::make_unique<GraphicsTexture>(this, "Downscaled HDR Target");
 	m_pMSAANormals = std::make_unique<GraphicsTexture>(this, "MSAA Normals");
@@ -847,7 +841,7 @@ void Graphics::InitD3D()
 	m_pTiledForward = std::make_unique<TiledForward>(this);
 	m_pRTAO = std::make_unique<RTAO>(this);
 	m_pSSAO = std::make_unique<SSAO>(this);
-	
+
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 
@@ -906,7 +900,7 @@ void Graphics::OnResize(int width, int height)
 	m_WindowHeight = height;
 
 	IdleGPU();
-	
+
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
 		m_Backbuffers[i]->Release();
@@ -915,11 +909,11 @@ void Graphics::OnResize(int width, int height)
 
 	// resize the buffers
 	HR(m_pSwapchain->ResizeBuffers(
-			FRAME_COUNT,
-			m_WindowWidth,
-			m_WindowHeight,
-			SWAPCHAIN_FORMAT,
-			DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
+		FRAME_COUNT,
+		m_WindowWidth,
+		m_WindowHeight,
+		SWAPCHAIN_FORMAT,
+		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	m_CurrentBackBufferIndex = 0;
 
@@ -927,7 +921,7 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
 		ID3D12Resource* pResource = nullptr;
- 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_Backbuffers[i]->CreateForSwapChain(pResource);
 	}
 
@@ -935,9 +929,9 @@ void Graphics::OnResize(int width, int height)
 	if (m_SampleCount > 1)
 	{
 		m_pResolveDepthStencil->Create(TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-		m_pResolvedRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(0,0,0,0))));
+		m_pResolvedRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(0, 0, 0, 0))));
 
-		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0,0,0,0))));
+		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
 	}
 
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
@@ -978,10 +972,10 @@ void Graphics::InitializeAssets()
 	// shadow mapping
 	// vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
-		
+
 		// opaque
 		Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
-			
+
 		// root signature
 		m_pShadowRS = std::make_unique<RootSignature>();
 		m_pShadowRS->FinalizeFromShader("Shadow Mapping RS", vertexShader, m_pDevice.Get());
@@ -996,16 +990,16 @@ void Graphics::InitializeAssets()
 		m_pShadowPSO->SetDepthBias(-1, -5.f, -4.f);
 		m_pShadowPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pShadowPSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
-		
+
 		// transparent
 		Shader alphaVertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain", { "ALPHA_BLEND" });
 		Shader alphaPixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Pixel, "PSMain", { "ALPHA_BLEND" });
-			
+
 		m_pShadowAlphaPSO = std::make_unique<PipelineState>(*m_pShadowPSO);
 		m_pShadowAlphaPSO->SetVertexShader(alphaVertexShader.GetByteCode(), alphaVertexShader.GetByteCodeSize());
 		m_pShadowAlphaPSO->SetPixelShader(alphaPixelShader.GetByteCode(), alphaPixelShader.GetByteCodeSize());
 		m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
-		
+
 		m_pShadowMap = std::make_unique<GraphicsTexture>(this, "Shadow Map");
 		m_pShadowMap->Create(TextureDesc(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 	}
@@ -1190,9 +1184,9 @@ void Graphics::UpdateImGui()
 				default:
 					break;
 				}
-			return true;
+				return true;
 			}, nullptr, 2);
-		
+
 		extern bool gVisualizeClusters;
 		ImGui::Checkbox("Visualize Clusters", &gVisualizeClusters);
 
@@ -1209,11 +1203,6 @@ void Graphics::UpdateImGui()
 		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 
 		ImGui::Checkbox("Show Light Geometry", &g_ShowLightGeometry);
-		
-		if (ImGui::Button("Update Camera"))
-		{
-			gCam = *m_pCamera;
-		}
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{
@@ -1326,7 +1315,7 @@ void Graphics::UpdateImGui()
 			width = image.x / image.y * windowSize.y;
 			height = windowSize.y;
 		}
-	
+
 		ImTextureID user_texture_id = m_pAmbientOcclusion->GetSRV().ptr;
 		ImGui::Image(user_texture_id, ImVec2(width, height));
 		ImGui::End();
@@ -1348,7 +1337,7 @@ void Graphics::UpdateImGui()
 		ImGui::Image(user_texture_id, ImVec2(width, height));
 		ImGui::End();
 	}
-	
+
 }
 
 void Graphics::RandomizeLights(int count)
@@ -1360,7 +1349,7 @@ void Graphics::RandomizeLights(int count)
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
 	int lightIndex = 0;
-	
+
 	Vector3 position(-150, 160, -10);
 	Vector3 direction;
 	position.Normalize(direction);
@@ -1397,7 +1386,7 @@ void Graphics::RandomizeLights(int count)
 	}
 
 	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light b) { return (int)a.LightType < (int)b.LightType; });
-	
+
 	IdleGPU();
 	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{
@@ -1445,7 +1434,7 @@ void Graphics::WaitForFence(uint64_t fenceValue)
 	pQueue->WaitForFence(fenceValue);
 }
 
-void Graphics::FreeCommandList(CommandContext * pCommandContext)
+void Graphics::FreeCommandList(CommandContext* pCommandContext)
 {
 	std::scoped_lock lockGuard(m_ContextAllocationMutex);
 	m_FreeCommandContexts[pCommandContext->GetType()].push(pCommandContext);
@@ -1588,7 +1577,7 @@ uint32_t Graphics::GetMultiSampleQualityLevel(uint32_t msaa)
 ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue)
 {
 	ID3D12Resource* pResource;
-	
+
 	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(heapType);
 	HR(m_pDevice->CreateCommittedResource(
 		&heapProps,
@@ -1597,7 +1586,7 @@ ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_
 		initialState,
 		pClearValue,
 		IID_PPV_ARGS(&pResource)));
-	
+
 	return pResource;
 }
 

@@ -48,7 +48,7 @@ struct PSInput
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
     float3 bitangent : TEXCOORD1;
-    float poop : POOP;
+    float clipPosZ : CLIPPOS;
 };
 
 Texture2D myDiffuseTexture : register(t0);
@@ -67,7 +67,7 @@ uint GetSliceFromDepth(float depth)
     return (uint)(cSliceMagicA * log(depth) - cSliceMagicB);
 }
 
-LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness, float poop)
+LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness, float clipPosZ)
 {
     uint3 clusterIndex3D = uint3(floor(pos.xy / cClusterSize), GetSliceFromDepth(vPos.z));
     uint clusterIndex1D = clusterIndex3D.x + cClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cClusterDimensions.y);
@@ -81,7 +81,7 @@ LightResult DoLight(float4 pos, float4 vPos, float3 wPos, float3 N, float3 V, fl
         uint lightIndex = tLightIndexList[startOffset + i];
         Light light = Lights[lightIndex];
 
-        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, wPos, N, V, poop);
+        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, N, V, clipPosZ);
         totalResult.Diffuse += result.Diffuse;
         totalResult.Specular += result.Specular;
     }
@@ -113,7 +113,7 @@ PSInput VSMain(VSInput input)
     result.normal = normalize(mul(input.normal, (float3x3)cWorld));
     result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
     result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
-    result.poop = result.positionVS.z;
+    result.clipPosZ = result.position.z;
 
     return result;
 }
@@ -133,7 +133,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     float3 N = TangentSpaceNormalMapping(myNormalTexture, myDiffuseSampler, TBN, input.texCoord, true);
     float3 V = normalize(cViewInverse[3].xyz - input.positionWS.xyz);
     
-    LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, N, V, diffuseColor, specularColor, r, input.poop);
+    LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, N, V, diffuseColor, specularColor, r, input.clipPosZ);
 
     float3 color = lightResults.Diffuse + lightResults.Specular;
 
