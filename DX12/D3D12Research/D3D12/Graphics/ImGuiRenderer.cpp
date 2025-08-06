@@ -43,7 +43,11 @@ void ImGuiRenderer::InitializeImGui()
 	ImGui::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->AddFontDefault();
+
+	ImFontConfig fontConfig;
+	fontConfig.OversampleH = 2;
+	fontConfig.OversampleV = 2;
+	io.Fonts->AddFontFromFileTTF("Resources/Fonts/Roboto-Bold.ttf", 15.0f, &fontConfig);
 
 	unsigned char* pPixels;
 	int width, height;

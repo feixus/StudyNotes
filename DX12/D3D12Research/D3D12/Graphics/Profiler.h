@@ -21,8 +21,8 @@ public:
 	float GetTime() const;
 
 private:
-	int64_t m_StartTime;
-	int64_t m_TotalTime{0};
+	int64_t m_StartTime{0};
+	float m_TotalTime{0};
 };
 
 class GpuTimer

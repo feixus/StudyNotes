@@ -43,7 +43,11 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	m_pTrianglesPSO->SetDepthWrite(true);
 	m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
-	m_pTrianglesPSO->Finalize("Debug Triangles", pGraphics->GetDevice());
+	m_pTrianglesPSO->Finalize("Triangles DebugRenderer PSO", pGraphics->GetDevice());
+
+    m_pLinesPSO = std::make_unique<PipelineState>(*m_pTrianglesPSO);
+    m_pLinesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
+    m_pLinesPSO->Finalize("Lines DebugRenderer PSO", pGraphics->GetDevice());
 }
 
 void DebugRenderer::Render(RGGraph& graph)
@@ -59,7 +63,8 @@ void DebugRenderer::Render(RGGraph& graph)
         builder.NeverCull();
         return [=](CommandContext& context, const RGPassResource& resources)
         {
-            context.InsertResourceBarrier(m_pGraphics->GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				context.InsertResourceBarrier(m_pGraphics->GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				context.InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
             context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_Store));
 
@@ -359,7 +364,8 @@ void DebugRenderer::AddLight(const Light& light)
     {
         case Light::Type::Directional:
         {
-            AddWireCylinder(light.Position, light.Direction, 200.0f, 50.0f,10, Color(1, 1, 0, 1));
+            AddWireCylinder(light.Position, light.Direction, 30, 5.0f,10, Color(1, 1, 0, 1));
+            AddAxisSystem(Matrix::CreateWorld(light.Position, -light.Direction, Vector3::Up), 1.0f);
             break;
         }
         case Light::Type::Point:

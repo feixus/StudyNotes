@@ -32,6 +32,10 @@ struct RectT
 
 	T GetWidth() const { return Right - Left; }
 	T GetHeight() const { return Bottom - Top; }
+	T GetAspect() const
+	{
+		return GetWidth() / GetHeight();
+	}
 
 	RectT Scale(const float scale) const
 	{

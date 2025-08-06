@@ -38,6 +38,8 @@
 #define GPU_VALIDATION 0
 #endif
 
+Camera gCam{nullptr};
+
 bool gDumpRenderGraph = true;
 
 float g_WhitePoint = 4;
@@ -46,6 +48,7 @@ float g_MaxLogLuminance = 2.0f;
 float g_Tau = 10;
 
 bool g_ShowRaytraced = false;
+bool g_ShowLightGeometry = false;
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount):
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -66,6 +69,7 @@ void Graphics::Initialize(HWND hWnd)
 	m_pCamera->SetNewPlane(400.f);
 	m_pCamera->SetFarPlane(10.f);
 	m_pCamera->SetViewport(0, 0, 1, 1);
+	gCam = *m_pCamera;
 
 	InitD3D();
 	InitializeAssets();
@@ -77,6 +81,9 @@ void Graphics::Initialize(HWND hWnd)
 
 void Graphics::Update()
 {
+	BeginFrame();
+	m_pImGuiRenderer->Update();
+
 	PIX_CAPTURE_SCOPE();
 	PROFILE_BEGIN("UpdateGameState");
 
@@ -96,24 +103,99 @@ void Graphics::Update()
 
 	// shadow map partitioning
 	//////////////////////////////////
-	ShadowData lightData;
-
 	Matrix projection = Math::CreateOrthographicMatrix(512, 512, 10000.f, 0.1f);
 
 	m_ShadowCasters = 0;
-
+	ShadowData lightData;
 	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, Vector3::Zero, Vector3::Up)) * projection;
 	lightData.ShadowMapOffsets[m_ShadowCasters] = Vector4(0.f, 0.f, 1.f, 0);
 	++m_ShadowCasters;
+
+	gCam = *m_pCamera;
+
+	uint32_t numCascades = 4;
+	float cascadeRatio = pow(gCam.GetNear() / gCam.GetFar(), 1.0f / numCascades);
+	std::vector<float> splits;
+	splits.push_back(gCam.GetFar());
+	for (uint32_t i = 1; i <= numCascades; i++)
+	{
+		splits.push_back(splits[i - 1] * cascadeRatio);
+	}
+
+	Matrix lightMatrix = XMMatrixLookToLH(m_Lights[0].Position, m_Lights[0].Direction, Vector3::Up);
+	Matrix lightInverseMatrix = XMMatrixInverse(nullptr, lightMatrix);
+
+	for (uint32_t i = 0; i < numCascades; i++)
+	{
+		float minZ = splits[i];
+		float maxZ = splits[i + 1];
+		float minY = minZ * tan(gCam.GetFoV() / 2);
+		float maxY = maxZ * tan(gCam.GetFoV() / 2);
+		float minX = minZ * tan((gCam.GetFoV() * gCam.GetViewport().GetAspect()) / 2);
+		float maxX = maxZ * tan((gCam.GetFoV() * gCam.GetViewport().GetAspect()) / 2);
+		Vector3 points[] = {
+				Vector3(-minX, -minY, minZ),
+				Vector3(-minX,  minY, minZ),
+				Vector3( minX,  minY, minZ),
+				Vector3( minX, -minY, minZ),
+				Vector3(-maxX, -maxY, maxZ),
+				Vector3(-maxX,  maxY, maxZ),
+				Vector3( maxX,  maxY, maxZ),
+				Vector3( maxX, -maxY, maxZ),
+		};
+
+		Vector3 minNum(1000000);
+		Vector3 maxNum(-1000000);
+
+		for (Vector3& point : points)
+		{
+			point = Vector3::Transform(point, gCam.GetViewInverse());
+			point = Vector3::Transform(point, lightMatrix);
+
+			minNum.x = Math::Min(point.x, minNum.x);
+			maxNum.x = Math::Max(point.x, maxNum.x);
+			minNum.y = Math::Min(point.y, minNum.y);
+			maxNum.y = Math::Max(point.y, maxNum.y);
+			minNum.z = Math::Min(point.z, minNum.z);
+			maxNum.z = Math::Max(point.z, maxNum.z);
+		}
+
+		Vector3 viewSize = maxNum - minNum;
+		Vector3 unitsPerPixel = viewSize / (m_pShadowMap->GetWidth() * 0.5f);
+		minNum.x /= unitsPerPixel.x;
+		minNum.x = floor(minNum.x);
+		minNum.x *= unitsPerPixel.x;
+		minNum.y /= unitsPerPixel.y;
+		minNum.y = floor(minNum.y);
+		minNum.y *= unitsPerPixel.y;
+
+		maxNum.x /= unitsPerPixel.x;
+		maxNum.x = floor(maxNum.x);
+		maxNum.x *= unitsPerPixel.x;
+		maxNum.y /= unitsPerPixel.y;
+		maxNum.y = floor(maxNum.y);
+		maxNum.y *= unitsPerPixel.y;
+		
+		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minNum.x, maxNum.x, minNum.y, maxNum.y, maxNum.z, 0);
+
+		lightData.LightViewProjections[i] = lightMatrix * projectionMatrix;
+		lightData.CascadeDepths[i] = splits[i + 1];
+	}
+
+	m_ShadowCasters = 4;
+
+	lightData.ShadowMapOffsets[0] = Vector4(0.0f, 0, 0.5f, 0);
+	lightData.ShadowMapOffsets[1] = Vector4(0.5f, 0, 0.5f, 0);
+	lightData.ShadowMapOffsets[2] = Vector4(0.0f, 0.5f, 0.5f, 0);
+	lightData.ShadowMapOffsets[3] = Vector4(0.5f, 0.5f, 0.5f, 0);
+
+	DebugRenderer::Instance().AddLight(m_Lights[0]);
 
 	PROFILE_END();
 
 	////////////////////////////////
 	// Rendering Begin
 	////////////////////////////////
-
-	BeginFrame();
-	m_pImGuiRenderer->Update();
 
 	RGGraph graph(this);
 
@@ -351,8 +433,6 @@ void Graphics::Update()
 		resources.pShadowMap = m_pShadowMap.get();
 		resources.pShadowData = &lightData;
 		m_pTiledForward->Execute(graph, resources);
-
-
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
@@ -369,6 +449,13 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
+	if (g_ShowLightGeometry)
+	{
+		for (const auto& light : m_Lights)
+		{
+			DebugRenderer::Instance().AddLight(light);
+		}
+	}
 	DebugRenderer::Instance().Render(graph);
 
 	// MSAA render target resolve
@@ -1121,6 +1208,13 @@ void Graphics::UpdateImGui()
 		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
 		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 
+		ImGui::Checkbox("Show Light Geometry", &g_ShowLightGeometry);
+		
+		if (ImGui::Button("Update Camera"))
+		{
+			gCam = *m_pCamera;
+		}
+
 		if (ImGui::Button("Dump RenderGraph"))
 		{
 			gDumpRenderGraph = true;
@@ -1219,37 +1313,58 @@ void Graphics::UpdateImGui()
 	}
 	ImGui::PopStyleVar();
 
-	std::string title = "Ambient Occlusion: " + std::string(g_ShowRaytraced ? "RTAO" : "SSAO");
-	ImGui::Begin(title.c_str());
-	Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
-	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
-	float width = windowSize.x;
-	float height = windowSize.x * image.y / image.x;
-	if (image.x / windowSize.x < image.y / windowSize.y)
 	{
-		width = image.x / image.y * windowSize.y;
-		height = windowSize.y;
+		ImGui::SetNextWindowPos(ImVec2(300, 0), 0, ImVec2(0, 0));
+		std::string title = "Ambient Occlusion: " + std::string(g_ShowRaytraced ? "RTAO" : "SSAO");
+		ImGui::Begin(title.c_str());
+		Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
+		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+		float width = windowSize.x;
+		float height = windowSize.x * image.y / image.x;
+		if (image.x / windowSize.x < image.y / windowSize.y)
+		{
+			width = image.x / image.y * windowSize.y;
+			height = windowSize.y;
+		}
+	
+		ImTextureID user_texture_id = m_pAmbientOcclusion->GetSRV().ptr;
+		ImGui::Image(user_texture_id, ImVec2(width, height));
+		ImGui::End();
 	}
 
-	ImTextureID user_texture_id = m_pAmbientOcclusion->GetSRV().ptr;
-	ImGui::Image(user_texture_id, ImVec2(width, height));
-	ImGui::End();
+	{
+		ImGui::Begin("Shadow Map");
+		Vector2 image((float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight());
+		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+		float width = windowSize.x;
+		float height = windowSize.x * image.y / image.x;
+		if (image.x / windowSize.x < image.y / windowSize.y)
+		{
+			width = image.x / image.y * windowSize.y;
+			height = windowSize.y;
+		}
+
+		ImTextureID user_texture_id = m_pShadowMap->GetSRV().ptr;
+		ImGui::Image(user_texture_id, ImVec2(width, height));
+		ImGui::End();
+	}
 	
 }
 
 void Graphics::RandomizeLights(int count)
 {
-	m_Lights.resize(count);
+	m_Lights.resize(1);
 
 	BoundingBox sceneBounds;
-	sceneBounds.Center = Vector3(0, 70, 0);
+	sceneBounds.Center = Vector3(0, 50, 0);
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
 	int lightIndex = 0;
 	
-	Vector3 dir(-300, -300, -300);
-	dir.Normalize();
-	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), dir, 100.0f);
+	Vector3 position(-150, 160, -10);
+	Vector3 direction;
+	position.Normalize(direction);
+	m_Lights[lightIndex] = Light::Directional(position, -direction, 1.0f);
 	m_Lights[lightIndex].ShadowIndex = 0;
 
 	int randomLightsStartIndex = lightIndex + 1;
@@ -1262,7 +1377,7 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(40.f, 60.f);
+		const float range = Math::RandomRange(10.f, 40.f);
 		const float angle = Math::RandomRange(60.f, 120.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;
@@ -1284,9 +1399,9 @@ void Graphics::RandomizeLights(int count)
 	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light b) { return (int)a.LightType < (int)b.LightType; });
 	
 	IdleGPU();
-	if (m_pLightBuffer->GetDesc().ElementCount != count)
+	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{
-		m_pLightBuffer->Create(BufferDesc::CreateStructured(count, sizeof(Light)));
+		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light)));
 	}
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());

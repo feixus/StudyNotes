@@ -51,8 +51,8 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc, ID3D12Heap* pHeap, 
 
 	D3D12_RESOURCE_DESC desc = {};
 	desc.Alignment = 0;
-	desc.Width = textureDesc.Width;
-	desc.Height = textureDesc.Height;
+	desc.Width = Math::Max(4, textureDesc.Width);
+	desc.Height = Math::Max(4, textureDesc.Height);
 	desc.Format = textureDesc.Format;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	desc.MipLevels = (uint16_t)textureDesc.Mips;

@@ -8,6 +8,7 @@ cbuffer LightData : register(b2)
 {
     float4x4 cLightViewProjection[MAX_SHADOW_CASTERS];
     float4 cShadowMapOffsets[MAX_SHADOW_CASTERS];
+    float4 cCascadeDepths;
 }
 
 float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSampler, float3x3 TBN, float2 tex, bool invertY)
@@ -77,9 +78,9 @@ float DirectionalAttenuation(float3 L, float3 direction, float cosUmbra, float c
 float RadialAttenuation(float3 L, float range)
 {
     float distSq = dot(L, L);
-    float rangeSq = Square(range);
+    float distanceAttenuation = 1 / (distSq + 1);
     float windowing = Square(saturate(1 - Square(distSq * Square(rcp(range)))));
-    return (rangeSq / (distSq + 1)) * windowing;
+    return distanceAttenuation * windowing;
 }
 
 float GetAttenuation(Light light, float3 wPos)
@@ -103,14 +104,31 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
     return ao * diffuse * lightColor;
 }
 
-LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V)
+static float4 colors[4] = {
+    float4(1, 0, 0, 1), // red
+    float4(0, 1, 0, 1), // green
+    float4(0, 0, 1, 1), // blue
+    float4(1, 0, 1, 1)  // magenta
+};
+
+LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V, float clipZ)
 {
     float attenuation = GetAttenuation(light, wPos);
     float3 L = normalize(light.Position - wPos);
     LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 
 #ifdef SHADOW
-    if (light.ShadowIndex >= 0)
+    if (light.Type == LIGHT_DIRECTIONAL)
+    {
+        float4 splits = clipZ > cCascadeDepths;
+        int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
+        float shadowFactor = DoShadow(wPos, cascadeIndex);
+        result.Diffuse *= shadowFactor;
+        result.Specular *= shadowFactor;
+
+        //result.Diffuse += 0.3f * colors[cascadeIndex].xyz;
+    }
+    else if (light.ShadowIndex >= 0)
     {
         float shadowFactor = DoShadow(wPos, light.ShadowIndex);
         result.Diffuse *= shadowFactor;

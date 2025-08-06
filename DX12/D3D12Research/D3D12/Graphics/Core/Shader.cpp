@@ -60,13 +60,14 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	if (debugShaders)
 	{
 		arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
+		arguments.push_back(L"-Qembed_debug");
 	}
 	else
 	{
 		arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
+		arguments.push_back(L"-Qstrip_debug");
+		arguments.push_back(L"-Qstrip_reflect");
 	}
-
-	arguments.push_back(L"-Qstrip_debug");
 
 	wchar_t symbolsPath[256];
 	ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
@@ -76,8 +77,6 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS);
 	arguments.push_back(DXC_ARG_DEBUG);
 	arguments.push_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
-
-	arguments.push_back(L"-Qstrip_reflect");
 
 	for (size_t i = 0; i < wDefines.size(); i++)
 	{
@@ -267,6 +266,7 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 			{
 				placedLineDirective = true;
 #if USE_SHADER_LINE_DIRECTIVE
+				// #line can correct locate every hlsl file error line number 
 				output << "#line " << linesProcessed + 1 << " \"" << filePath << "\"\n";
 #endif
 			}

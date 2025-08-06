@@ -20,7 +20,7 @@ void CpuTimer::End()
 {
 	LARGE_INTEGER end;
 	QueryPerformanceCounter(&end);
-	m_TotalTime += (float)(end.QuadPart - m_StartTime) * Profiler::Instance()->GetSecondsPerCpuTick() * 1000.0f;;
+	m_TotalTime = (float)(end.QuadPart - m_StartTime) * Profiler::Instance()->GetSecondsPerCpuTick() * 1000.0f;
 }
 
 float CpuTimer::GetTime() const

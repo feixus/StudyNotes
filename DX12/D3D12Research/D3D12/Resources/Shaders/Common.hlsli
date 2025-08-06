@@ -215,3 +215,30 @@ float Square(float x)
 {
 	return x * x;
 }
+
+// follow IEC 61966-2-1 sRGB standard
+float SrgbToLinear(float y)
+{
+	if (y <= 0.04045f)
+		return y / 12.92f;
+	else
+		return pow((y + 0.055f) / 1.055f, 2.4f);
+}
+
+float SrgbToLinearFast(float y)
+{
+	return pow(y, 2.2f);
+}
+
+float LinearToSrgb(float x)
+{
+	if (x <= 0.0031308f)
+		return x * 12.92f;
+	else
+		return 1.055f * pow(x, 1.0f / 2.4f) - 0.055f;
+}
+
+float LinearToSrgbFast(float x)
+{
+	return pow(x, 1.0f / 2.2f);
+}
