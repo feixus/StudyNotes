@@ -49,7 +49,21 @@ namespace Math
 #endif
     }
 
-    Vector3 ScaleFromMatrix(const Matrix& m)
+    void GetProjectionClipPlanes(const Matrix& projection, float& nearPlane, float& farPlane)
+    {
+        nearPlane = -projection._43 / projection._33;
+        farPlane = nearPlane * projection._33 / (projection._33 - 1);
+    }
+
+	void ReverseZProjection(Matrix& projection)
+	{
+        float n, f;
+        GetProjectionClipPlanes(projection, n, f);
+        projection._33 = f / (f - n);
+        projection._43 = -projection._33 * n;
+	}
+
+	Vector3 ScaleFromMatrix(const Matrix& m)
     {
         return Vector3(
             sqrtf(m._11 * m._11 + m._21 * m._21 + m._31 * m._31),

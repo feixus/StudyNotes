@@ -38,7 +38,7 @@
 #define GPU_VALIDATION 0
 #endif
 
-bool gDumpRenderGraph = true;
+bool g_DumpRenderGraph = true;
 
 float g_WhitePoint = 4;
 float g_MinLogLuminance = -10.0f;
@@ -46,6 +46,9 @@ float g_MaxLogLuminance = 2.0f;
 float g_Tau = 10;
 
 bool g_ShowSDSM = true;
+bool g_StabilizeCascases = true;
+float g_PSSMFactor = 1.0f;
+
 bool g_ShowRaytraced = false;
 bool g_ShowLightGeometry = false;
 
@@ -105,7 +108,7 @@ void Graphics::Update()
 	constexpr uint32_t MAX_CASCADES = 4;
 
 	ShadowData lightData;
-	std::array<float, MAX_CASCADES + 1> cascadeDepths;
+	std::array<float, MAX_CASCADES> cascadeSplits;
 	m_ShadowCasters = 0;
 	
 	float minPoint = 0;
@@ -120,88 +123,115 @@ void Graphics::Update()
 		pSourceBuffer->UnMap();
 	}
 
-	float clipPlaneRange = abs(m_pCamera->GetFar() - m_pCamera->GetNear());
-	float minZ = m_pCamera->GetFar() + minPoint * clipPlaneRange;
-	float maxZ = m_pCamera->GetFar() + maxPoint * clipPlaneRange;
-
-	float zPartitioningRatio = pow(maxZ / minZ, 1.0f / MAX_CASCADES);
-
-	cascadeDepths[0] = minZ;
-	for (uint32_t i = 1; i <= MAX_CASCADES; i++)
-	{
-		cascadeDepths[i] = cascadeDepths[i - 1] * zPartitioningRatio;
-	}
-
-	Matrix lightMatrix = XMMatrixLookToLH(m_Lights[0].Position, m_Lights[0].Direction, Vector3::Up);
-	Matrix lightInverseMatrix = XMMatrixInverse(nullptr, lightMatrix);
+	float nearPlane = m_pCamera->GetFar();
+	float farPlane = m_pCamera->GetNear();
+	float clipPlaneRange = abs(farPlane - nearPlane);
+	float minZ = nearPlane + minPoint * clipPlaneRange;
+	float maxZ = nearPlane + maxPoint * clipPlaneRange;
 
 	for (uint32_t i = 0; i < MAX_CASCADES; i++)
 	{
-		float minZ = cascadeDepths[i];
-		float maxZ = cascadeDepths[i + 1];
-		float minY = minZ * tan(m_pCamera->GetFoV() / 2);
-		float maxY = maxZ * tan(m_pCamera->GetFoV() / 2);
-		float minX = minZ * tan((m_pCamera->GetFoV() * m_pCamera->GetViewport().GetAspect()) / 2);
-		float maxX = maxZ * tan((m_pCamera->GetFoV() * m_pCamera->GetViewport().GetAspect()) / 2);
-		Vector3 frustumCorners[] = {
-				Vector3(-minX, -minY, minZ),
-				Vector3(-minX,  minY, minZ),
-				Vector3(minX,  minY, minZ),
-				Vector3(minX, -minY, minZ),
-				Vector3(-maxX, -maxY, maxZ),
-				Vector3(-maxX,  maxY, maxZ),
-				Vector3(maxX,  maxY, maxZ),
-				Vector3(maxX, -maxY, maxZ),
-		};
-
-		Vector3 minNum(1000000000);
-		Vector3 maxNum(-1000000000);
-
-		for (Vector3& point : frustumCorners)
-		{
-			point = Vector3::Transform(point, m_pCamera->GetViewInverse());
-			point = Vector3::Transform(point, lightMatrix);
-
-			minNum = Vector3::Min(point, minNum);
-			maxNum = Vector3::Max(point, maxNum);
-		}
-
-#if 0
-		// bounding sphere to keep the projection size constant
-		Vector3 center = (minNum + maxNum) * 0.5f;
-		Vector3 extents = (maxNum - minNum) * 0.5f;
-		float radius = sqrtf(extents.Dot(extents));
-
-		minNum.x = center.x - radius;
-		minNum.y = center.y - radius;
-		maxNum.x = center.x + radius;
-		maxNum.y = center.y + radius;
-#endif
-
-		// snap projection to shadowmap texels to avoid flickering edges
-		Vector3 viewSize = maxNum - minNum;
-		Vector3 unitsPerPixel = viewSize / (m_pShadowMap->GetWidth() * 0.5f);
-
-		DirectX::XMVECTOR _min = minNum;
-		_min = DirectX::XMVectorDivide(_min, unitsPerPixel);
-		_min = DirectX::XMVectorFloor(_min);
-		minNum = DirectX::XMVectorMultiply(_min, unitsPerPixel);
-		DirectX::XMVECTOR _max = maxNum;
-		_max = DirectX::XMVectorDivide(_max, unitsPerPixel);
-		_max = DirectX::XMVectorFloor(_max);
-		maxNum = DirectX::XMVectorMultiply(_max, unitsPerPixel);
-
-		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minNum.x, maxNum.x, minNum.y, maxNum.y, maxNum.z, 0);
-
-		lightData.LightViewProjections[i] = lightMatrix * projectionMatrix;
-		lightData.CascadeDepths[i] = Vector4::Transform(Vector4(0, 0, cascadeDepths[i + 1], 1), m_pCamera->GetProjection()).z;
-		m_ShadowCasters++;
+		float p = (i + 1) / (float)MAX_CASCADES;
+		float log = minZ * std::pow(maxZ / minZ, p);
+		float uniform = minZ + (maxZ - minZ) * p;
+		float d = g_PSSMFactor * (log - uniform) + uniform;
+		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 	}
 
-	lightData.ShadowMapOffsets[0] = Vector4(0.0f, 0, 0.5f, 0);
-	lightData.ShadowMapOffsets[1] = Vector4(0.5f, 0, 0.5f, 0);
-	lightData.ShadowMapOffsets[2] = Vector4(0.0f, 0.5f, 0.5f, 0);
-	lightData.ShadowMapOffsets[3] = Vector4(0.5f, 0.5f, 0.5f, 0);
+	for (uint32_t i = 0; i < MAX_CASCADES; i++)
+	{
+		float previousCascadeSplit = (i == 0) ? minPoint : cascadeSplits[i - 1];
+		float currentCascadeSplit = cascadeSplits[i];
+
+		Vector3 frustumCorners[] = {
+			// near
+			Vector3(-1, -1, 1),
+			Vector3(-1,  1, 1),
+			Vector3( 1,  1, 1),
+			Vector3( 1, -1, 1),
+			// far
+			Vector3(-1, -1, 0),
+			Vector3(-1,  1, 0),
+			Vector3( 1,  1, 0),
+			Vector3( 1, -1, 0),
+		};
+
+		// retrieve frustum corners in world space
+		for (Vector3& corner : frustumCorners)
+		{
+			corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
+			corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+		}
+
+		// adjust frustum corners based on cascade splits
+		for (int j = 0; j < 4; j++)
+		{
+			Vector3 cornerRay = frustumCorners[j + 4] - frustumCorners[j];
+			Vector3 nearPoint = previousCascadeSplit * cornerRay;
+			Vector3 farPoint = currentCascadeSplit * cornerRay;
+			frustumCorners[j + 4] = frustumCorners[j] + farPoint;
+			frustumCorners[j] = frustumCorners[j] + nearPoint;
+		}
+
+		Vector3 center = Vector3::Zero;
+		for (const Vector3& corner : frustumCorners)
+		{
+			center += corner;
+		}
+		center /= frustumCorners->Length();
+
+		Vector3 minExtents(FLT_MAX);
+		Vector3 maxExtents(-FLT_MAX);
+
+		// create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
+		if (g_StabilizeCascases)
+		{
+			float radius = 0;
+			for (const Vector3& corner : frustumCorners)
+			{
+				float distance = Vector3::DistanceSquared(corner, center);
+				radius = Math::Max(radius, distance);
+			}
+			radius = std::sqrt(radius);
+			maxExtents  = Vector3(radius);
+			minExtents  = -maxExtents;
+		}
+		else
+		{
+			Matrix lightView = XMMatrixLookToLH(center, m_Lights[0].Direction, Vector3::Up);
+			for (const Vector3& corner : frustumCorners)
+			{
+				Vector3 transformedCorner = Vector3::Transform(corner, lightView);
+				minExtents = Vector3::Min(minExtents, transformedCorner);
+				maxExtents = Vector3::Max(maxExtents, transformedCorner);
+			}
+		}
+
+		Matrix shadowView = XMMatrixLookToLH(center + m_Lights[0].Direction * -400, m_Lights[0].Direction, Vector3::Up);
+		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
+		Matrix lightViewProjection = shadowView * projectionMatrix;
+
+		// snap projection to shadowmap texels to avoid flickering edges
+		if (g_StabilizeCascases)
+		{
+			float shadowMapSize = m_pShadowMap->GetWidth() * 0.5f;
+			Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
+			shadowOrigin *= shadowMapSize * 0.5f;
+			Vector4 rounded = XMVectorRound(shadowOrigin);
+			Vector4 roundedOffset = rounded - shadowOrigin;
+			roundedOffset *= 2.0f / shadowMapSize;
+			roundedOffset.z = 0;
+			roundedOffset.w = 0;
+
+			projectionMatrix *= Matrix::CreateTranslation(Vector3(roundedOffset));
+			lightViewProjection = shadowView * projectionMatrix;
+		}
+		
+		lightData.LightViewProjections[i] = lightViewProjection;
+		lightData.CascadeDepths[i] = Vector4::Transform(Vector4(0, 0, currentCascadeSplit * (farPlane - nearPlane) + nearPlane, 1), m_pCamera->GetProjection()).z;
+		lightData.ShadowMapOffsets[i] = Vector4((float)(m_ShadowCasters % 2) * 0.5f, (float)(m_ShadowCasters / 2) * 0.5f, 0.5f, 0);
+		m_ShadowCasters++;
+	}
 
 	PROFILE_END();
 
@@ -713,10 +743,10 @@ void Graphics::Update()
 		});
 
 	graph.Compile();
-	if (gDumpRenderGraph)
+	if (g_DumpRenderGraph)
 	{
 		graph.DumpGraphMermaid("graph.html");
-		gDumpRenderGraph = false;
+		g_DumpRenderGraph = false;
 	}
 	nextFenceValue = graph.Execute();
 
@@ -1341,10 +1371,12 @@ void Graphics::UpdateImGui()
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{
-			gDumpRenderGraph = true;
+			g_DumpRenderGraph = true;
 		}
 
 		ImGui::Checkbox("SDSM", &g_ShowSDSM);
+		ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascases);
+		ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
 		if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
 		{
 			if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)

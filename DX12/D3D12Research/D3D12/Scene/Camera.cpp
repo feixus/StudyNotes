@@ -145,7 +145,11 @@ void Camera::UpdateMatrices() const
     m_Projection.Invert(m_ProjectionInverse);
     m_ViewProjection = m_View * m_Projection;
 
-    Matrix p = Math::CreatePerspectiveMatrix(m_FoV, rect.GetWidth() / rect.GetHeight(), m_FarPlane, m_NearPlane);
+    Matrix p = m_Projection;
+    if (m_FarPlane < m_NearPlane)
+    {
+        Math::ReverseZProjection(p);
+    }
     BoundingFrustum::CreateFromMatrix(m_Frustum, p);
     m_Frustum.Transform(m_Frustum, m_ViewInverse);
 }
