@@ -115,6 +115,7 @@ public:
 
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
+	GraphicsTexture* GetResolvedNormals() const { return m_SampleCount > 1 ? m_pResolvedNormals.get() : m_pNormals.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
@@ -128,7 +129,6 @@ public:
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
 	static const int32_t SHADOW_MAP_SIZE = 2048;
-	static const int32_t MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
@@ -174,8 +174,8 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
-	std::unique_ptr<GraphicsTexture> m_pMSAANormals;
 	std::unique_ptr<GraphicsTexture> m_pNormals;
+	std::unique_ptr<GraphicsTexture> m_pResolvedNormals;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
@@ -244,6 +244,7 @@ private:
 
 	// depth reduction
 	std::unique_ptr<PipelineState> m_pPrepareReduceDepthPSO;
+	std::unique_ptr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
 	std::unique_ptr<PipelineState> m_pReduceDepthPSO;
 	std::unique_ptr<RootSignature> m_pReduceDepthRS;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ReductionTargets;

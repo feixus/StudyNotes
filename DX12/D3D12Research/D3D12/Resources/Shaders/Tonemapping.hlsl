@@ -66,14 +66,14 @@ float3 convertYxy2RGB(float3 _Yxy)
     return convertXYZ2RGB(xyz);
 }
 
-float reinhard2(float x, float whiteSqr)
-{
-    return (x * (1.0 + x / whiteSqr)) / (1.0 + x);
-}
-
 float3 toGamma(float3 rgb)
 {
     return pow(rgb, 1.0 / 2.2);
+}
+
+float reinhard2(float x, float whiteSqr)
+{
+    return (x * (1.0 + x / whiteSqr)) / (1.0 + x);
 }
 
 // Reinhard tonemapping

@@ -19,10 +19,7 @@
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
-bool gUseAlternativeLightCulling = false;
-bool gVisualizeClusters = false;
-
-float tFovAngle = Math::ToRadians * 60.0f;
+bool g_VisualizeClusters = false;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
     : m_pGraphics(pGraphics)
@@ -360,7 +357,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
          });
  
 
-    if (gVisualizeClusters)
+    if (g_VisualizeClusters)
     {
 		graph.AddPass("Visualize Clusters", [&](RGPassBuilder& builder)
 			{
