@@ -135,32 +135,27 @@ namespace Math
     Vector3 RandVector();
     Vector3 RandCircleVector();
 
-    using HexColor = unsigned int;
-    // convert between 4 float colors and unsigned int hex colors
-    struct HexColorConverter
-    {
-        Color operator()(HexColor color) const
-        {
-            Color output;
-            // unsigned int layout: AAAA RRRR GGGG BBBB
-            output.x = (float)((color >> 16) & 0xFF) / 255.0f;
-            output.y = (float)((color >> 8) & 0xFF) / 255.0f;
-            output.z = (float)(color & 0xFF) / 255.0f;
-            output.w = (float)((color >> 24) & 0xFF) / 255.0f;
-            return output;
-        }
+	inline uint32_t EncodeColor(const Color& color)
+	{
+		uint32_t output = 0;
+		// unsigned int layout: AAAA RRRR GGGG BBBB
+		output |= (unsigned char)(color.x * 255.0f) << 16;
+		output |= (unsigned char)(color.y * 255.0f) << 8;
+		output |= (unsigned char)(color.z * 255.0f) << 0;
+		output |= (unsigned char)(color.w * 255.0f) << 24;
+		return output;
+	}
 
-        HexColor operator()(const Color& color) const
-        {
-            HexColor output{0};
-            // unsigned int layout: AAAA RRRR GGGG BBBB
-            output |= (unsigned int)(color.x * 255.0f) << 16;
-            output |= (unsigned int)(color.y * 255.0f) << 8;
-            output |= (unsigned int)(color.z * 255.0f);
-            output |= (unsigned int)(color.w * 255.0f) << 24;
-            return output;
-        }
-    };
+	inline Color DecodeColor(uint32_t color)
+	{
+		Color output;
+		// unsigned int layout: AAAA RRRR GGGG BBBB
+		output.x = ((color >> 16) && 0xFF) / 255.0f;
+		output.y = ((color >>  8) && 0xFF) / 255.0f;;
+		output.z = ((color >>  0) && 0xFF) / 255.0f;;
+		output.w = ((color >> 24) && 0xFF) / 255.0f;;
+		return output;
+	}
 
     inline int32_t RoundUp(float value)
     {

@@ -20,12 +20,6 @@ struct Light
 	float Range{1.0f};
 	int32_t ShadowIndex{-1};
 
-	void SetColor(const Color& c)
-	{
-		Colour = (uint32_t)(c.x * 255) << 24 | (uint32_t)(c.y * 255) << 16 | 
-				 (uint32_t)(c.z * 255) << 8 | (uint32_t)(c.w * 255) << 0;
-	}
-
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
 	{
 		Light light{};
@@ -34,7 +28,7 @@ struct Light
 		light.Direction = direction;
 		light.LightType = Type::Directional;
 		light.Intensity = intensity;
-		light.SetColor(color);
+		light.Colour = Math::EncodeColor(color);
 		return light;
 	}
 
@@ -46,7 +40,7 @@ struct Light
 		light.Range = radius;
 		light.LightType = Type::Point;
 		light.Intensity = intensity;
-		light.SetColor(color);
+		light.Colour = Math::EncodeColor(color);
 		return light;
 	}
 
@@ -61,7 +55,7 @@ struct Light
 		light.SpotlightAngles.y = cos(umbraAngleInDegrees * 0.5f * Math::PI / 180.0f);
 		light.Intensity = intensity;
 		light.LightType = Type::Spot;
-		light.SetColor(color);
+		light.Colour = Math::EncodeColor(color);
 		return light;
 	}
 };

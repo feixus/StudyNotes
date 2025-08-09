@@ -11,7 +11,7 @@ cbuffer Parameters : register(b0)
 struct VS_Input
 {
     float3 position : POSITION;
-    float4 color : COLOR;
+    uint color : COLOR;
 };
 
 struct PS_Input
@@ -25,7 +25,7 @@ PS_Input VSMain(VS_Input input)
 {
     PS_Input output;
     output.position = mul(float4(input.position, 1.0), cViewProj);
-    output.color = input.color;
+    output.color = UIntToColor(input.color);
     return output;
 }
 

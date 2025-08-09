@@ -10,39 +10,39 @@ struct Light;
 
 struct DebugLine
 {
-    DebugLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd)
+    DebugLine(const Vector3& start, const Vector3& end, const uint32_t colorStart, const uint32_t colorEnd)
         : Start(start), ColorStart(colorStart), End(end), ColorEnd(colorEnd)
     {}
 
     Vector3 Start;
-    Color ColorStart;
+    uint32_t ColorStart;
     Vector3 End;
-    Color ColorEnd;
+    uint32_t ColorEnd;
 };
 
 struct DebugRay
 {
-    DebugRay(const Vector3& start, const Vector3& direction, const Color& color)
+    DebugRay(const Vector3& start, const Vector3& direction, const uint32_t color)
         : Start(start), Direction(direction), Color(color)
     {}
 
     Vector3 Start;
     Vector3 Direction;
-    Color Color;
+    uint32_t Color;
 };
 
 struct DebugTriangle
 {
-    DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& colorA, const Color& colorB, const Color& colorC)
+    DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32_t colorA, const uint32_t colorB, const uint32_t colorC)
         : A(a), ColorA(colorA), B(b), ColorB(colorB), C(c), ColorC(colorC)
     {}
 
     Vector3 A;
-    Color ColorA;
+    uint32_t ColorA;
     Vector3 B;
-    Color ColorB;
+    uint32_t ColorB;
     Vector3 C;
-    Color ColorC;
+    uint32_t ColorC;
 };
 
 struct DebugSphere
@@ -86,6 +86,7 @@ public:
     void AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& color, const bool solid = true);
     void AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& colorA, const Color& colorB, const Color& colorC, const bool solid = true);
     void AddPolygon(const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d, const Color& color);
+    void AddBox(const Vector3& position, const Vector3& extents, const Color& color, const bool solid = false);
     void AddBoundingBox(const BoundingBox& boundingBox, const Color& color, const bool solid = false);
     void AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, const bool solid = false);
     void AddSphere(const Vector3& position, const float radius, const int slices, const int stacks, const Color& color, const bool solid = false);

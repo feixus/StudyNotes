@@ -22,7 +22,7 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
     m_pGraphics = pGraphics;
 	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
 		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R32_UINT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
 	// shaders
@@ -50,6 +50,8 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
     m_pLinesPSO->Finalize("Lines DebugRenderer PSO", pGraphics->GetDevice());
 }
 
+constexpr uint32_t VertexStride = sizeof(DebugLine) / 2;
+
 void DebugRenderer::Render(RGGraph& graph)
 {
     int totalPrimitives = m_LinePrimitives + m_TrianglePrimitives;
@@ -76,14 +78,14 @@ void DebugRenderer::Render(RGGraph& graph)
 
             if (m_LinePrimitives != 0)
             {
-                context.SetDynamicVertexBuffer(0, m_LinePrimitives, sizeof(Vector3) + sizeof(Color), m_Lines.data());
+                context.SetDynamicVertexBuffer(0, m_LinePrimitives, VertexStride, m_Lines.data());
                 context.SetPipelineState(m_pLinesPSO.get());
                 context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
                 context.Draw(0, m_LinePrimitives);
             }
             if (m_TrianglePrimitives != 0)
             {
-                context.SetDynamicVertexBuffer(0, m_TrianglePrimitives, sizeof(Vector3) + sizeof(Color), m_Triangles.data());
+                context.SetDynamicVertexBuffer(0, m_TrianglePrimitives, VertexStride, m_Triangles.data());
                 context.SetPipelineState(m_pTrianglesPSO.get());
                 context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
                 context.Draw(0, m_TrianglePrimitives);
@@ -109,7 +111,7 @@ void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const Colo
 
 void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd)
 {
-    m_Lines.push_back(DebugLine(start, end, colorStart, colorEnd));
+    m_Lines.push_back(DebugLine(start, end, Math::EncodeColor(colorStart), Math::EncodeColor(colorEnd)));
     m_LinePrimitives += 2;
 }
 
@@ -127,7 +129,7 @@ void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector
 {
     if (solid)
     {
-        m_Triangles.push_back(DebugTriangle(a, b, c, colorA, colorB, colorC));
+        m_Triangles.push_back(DebugTriangle(a, b, c, Math::EncodeColor(colorA), Math::EncodeColor(colorB), Math::EncodeColor(colorC)));
         m_TrianglePrimitives += 3;
     }
     else
@@ -144,17 +146,17 @@ void DebugRenderer::AddPolygon(const Vector3& a, const Vector3& b, const Vector3
     AddTriangle(a, c, d, color);
 }
 
-void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, const bool solid)
+void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, const Color& color, const bool solid)
 {
-    Vector3 minV(boundingBox.Center.x - boundingBox.Extents.x, boundingBox.Center.y - boundingBox.Extents.y, boundingBox.Center.z - boundingBox.Extents.z);
-    Vector3 maxV(boundingBox.Center.x + boundingBox.Extents.x, boundingBox.Center.y + boundingBox.Extents.y, boundingBox.Center.z + boundingBox.Extents.z);
+    Vector3 minV(position.x - extents.x, position.y - extents.y, position.z - extents.z);
+    Vector3 maxV(position.x + extents.x, position.y + extents.y, position.z + extents.z);
 
-	Vector3 v1(maxV.x, minV.y, minV.z);
-	Vector3 v2(maxV.x, maxV.y, minV.z);
-	Vector3 v3(minV.x, maxV.y, minV.z);
-	Vector3 v4(minV.x, minV.y, maxV.z);
-	Vector3 v5(maxV.x, minV.y, maxV.z);
-	Vector3 v6(minV.x, maxV.y, maxV.z);
+    Vector3 v1(maxV.x, minV.y, minV.z);
+    Vector3 v2(maxV.x, maxV.y, minV.z);
+    Vector3 v3(minV.x, maxV.y, minV.z);
+    Vector3 v4(minV.x, minV.y, maxV.z);
+    Vector3 v5(maxV.x, minV.y, maxV.z);
+    Vector3 v6(minV.x, maxV.y, maxV.z);
 
     if (!solid)
     {
@@ -180,6 +182,11 @@ void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& 
         AddPolygon(v3, v2, maxV, v6, color);
         AddPolygon(minV, v1, v5, v4, color);
     }
+}
+
+void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, const bool solid)
+{
+    AddBox(boundingBox.Center, boundingBox.Extents, color, solid);
 }
 
 void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, const bool solid)
@@ -258,7 +265,7 @@ void DebugRenderer::AddSphere(const Vector3& position, const float radius, const
                 Vector3 p3 = sphere.GetPoint(i, j + jStep);
                 Vector3 p4 = sphere.GetPoint(i + iStep, j + jStep);
 
-                AddPolygon(p2, p1, p3, p4, Color(0, 0, 1, 1));
+                AddPolygon(p2, p1, p3, p4, color);
             }
         }
     }

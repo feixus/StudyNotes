@@ -23,7 +23,6 @@ float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSam
     return mul(sampledNormal, TBN);
 }
 
-#ifdef SHADOW
 Texture2D tShadowMapTexture : register(t3);
 SamplerComparisonState sShadowMapSampler : register(s1);
 
@@ -60,8 +59,6 @@ float DoShadow(float3 wPos, int shadowMapIndex)
 
     return result * result;
 }
-
-#endif
 
 // Angle >= Umbra -> 0
 // Angle < Penumbra -> 1
@@ -117,7 +114,6 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
     float3 L = normalize(light.Position - wPos);
     LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 
-#ifdef SHADOW
     if (light.Type == LIGHT_DIRECTIONAL)
     {
         float4 splits = clipZ < cCascadeDepths;
@@ -137,7 +133,6 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
         result.Diffuse *= shadowFactor;
         result.Specular *= shadowFactor;
     }
-#endif
 
     float4 color = light.GetColor();
     result.Diffuse *= color.rgb * light.Intensity;

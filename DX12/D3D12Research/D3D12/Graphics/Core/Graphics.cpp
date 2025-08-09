@@ -50,7 +50,7 @@ bool g_StabilizeCascases = true;
 float g_PSSMFactor = 1.0f;
 
 bool g_ShowRaytraced = false;
-bool g_ShowLightGeometry = false;
+bool g_VisualizeLights = false;
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount) :
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -101,6 +101,14 @@ void Graphics::Update()
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist < bDist;
 		});
+
+	if (g_VisualizeLights)
+	{
+		for (const auto& light : m_Lights)
+		{
+			DebugRenderer::Instance().AddLight(light);
+		}
+	}
 
 	// shadow map partitioning
 	//////////////////////////////////
@@ -476,6 +484,7 @@ void Graphics::Update()
 						context.BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
 
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+						context.SetGraphicsRootSignature(m_pShadowRS.get());
 
 						for (int i = 0; i < m_ShadowCasters; ++i)
 						{
@@ -496,7 +505,6 @@ void Graphics::Update()
 							{
 								GPU_PROFILE_SCOPE("Opaque", &context);
 								context.SetPipelineState(m_pShadowPSO.get());
-								context.SetGraphicsRootSignature(m_pShadowRS.get());
 
 								for (const Batch& b : m_OpaqueBatches)
 								{
@@ -510,7 +518,6 @@ void Graphics::Update()
 							{
 								GPU_PROFILE_SCOPE("Transparent", &context);
 								context.SetPipelineState(m_pShadowAlphaPSO.get());
-								context.SetGraphicsRootSignature(m_pShadowRS.get());
 
 								context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 								for (const Batch& b : m_TransparentBatches)
@@ -557,13 +564,6 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
-	if (g_ShowLightGeometry)
-	{
-		for (const auto& light : m_Lights)
-		{
-			DebugRenderer::Instance().AddLight(light);
-		}
-	}
 	DebugRenderer::Instance().Render(graph);
 
 	// MSAA render target resolve
@@ -1125,11 +1125,9 @@ void Graphics::InitializeAssets()
 		m_pShadowPSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
 
 		// transparent
-		Shader alphaVertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain", { "ALPHA_BLEND" });
-		Shader alphaPixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Pixel, "PSMain", { "ALPHA_BLEND" });
+		Shader alphaPixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Pixel, "PSMain");
 
 		m_pShadowAlphaPSO = std::make_unique<PipelineState>(*m_pShadowPSO);
-		m_pShadowAlphaPSO->SetVertexShader(alphaVertexShader.GetByteCode(), alphaVertexShader.GetByteCodeSize());
 		m_pShadowAlphaPSO->SetPixelShader(alphaPixelShader.GetByteCode(), alphaPixelShader.GetByteCodeSize());
 		m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
 
@@ -1367,7 +1365,7 @@ void Graphics::UpdateImGui()
 		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
 		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 
-		ImGui::Checkbox("Show Light Geometry", &g_ShowLightGeometry);
+		ImGui::Checkbox("Visualize Lights", &g_VisualizeLights);
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{
@@ -1521,7 +1519,7 @@ void Graphics::RandomizeLights(int count)
 	Vector3 position(-150, 160, -10);
 	Vector3 direction;
 	position.Normalize(direction);
-	m_Lights[lightIndex] = Light::Directional(position, -direction, 1.0f);
+	m_Lights[lightIndex] = Light::Directional(position, -direction, 5.0f);
 	m_Lights[lightIndex].ShadowIndex = 0;
 
 	int randomLightsStartIndex = lightIndex + 1;
@@ -1536,15 +1534,16 @@ void Graphics::RandomizeLights(int count)
 
 		const float range = Math::RandomRange(10.f, 40.f);
 		const float angle = Math::RandomRange(60.f, 120.f);
+		const float intensity = Math::RandomRange(250, 270);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
 		{
 		case Light::Type::Point:
-			m_Lights[i] = Light::Point(position, range, 30.0f, color);
+			m_Lights[i] = Light::Point(position, range, intensity, color);
 			break;
 		case Light::Type::Spot:
-			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, angle - Math::RandomRange(0.0f, angle * 0.5f), 30.0f, color);
+			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, angle - Math::RandomRange(0.0f, angle * 0.5f), intensity, color);
 			break;
 		case Light::Type::Directional:
 		case Light::Type::MAX:

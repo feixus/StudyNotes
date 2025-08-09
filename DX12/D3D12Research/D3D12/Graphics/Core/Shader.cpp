@@ -346,7 +346,7 @@ std::string Shader::GetShaderTarget(Type shaderType, char shaderModelMajor, char
 ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines)
 {
 	m_Path = pFilePath;
-	Compile(pFilePath, 6, 0, defines);
+	Compile(pFilePath, 6, 3, defines);
 }
 
 std::string ShaderLibrary::GetShaderTarget(char shaderModelMajor, char shaderModelMinor)
