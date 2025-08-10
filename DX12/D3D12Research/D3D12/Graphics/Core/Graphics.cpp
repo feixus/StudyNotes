@@ -266,7 +266,6 @@ void Graphics::Update()
 	// - required for light culling
 	RGPass& prepass = graph.AddPass("Depth Prepass", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			sceneData.DepthStencil = builder.Write(sceneData.DepthStencil);
 
 			return [=](CommandContext& renderContext, const RGPassResource& resources)
@@ -303,7 +302,6 @@ void Graphics::Update()
 	// normals
 	graph.AddPass("Normals", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			sceneData.DepthStencil = builder.Write(sceneData.DepthStencil);
 
 			return [=](CommandContext& renderContext, const RGPassResource& resources)
@@ -354,7 +352,6 @@ void Graphics::Update()
 	{
 		graph.AddPass("Depth Resolve", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
 				sceneData.DepthStencil = builder.Read(sceneData.DepthStencil);
 				sceneData.DepthStencilResolved = builder.Write(sceneData.DepthStencilResolved);
 
@@ -412,7 +409,6 @@ void Graphics::Update()
 		{
 			graph.AddPass("Depth Reduce", [&](RGPassBuilder& builder)
 				{
-					builder.NeverCull();
 					sceneData.DepthStencil = builder.Write(sceneData.DepthStencil);
 
 					return [=](CommandContext& renderContext, const RGPassResource& resources)
@@ -475,8 +471,6 @@ void Graphics::Update()
 
 		graph.AddPass("Shadow Mapping", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
-
 				return[=](CommandContext& context, const RGPassResource& resources)
 					{
 						context.InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -572,8 +566,6 @@ void Graphics::Update()
 	{
 		graph.AddPass("Resolve MSAA", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
-
 				return [=](CommandContext& context, const RGPassResource& resources)
 					{
 						context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
@@ -593,7 +585,6 @@ void Graphics::Update()
 		{
 			graph.AddPass("Downsample Color", [&](RGPassBuilder& builder)
 				{
-					builder.NeverCull();
 					toneMappingInput = builder.Write(toneMappingInput);
 
 					return[=](CommandContext& context, const RGPassResource& resources)
@@ -626,7 +617,6 @@ void Graphics::Update()
 		// luminance histogram, collect the pixel count into a 256 bins histogram with luminance
 		graph.AddPass("Luminance Histogram", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
 				toneMappingInput = builder.Read(toneMappingInput);
 
 				return[=](CommandContext& context, const RGPassResource& resources)
@@ -665,8 +655,6 @@ void Graphics::Update()
 		// average luminance, compute the average luminance from the histogram
 		graph.AddPass("Average Luminance", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
-
 				return[=](CommandContext& context, const RGPassResource& resources)
 					{
 						context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -700,8 +688,6 @@ void Graphics::Update()
 
 		graph.AddPass("Tonemap", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
-
 				return[=](CommandContext& context, const RGPassResource& resources)
 					{
 
@@ -734,7 +720,6 @@ void Graphics::Update()
 
 	graph.AddPass("Temp Barriers", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return[=](CommandContext& context, const RGPassResource& resources)
 				{
 					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -1323,6 +1308,8 @@ void Graphics::UpdateImGui()
 	ImGui::Text("%dx MSAA", m_SampleCount);
 	ImGui::PlotLines("##", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
 
+	static int currentItemIndex = 0;
+	const char* items[] = { "AO", "ShadowMap" };
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
@@ -1360,27 +1347,25 @@ void Graphics::UpdateImGui()
 			RandomizeLights(m_DesiredLightCount);
 		}
 
-		ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
-		ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
-		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
-		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
-
-		ImGui::Checkbox("Visualize Lights", &g_VisualizeLights);
-
 		if (ImGui::Button("Dump RenderGraph"))
 		{
 			g_DumpRenderGraph = true;
 		}
 
-		ImGui::Checkbox("SDSM", &g_ShowSDSM);
-		ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascases);
-		ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
-		if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
+		if (ImGui::BeginCombo("DebugTexture", items[currentItemIndex]))
 		{
-			if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
+			for (int n = 0; n < IM_ARRAYSIZE(items); n++)
 			{
-				g_ShowRaytraced = false;
+				bool isSelected = (currentItemIndex == n);
+				if (ImGui::Selectable(items[n], isSelected))
+				{
+					currentItemIndex = n;
+				}
+
+				if (isSelected)
+					ImGui::SetItemDefaultFocus();
 			}
+			ImGui::EndCombo();
 		}
 
 		ImGui::TreePop();
@@ -1468,11 +1453,31 @@ void Graphics::UpdateImGui()
 	}
 	ImGui::PopStyleVar();
 
+	m_pVisualizeTexture = nullptr;
+	std::string title = "";
+	switch (currentItemIndex)
+	{
+	case 0:
+	{
+		m_pVisualizeTexture = m_pAmbientOcclusion.get();
+		title = "Ambient Occlusion: " + std::string(g_ShowRaytraced ? "RTAO" : "SSAO");
+	}
+	break;
+	case 1:
+	{
+		m_pVisualizeTexture = m_pShadowMap.get();
+		title = "ShadowMap";
+	}
+	break;
+	default:
+		break;
+	}
+
+	if (m_pVisualizeTexture)
 	{
 		ImGui::SetNextWindowPos(ImVec2(300, 0), 0, ImVec2(0, 0));
-		std::string title = "Ambient Occlusion: " + std::string(g_ShowRaytraced ? "RTAO" : "SSAO");
 		ImGui::Begin(title.c_str());
-		Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
+		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
 		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 		float width = windowSize.x;
 		float height = windowSize.x * image.y / image.x;
@@ -1482,28 +1487,37 @@ void Graphics::UpdateImGui()
 			height = windowSize.y;
 		}
 
-		ImTextureID user_texture_id = m_pAmbientOcclusion->GetSRV().ptr;
+		ImTextureID user_texture_id = m_pVisualizeTexture->GetSRV().ptr;
 		ImGui::Image(user_texture_id, ImVec2(width, height));
 		ImGui::End();
 	}
+	
+	ImGui::SetNextWindowPos(ImVec2(300, 20), 0, ImVec2(0, 0));
+	ImGui::Begin("Parameters");
 
+	ImGui::Text("Shadows");
+	ImGui::Checkbox("SDSM", &g_ShowSDSM);
+	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascases);
+	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
+	
+	ImGui::Text("Expose/Tonemapping");
+	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
+	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
+	ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
+	ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
+
+	ImGui::Text("Misc");
+	ImGui::Checkbox("Visualize Lights", &g_VisualizeLights);
+
+	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
 	{
-		ImGui::Begin("Shadow Map");
-		Vector2 image((float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight());
-		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
-		float width = windowSize.x;
-		float height = windowSize.x * image.y / image.x;
-		if (image.x / windowSize.x < image.y / windowSize.y)
+		if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
 		{
-			width = image.x / image.y * windowSize.y;
-			height = windowSize.y;
+			g_ShowRaytraced = false;
 		}
-
-		ImTextureID user_texture_id = m_pShadowMap->GetSRV().ptr;
-		ImGui::Image(user_texture_id, ImVec2(width, height));
-		ImGui::End();
 	}
 
+	ImGui::End();
 }
 
 void Graphics::RandomizeLights(int count)

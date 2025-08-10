@@ -158,7 +158,6 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 
 	graph.AddPass("RenderUI", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResource& resources)
 			{
 				context.SetPipelineState(m_pPipelineStateObject.get());

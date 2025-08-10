@@ -30,16 +30,16 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 	float g_AoRadius = 0.5;
 	int g_AoSamples = 16;
 
-	ImGui::Begin("AO Parameters");
-	ImGui::SliderFloat("AO Power", &g_AoPower, 0, 10);
-	ImGui::SliderFloat("AO Threshold", &g_AoThreshold, 0.0001f, 0.01f);
-	ImGui::SliderFloat("AO Radius", &g_AoRadius, 0, 2);
-	ImGui::SliderInt("AO Samples", &g_AoSamples, 1, 64);
+	ImGui::Begin("Parameters");
+	ImGui::Text("Ambient Occlusion");
+	ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
+	ImGui::SliderFloat("Threshold", &g_AoThreshold, 0.0001f, 0.01f);
+	ImGui::SliderFloat("Radius", &g_AoRadius, 0, 2);
+	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
 	ImGui::End();
 
 	graph.AddPass("SSAO", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& renderContext, const RGPassResource& resources)
 				{
 					renderContext.InsertResourceBarrier(inputResources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -89,7 +89,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 
 	graph.AddPass("Blur SSAO", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& renderContext, const RGPassResource& resources)
 				{
 					renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

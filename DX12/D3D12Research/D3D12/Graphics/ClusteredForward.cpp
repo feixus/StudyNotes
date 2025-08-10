@@ -103,7 +103,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
     graph.AddPass("Mark Clusters", [&](RGPassBuilder& builder)
         {
             builder.Read(inputResource.DepthBuffer);
-            builder.NeverCull();
             return [=](CommandContext& context, const RGPassResource& passResources)
                 {
                     GraphicsTexture* depthBuffer = passResources.GetTexture(inputResource.DepthBuffer);
@@ -179,7 +178,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 	graph.AddPass("Compact Clusters", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResource& passResources)
             {
 					context.InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -202,7 +200,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 	graph.AddPass("Update Indirect Arguments", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResource& passResources)
             {
 				UnorderedAccessView* pCompactedClusterUav = m_pCompactedClusterBuffer->GetUAV();
@@ -221,7 +218,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
     graph.AddPass("Clustered Light Culling", [&](RGPassBuilder& builder)
         {
-            builder.NeverCull();
             return[=](CommandContext& context, const RGPassResource& passResources)
             {
                     context.SetPipelineState(m_pLightCullingPSO.get());
@@ -261,7 +257,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
 		{
             builder.Read(inputResource.DepthBuffer);
-			builder.NeverCull();
 			return[=](CommandContext& context, const RGPassResource& passResources)
             {
 				struct PerObjectData
@@ -361,7 +356,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
     {
 		graph.AddPass("Visualize Clusters", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
 				return[=](CommandContext& context, const RGPassResource& passResources)
                 {
 					if (m_DidCopyDebugClusterData == false)

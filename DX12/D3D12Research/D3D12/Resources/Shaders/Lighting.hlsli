@@ -108,7 +108,7 @@ static float4 colors[4] = {
     float4(1, 0, 1, 1)  // magenta
 };
 
-LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 N, float3 V, float clipZ)
+LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 N, float3 V, float clipPosZ)
 {
     float attenuation = GetAttenuation(light, wPos);
     float3 L = normalize(light.Position - wPos);
@@ -116,11 +116,26 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
     if (light.Type == LIGHT_DIRECTIONAL)
     {
-        float4 splits = clipZ < cCascadeDepths;
+        float4 splits = clipPosZ < cCascadeDepths;
         int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
-        float shadowFactor = DoShadow(wPos, light.ShadowIndex + cascadeIndex);
-        result.Diffuse *= shadowFactor;
-        result.Specular *= shadowFactor;
+        float visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex);
+
+#define FADE_SHADOW_CASCADES 1
+#define FADE_THRESHOLD 0.1f
+#if FADE_SHADOW_CASCADES
+        float nextSplit = cCascadeDepths[cascadeIndex];
+        float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
+        float fadeFactor = (nextSplit - clipPosZ) / splitRange;
+        if (fadeFactor < FADE_THRESHOLD && cascadeIndex != 4 - 1)
+        {
+            float nextVisibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex + 1);
+            float t = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
+            visibility = lerp(nextVisibility, visibility, t);
+        }
+#endif
+
+        result.Diffuse *= visibility;
+        result.Specular *= visibility;
 
 #define VISUALIZE_CASCADES 0
 #if VISUALIZE_CASCADES

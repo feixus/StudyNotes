@@ -121,6 +121,8 @@ void RGGraph::Compile()
     // set all the compile metadata
     for (RGPass* pPass : m_RenderPasses)
     {
+        pPass->m_NeverCull = true;
+
         pPass->m_References = (int)pPass->m_Writes.size() + (int)pPass->m_NeverCull;
 
         for (RGResourceHandle read : pPass->m_Reads)
@@ -248,7 +250,6 @@ void RGGraph::Present(RGResourceHandle resource)
     AddPass("Present",
             [&](RGPassBuilder& builder) {
                 builder.Read(resource);
-                builder.NeverCull();
             
                 return [=](CommandContext&, const RGPassResource&) {
                 };

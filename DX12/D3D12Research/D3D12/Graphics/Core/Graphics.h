@@ -45,6 +45,12 @@ enum class RenderPath
 	Clustered,
 };
 
+enum class ShowGraph
+{
+	ShadowMap,
+	AO,
+};
+
 #define PIX_CAPTURE_SCOPE() PixScopeCapture<__COUNTER__> pix_scope_##__COUNTER__
 
 template<size_t IDX>
@@ -201,6 +207,7 @@ private:
 	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
+	ShowGraph m_ShowGraph = ShowGraph::AO;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;
@@ -256,4 +263,6 @@ private:
 	std::unique_ptr<Buffer> m_pLightBuffer;
 
 	std::unique_ptr<class Clouds> m_pClouds;
+
+	GraphicsTexture* m_pVisualizeTexture{ nullptr };
 };
