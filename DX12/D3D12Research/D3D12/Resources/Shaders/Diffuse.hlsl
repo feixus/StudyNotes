@@ -2,7 +2,6 @@
 #include "Lighting.hlsli"
 
 #define SPLITZ_CULLING 1
-#define FORWARD_PLUS 1
 #define BLOCK_SIZE 16
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
@@ -23,7 +22,7 @@ cbuffer PerObjectData : register(b0) // b-const buffer t-texture s-sampler
 cbuffer PerFrameData : register(b1)
 {
     float4x4 cViewInverse;
-    int cLightCount;
+    float4x4 cView;
 }
 
 struct VSInput
@@ -39,11 +38,11 @@ struct PSInput
 {
     float4 position : SV_POSITION;
     float3 positionWS : POSITION_WS;
+    float3 positionVS : POSITION_VS;
     float2 texCoord : TEXCOORD;
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
     float3 bitangent : TEXCOORD1;
-    float clipPosZ : CLIPPOS;
 };
 
 Texture2D myDiffuseTexture : register(t0);
@@ -52,38 +51,26 @@ Texture2D mySpecularTexture : register(t2);
 
 SamplerState myDiffuseSampler : register(s0);
 
-#if FORWARD_PLUS
 Texture2D<uint2> tLightGrid : register(t4);
 StructuredBuffer<uint> tLightIndexList : register(t5);
-#endif
 
 StructuredBuffer<Light> Lights : register(t6);
 
 
-LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness, float clipPosZ)
+LightResult DoLight(float4 pos, float3 wPos, float3 vPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
-#if FORWARD_PLUS
     uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
     uint startOffset = tLightGrid[tileIndex].x;
     uint lightCount = tLightGrid[tileIndex].y;
-#else
-    uint lightCount = cLightCount;
-#endif
 
     LightResult totalResult = (LightResult)0;
 
     for (uint i = 0; i < lightCount; i++)
     {
-#if FORWARD_PLUS
         uint lightIndex = tLightIndexList[startOffset + i];
         Light light = Lights[lightIndex];
-#else
-        uint lightIndex = i;
-        Light light = Lights[i];
 
-#endif
-
-        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, N, V, clipPosZ);
+        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, vPos, N, V);
         totalResult.Diffuse += result.Diffuse;
         totalResult.Specular += result.Specular;
     }
@@ -101,7 +88,7 @@ PSInput VSMain(VSInput input)
     result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
     result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
     result.positionWS = mul(float4(input.position, 1.0f), cWorld).xyz;
-    result.clipPosZ = result.position.z;
+    result.positionVS = mul(float4(result.positionWS, 1.0f), cView).xyz;
     return result;
 }
 
@@ -119,7 +106,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     float3 N = TangentSpaceNormalMapping(myNormalTexture, myDiffuseSampler, TBN, input.texCoord, true);
     float3 V = normalize(cViewInverse[3].xyz - input.positionWS);
     
-    LightResult lightResults = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r, input.clipPosZ);
+    LightResult lightResults = DoLight(input.position, input.positionWS, input.positionVS, N, V, diffuseColor, specularColor, r);
 
     float3 color = lightResults.Diffuse + lightResults.Specular;
 

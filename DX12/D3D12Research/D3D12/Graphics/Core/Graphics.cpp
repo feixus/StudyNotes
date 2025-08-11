@@ -236,8 +236,8 @@ void Graphics::Update()
 		}
 		
 		lightData.LightViewProjections[i] = lightViewProjection;
-		lightData.CascadeDepths[i] = Vector4::Transform(Vector4(0, 0, currentCascadeSplit * (farPlane - nearPlane) + nearPlane, 1), m_pCamera->GetProjection()).z;
-		lightData.ShadowMapOffsets[i] = Vector4((float)(m_ShadowCasters % 2) * 0.5f, (float)(m_ShadowCasters / 2) * 0.5f, 0.5f, 0);
+		lightData.CascadeDepths[i] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
+		lightData.ShadowMapOffsets[i] = Vector4((float)(m_ShadowCasters % 2) * 0.5f, (float)(m_ShadowCasters / 2) * 0.5f, 0.5f, 0.5f);
 		m_ShadowCasters++;
 	}
 
@@ -488,7 +488,7 @@ void Graphics::Update()
 							viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
 							viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
 							viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
-							viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
+							viewport.Bottom = viewport.Top + shadowOffset.w * (float)m_pShadowMap->GetHeight();
 							context.SetViewport(viewport);
 
 							struct PerObjectData

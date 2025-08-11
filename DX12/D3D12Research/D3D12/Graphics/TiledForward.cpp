@@ -101,6 +101,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                     struct PerFrameData
                     {
                         Matrix ViewInverse;
+                        Matrix View;
                     } frameData{};
 
                     struct PerObjectData
@@ -110,6 +111,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                     } objectData{};
 
                     frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
+                    frameData.View = inputResource.pCamera->GetView();
 
                     GraphicsTexture* pDepthTexture = passResources.GetTexture(inputResource.DepthBuffer);
 
