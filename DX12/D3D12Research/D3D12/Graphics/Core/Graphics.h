@@ -257,6 +257,10 @@ private:
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ReductionTargets;
 	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
 
+	// sky
+	std::unique_ptr<RootSignature> m_pSkyboxRS;
+	std::unique_ptr<PipelineState> m_pSkyboxPSO;
+
 	// light data
 	int m_ShadowCasters{0};
 	std::vector<Light> m_Lights;
