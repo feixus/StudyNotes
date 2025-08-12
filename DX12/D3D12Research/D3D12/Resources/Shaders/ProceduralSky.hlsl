@@ -85,6 +85,9 @@ float AngleBetween(float3 dir0, float3 dir1)
 //A Practical Analytic Model for Daylight
 //A. J. Preetham, Peter Shirley, Brian Smits
 //https://dl.acm.org/doi/pdf/10.1145/311535.311545
+// clear sky or overcast sky only
+// spectral radiance of the sun and sky in a given direction
+// how the spectral radiance of a distant object is changed as it travels through air to he viewer
 float3 CIESky(float3 dir, float3 sunDir)
 {
     float3 skyDir = float3(dir.x, saturate(dir.y), dir.z);
@@ -96,9 +99,9 @@ float3 CIESky(float3 dir, float3 sunDir)
     float cosS = cos(S);
     float cosGamma = cos(gamma);
 
+    // sky luminance model
     float numerator = (0.91f + 10 * exp(-3 * gamma) + 0.45f * cosGamma * cosGamma) * (1 - exp(-0.32f / cosTheta));
     float denominator = (0.91f + 10 * exp(-3 * S) + 0.45f * cosS * cosS) * (1 - exp(-0.32f));
-
     float luminance = numerator / max(denominator, 0.0001f);
 
     // clear sky model only calculates luminance, so we'll pick a strong blue color for the sky
