@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "ClusteredForward.h"
-#include "GpuParticles.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Scene/Camera.h"
 #include "Core/CommandSignature.h"
@@ -26,14 +25,10 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 {
     SetupResources(pGraphics);
     SetupPipelines(pGraphics);
-
-    m_pGpuParticles = std::make_unique<GpuParticles>(pGraphics);
-    m_pGpuParticles->Initialize();
 }
 
 ClusteredForward::~ClusteredForward()
-{
-}
+{}
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
@@ -392,8 +387,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
     {
         m_DidCopyDebugClusterData = false;
     }
-
-    m_pGpuParticles->Simulate(graph);
 }
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)

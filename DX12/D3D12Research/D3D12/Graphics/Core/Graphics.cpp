@@ -25,6 +25,8 @@
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/RTAO.h"
 #include "Graphics/SSAO.h"
+#include "Graphics/GpuParticles.h"
+#include "Graphics/Core/CommandSignature.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -43,7 +45,7 @@ bool g_DumpRenderGraph = true;
 float g_WhitePoint = 4;
 float g_MinLogLuminance = -10.0f;
 float g_MaxLogLuminance = 2.0f;
-float g_Tau = 10;
+float g_Tau = 2;
 
 bool g_ShowSDSM = true;
 bool g_StabilizeCascases = true;
@@ -256,6 +258,7 @@ void Graphics::Update()
 	{
 		RGResourceHandle DepthStencil;
 		RGResourceHandle DepthStencilResolved;
+		RGResourceHandle NormalsResolved;
 	} sceneData{};
 
 	sceneData.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
@@ -382,6 +385,14 @@ void Graphics::Update()
 					};
 			});
 	}
+
+	graph.AddPass("Simulate Particles", [&](RGPassBuilder& builder)
+		{
+			return [=](CommandContext& context, const RGPassResource& passResources)
+				{
+					m_pGpuParticles->Simulate(context, GetResolveDepthStencil(), GetResolvedNormals());
+				};
+		});
 
 	if (g_ShowRaytraced)
 	{
@@ -561,6 +572,14 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
+	graph.AddPass("Draw Particles", [&](RGPassBuilder& builder)
+		{
+			return [=](CommandContext& context, const RGPassResource& passResources)
+				{
+					m_pGpuParticles->Render(context);
+				};
+		});
+
 	graph.AddPass("Sky", [&](RGPassBuilder& builder)
 		{
 			sceneData.DepthStencil = builder.Read(sceneData.DepthStencil);
@@ -590,9 +609,9 @@ void Graphics::Update()
 					Matrix View;
 					Matrix Projection;
 					Vector3 Bias;
-					float padding1;
+					float padding1{};
 					Vector3 SunDirection;
-					float padding2;
+					float padding2{};
 				} constBuffer;
 
 				constBuffer.View = m_pCamera->GetView();
@@ -1004,6 +1023,9 @@ void Graphics::InitD3D()
 
 	DebugRenderer::Instance().Initialize(this);
 	DebugRenderer::Instance().SetCamera(m_pCamera.get());
+
+	m_pGpuParticles = std::make_unique<GpuParticles>(this);
+	m_pGpuParticles->Initialize();
 }
 
 void Graphics::CreateSwapchain()
@@ -1628,7 +1650,7 @@ void Graphics::RandomizeLights(int count)
 
 		const float range = Math::RandomRange(10.f, 40.f);
 		const float angle = Math::RandomRange(60.f, 120.f);
-		const float intensity = Math::RandomRange(250, 270);
+		const float intensity = Math::RandomRange(250.f, 270.f);
 
 		Light::Type type = (rand() % 2 == 0) ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
@@ -1825,10 +1847,10 @@ bool Graphics::IsFenceComplete(uint64_t fenceValue)
 	return pQueue->IsFenceComplete(fenceValue);
 }
 
-uint32_t Graphics::GetMultiSampleQualityLevel(uint32_t msaa)
+uint32_t Graphics::GetMultiSampleQualityLevel(uint32_t msaa, DXGI_FORMAT format)
 {
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
-	qualityLevels.Format = RENDER_TARGET_FORMAT;
+	qualityLevels.Format = format == DXGI_FORMAT_UNKNOWN ? RENDER_TARGET_FORMAT : format;
 	qualityLevels.SampleCount = msaa;
 	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));

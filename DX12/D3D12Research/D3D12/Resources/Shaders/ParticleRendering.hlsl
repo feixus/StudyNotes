@@ -3,6 +3,7 @@ struct ParticleData
     float3 Position;
     float LifeTime;
     float3 Velocity;
+    float Size;
 };
 
 cbuffer FrameData : register(b0)
@@ -23,6 +24,7 @@ struct VS_INPUT
 struct PS_INPUT
 {
     float4 position : SV_POSITION;
+    float2 texCoord : TEXCOORD0;
     float4 color : COLOR;
 };
 
@@ -45,7 +47,7 @@ PS_INPUT VSMain(VS_INPUT input)
 
     uint particleIndex = tAliveList[instanceId];
     ParticleData particle = tParticleData[particleIndex];
-    float3 quadPos = 0.1 * BILLBOARD[vertexId];
+    float3 quadPos = particle.Size * BILLBOARD[vertexId];
 
     output.position = float4(mul(quadPos, (float3x3)cViewInverse), 1);
     output.position.xyz += particle.Position;
@@ -55,12 +57,15 @@ PS_INPUT VSMain(VS_INPUT input)
     // Calculate color based on lifetime
     float lifeFactor = particle.LifeTime / 4.0f; // Assuming max lifetime is 4
     output.color = float4(1.0f - lifeFactor, lifeFactor, 0.0f, 1.0f); // Gradient from red to green
+    output.texCoord = BILLBOARD[vertexId].xy * 0.5f + 0.5f;
+
     return output;
 }
 
 float4 PSMain(PS_INPUT input) : SV_TARGET
 {
-    return input.color;
+    float alpha = 1 - saturate(2 * length(input.texCoord - 0.5f));
+    return float4(input.color.xyz, alpha);
 }
 
 

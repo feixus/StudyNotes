@@ -22,6 +22,7 @@ class UnorderedAccessView;
 class TiledForward;
 class RTAO;
 class SSAO;
+class GpuParticles;
 
 struct Batch
 {
@@ -36,7 +37,7 @@ struct ShadowData
 {
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
 	Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
-	float CascadeDepths[4];
+	float CascadeDepths[4]{};
 };
 
 enum class RenderPath
@@ -103,6 +104,7 @@ public:
 	bool BeginPixCapture() const;
 	bool EndPixCapture() const;
 
+	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandContext);
@@ -128,7 +130,7 @@ public:
 	Camera* GetCamera() const { return m_pCamera.get(); }
 
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
-	uint32_t GetMultiSampleQualityLevel(uint32_t msaa);
+	uint32_t GetMultiSampleQualityLevel(uint32_t msaa, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 
@@ -266,7 +268,10 @@ private:
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
 
-	std::unique_ptr<class Clouds> m_pClouds;
-
 	GraphicsTexture* m_pVisualizeTexture{ nullptr };
+
+	// particles
+	std::unique_ptr<GpuParticles> m_pGpuParticles;
+	// clouds
+	std::unique_ptr<class Clouds> m_pClouds;
 };

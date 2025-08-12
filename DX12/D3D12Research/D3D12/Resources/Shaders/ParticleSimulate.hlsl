@@ -1,8 +1,17 @@
+#include "RNG.hlsli"
+#include "Common.hlsli"
+
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(UAV(u0, numDescriptors = 8), visibility=SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_ALL), " \
+                "StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
+                
 struct ParticleData
 {
     float3 Position;
     float LifeTime;
     float3 Velocity;
+    float Size;
 };
 
 struct CS_INPUT
@@ -18,17 +27,42 @@ struct CS_INPUT
 #define ALIVE_LIST_2_COUNTER 8
 #define EMIT_COUNT 12
 
-#ifdef COMPILE_UPDATE_PARAMETERS
-
-cbuffer Parameters : register(b0)
+cbuffer SimulationParameters : register(b0)
 {
-    uint cEmitCount;
+    int cEmitCount;
 }
+
+cbuffer EmitParameters : register(b0)
+{
+    float4 cRandomDirections[64];
+}
+
+cbuffer SimulateParameters : register(b0)
+{
+    float4x4 cViewProjection;
+    float cDeltaTime;
+    float cParticleLifetime;
+    float cNear;
+    float cFar;
+}
+
 
 RWByteAddressBuffer uCounters : register(u0);
 RWByteAddressBuffer uEmitArguments : register(u1);
 RWByteAddressBuffer uSimulateArguments : register(u2);
+RWByteAddressBuffer uDrawArgumentsBuffer : register(u3);
+RWStructuredBuffer<uint> uDeadList : register(u4);
+RWStructuredBuffer<uint> uAliveList1 : register(u5);
+RWStructuredBuffer<uint> uAliveList2 : register(u6);
+RWStructuredBuffer<ParticleData> uParticleData : register(u7);
 
+ByteAddressBuffer tCounters : register(t0);
+Texture2D tDepth : register(t1);
+Texture2D tNormals : register(t2);
+
+SamplerState sSampler : register(s0);
+
+[RootSignature(RootSig)]
 [numthreads(1, 1, 1)]
 void UpdateSimulationParameters(CS_INPUT input)
 {
@@ -46,20 +80,6 @@ void UpdateSimulationParameters(CS_INPUT input)
     uCounters.Store(EMIT_COUNT, emitCount);
 }
 
-#endif
-
-#ifdef COMPILE_EMITTER
-
-cbuffer EmitterData : register(b0)
-{
-    float4 cRandomDirections[64];
-}
-
-RWByteAddressBuffer uCounters : register(u0);
-RWStructuredBuffer<uint> uDeadList : register(u1);
-RWStructuredBuffer<uint> uAliveList1 : register(u2);
-RWStructuredBuffer<ParticleData> uParticleData : register(u3);
-
 [numthreads(128, 1, 1)]
 void Emit(CS_INPUT input)
 {
@@ -72,9 +92,9 @@ void Emit(CS_INPUT input)
 
         ParticleData p;
         p.LifeTime = 0;
-        p.Position = float3(0, 0, 0);
-        p.Velocity = 30 * cRandomDirections[particleIndex % 64].xyz;
-
+        p.Position = float3(0, 3, 0);
+        p.Velocity = 20 * cRandomDirections[particleIndex % 64].xyz;
+        p.Size = (float)Random(deadSlot, 10, 30) / 100.0f;
         uParticleData[particleIndex] = p;
 
         uint aliveSlot;
@@ -82,22 +102,6 @@ void Emit(CS_INPUT input)
         uAliveList1[aliveSlot] = particleIndex;
     }
 }
-
-#endif
-
-#ifdef COMPILE_SIMULATE
-
-cbuffer Parameters : register(b0)
-{
-    float cDeltaTime;
-    float cParticleLifetime;
-}
-
-RWByteAddressBuffer uCounters : register(u0);
-RWStructuredBuffer<uint> uDeadList : register(u1);
-RWStructuredBuffer<uint> uAliveList1 : register(u2);
-RWStructuredBuffer<uint> uAliveList2 : register(u3);
-RWStructuredBuffer<ParticleData> uParticleData : register(u4);
 
 [numthreads(128, 1, 1)]
 void Simulate(CS_INPUT input)
@@ -109,6 +113,24 @@ void Simulate(CS_INPUT input)
         ParticleData p = uParticleData[particleIndex];
         if (p.LifeTime < cParticleLifetime)
         {
+            float4 screenPos = mul(float4(p.Position, 1), cViewProjection);
+            screenPos.xyz /= screenPos.w;
+            if (screenPos.x > -1 && screenPos.x < 1 && screenPos.y > -1 && screenPos.y < 1)
+            {
+                float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
+                float depth = LinearizeDepth(tDepth.SampleLevel(sSampler, uv, 0).r, cFar, cNear);
+                const float thickness = 0.2f;
+
+                if (screenPos.w + p.Size > depth && screenPos.w - p.Size < depth + thickness)
+                {
+                    float3 normal = tNormals.SampleLevel(sSampler, uv, 0).xyz;
+                    if (dot(normal, p.Velocity) < 0)
+                    {
+                        p.Velocity = reflect(p.Velocity, normal);
+                    }
+                }
+            }
+
             p.Velocity += float3(0, -9.81f * cDeltaTime, 0);
             p.Position += p.Velocity * cDeltaTime;
             p.LifeTime += cDeltaTime;
@@ -127,18 +149,9 @@ void Simulate(CS_INPUT input)
     }
 }
 
-#endif
-
-#ifdef COMPILE_SIMULATE_END
-
-ByteAddressBuffer uCounters : register(t0);
-RWByteAddressBuffer uArgumentsBuffer : register(u0);
-
 [numthreads(1, 1, 1)]
 void SimulateEnd(CS_INPUT input)
 {
     uint particleCount = uCounters.Load(ALIVE_LIST_2_COUNTER);
-    uArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
+    uDrawArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
 }
-
-#endif

@@ -2,14 +2,10 @@
 #include "CommandSignature.h"
 
 CommandSignature::CommandSignature()
-{
-
-}
+{}
 
 CommandSignature::~CommandSignature()
-{
-
-}
+{}
 
 void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
 {

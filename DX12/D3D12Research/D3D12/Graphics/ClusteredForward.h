@@ -7,7 +7,6 @@ class Buffer;
 class GraphicsTexture;
 class Camera;
 class CommandSignature;
-class GpuParticles;
 struct Batch;
 class Graphics;
 class CommandContext;
@@ -97,6 +96,4 @@ private:
     std::unique_ptr<Buffer> m_pDebugLightGrid;
     Matrix m_DebugClusterViewMatrix;
     bool m_DidCopyDebugClusterData{false};
-
-    std::unique_ptr<GpuParticles> m_pGpuParticles;
 };

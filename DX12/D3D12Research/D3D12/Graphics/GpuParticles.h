@@ -9,6 +9,7 @@ class PipelineState;
 class RootSignature;
 class CommandContext;
 class RGGraph;
+class GraphicsTexture;
 
 class GpuParticles
 {
@@ -17,8 +18,8 @@ public:
     ~GpuParticles() = default;
 
     void Initialize();
-    void Simulate(RGGraph& graph);
-    void Render();
+    void Simulate(CommandContext& context, GraphicsTexture* pResolvedDepth, GraphicsTexture* pNormals);
+    void Render(CommandContext& context);
 
 private:
     Graphics* m_pGraphics{nullptr};
@@ -29,10 +30,8 @@ private:
     std::unique_ptr<Buffer> m_pParticleBuffer;
     std::unique_ptr<Buffer> m_pCounterBuffer;
     
-    std::unique_ptr<RootSignature> m_pPrepareArgumentsRS;
     std::unique_ptr<PipelineState> m_pPrepareArgumentsPSO;
 
-    std::unique_ptr<RootSignature> m_pEmitRS;
     std::unique_ptr<PipelineState> m_pEmitPSO;
     std::unique_ptr<Buffer> m_pEmitArguments;
 
@@ -40,7 +39,6 @@ private:
     std::unique_ptr<PipelineState> m_pSimulatePSO;
     std::unique_ptr<Buffer> m_pSimulateArguments;
 
-    std::unique_ptr<RootSignature> m_pSimulateEndRS;
     std::unique_ptr<PipelineState> m_pSimulateEndPSO;
     std::unique_ptr<Buffer> m_pDrawArguments;
 

@@ -120,7 +120,7 @@ public:
         [&](auto&&... payloadArgs) {
             return std::invoke(m_Lambda, 
 				               std::forward<Args>(args)...,
-				               std::forward(decltype(payloadArgs)(payloadArgs)...));
+				               std::forward<decltype(payloadArgs)>(payloadArgs)...);
         },
         m_Payload
         );
