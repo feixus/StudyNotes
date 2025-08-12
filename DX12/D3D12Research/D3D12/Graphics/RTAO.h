@@ -44,7 +44,7 @@ private:
     std::unique_ptr<RootSignature> m_pRayGenSignature;
     std::unique_ptr<RootSignature> m_pHitSignature;
     std::unique_ptr<RootSignature> m_pMissSignature;
-    std::unique_ptr<RootSignature> m_pDummySignature;
+    std::unique_ptr<RootSignature> m_pGlobalRS;
 
     ComPtr<ID3D12StateObject> m_pStateObject;
     ComPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;

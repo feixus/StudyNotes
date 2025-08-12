@@ -61,34 +61,10 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
                 context.InsertResourceBarrier(inputResources.pNormalTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(inputResources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 
-                const int descriptorsToAllocate = 4; // UAV + TLAS + Normal SRV + Depth SRV
-                int totalAllocatedDescriptors = 0;
-    
-                DescriptorHandle descriptors = context.AllocateTransientDescriptor(descriptorsToAllocate, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                ID3D12Device* pDevice = m_pGraphics->GetDevice();
-
-                auto pfCopyDescriptors = [&](const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& sourceDescriptor)
-                {
-                    DescriptorHandle originalHandle = descriptors;
-                    for (size_t i = 0; i < sourceDescriptor.size(); i++)
-                    {
-                        if (totalAllocatedDescriptors >= descriptorsToAllocate)
-                        {
-                            assert(false);
-                        }
-
-                        pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), sourceDescriptor[i], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                        descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                        totalAllocatedDescriptors++;
-                    }
-                    return originalHandle;
-                };
-
-                DescriptorHandle renderTargetUAV = pfCopyDescriptors({ inputResources.pRenderTarget->GetUAV() });
-                DescriptorHandle tlasSRV = pfCopyDescriptors({ m_pTLAS->GetSRV()->GetDescriptor() });
-                DescriptorHandle textureSRV = pfCopyDescriptors({ inputResources.pNormalTexture->GetSRV(),
-                                                                inputResources.pDepthTexture->GetSRV() });
-
+                context.SetComputeRootSignature(m_pGlobalRS.get());
+				ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
+				pCmd->SetPipelineState1(m_pStateObject.Get());
+                
                 constexpr const int numRandomVectors = 64;
                 struct Parameters
                 {
@@ -122,27 +98,24 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
                 parameters.Radius = g_AoRadius;
                 parameters.Samples = g_AoSamples;
 
-				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(Parameters), &parameters);
-
                 D3D12_DISPATCH_RAYS_DESC rayDesc{};
                 rayDesc.Width = inputResources.pRenderTarget->GetWidth();
                 rayDesc.Height = inputResources.pRenderTarget->GetHeight();
                 rayDesc.Depth = 1;
 
                 ShaderBindingTable bindingTable(m_pStateObject.Get());
-                bindingTable.AddRayGenEntry("RayGen", {
-				    reinterpret_cast<void*>(allocation.GpuHandle),
-					reinterpret_cast<void*>(renderTargetUAV.GetGpuHandle().ptr),
-					reinterpret_cast<void*>(tlasSRV.GetGpuHandle().ptr),
-					reinterpret_cast<void*>(textureSRV.GetGpuHandle().ptr),
-                });
+                bindingTable.AddRayGenEntry("RayGen", {});
                 bindingTable.AddMissEntry("Miss", {});
                 bindingTable.AddHitGroupEntry("HitGroup", {});
                 bindingTable.Commit(context, rayDesc);
 
-                ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
-                pCmd->SetPipelineState1(m_pStateObject.Get());
-                //context.PrepareDraw(DescriptorTableType::Compute);
+                context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+				context.SetDynamicDescriptor(1, 0, inputResources.pRenderTarget->GetUAV());
+				context.SetDynamicDescriptor(2, 0, m_pTLAS->GetSRV());
+                context.SetDynamicDescriptor(2, 1, inputResources.pNormalTexture->GetSRV());
+                context.SetDynamicDescriptor(2, 2, inputResources.pDepthTexture->GetSRV());
+                
+                context.PrepareDraw(DescriptorTableType::Compute);
                 pCmd->DispatchRays(&rayDesc);
             }
         };
@@ -267,18 +240,6 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
     // raytracing pipeline
     {
         m_pRayGenSignature = std::make_unique<RootSignature>();
-        m_pRayGenSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-        m_pRayGenSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-        m_pRayGenSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
-        m_pRayGenSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
-
-        D3D12_SAMPLER_DESC samplerDesc{};
-        samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-        samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        m_pRayGenSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_ALL);
-        samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-        m_pRayGenSignature->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_ALL);
-
         m_pRayGenSignature->Finalize("Ray Gen RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
         m_pHitSignature = std::make_unique<RootSignature>();
@@ -287,8 +248,19 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
         m_pMissSignature = std::make_unique<RootSignature>();
         m_pMissSignature->Finalize("Ray MissHit RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
-        m_pDummySignature = std::make_unique<RootSignature>();
-        m_pDummySignature->Finalize("Ray Dummy Global RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+        m_pGlobalRS = std::make_unique<RootSignature>();
+        m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+		m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+
+		D3D12_SAMPLER_DESC samplerDesc{};
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        m_pGlobalRS->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_ALL);
+		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        m_pGlobalRS->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_ALL);
+
+        m_pGlobalRS->Finalize("Ray Global RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
         
         ShaderLibrary shaderLibrary("Resources/Shaders/RTAO.hlsl");
 
@@ -342,7 +314,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
             pRtPipelineConfig->Config(1);
 
             CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT* pGlobalRs = desc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
-            pGlobalRs->SetRootSignature(m_pDummySignature->GetRootSignature());
+            pGlobalRs->SetRootSignature(m_pGlobalRS->GetRootSignature());
         }
         D3D12_STATE_OBJECT_DESC stateObject = *desc;
 
