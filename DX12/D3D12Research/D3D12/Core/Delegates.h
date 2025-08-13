@@ -348,7 +348,7 @@ private:
     union
     {
         char Buffer[MaxStackSize];
-        void* pPtr;
+        void* pPtr{nullptr};
     };
 
     size_t m_Size;

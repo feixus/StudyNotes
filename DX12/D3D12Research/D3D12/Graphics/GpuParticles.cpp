@@ -198,9 +198,9 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 
 		struct Parameters
 		{
-			int32_t EmitCount;
+			uint32_t EmitCount;
 		} parameters;
-		parameters.EmitCount = floor(m_ParticlesToSpawn);
+		parameters.EmitCount = (uint32_t)floor(m_ParticlesToSpawn);
         m_ParticlesToSpawn -= parameters.EmitCount;
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
@@ -240,10 +240,10 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 		struct Parameters
 		{
 			Matrix ViewProjection;
-			float DeltaTime;
-			float ParticleLifetime;
-			float Near;
-			float Far;
+			float DeltaTime{0};
+			float ParticleLifetime{0};
+			float Near{0};
+			float Far{0};
 		} parameters;
 		parameters.DeltaTime = GameTimer::DeltaTime();
 		parameters.ParticleLifetime = g_LifeTime;

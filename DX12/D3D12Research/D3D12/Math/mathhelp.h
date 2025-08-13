@@ -150,10 +150,10 @@ namespace Math
 	{
 		Color output;
 		// unsigned int layout: AAAA RRRR GGGG BBBB
-		output.x = ((color >> 16) && 0xFF) / 255.0f;
-		output.y = ((color >>  8) && 0xFF) / 255.0f;;
-		output.z = ((color >>  0) && 0xFF) / 255.0f;;
-		output.w = ((color >> 24) && 0xFF) / 255.0f;;
+		output.x = ((color >> 16) & 0xFF) / 255.0f;
+		output.y = ((color >> 8) & 0xFF) / 255.0f;;
+		output.z = ((color >> 0) & 0xFF) / 255.0f;;
+		output.w = ((color >> 24) & 0xFF) / 255.0f;;
 		return output;
 	}
 

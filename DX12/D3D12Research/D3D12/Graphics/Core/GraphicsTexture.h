@@ -82,7 +82,7 @@ struct ClearBinding
 	union
 	{
 		Color Color;
-		DepthStencilData DepthStencil;
+		DepthStencilData DepthStencil{};
 	};
 };
 

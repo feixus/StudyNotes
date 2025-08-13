@@ -1,22 +1,18 @@
 #pragma once
-#include "Graphics/Core/GraphicsResource.h"
 
-class PipelineState;
 class PipelineState;
 class RootSignature;
 class GraphicsTexture;
-class Graphics;
-class GraphicsTexture;
 class Buffer;
+class Graphics;
+class Camera;
+class CommandContext;
 
-class Clouds : public GraphicsObject
+class Clouds
 {
 public:
-	Clouds(Graphics* pGraphics);
-	void Initialize();
-	void OnSwapchainCreated(int windowWidth, int windowHeight);
-	void RenderUI();
-	void Render(GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture);
+	void Initialize(Graphics* pGraphics);
+	void Render(CommandContext& context, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera);
 
 private:
 	std::unique_ptr<PipelineState> m_pWorleyNoisePS;

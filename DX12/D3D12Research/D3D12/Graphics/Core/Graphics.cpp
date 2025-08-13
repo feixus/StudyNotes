@@ -580,6 +580,14 @@ void Graphics::Update()
 				};
 		});
 
+	graph.AddPass("Draw Clouds", [&](RGPassBuilder& builder)
+		{
+			return [=](CommandContext& context, const RGPassResource& passResources)
+				{
+					m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera());
+				};
+		});
+
 	graph.AddPass("Sky", [&](RGPassBuilder& builder)
 		{
 			sceneData.DepthStencil = builder.Read(sceneData.DepthStencil);
@@ -589,6 +597,7 @@ void Graphics::Update()
 				GraphicsTexture* pDepthStencil = inputResources.GetTexture(sceneData.DepthStencil);
 				const TextureDesc& desc = pDepthStencil->GetDesc();
 				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+				renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 				RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
 				
@@ -784,7 +793,6 @@ void Graphics::Update()
 	//  - ImGui render, pretty straight forward
 	{
 		//ImGui::ShowDemoWindow();
-		//m_pClouds->RenderUI();
 		m_pImGuiRenderer->Render(graph, GetCurrentBackbuffer());
 	}
 
@@ -804,22 +812,6 @@ void Graphics::Update()
 		g_DumpRenderGraph = false;
 	}
 	nextFenceValue = graph.Execute();
-
-
-	/*m_pClouds->Render(m_pResolvedRenderTarget.get(), m_pResolveDepthStencil.get());
-
-	{
-		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		Profiler::Get()->Begin("Blit to Backbuffer", pCommandContext);
-		pCommandContext->InsertResourceBarrier(m_pResolvedRenderTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-		pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_COPY_DEST);
-		pCommandContext->FlushResourceBarriers();
-		pCommandContext->CopyResource(m_pResolvedRenderTarget.get(), GetCurrentBackbuffer());
-		pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
-		Profiler::Get()->End(pCommandContext);
-
-		nextFenceValue = pCommandContext->Execute(false);
-	}*/
 
 	// present
 	//  - set fence for the currently queued frame
@@ -1016,8 +1008,8 @@ void Graphics::InitD3D()
 
 	m_pResourceAllocator = std::make_unique<RGResourceAllocator>(this);
 
-	m_pClouds = std::make_unique<Clouds>(this);
-	m_pClouds->Initialize();
+	m_pClouds = std::make_unique<Clouds>();
+	m_pClouds->Initialize(this);
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
@@ -1118,7 +1110,6 @@ void Graphics::OnResize(int width, int height)
 	m_pTiledForward->OnSwapchainCreated(width, height);
 	m_pRTAO->OnSwapchainCreated(width, height);
 	m_pSSAO->OnSwapchainCreated(width, height);
-	m_pClouds->OnSwapchainCreated(width, height);
 
 	m_ReductionTargets.clear();
 	int w = GetWindowWidth();
@@ -1355,7 +1346,8 @@ void Graphics::InitializeAssets()
 
 		// pipeline state
 		m_pSkyboxPSO = std::make_unique<PipelineState>();
-		m_pSkyboxPSO->SetInputLayout(cubeInputElements, std::size(cubeInputElements));
+		//m_pSkyboxPSO->SetInputLayout(cubeInputElements, std::size(cubeInputElements));
+		m_pSkyboxPSO->SetInputLayout(nullptr, 0);
 		m_pSkyboxPSO->SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		m_pSkyboxPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pSkyboxPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
