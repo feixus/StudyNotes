@@ -4,11 +4,11 @@
 class Buffer;
 class CommandContext;
 
-#define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Instance()->Begin(name, cmdlist);
-#define GPU_PROFILE_END(cmdlist) Profiler::Instance()->End(cmdlist);
+#define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
+#define GPU_PROFILE_END(cmdlist) Profiler::Get()->End(cmdlist);
 
-#define PROFILE_BEGIN(name) Profiler::Instance()->Begin(name, nullptr);
-#define PROFILE_END() Profiler::Instance()->End();
+#define PROFILE_BEGIN(name) Profiler::Get()->Begin(name, nullptr);
+#define PROFILE_END() Profiler::Get()->End();
 
 #define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, cmdlist);
 #define PROFILE_SCOPE(name) ScopeProfiler profiler ## __COUNTER__(name, nullptr);
@@ -130,7 +130,7 @@ private:
 class Profiler
 {
 public:
-	static Profiler* Instance();
+	static Profiler* Get();
 
 	void Initialize(Graphics* pGraphics);
 
@@ -177,12 +177,12 @@ struct ScopeProfiler
 	ScopeProfiler(const char* pName, CommandContext* pContext = nullptr)
 		: pContext(pContext)
 	{
-		Profiler::Instance()->Begin(pName, pContext);
+		Profiler::Get()->Begin(pName, pContext);
 	}
 
 	~ScopeProfiler()
 	{
-		Profiler::Instance()->End(pContext);
+		Profiler::Get()->End(pContext);
 	}
 
 	CommandContext* pContext;

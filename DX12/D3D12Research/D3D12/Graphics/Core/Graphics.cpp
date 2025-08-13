@@ -111,7 +111,7 @@ void Graphics::Update()
 	{
 		for (const auto& light : m_Lights)
 		{
-			DebugRenderer::Instance().AddLight(light);
+			DebugRenderer::Get()->AddLight(light);
 		}
 	}
 
@@ -628,7 +628,7 @@ void Graphics::Update()
 			};
 		});
 
-	DebugRenderer::Instance().Render(graph);
+	DebugRenderer::Get()->Render(graph, *m_pCamera, GetCurrentRenderTarget(), GetDepthStencil());
 
 	// MSAA render target resolve
 	//  - we have to resolve a MSAA render target ourselves.
@@ -810,13 +810,13 @@ void Graphics::Update()
 
 	{
 		CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		Profiler::Instance()->Begin("Blit to Backbuffer", pCommandContext);
+		Profiler::Get()->Begin("Blit to Backbuffer", pCommandContext);
 		pCommandContext->InsertResourceBarrier(m_pResolvedRenderTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 		pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_COPY_DEST);
 		pCommandContext->FlushResourceBarriers();
 		pCommandContext->CopyResource(m_pResolvedRenderTarget.get(), GetCurrentBackbuffer());
 		pCommandContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
-		Profiler::Instance()->End(pCommandContext);
+		Profiler::Get()->End(pCommandContext);
 
 		nextFenceValue = pCommandContext->Execute(false);
 	}*/
@@ -846,15 +846,15 @@ void Graphics::EndFrame(uint64_t fenceValue)
 	// the 'm_CurrentBackBufferIndex' is always in the new buffer frame
 	// we present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame
 
-	Profiler::Instance()->BeginReadback(m_Frame);
+	Profiler::Get()->BeginReadback(m_Frame);
 	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	Profiler::Instance()->EndReadBack(m_Frame);
+	Profiler::Get()->EndReadBack(m_Frame);
 	++m_Frame;
 
-	DebugRenderer::Instance().EndFrame();
+	DebugRenderer::Get()->EndFrame();
 }
 
 void Graphics::InitD3D()
@@ -981,7 +981,7 @@ void Graphics::InitD3D()
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	Profiler::Instance()->Initialize(this);
+	Profiler::Get()->Initialize(this);
 
 	// swap chain
 	CreateSwapchain();
@@ -1021,8 +1021,7 @@ void Graphics::InitD3D()
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
-	DebugRenderer::Instance().Initialize(this);
-	DebugRenderer::Instance().SetCamera(m_pCamera.get());
+	DebugRenderer::Get()->Initialize(this);
 
 	m_pGpuParticles = std::make_unique<GpuParticles>(this);
 	m_pGpuParticles->Initialize();
@@ -1545,7 +1544,7 @@ void Graphics::UpdateImGui()
 		ImGui::SetNextWindowSize(ImVec2((m_WindowWidth - 250) * 0.5f, 250));
 		ImGui::SetNextWindowCollapsed(!showOutputLog);
 		ImGui::Begin("Profiler", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-		ProfileNode* pRootNode = Profiler::Instance()->GetRootNode();
+		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
 		pRootNode->RenderImGui(m_Frame);
 		ImGui::End();
 	}

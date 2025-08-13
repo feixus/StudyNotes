@@ -153,6 +153,14 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
         return;
     }
 
+    static float time = 0;
+    time += GameTimer::DeltaTime();
+    if (time > g_LifeTime)
+    {
+        time = 0;
+        m_ParticlesToSpawn = 1000000;
+    }
+
 	context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -192,7 +200,8 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 		{
 			int32_t EmitCount;
 		} parameters;
-		parameters.EmitCount = g_EmitCount;
+		parameters.EmitCount = floor(m_ParticlesToSpawn);
+        m_ParticlesToSpawn -= parameters.EmitCount;
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
@@ -211,7 +220,8 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 		std::array<Vector4, 64> randomDirections;
 		std::generate(randomDirections.begin(), randomDirections.end(), []() {
 			Vector4 v = Vector4(Math::RandVector());
-			v.y = Math::Lerp(0.1f, 0.8f, (float)abs(v.y));
+			v.y = Math::Lerp(0.6f, 0.8f, (float)abs(v.y));
+			v.z = Math::Lerp(0.6f, 0.8f, (float)abs(v.z));
 			v.Normalize();
 			return v;
 			});
@@ -263,8 +273,6 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 
 void GpuParticles::Render(CommandContext& context)
 {
-    GPU_PROFILE_SCOPE("Draw Particles", &context);
-
 	context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 	context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	context.InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);

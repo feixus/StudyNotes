@@ -47,4 +47,6 @@ private:
 
     std::unique_ptr<RootSignature> m_pParticleRenderRS;
     std::unique_ptr<PipelineState> m_pParticleRenderPSO;
+
+    float m_ParticlesToSpawn{0};
 };

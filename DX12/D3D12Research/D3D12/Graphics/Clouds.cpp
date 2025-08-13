@@ -100,7 +100,7 @@ void Clouds::Initialize()
 	
 	{
 		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		Profiler::Instance()->Begin("Clouds_Render", pContext);
+		Profiler::Get()->Begin("Clouds_Render", pContext);
 
 		pContext->SetPipelineState(m_pWorleyNoisePS.get());
 		pContext->SetComputeRootSignature(m_pWorleyNoiseRS.get());
@@ -132,7 +132,7 @@ void Clouds::Initialize()
 		pContext->SetDynamicDescriptor(1, 0, m_pWorleyNoiseTexture->GetUAV());
 
 		pContext->Dispatch(Resolution / 8, Resolution / 8, Resolution / 8);
-		Profiler::Instance()->End(pContext);
+		Profiler::Get()->End(pContext);
 		pContext->Execute(true);
 	}
 }
@@ -172,7 +172,7 @@ void Clouds::Render(GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTextu
 {
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
-		Profiler::Instance()->Begin("Clouds", pContext);
+		Profiler::Get()->Begin("Clouds", pContext);
 
 		pContext->InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -215,17 +215,17 @@ void Clouds::Render(GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTextu
 		pContext->Draw(0, 6);
 	
 		pContext->EndRenderPass();
-		Profiler::Instance()->End(pContext);
+		Profiler::Get()->End(pContext);
 	}
 
 	{
-		Profiler::Instance()->Begin("Blit to Main Render Target", pContext);
+		Profiler::Get()->Begin("Blit to Main Render Target", pContext);
 		pContext->InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 		pContext->InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 		pContext->FlushResourceBarriers();
 
 		pContext->CopyResource(m_pIntermediateColor.get(), pSceneTexture);
-		Profiler::Instance()->End(pContext);
+		Profiler::Get()->End(pContext);
 	}
 	pContext->Execute(false);
 }

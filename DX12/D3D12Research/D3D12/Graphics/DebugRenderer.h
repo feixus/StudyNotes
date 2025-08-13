@@ -7,6 +7,7 @@ class RootSignature;
 class PipelineState;
 class RGGraph;
 struct Light;
+class GraphicsTexture;
 
 struct DebugLine
 {
@@ -72,13 +73,11 @@ struct DebugSphere
 class DebugRenderer
 {
 public:
-    static DebugRenderer& Instance();
+    static DebugRenderer* Get();
 
     void Initialize(Graphics* pGraphics);
-    void Render(RGGraph& graph);
+    void Render(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
     void EndFrame();
-
-    void SetCamera(const Camera* pCamera) { m_pCamera = pCamera; }
 
     void AddLine(const Vector3& start, const Vector3& end, const Color& color);
     void AddLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd);
@@ -99,9 +98,6 @@ public:
 
 private:
     DebugRenderer() = default;
-
-    Graphics* m_pGraphics;
-    const Camera* m_pCamera{nullptr};
 
     int m_LinePrimitives{0};
     std::vector<DebugLine> m_Lines;
