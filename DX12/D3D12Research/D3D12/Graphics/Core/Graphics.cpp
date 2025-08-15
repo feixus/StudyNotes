@@ -46,6 +46,7 @@ float g_WhitePoint = 4;
 float g_MinLogLuminance = -10.0f;
 float g_MaxLogLuminance = 2.0f;
 float g_Tau = 2;
+uint32_t g_ToneMapper = 0;
 
 bool g_ShowSDSM = true;
 bool g_StabilizeCascases = true;
@@ -721,6 +722,13 @@ void Graphics::Update()
 			{
 				return[=](CommandContext& context, const RGPassResource& resources)
 					{
+						struct Parameters
+						{
+							float WhitePoint;
+							uint32_t ToneMapper;
+						} constBuffer;
+						constBuffer.WhitePoint = g_WhitePoint;
+						constBuffer.ToneMapper = g_ToneMapper;
 
 						context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 						context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -732,7 +740,7 @@ void Graphics::Update()
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 						context.BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess));
 
-						context.SetDynamicConstantBufferView(0, &g_WhitePoint, sizeof(float));
+						context.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 						context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
 						context.SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
 						context.Draw(0, 3);
@@ -1526,6 +1534,31 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
 	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
 	ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
+	ImGui::Combo("Tonemapper", (int*)&g_ToneMapper, [](void* data, int index, const char** outText)
+		{
+			switch (index)
+			{
+			case 0:
+				*outText = "Reinhard";
+				break;
+			case 1:
+				*outText = "Reinhard Extended";
+				break;
+			case 2:
+				*outText = "ACES fast";
+				break;
+			case 3:
+				*outText = "Unreal 3";
+				break;
+			case 4:
+				*outText = "Uncharted2";
+				break;
+			default:
+				return false;
+				break;
+			}
+			return true;
+		}, nullptr, 5);
 	ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 
 	ImGui::Text("Misc");

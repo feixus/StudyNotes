@@ -1,14 +1,22 @@
+#include "Common.hlsli"
+
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 2), visibility = SHADER_VISIBILITY_PIXEL), " \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
 
 #define TONEMAP_GAMMA 1.0
-
+#define TONEMAP_OPERATOR 2
+#define TONEMAP_REINHARD 0
+#define TONEMAP_REINHARD_EXTENDED 1
+#define TONEMAP_ACES_FAST 2
+#define TONEMAP_UNREAL3 3
+#define TONEMAP_UNCHARTED2 4
 
 cbuffer Parameters : register(b0)
 {
     float cWhitePoint;
+    uint cTonemapper;
 }
 
 struct PSInput
@@ -17,7 +25,7 @@ struct PSInput
     float2 texCoord : TEXCOORD;
 };
 
-float3 convertRGB2XYZ(float3 rgb)
+float3 ConvertRGB2XYZ(float3 rgb)
 {
     // https://web.archive.org/web/20191027010220/http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
     float3 xyz;
@@ -28,7 +36,7 @@ float3 convertRGB2XYZ(float3 rgb)
     return xyz;
 }
 
-float3 convertXYZ2RGB(float3 xyz)
+float3 ConvertXYZ2RGB(float3 xyz)
 {
     float3 rgb;
     rgb.x = dot(float3(3.2406, -1.5372, -0.4986), xyz);
@@ -37,14 +45,20 @@ float3 convertXYZ2RGB(float3 xyz)
     return rgb;
 }
 
-float3 convertXYZ2Yxy(float3 xyz)
+float3 ConvertXYZ2Yxy(float3 xyz)
 {
     //  https://web.archive.org/web/20191027010144/http://www.brucelindbloom.com/index.html?Eqn_XYZ_to_xyY.html
     float inv = 1.0 / dot(xyz, float3(1, 1, 1));
     return float3(xyz.y, xyz.x * inv, xyz.y * inv);
 }
 
-float3 convertYxy2XYZ(float3 _Yxy)
+float3 ConvertRGB2Yxy(float3 rgb)
+{
+    float3 xyz = ConvertRGB2XYZ(rgb);
+    return ConvertXYZ2Yxy(xyz);
+}
+
+float3 ConvertYxy2XYZ(float3 _Yxy)
 {
     // https://web.archive.org/web/20191027010036/http://www.brucelindbloom.com/index.html?Eqn_xyY_to_XYZ.html
     float3 xyz;
@@ -54,71 +68,52 @@ float3 convertYxy2XYZ(float3 _Yxy)
     return xyz;
 }
 
-float3 convertRGB2Yxy(float3 rgb)
+float3 ConvertYxy2RGB(float3 _Yxy)
 {
-    float3 xyz = convertRGB2XYZ(rgb);
-    return convertXYZ2Yxy(xyz);
+    float3 xyz = ConvertYxy2XYZ(_Yxy);
+    return ConvertXYZ2RGB(xyz);
 }
 
-float3 convertYxy2RGB(float3 _Yxy)
+float Reinhard(float x)
 {
-    float3 xyz = convertYxy2XYZ(_Yxy);
-    return convertXYZ2RGB(xyz);
+    return x / (1.0f + x);
 }
 
-float3 toGamma(float3 rgb)
+float ReinhardExtended(float x, float maxWhite)
 {
-    return pow(rgb, 1.0 / 2.2);
+    return (x * (1.0f + x / Square(maxWhite))) / (1.0f + x);
 }
 
-float reinhard2(float x, float whiteSqr)
+float ACES_Fast(float x)
 {
-    return (x * (1.0 + x / whiteSqr)) / (1.0 + x);
+    // Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
+    const float a = 2.51f;
+    const float b = 0.03f;
+    const float c = 2.43f;
+    const float d = 0.59f;
+    const float e = 0.14f;
+    return (x * (a * x + b)) / (x * (c * x + d) + e);
 }
 
-// Reinhard tonemapping
-float4 tonemap_reinhard(in float3 color)
+float Unreal3(float x)
 {
-    color *= 16;
-    color = color / (1 + color);
-    float3 ret = pow(color, TONEMAP_GAMMA);
-    return float4(ret, 1.0f);
+    // Unreal 3, Documentation: "Color Grading"
+    // Adapted to be close to Tonemap_ACES, with similar range
+    // Gamma 2.2 correction is baked in, don't use with sRGB conversion!
+    return x / (x + 0.155f) * 1.019f;
 }
 
-// Uncharted 2 tonemapping
-float3 tonemap_uncharted2(in float3 x)
+float Uncharted2(float x)
 {
-    float A = 0.15;
-    float B = 0.50;
-    float C = 0.10;
-    float D = 0.20;
-    float E = 0.02;
-    float F = 0.30;
+    const float A = 0.15;
+    const float B = 0.50;
+    const float C = 0.10;
+    const float D = 0.20;
+    const float E = 0.02;
+    const float F = 0.30;
+    const float W = 11.2; // white point, 11.2 is the default value in Uncharted2
 
     return (x * (A * x + C * B) + D * E) / (x * (A * x + B) + F * D) - E / F;
-}
-
-float3 tonemap_uc2(in float3 color)
-{
-    float W = 11.2;
-    color *= 16; // hardcoded exposure adjustment
-
-    float exposure_bias = 2.0f;
-    float3 curr = tonemap_uncharted2(color * exposure_bias);
-
-    float3 white_scale = 1.0f / tonemap_uncharted2(W);
-    float3 ccolor = curr * white_scale;
-
-    return pow(abs(ccolor), TONEMAP_GAMMA); // gamma
-}
-
-float3 tonemap_filmic(in float3 color)
-{
-    color = max(0, color - 0.004f);
-    color = (color * (6.2f * color + 0.5f)) / (color * (6.2f * color + 1.7f) + 0.06f);
-
-    // result has 1/2.2 baked in
-    return pow(color, TONEMAP_GAMMA);
 }
 
 Texture2D tColorTexture : register(t0);
@@ -146,10 +141,29 @@ float4 PSMain(PSInput input) : SV_TARGET
     float3 rgb = tColorTexture.Sample(sColorSampler, input.texCoord).rgb;
     float avgLum = tAverageLuminance.Load(uint3(0, 0, 0)).r;
 
-    float3 Yxy = convertRGB2Yxy(rgb);
-    float lp = Yxy.x / (9.6 * avgLum + 0.0001f);
-    Yxy.x = reinhard2(lp, cWhitePoint);
+    float3 Yxy = ConvertRGB2Yxy(rgb);
 
-    rgb = convertYxy2RGB(Yxy);
-    return float4(toGamma(rgb), 1.0f);
+    float newLuminance = Yxy.x / (9.6 * avgLum + 0.0001f);
+
+    // tonemap on luminance only
+    switch(cTonemapper)
+    {
+    case TONEMAP_REINHARD:
+        Yxy.x = Reinhard(newLuminance);
+        return float4(LinearToSrgbFast(ConvertYxy2RGB(Yxy)), 1.0f);
+    case TONEMAP_REINHARD_EXTENDED:
+        Yxy.x = ReinhardExtended(newLuminance, cWhitePoint);
+        return float4(LinearToSrgbFast(ConvertYxy2RGB(Yxy)), 1.0f);
+    case TONEMAP_ACES_FAST:
+        Yxy.x = ACES_Fast(newLuminance);
+        return float4(LinearToSrgbFast(ConvertYxy2RGB(Yxy)), 1.0f);
+    case TONEMAP_UNREAL3:
+        Yxy.x = Unreal3(newLuminance);
+        return float4(ConvertYxy2RGB(Yxy), 1.0f);
+    case TONEMAP_UNCHARTED2:
+        Yxy.x = Uncharted2(newLuminance);
+        return float4(LinearToSrgbFast(ConvertYxy2RGB(Yxy)), 1.0f);
+    }
+    
+    return float4(0, 0, 0, 0);
 }
