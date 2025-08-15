@@ -1,8 +1,6 @@
 #pragma once
 
 class Graphics;
-class Buffer;
-class Camera;
 class RootSignature;
 class PipelineState;
 class RGGraph;
@@ -21,17 +19,6 @@ struct DebugLine
     uint32_t ColorEnd;
 };
 
-struct DebugRay
-{
-    DebugRay(const Vector3& start, const Vector3& direction, const uint32_t color)
-        : Start(start), Direction(direction), Color(color)
-    {}
-
-    Vector3 Start;
-    Vector3 Direction;
-    uint32_t Color;
-};
-
 struct DebugTriangle
 {
     DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32_t colorA, const uint32_t colorB, const uint32_t colorC)
@@ -46,29 +33,6 @@ struct DebugTriangle
     uint32_t ColorC;
 };
 
-struct DebugSphere
-{
-    DebugSphere(const Vector3& center, float radius)
-        : Center(center), Radius(radius)
-    {}
-
-    Vector3 GetPoint(const float theta, const float phi) const
-    {
-        return Center + GetLocalPoint(theta, phi);
-    }
-
-    Vector3 GetLocalPoint(const float theta, const float phi) const
-    {
-        return Vector3(
-            Radius * sin(theta) * sin(phi),
-            Radius * cos(phi),
-            Radius * cos(theta) * sin(phi)
-        );
-    }
-
-    Vector3 Center;
-    float Radius;
-};
 
 class DebugRenderer
 {
@@ -76,7 +40,7 @@ public:
     static DebugRenderer* Get();
 
     void Initialize(Graphics* pGraphics);
-    void Render(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
+    void Render(RGGraph& graph, const Matrix& viewProjection, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
     void EndFrame();
 
     void AddLine(const Vector3& start, const Vector3& end, const Color& color);
@@ -99,9 +63,7 @@ public:
 private:
     DebugRenderer() = default;
 
-    int m_LinePrimitives{0};
     std::vector<DebugLine> m_Lines;
-    int m_TrianglePrimitives{0};
     std::vector<DebugTriangle> m_Triangles;
 
     std::unique_ptr<PipelineState> m_pTrianglesPSO;

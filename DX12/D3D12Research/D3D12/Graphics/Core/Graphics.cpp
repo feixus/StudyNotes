@@ -258,7 +258,6 @@ void Graphics::Update()
 	{
 		RGResourceHandle DepthStencil;
 		RGResourceHandle DepthStencilResolved;
-		RGResourceHandle NormalsResolved;
 	} sceneData{};
 
 	sceneData.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
@@ -588,7 +587,7 @@ void Graphics::Update()
 			};
 		});
 
-	DebugRenderer::Get()->Render(graph, *m_pCamera, GetCurrentRenderTarget(), GetDepthStencil());
+	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
 	// MSAA render target resolve
 	//  - we have to resolve a MSAA render target ourselves.
@@ -629,10 +628,12 @@ void Graphics::Update()
 							struct DownscaleParameters
 							{
 								uint32_t TargetDimensions[2];
+								Vector2 TargetDimensionsInv;
 							} Parameters{};
 
 							Parameters.TargetDimensions[0] = pTonemapInput->GetWidth();
 							Parameters.TargetDimensions[1] = pTonemapInput->GetHeight();
+							Parameters.TargetDimensionsInv = Vector2(1.0f / pTonemapInput->GetWidth(), 1.0f / pTonemapInput->GetHeight());
 
 							context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
 							context.SetDynamicDescriptor(1, 0, pTonemapInput->GetUAV());
@@ -825,8 +826,8 @@ void Graphics::InitD3D()
 	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
 	// look for an adapter
-	uint32_t adapter = 0;
 	ComPtr<IDXGIAdapter4> pAdapter;
+	uint32_t adapter = 0;
 	while (m_pFactory->EnumAdapterByGpuPreference(adapter++, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND)
 	{
 		DXGI_ADAPTER_DESC3 desc;
@@ -836,7 +837,9 @@ void Graphics::InitD3D()
 		{
 			char name[256];
 			ToMultibyte(desc.Description, name, 256);
-			E_LOG(LogType::Info, "Using %s", name);
+			
+			E_LOG(LogType::Info, "\t%s - %f GB", name, (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
+
 			break;
 		}
 	}
@@ -1147,27 +1150,6 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pDepthPrepassPSO->Finalize("Depth Prepass PSO", m_pDevice.Get());
-	}
-
-	// normals
-	{
-		Shader vertexShader("Resources/Shaders/OutputNormals.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/OutputNormals.hlsl", Shader::Type::Pixel, "PSMain");
-
-		// root signature
-		m_pNormalsRS = std::make_unique<RootSignature>();
-		m_pNormalsRS->FinalizeFromShader("Normals RS", vertexShader, m_pDevice.Get());
-
-		// pipeline state
-		m_pNormalsPSO = std::make_unique<PipelineState>();
-		m_pNormalsPSO->SetInputLayout(inputElements, std::size(inputElements));
-		m_pNormalsPSO->SetRootSignature(m_pNormalsRS->GetRootSignature());
-		m_pNormalsPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pNormalsPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pNormalsPSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-		m_pNormalsPSO->SetDepthWrite(false);
-		m_pNormalsPSO->SetRenderTargetFormat(DXGI_FORMAT_R32G32B32A32_FLOAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
-		m_pNormalsPSO->Finalize("Normals PSO", m_pDevice.Get());
 	}
 
 	// luminance histogram

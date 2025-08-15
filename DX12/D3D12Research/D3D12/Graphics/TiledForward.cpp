@@ -65,7 +65,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                         Matrix CameraView;
                         Matrix ProjectionInverse;
                         uint32_t NumThreadGroups[4]{};
-                        Vector2 ScreenDimensions;
+                        Vector2 ScreenDimensionsInv;
                         uint32_t LightCount{0};
                     } Data{};
 
@@ -73,8 +73,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                     Data.NumThreadGroups[0] = Math::DivideAndRoundUp(pDepthTexture->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
                     Data.NumThreadGroups[1] = Math::DivideAndRoundUp(pDepthTexture->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
                     Data.NumThreadGroups[2] = 1;
-                    Data.ScreenDimensions.x = (float)pDepthTexture->GetWidth();
-                    Data.ScreenDimensions.y = (float)pDepthTexture->GetHeight();
+                    Data.ScreenDimensionsInv = Vector2(1.0f / pDepthTexture->GetWidth(), 1.0f / pDepthTexture->GetHeight());
                     Data.LightCount = (uint32_t)inputResource.pLightBuffer->GetDesc().ElementCount;
                     Data.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
 

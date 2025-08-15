@@ -6,7 +6,7 @@
 cbuffer Parameters : register(b0)
 {
     float4x4 cProjectionInverse;
-    float2 cScreenDimensions;
+    float2 cScreenDimensionsInv;
     float2 cClusterSize;
     uint3 cClusterDimensions;
     float cNearZ;
@@ -17,14 +17,6 @@ cbuffer Parameters : register(b0)
 float GetDepthFromSlice(uint slice)
 {
     return cNearZ * pow(cFarZ / cNearZ, (float)slice / cClusterDimensions.z);
-}
-
-float4 ScreenToView(float2 viewSpace)
-{
-    viewSpace = viewSpace / cScreenDimensions;
-    float4 clipSpace = float4(viewSpace.x * 2.0f - 1.0f, (1.0f - viewSpace.y) * 2.0f - 1.0f, 0.0f, 1.0f);
-    clipSpace = mul(clipSpace, cProjectionInverse);
-    return clipSpace / clipSpace.w;
 }
 
 float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
@@ -51,8 +43,8 @@ void GenerateAABBs(CS_Input input)
     float2 minPoint_SS = float2(cClusterSize.x * clusterIndex3D.x, cClusterSize.y * clusterIndex3D.y);
     float2 maxPoint_SS = float2(cClusterSize.x * (clusterIndex3D.x + 1), cClusterSize.y * (clusterIndex3D.y + 1));
 
-    float3 minPoint_VS = ScreenToView(minPoint_SS).xyz;
-    float3 maxPoint_VS = ScreenToView(maxPoint_SS).xyz;
+    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse).xyz;
+    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse).xyz;
 
     float farZ = GetDepthFromSlice(clusterIndex3D.z);
     float nearZ = GetDepthFromSlice(clusterIndex3D.z + 1);
