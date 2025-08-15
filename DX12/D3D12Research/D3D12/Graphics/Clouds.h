@@ -11,6 +11,7 @@ class CommandContext;
 class Clouds
 {
 public:
+	Clouds();
 	void Initialize(Graphics* pGraphics);
 	void Render(CommandContext& context, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera);
 
@@ -26,4 +27,7 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pIntermediateDepth;
 
 	std::unique_ptr<Buffer> m_pQuadVertexBuffer;
+
+	bool m_UpdateNoise{true};
+	BoundingBox m_CloudBounds;
 };

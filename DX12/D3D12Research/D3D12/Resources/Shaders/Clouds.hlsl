@@ -30,6 +30,9 @@ cbuffer Constants : register(b0)
     float cCloudThreshold;
     float3 cCloudOffset;
     float cCloudDensity;
+
+    float3 cMinExtents;
+    float3 cMaxExtents;
 }
 
 PSInput VSMain(VSInput input)
@@ -41,7 +44,8 @@ PSInput VSMain(VSInput input)
     return output;
 }
 
-float2 rayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, float3 rayDirection)
+//https://jcgt.org/published/0007/03/04/
+float2 RayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, float3 rayDirection)
 {
     // ray(t) = rayOrigin + t * rayDirection
     float3 t0 = (boundsMin - rayOrigin) / rayDirection;
@@ -73,14 +77,14 @@ float SampleDensity(float3 position)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    float3 rd = normalize(input.ray.xyz);
     float3 ro = cViewInverse[3].xyz;
+    float3 rd = normalize(input.ray.xyz);
+    float2 boxResult = RayBoxDistance(cMinExtents, cMaxExtents, ro, rd);
 
     float4 color = tSceneTexture.Sample(sSceneSampler, input.texCoord);
+
     float depth = GetLinearDepth(tDepthTexture.Sample(sSceneSampler, input.texCoord).r);
     float maxDepth = depth * length(input.ray.xyz);
-
-    float2 boxResult = rayBoxDistance(float3(-50, -5, -50), float3(50, 50, 50), ro, rd);
 
     float distanceTravelled = 0;
     float stepSize = boxResult.y / 100;
@@ -97,6 +101,6 @@ float4 PSMain(PSInput input) : SV_TARGET
     }
     // Beer-Lambert law for transmittance
     // T = e^(-k * d), where k is the extinction coefficient (density) and d is the distance travelled
-    float transmittance = exp(-totalDensity);
-    return float4(color.xyz * transmittance, 1);
+    float transmittance = saturate(1 - exp(-totalDensity));
+    return float4(color.xyz + 5 * transmittance, 1);
 }

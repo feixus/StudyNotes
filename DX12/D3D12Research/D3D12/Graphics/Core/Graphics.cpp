@@ -305,53 +305,6 @@ void Graphics::Update()
 				};
 		});
 
-	// normals
-	graph.AddPass("Normals", [&](RGPassBuilder& builder)
-		{
-			sceneData.DepthStencil = builder.Write(sceneData.DepthStencil);
-
-			return [=](CommandContext& renderContext, const RGPassResource& resources)
-				{
-					GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
-					const TextureDesc& desc = pDepthStencil->GetDesc();
-
-					renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-					RenderPassInfo info = RenderPassInfo(m_pNormals.get(), RenderPassAccess::Clear_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
-					renderContext.BeginRenderPass(info);
-					renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
-
-					renderContext.SetPipelineState(m_pNormalsPSO.get());
-					renderContext.SetGraphicsRootSignature(m_pNormalsRS.get());
-
-					struct Parameters
-					{
-						Matrix World;
-						Matrix WorldViewProj;
-					} constBuffer{};
-
-					for (const Batch& b : m_OpaqueBatches)
-					{
-						constBuffer.World = b.WorldMatrix;
-						constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
-
-						renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
-						renderContext.SetDynamicDescriptor(1, 0, b.pMaterial->pNormalTexture->GetSRV());
-						b.pMesh->Draw(&renderContext);
-					}
-
-					renderContext.EndRenderPass();
-
-					if (m_SampleCount > 1)
-					{
-						renderContext.InsertResourceBarrier(m_pResolvedNormals.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
-						renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-						renderContext.ResolveResource(m_pNormals.get(), 0, m_pResolvedNormals.get(), 0, m_pResolvedNormals->GetFormat());
-					}
-				};
-		});
-
 	// [with MSAA] depth resolve
 	//  - if MSAA is enabled, run a compute shader to resolve the depth buffer
 	if (m_SampleCount > 1)
@@ -390,7 +343,7 @@ void Graphics::Update()
 		{
 			return [=](CommandContext& context, const RGPassResource& passResources)
 				{
-					m_pGpuParticles->Simulate(context, GetResolveDepthStencil(), GetResolvedNormals());
+					m_pGpuParticles->Simulate(context, GetResolveDepthStencil());
 				};
 		});
 
@@ -398,7 +351,6 @@ void Graphics::Update()
 	{
 		RtaoInputResources resources = {
 			.pRenderTarget = m_pAmbientOcclusion.get(),
-			.pNormalTexture = GetResolvedNormals(),
 			.pDepthTexture = GetResolveDepthStencil(),
 			.pCamera = m_pCamera.get()
 		};
@@ -408,7 +360,6 @@ void Graphics::Update()
 	{
 		SsaoInputResources ssaoResources = {
 			.pRenderTarget = m_pAmbientOcclusion.get(),
-			.pNormalsTexture = GetResolvedNormals(),
 			.pDepthTexture = GetResolveDepthStencil(),
 			.pCamera = m_pCamera.get(),
 		};
@@ -994,8 +945,6 @@ void Graphics::InitD3D()
 
 	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
 	m_pDownscaledColor = std::make_unique<GraphicsTexture>(this, "Downscaled HDR Target");
-	m_pNormals = std::make_unique<GraphicsTexture>(this, "MSAA Normals");
-	m_pResolvedNormals = std::make_unique<GraphicsTexture>(this, "Normals");
 	m_pAmbientOcclusion = std::make_unique<GraphicsTexture>(this, "SSAO Target");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
@@ -1100,8 +1049,6 @@ void Graphics::OnResize(int width, int height)
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
-	m_pNormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, m_SampleCount));
-	m_pResolvedNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
 	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess | TextureFlag::RenderTarget));
 
 	m_pCamera->SetDirty();

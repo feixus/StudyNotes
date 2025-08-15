@@ -140,13 +140,13 @@ void GpuParticles::Initialize()
         ImGui::Begin("Parameters");
         ImGui::Text("Particles");
         ImGui::Checkbox("Simulate", &g_Simulate);
-        ImGui::SliderInt("Emit Count", &g_EmitCount, 0, 50);
+        ImGui::SliderInt("Emit Count", &g_EmitCount, 0, cMaxParticleCount / 50);
         ImGui::SliderFloat("Life Time", &g_LifeTime, 0.f, 10.f);
         ImGui::End();
     }));
 }
 
-void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedDepth, GraphicsTexture* pNormals)
+void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedDepth)
 {
     if (!g_Simulate)
     {
@@ -185,7 +185,6 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
     D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
         m_pCounterBuffer->GetSRV()->GetDescriptor(),
         pResolvedDepth->GetSRV(),
-        pNormals->GetSRV(),
     };
 
     context.SetDynamicDescriptors(1, 0, uavs, std::size(uavs));
@@ -240,6 +239,8 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 		struct Parameters
 		{
 			Matrix ViewProjection;
+            Matrix ViewProjectionInv;
+            Vector2 DimensionsInv;
 			float DeltaTime{0};
 			float ParticleLifetime{0};
 			float Near{0};
@@ -248,6 +249,9 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 		parameters.DeltaTime = GameTimer::DeltaTime();
 		parameters.ParticleLifetime = g_LifeTime;
 		parameters.ViewProjection = m_pGraphics->GetCamera()->GetViewProjection();
+        parameters.DimensionsInv.x = 1.0f / pResolvedDepth->GetWidth();
+        parameters.DimensionsInv.y = 1.0f / pResolvedDepth->GetHeight();
+        parameters.ViewProjectionInv = m_pGraphics->GetCamera()->GetProjectionInverse() * m_pGraphics->GetCamera()->GetViewInverse();
 		parameters.Near = m_pGraphics->GetCamera()->GetNear();
 		parameters.Far = m_pGraphics->GetCamera()->GetFar();
 

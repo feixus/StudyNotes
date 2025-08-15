@@ -18,7 +18,7 @@ public:
     ~GpuParticles() = default;
 
     void Initialize();
-    void Simulate(CommandContext& context, GraphicsTexture* pResolvedDepth, GraphicsTexture* pNormals);
+    void Simulate(CommandContext& context, GraphicsTexture* pResolvedDepth);
     void Render(CommandContext& context);
 
 private:

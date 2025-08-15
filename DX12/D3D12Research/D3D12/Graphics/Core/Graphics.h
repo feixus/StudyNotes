@@ -123,7 +123,6 @@ public:
 
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
-	GraphicsTexture* GetResolvedNormals() const { return m_SampleCount > 1 ? m_pResolvedNormals.get() : m_pNormals.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
@@ -182,8 +181,6 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
-	std::unique_ptr<GraphicsTexture> m_pNormals;
-	std::unique_ptr<GraphicsTexture> m_pResolvedNormals;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;

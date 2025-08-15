@@ -58,7 +58,6 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
         {
             {
                 context.InsertResourceBarrier(inputResources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                context.InsertResourceBarrier(inputResources.pNormalTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(inputResources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 
                 context.SetComputeRootSignature(m_pGlobalRS.get());
@@ -112,8 +111,7 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
                 context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 				context.SetDynamicDescriptor(1, 0, inputResources.pRenderTarget->GetUAV());
 				context.SetDynamicDescriptor(2, 0, m_pTLAS->GetSRV());
-                context.SetDynamicDescriptor(2, 1, inputResources.pNormalTexture->GetSRV());
-                context.SetDynamicDescriptor(2, 2, inputResources.pDepthTexture->GetSRV());
+                context.SetDynamicDescriptor(2, 1, inputResources.pDepthTexture->GetSRV());
                 
                 context.PrepareDraw(DescriptorTableType::Compute);
                 pCmd->DispatchRays(&rayDesc);
@@ -251,7 +249,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
         m_pGlobalRS = std::make_unique<RootSignature>();
         m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
 
 		D3D12_SAMPLER_DESC samplerDesc{};
 		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;

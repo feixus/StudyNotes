@@ -6,13 +6,14 @@
 
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 2), visibility = SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), " \
                 "StaticSampler(s1, filter = FILTER_COMPARISON_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_ALL)"
 
 cbuffer ShaderParameters : register(b0)
 {
     float4x4 cProjectionInverse;
+    float4x4 cViewInverse;
     float4x4 cProjection;
     float4x4 cView;
     uint2 cDimensions;
@@ -25,7 +26,6 @@ cbuffer ShaderParameters : register(b0)
 }
 
 Texture2D tDepthTexture : register(t0);
-Texture2D tNormalsTexture : register(t1);
 SamplerState sSampler : register(s0);
 
 RWTexture2D<float> uAmbientOcclusion : register(u0);
@@ -42,12 +42,16 @@ struct CS_INPUT
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
-    float2 texCoord = (float2)input.DispatchThreadId.xy / cDimensions;
+    float2 dimInv = rcp(float2(cDimensions));
+    float2 texCoord = (float2)input.DispatchThreadId.xy * dimInv;
     float depth = tDepthTexture.SampleLevel(sSampler, texCoord, 0).r;
 
-    float4 viewPos = ScreenToView(float4(texCoord.xy, depth, 1), float2(1, 1), cProjectionInverse);
-    // world to view space
-    float3 normal = normalize(mul(tNormalsTexture.SampleLevel(sSampler, texCoord, 0).xyz, (float3x3)cView));
+    float3 viewPos = ScreenToView(float4(texCoord.xy, depth, 1), float2(1, 1), cProjectionInverse).xyz;
+    float2 texCoord1 = texCoord + float2(dimInv.x, 0);
+    float2 texCoord2 = texCoord + float2(0, -dimInv.y);
+    float3 p1 = ScreenToView(float4(texCoord1.xy, tDepthTexture.SampleLevel(sSampler, texCoord1, 0).r, 1), float2(1, 1), cProjectionInverse).xyz;
+    float3 p2 = ScreenToView(float4(texCoord2.xy, tDepthTexture.SampleLevel(sSampler, texCoord2, 0).r, 1), float2(1, 1), cProjectionInverse).xyz;
+    float3 normal = normalize(cross(p2 - viewPos, p1 - viewPos));
 
     // tangent space to view space 
     int state = SeedThread(input.DispatchThreadId.x + input.DispatchThreadId.y * cDimensions.x);
@@ -62,7 +66,7 @@ void CSMain(CS_INPUT input)
     {
         float2 point2d = HammersleyPoints(i, cAoSamples);
         float3 hemispherePoint = HemisphereSampleUniform(point2d.x, point2d.y);
-        float3 newViewPos = viewPos.xyz + mul(hemispherePoint, TBN) * cAoRadius;
+        float3 newViewPos = viewPos + mul(hemispherePoint, TBN) * cAoRadius;
         float4 newTexCoord = mul(float4(newViewPos, 1), cProjection);
         newTexCoord.xyz /= newTexCoord.w;
         newTexCoord.xy = newTexCoord.xy * float2(0.5, -0.5) + float2(0.5, 0.5);

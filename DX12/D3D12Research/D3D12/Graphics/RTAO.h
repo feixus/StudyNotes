@@ -14,7 +14,6 @@ class RGGraph;
 struct RtaoInputResources
 {
     GraphicsTexture* pRenderTarget{};
-    GraphicsTexture* pNormalTexture{};
     GraphicsTexture* pDepthTexture{};
     Camera* pCamera{};
 };

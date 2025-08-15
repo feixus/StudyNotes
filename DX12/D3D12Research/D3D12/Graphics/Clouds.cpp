@@ -25,20 +25,33 @@ struct CloudParameters
 	float CloudThreshold{0.4f};
 	Vector3 CloudOffset;
 	float CloudDensity{0.7f};
+
+	Vector4 MinExtents;
+	Vector4 MaxExtents;
 };
 
 static CloudParameters sCloudParameters;
 
-
-void Clouds::Initialize(Graphics* pGraphics)
+Clouds::Clouds()
 {
-	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
+	m_CloudBounds.Center = Vector3(0, 150, 0);
+	m_CloudBounds.Extents = Vector3(50, 20, 50);
+}
+
+void Clouds::Initialize(Graphics *pGraphics)
+{
+	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([this]() {
 		ImGui::Begin("Parameters");
 		ImGui::Text("Clouds");
+		ImGui::SliderFloat3("Position", reinterpret_cast<float*>(&m_CloudBounds.Center), 0.f, 500.f);
+		ImGui::SliderFloat3("Extents", reinterpret_cast<float*>(&m_CloudBounds.Extents), 0.f, 500.f);
 		ImGui::SliderFloat("Scale", &sCloudParameters.CloudScale, 0, 0.02f);
-		ImGui::SliderFloat("Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
+		ImGui::SliderFloat("Cloud Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
 		ImGui::SliderFloat("Density", &sCloudParameters.CloudDensity, 0, 1.0f);
-		ImGui::SliderFloat3("Offset", &sCloudParameters.CloudOffset.x, -1.f, 1.f);
+		if (ImGui::Button("Generate Noise"))
+		{
+			m_UpdateNoise = true;
+		}
 		ImGui::End();
 	}));
 
@@ -117,14 +130,25 @@ void Clouds::Initialize(Graphics* pGraphics)
 		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
 
 		m_pIntermediateColor = std::make_unique<GraphicsTexture>(pGraphics, "Cloud Intermediate Color");
-		m_pIntermediateColor->Create(TextureDesc::CreateRenderTarget(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, pGraphics->GetMultiSampleCount()));
 	}
-	
-	{
-		GPU_PROFILE_SCOPE("Compute Clouds", pContext);
+	pContext->Execute(true);
+}
 
-		pContext->SetPipelineState(m_pWorleyNoisePS.get());
-		pContext->SetComputeRootSignature(m_pWorleyNoiseRS.get());
+void Clouds::Render(CommandContext& context, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera)
+{
+	if (pSceneTexture->GetWidth() != m_pIntermediateColor->GetWidth() || pSceneTexture->GetHeight() != m_pIntermediateColor->GetHeight())
+	{
+		m_pIntermediateColor->Create(pSceneTexture->GetDesc());
+	}
+
+	if (m_UpdateNoise)
+	{
+		m_UpdateNoise = false;
+
+		GPU_PROFILE_SCOPE("Compute Worley Noise", &context);
+
+		context.SetPipelineState(m_pWorleyNoisePS.get());
+		context.SetComputeRootSignature(m_pWorleyNoiseRS.get());
 
 		struct
 		{
@@ -146,19 +170,15 @@ void Clouds::Initialize(Graphics* pGraphics)
 		Constants.PointsPerRow[2] = 10;
 		Constants.PointsPerRow[3] = 12;
 
-		pContext->InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		pContext->FlushResourceBarriers();
+		context.InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		context.FlushResourceBarriers();
 
-		pContext->SetComputeDynamicConstantBufferView(0, &Constants, sizeof(Constants));
-		pContext->SetDynamicDescriptor(1, 0, m_pWorleyNoiseTexture->GetUAV());
+		context.SetComputeDynamicConstantBufferView(0, &Constants, sizeof(Constants));
+		context.SetDynamicDescriptor(1, 0, m_pWorleyNoiseTexture->GetUAV());
 		
-		pContext->Dispatch(Resolution / 8, Resolution / 8, Resolution / 8);
+		context.Dispatch(Resolution / 8, Resolution / 8, Resolution / 8);
 	}
-	pContext->Execute(true);
-}
 
-void Clouds::Render(CommandContext& context, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera)
-{
 	{
 		GPU_PROFILE_SCOPE("Clouds", &context);
 
@@ -192,6 +212,8 @@ void Clouds::Render(CommandContext& context, GraphicsTexture* pSceneTexture, Gra
 		sCloudParameters.ViewInverse = pCamera->GetViewInverse();
 		sCloudParameters.NearPlane = pCamera->GetNear();
 		sCloudParameters.FarPlane = pCamera->GetFar();
+		sCloudParameters.MinExtents = Vector4(Vector3(m_CloudBounds.Center) - Vector3(m_CloudBounds.Extents));
+		sCloudParameters.MaxExtents = Vector4(Vector3(m_CloudBounds.Center) + Vector3(m_CloudBounds.Extents));
 
 		context.SetDynamicConstantBufferView(0, &sCloudParameters, sizeof(sCloudParameters));
 
@@ -212,5 +234,8 @@ void Clouds::Render(CommandContext& context, GraphicsTexture* pSceneTexture, Gra
 		context.FlushResourceBarriers();
 
 		context.CopyResource(m_pIntermediateColor.get(), pSceneTexture);
+
+		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		context.FlushResourceBarriers();
 	}
 }

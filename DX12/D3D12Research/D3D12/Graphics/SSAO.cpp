@@ -43,7 +43,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 			return [=](CommandContext& renderContext, const RGPassResource& resources)
 				{
 					renderContext.InsertResourceBarrier(inputResources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(inputResources.pNormalsTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(inputResources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					renderContext.SetComputeRootSignature(m_pSSAORS.get());
@@ -53,6 +52,7 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 					struct ShaderParameters
 					{
 						Matrix ProjectionInverse;
+						Matrix ViewInverse;
 						Matrix Projection;
 						Matrix View;
 						uint32_t Dimensions[2]{};
@@ -65,6 +65,7 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 					} shaderParameters{};
 
 					shaderParameters.ProjectionInverse = inputResources.pCamera->GetProjectionInverse();
+					shaderParameters.ViewInverse = inputResources.pCamera->GetViewInverse();
 					shaderParameters.Projection = inputResources.pCamera->GetProjection();
 					shaderParameters.View = inputResources.pCamera->GetView();
 					shaderParameters.Dimensions[0] = inputResources.pRenderTarget->GetWidth();
@@ -79,7 +80,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& inputResources)
 					renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 					renderContext.SetDynamicDescriptor(1, 0, inputResources.pRenderTarget->GetUAV());
 					renderContext.SetDynamicDescriptor(2, 0, inputResources.pDepthTexture->GetSRV());
-					renderContext.SetDynamicDescriptor(2, 1, inputResources.pNormalsTexture->GetSRV());
 
 					int dispatchGroupX = Math::DivideAndRoundUp(inputResources.pRenderTarget->GetWidth(), 16);
 					int dispatchGroupY = Math::DivideAndRoundUp(inputResources.pRenderTarget->GetHeight(), 16);
