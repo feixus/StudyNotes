@@ -47,6 +47,7 @@ float g_MinLogLuminance = -10.0f;
 float g_MaxLogLuminance = 2.0f;
 float g_Tau = 2;
 uint32_t g_ToneMapper = 0;
+bool g_DrawHistogram = true;
 
 bool g_ShowSDSM = true;
 bool g_StabilizeCascases = true;
@@ -730,7 +731,7 @@ void Graphics::Update()
 						constBuffer.WhitePoint = g_WhitePoint;
 						constBuffer.ToneMapper = g_ToneMapper;
 
-						context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+						context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 						context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 						context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -738,7 +739,7 @@ void Graphics::Update()
 						context.SetGraphicsRootSignature(m_pToneMapRS.get());
 						context.SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-						context.BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess));
+						context.BeginRenderPass(RenderPassInfo(m_pTonemapTarget.get(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess));
 
 						context.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 						context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
@@ -747,19 +748,52 @@ void Graphics::Update()
 						context.EndRenderPass();
 					};
 			});
+
+		if (g_DrawHistogram)
+		{
+			graph.AddPass("Average Luminance", [&](RGPassBuilder& builder)
+			{
+				return[=](CommandContext& context, const RGPassResource& resources)
+				{
+					context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+					context.SetPipelineState(m_pDrawHistogramPSO.get());
+					context.SetComputeRootSignature(m_pDrawHistogramRS.get());
+
+					struct AverageParameters
+					{
+						float MinLogLuminance{0};
+						float InverseLogLuminanceRange{0};
+					} Parameters;
+
+					Parameters.MinLogLuminance = g_MinLogLuminance;
+					Parameters.InverseLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+
+					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
+					context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
+					context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
+					context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
+
+					context.Dispatch(256, 1, 1);
+				};
+			});
+		}
 	}
 
 	// UI
 	//  - ImGui render, pretty straight forward
 	{
 		//ImGui::ShowDemoWindow();
-		m_pImGuiRenderer->Render(graph, GetCurrentBackbuffer());
+		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
 	}
 
 	graph.AddPass("Temp Barriers", [&](RGPassBuilder& builder)
 		{
 			return[=](CommandContext& context, const RGPassResource& resources)
 				{
+					context.CopyResource(m_pTonemapTarget.get(), GetCurrentBackbuffer());
 					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 					context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
 				};
@@ -955,6 +989,7 @@ void Graphics::InitD3D()
 	}
 
 	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
+	m_pTonemapTarget = std::make_unique<GraphicsTexture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<GraphicsTexture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<GraphicsTexture>(this, "SSAO Target");
 
@@ -1058,6 +1093,7 @@ void Graphics::OnResize(int width, int height)
 	}
 
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
+	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
 	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess | TextureFlag::RenderTarget));
@@ -1178,6 +1214,18 @@ void Graphics::InitializeAssets()
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32_t) * 256));
 		m_pAverageLuminance = std::make_unique<GraphicsTexture>(this, "Average Luminance");
 		m_pAverageLuminance->Create(TextureDesc::Create2D(1, 1, DXGI_FORMAT_R32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	}
+
+	// draw histogram
+	{
+		Shader computeShader("Resources/Shaders/DrawLuminanceHistogram.hlsl", Shader::Type::Compute, "DrawLuminanceHistogram");
+		m_pDrawHistogramRS = std::make_unique<RootSignature>();
+		m_pDrawHistogramRS->FinalizeFromShader("Draw Histogram RS", computeShader, m_pDevice.Get());
+
+		m_pDrawHistogramPSO = std::make_unique<PipelineState>();
+		m_pDrawHistogramPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pDrawHistogramPSO->SetRootSignature(m_pDrawHistogramRS->GetRootSignature());
+		m_pDrawHistogramPSO->Finalize("Draw Histogram PSO", m_pDevice.Get());
 	}
 
 	// average luminance
@@ -1533,6 +1581,7 @@ void Graphics::UpdateImGui()
 	ImGui::Text("Expose/Tonemapping");
 	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
 	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
+	ImGui::Checkbox("Draw Exposure Histogram", &g_DrawHistogram);
 	ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
 	ImGui::Combo("Tonemapper", (int*)&g_ToneMapper, [](void* data, int index, const char** outText)
 		{

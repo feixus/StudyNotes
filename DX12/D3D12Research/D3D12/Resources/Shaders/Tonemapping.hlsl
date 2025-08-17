@@ -143,6 +143,15 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     float3 Yxy = ConvertRGB2Yxy(rgb);
 
+    //https://google.github.io/filament/Filament.md.html#imagingpipeline/physicallybasedcamera/exposurevalue
+    /*const float ISO = 100.0f;
+    const float K = 12.5f;
+    const float q = 0.65f;
+    float EV = log2((avgLum * ISO) / K);
+    float EV100 = EV - log2(ISO / 100);
+    float lMax = pow(2, EV100) * 1.2f;
+    float newLuminance = Yxy.x / lMax;*/
+
     float newLuminance = Yxy.x / (9.6 * avgLum + 0.0001f);
 
     // tonemap on luminance only

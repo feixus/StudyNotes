@@ -160,6 +160,8 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 		{
 			return [=](CommandContext& context, const RGPassResource& resources)
 			{
+				context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+				
 				context.SetPipelineState(m_pPipelineStateObject.get());
 				context.SetGraphicsRootSignature(m_pRootSignature.get());
 

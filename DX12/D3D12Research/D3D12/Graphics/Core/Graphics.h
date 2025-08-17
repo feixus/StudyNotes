@@ -178,6 +178,7 @@ private:
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pHDRRenderTarget;
+	std::unique_ptr<GraphicsTexture> m_pTonemapTarget;
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
@@ -234,6 +235,8 @@ private:
 	std::unique_ptr<PipelineState> m_pAverageLuminancePSO;
 	std::unique_ptr<RootSignature> m_pToneMapRS;
 	std::unique_ptr<PipelineState> m_pToneMapPSO;
+	std::unique_ptr<RootSignature> m_pDrawHistogramRS;
+	std::unique_ptr<PipelineState> m_pDrawHistogramPSO;
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
 	std::unique_ptr<GraphicsTexture> m_pAverageLuminance;
 
