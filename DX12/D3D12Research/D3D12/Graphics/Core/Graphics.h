@@ -238,7 +238,7 @@ private:
 	std::unique_ptr<RootSignature> m_pDrawHistogramRS;
 	std::unique_ptr<PipelineState> m_pDrawHistogramPSO;
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
-	std::unique_ptr<GraphicsTexture> m_pAverageLuminance;
+	std::unique_ptr<Buffer> m_pAverageLuminance;
 
 	// SSAO
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusion;

@@ -45,7 +45,7 @@ bool g_DumpRenderGraph = true;
 float g_WhitePoint = 4;
 float g_MinLogLuminance = -10.0f;
 float g_MaxLogLuminance = 2.0f;
-float g_Tau = 2;
+float g_Tau = 1;
 uint32_t g_ToneMapper = 0;
 bool g_DrawHistogram = true;
 
@@ -776,7 +776,7 @@ void Graphics::Update()
 					context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
 
-					context.Dispatch(256, 1, 1);
+					context.Dispatch(1, m_pLuminanceHistogram->GetDesc().ElementCount);
 				};
 			});
 		}
@@ -1212,8 +1212,8 @@ void Graphics::InitializeAssets()
 
 		m_pLuminanceHistogram = std::make_unique<Buffer>(this, "Luminance Histogram");
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32_t) * 256));
-		m_pAverageLuminance = std::make_unique<GraphicsTexture>(this, "Average Luminance");
-		m_pAverageLuminance->Create(TextureDesc::Create2D(1, 1, DXGI_FORMAT_R32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+		m_pAverageLuminance = std::make_unique<Buffer>(this, "Average Luminance");
+		m_pAverageLuminance->Create(BufferDesc::CreateStructured(2, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
 	}
 
 	// draw histogram
@@ -1608,7 +1608,7 @@ void Graphics::UpdateImGui()
 			}
 			return true;
 		}, nullptr, 5);
-	ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
+	ImGui::SliderFloat("Tau", &g_Tau, 0, 5);
 
 	ImGui::Text("Misc");
 	ImGui::Checkbox("Visualize Lights", &g_VisualizeLights);
