@@ -17,6 +17,7 @@ class ComputeCommandContext;
 class CopyCommandContext;
 class UnorderedAccessView;
 class ShaderResourceView;
+class CommandSignature;
 
 enum class CommandListContext
 {
@@ -121,6 +122,18 @@ struct RenderPassInfo
 	DepthTargetInfo DepthStencilTarget{};
 };
 
+class ResourceBarrierBatcher
+{
+public:
+	void AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource);
+	void AddUAV(ID3D12Resource* pResource);
+	void Flush(ID3D12GraphicsCommandList* pCmdList);
+	void Reset();
+
+private:
+	std::vector<D3D12_RESOURCE_BARRIER> m_QueueBarriers;
+};
+
 class CommandContext : public GraphicsObject
 {
 public:
@@ -130,8 +143,7 @@ public:
 	virtual void Reset();
 	virtual uint64_t Execute(bool wait);
 	
-	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
-	void InsertResourceBarrier(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state, D3D12_RESOURCE_STATES targetState);
+	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false, uint32_t subResource = 0xffffffff);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
@@ -144,12 +156,13 @@ public:
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	// commands
+	void Dispatch(const IntVector3& groupCounts);
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
-	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments, DescriptorTableType type = DescriptorTableType::Compute);
+	void ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, DescriptorTableType type = DescriptorTableType::Compute);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
-	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
+	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values = nullptr);
 	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
@@ -201,10 +214,7 @@ private:
 
 	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_CurrentDescriptorHeaps{};
 
-	static const int MAX_QUEUED_BARRIERS = 12;
-
-	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueueBarriers{};
-	int m_NumQueueBarriers = 0;
+	ResourceBarrierBatcher m_BarrierBatcher;
 
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList{};

@@ -10,6 +10,7 @@ class RootSignature;
 class CommandContext;
 class RGGraph;
 class GraphicsTexture;
+class Camera;
 
 class GpuParticles
 {
@@ -17,12 +18,11 @@ public:
     GpuParticles(Graphics* pGraphics);
     ~GpuParticles() = default;
 
-    void Initialize();
-    void Simulate(CommandContext& context, GraphicsTexture* pResolvedDepth);
-    void Render(CommandContext& context);
+    void Simulate(CommandContext& context, GraphicsTexture* pSourceDepth, const Camera& camera);
+    void Render(CommandContext& context, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera);
 
 private:
-    Graphics* m_pGraphics{nullptr};
+    void Initialize(Graphics* pGraphics);
 
     std::unique_ptr<Buffer> m_pAliveList1;
     std::unique_ptr<Buffer> m_pAliveList2;

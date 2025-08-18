@@ -1,4 +1,5 @@
 #include "TonemappingCommon.hlsli"
+#include "../Color.hlsli"
 
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
@@ -36,14 +37,14 @@ void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 
     //http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
 #if TONEMAP_LUMINANCE
-    float3 Yxy = ConvertRGB2Yxy(rgb);
-    float value = Yxy.x;
+    float3 xyY = sRGB_to_xyY(rgb);
+    float value = xyY.z;
 #else
     float3 value = rgb;
 #endif
 
     float exposure = tAverageLuminance[2];
-    value *= exposure;
+    //value *= exposure;
 
     switch(cTonemapper)
     {
@@ -60,8 +61,8 @@ void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
     }
 
 #if TONEMAP_LUMINANCE
-    Yxy.x = value;
-    rgb = ConvertYxy2RGB(Yxy);
+    xyY.z = value;
+    rgb = xyY_to_sRGB(xyY);
 #else
     rgb = value;
 #endif

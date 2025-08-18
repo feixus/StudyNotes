@@ -10,6 +10,7 @@
 #include "GraphicsBuffer.h"
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
+#include "CommandSignature.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON |
 													D3D12_RESOURCE_STATE_UNORDERED_ACCESS | 
@@ -51,7 +52,7 @@ void CommandContext::Reset()
 		m_pCommandList->Reset(m_pAllocator, nullptr);
 	}
 
-	m_NumQueueBarriers = 0;
+	m_BarrierBatcher.Reset();
 	BindDescriptorHeaps();
 }
 
@@ -83,7 +84,7 @@ uint64_t CommandContext::Execute(bool wait)
 	return fenceValue;
 }
 
-void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate)
+void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate, uint32_t subResource)
 {
 	if (pBuffer->GetResourceState() != state)
 	{
@@ -100,13 +101,8 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 			assert((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
 		}
 
-		m_QueueBarriers[m_NumQueueBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(
-			pBuffer->GetResource(),
-			pBuffer->GetResourceState(),
-			state);
-
-		++m_NumQueueBarriers;
-		if (executeImmediate || m_NumQueueBarriers >= m_QueueBarriers.size())
+		m_BarrierBatcher.AddTransition(pBuffer->GetResource(), pBuffer->m_CurrentState, state, subResource);
+		if (executeImmediate)
 		{
 			FlushResourceBarriers();
 		}
@@ -115,21 +111,10 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 }
 
-void CommandContext::InsertResourceBarrier(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state, D3D12_RESOURCE_STATES targetState)
-{
-	m_QueueBarriers[m_NumQueueBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(
-		pResource,
-		state,
-		targetState);
-	++m_NumQueueBarriers;
-}
-
 void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer, bool executeImmediate)
 {
-	m_QueueBarriers[m_NumQueueBarriers] = CD3DX12_RESOURCE_BARRIER::UAV(pBuffer ? pBuffer->GetResource() : nullptr);
-	++m_NumQueueBarriers;
-
-	if (executeImmediate || m_NumQueueBarriers >= m_QueueBarriers.size())
+	m_BarrierBatcher.AddUAV(pBuffer ? pBuffer->GetResource() : nullptr);	
+	if (executeImmediate)
 	{
 		FlushResourceBarriers();
 	}
@@ -142,11 +127,7 @@ void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer, bool executeImm
 
 void CommandContext::FlushResourceBarriers()
 {
-	if (m_NumQueueBarriers > 0)
-	{
-		m_pCommandList->ResourceBarrier(m_NumQueueBarriers, m_QueueBarriers.data());
-		m_NumQueueBarriers = 0;
-	}
+	m_BarrierBatcher.Flush(m_pCommandList);
 }
 
 void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* pDest)
@@ -175,17 +156,22 @@ void CommandContext::InitializeBuffer(GraphicsResource* pResource, const void* p
 void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount)
 {
 	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
-	size_t requiredSize = 0;
+	uint64_t requiredSize = 0;
 	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, firstSubresource, subresourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
 	/* D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT(512 bytes): can for the start address of each subresource's data
 	*  D3D12_TEXTURE_DATA_PITCH_ALIGNMENT(256 bytes): can used to ensure each row's pitch is properly padded
 	*  D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT(64 KB): can used to with CreatePlacedResource, for GPU page size
 	*/
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32_t)requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubresource, subresourceCount, pSubresources);
 	InsertResourceBarrier(pResource, previousState, true);
+}
+
+void CommandContext::Dispatch(const IntVector3& groupCounts)
+{
+	Dispatch(groupCounts.x, groupCounts.y, groupCounts.z);
 }
 
 void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
@@ -195,10 +181,10 @@ void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32
 }
 
 // GPU-driven rendering
-void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments, DescriptorTableType type)
+void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, DescriptorTableType type)
 {
 	PrepareDraw(type);
-	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
+	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
@@ -219,7 +205,7 @@ void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int in
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
-void CommandContext::ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const DirectX::SimpleMath::Color& color /*= Color(0.2f, 0.2f, 0.2f, 1.0f)*/)
+void CommandContext::ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const DirectX::SimpleMath::Color& color /*= Color(0.2f, 0.2f, 0.2f, 1.0f)*/)
 {
 	m_pCommandList->ClearRenderTargetView(rtv, color, 0, nullptr);
 }
@@ -670,4 +656,42 @@ void CommandContext::BindDescriptorHeaps()
 	{
 		m_pCommandList->SetDescriptorHeaps(heapCount, heapsToBind.data());
 	}
+}
+
+void ResourceBarrierBatcher::AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource)
+{
+	if (m_QueueBarriers.size())
+	{
+		const D3D12_RESOURCE_BARRIER last = m_QueueBarriers.back();
+		if (last.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION &&
+			last.Transition.pResource == pResource &&
+			last.Transition.StateBefore == beforeState &&
+			last.Transition.StateAfter == afterState)
+		{
+			m_QueueBarriers.pop_back();
+			return;
+		}
+	}
+
+	m_QueueBarriers.emplace_back(
+		CD3DX12_RESOURCE_BARRIER::Transition(pResource, beforeState, afterState, subResource, D3D12_RESOURCE_BARRIER_FLAG_NONE));
+}
+
+void ResourceBarrierBatcher::AddUAV(ID3D12Resource* pResource)
+{
+	m_QueueBarriers.emplace_back(CD3DX12_RESOURCE_BARRIER::UAV(pResource));
+}
+
+void ResourceBarrierBatcher::Flush(ID3D12GraphicsCommandList* pCmdList)
+{
+	if (m_QueueBarriers.size())
+	{
+		pCmdList->ResourceBarrier((uint32_t)m_QueueBarriers.size(), m_QueueBarriers.data());
+		Reset();
+	}
+}
+
+void ResourceBarrierBatcher::Reset()
+{
+	m_QueueBarriers.clear();
 }

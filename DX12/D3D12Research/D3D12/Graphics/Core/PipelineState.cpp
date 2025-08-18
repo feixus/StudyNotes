@@ -27,7 +27,7 @@ void PipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
     };
     HR(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())));
 
-	SetD3DObjectName(m_pPipelineState.Get(), pName);
+    D3D_SETNAME(m_pPipelineState.Get(), pName);
 }
 
 void PipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality)

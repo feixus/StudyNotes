@@ -186,6 +186,11 @@ struct TextureDesc
 			ClearBindingValue == other.ClearBindingValue &&
 			Dimension == other.Dimension;
 	}
+
+	bool operator !=(const TextureDesc& other) const
+	{
+		return !operator==(other);
+	}
 };
 
 class GraphicsTexture : public GraphicsResource

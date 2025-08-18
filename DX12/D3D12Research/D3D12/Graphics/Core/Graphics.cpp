@@ -56,8 +56,9 @@ float g_PSSMFactor = 1.0f;
 bool g_ShowRaytraced = false;
 bool g_VisualizeLights = false;
 
-float g_SunOrientation = 0;
-float g_SunInclination = 0.2f;
+float g_SunInclination = 0.579f;
+float g_SunOrientation = -3.055f;
+float g_SunTemperature = 5000.0f;
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount) :
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -267,6 +268,25 @@ void Graphics::Update()
 
 	uint64_t nextFenceValue = 0;
 
+	graph.AddPass("Setup Lights", [&](RGPassBuilder& builder)
+		{
+			sceneData.DepthStencil = builder.Write(sceneData.DepthStencil);
+
+			return [=](CommandContext& renderContext, const RGPassResource& resources)
+				{
+					float costheta = cosf(g_SunOrientation);
+					float sintheta = sinf(g_SunOrientation);
+					float cosphi = cosf(g_SunInclination * Math::PIDIV2);
+					float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+
+					m_Lights[0].Direction = Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
+					m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
+
+					DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light), m_Lights.data());
+					renderContext.GetCommandList()->CopyBufferRegion(m_pLightBuffer->GetResource(), 0, allocation.pBackingResource->GetResource(), allocation.Offset, m_pLightBuffer->GetSize());
+				};
+		});
+
 	// depth prepass
 	// - depth only pass that renders the entire scene
 	// - optimization that prevents wasteful lighting calculations during the base pass
@@ -344,7 +364,7 @@ void Graphics::Update()
 		{
 			return [=](CommandContext& context, const RGPassResource& passResources)
 				{
-					m_pGpuParticles->Simulate(context, GetResolveDepthStencil());
+					m_pGpuParticles->Simulate(context, GetResolveDepthStencil(), *m_pCamera);
 				};
 		});
 
@@ -528,7 +548,7 @@ void Graphics::Update()
 		{
 			return [=](CommandContext& context, const RGPassResource& passResources)
 				{
-					m_pGpuParticles->Render(context);
+					m_pGpuParticles->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
 				};
 		});
 
@@ -560,11 +580,6 @@ void Graphics::Update()
 				renderContext.SetPipelineState(m_pSkyboxPSO.get());
 				renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
 
-				float costheta = cosf(g_SunOrientation);
-				float sintheta = sinf(g_SunOrientation);
-				float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-				float sinphi = sinf(g_SunInclination * Math::PIDIV2);
-
 				struct Parameters
 				{
 					Matrix View;
@@ -578,7 +593,7 @@ void Graphics::Update()
 				constBuffer.View = m_pCamera->GetView();
 				constBuffer.Projection = m_pCamera->GetProjection();
 				constBuffer.Bias = Vector3::One;
-				constBuffer.SunDirection = Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
+				constBuffer.SunDirection = -m_Lights[0].Direction;
 				constBuffer.SunDirection.Normalize();
 
 				renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
@@ -629,19 +644,19 @@ void Graphics::Update()
 
 							struct DownscaleParameters
 							{
-								uint32_t TargetDimensions[2];
+								IntVector2 TargetDimensions;
 								Vector2 TargetDimensionsInv;
 							} Parameters{};
 
-							Parameters.TargetDimensions[0] = pTonemapInput->GetWidth();
-							Parameters.TargetDimensions[1] = pTonemapInput->GetHeight();
+							Parameters.TargetDimensions.x = pTonemapInput->GetWidth();
+							Parameters.TargetDimensions.y = pTonemapInput->GetHeight();
 							Parameters.TargetDimensionsInv = Vector2(1.0f / pTonemapInput->GetWidth(), 1.0f / pTonemapInput->GetHeight());
 
 							context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
 							context.SetDynamicDescriptor(1, 0, pTonemapInput->GetUAV());
 							context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
-							context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 16), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 16), 1);
+							context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 16), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 16));
 						};
 				});
 		}
@@ -885,7 +900,22 @@ void Graphics::InitD3D()
 	}
 
 	// device
-	HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_pDevice)));
+	constexpr D3D_FEATURE_LEVEL featureLevels[] =
+	{
+		D3D_FEATURE_LEVEL_12_1,
+		D3D_FEATURE_LEVEL_12_0,
+		D3D_FEATURE_LEVEL_11_1,
+		D3D_FEATURE_LEVEL_11_0
+	};
+
+	HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
+	D3D12_FEATURE_DATA_FEATURE_LEVELS caps = {
+		.NumFeatureLevels = std::size(featureLevels),
+		.pFeatureLevelsRequested = featureLevels,
+	};
+	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)));
+	HR(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
+		
 	pAdapter.Reset();
 
 	m_pDevice.As(&m_pRaytracingDevice);
@@ -1009,7 +1039,6 @@ void Graphics::InitD3D()
 	DebugRenderer::Get()->Initialize(this);
 
 	m_pGpuParticles = std::make_unique<GpuParticles>(this);
-	m_pGpuParticles->Initialize();
 }
 
 void Graphics::CreateSwapchain()
@@ -1565,6 +1594,7 @@ void Graphics::UpdateImGui()
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &g_SunOrientation, -Math::PI, Math::PI);
 	ImGui::SliderFloat("Sun Inclination", &g_SunInclination, 0, 1);
+	ImGui::SliderFloat("Sun Temperature", &g_SunTemperature, 1000, 15000);
 
 	ImGui::Text("Shadows");
 	ImGui::Checkbox("SDSM", &g_ShowSDSM);
@@ -1665,14 +1695,11 @@ void Graphics::RandomizeLights(int count)
 
 	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light b) { return (int)a.LightType < (int)b.LightType; });
 
-	IdleGPU();
 	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{
-		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light)));
+		IdleGPU();
+		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));
 	}
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
-	pContext->Execute(true);
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

@@ -133,11 +133,11 @@ float4 PSMain(PSInput input) : SV_TARGET
     float3 color = lightResults.Diffuse + lightResults.Specular;
 
     float ao = tAO.Sample(myDiffuseSampler, (float2)input.position.xy / cScreenDimensions).r;
-    color += ApplyAmbientLight(diffuseColor, ao, float3(0.2f, 0.5f, 1.0f) * 0.1f);
+    color += ApplyAmbientLight(diffuseColor, ao, Lights[0].GetColor().rgb * 0.1f);
    
 #define VOLUMETRIC_LIGHT 1
 #if VOLUMETRIC_LIGHT
-    const float fogValue = 0.4f;
+    const float fogValue = 0.1f;
     const uint samples = 10;
     float3 cameraPos = cViewInverse[3].xyz;
     float3 worldPos = input.positionWS.xyz;

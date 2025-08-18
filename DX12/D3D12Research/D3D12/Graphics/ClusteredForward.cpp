@@ -62,8 +62,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		{
 			Matrix ProjectionInverse;
 			Vector2 ScreenDimensionsInv;
-			Vector2 ClusterSize;
-			int ClusterDimensions[3]{};
+			IntVector2 ClusterSize;
+			IntVector3 ClusterDimensions;
 			float NearZ{0};
 			float FarZ{0};
 		} constantBuffer;
@@ -72,11 +72,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
         constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
 		constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
-		constantBuffer.ClusterSize.x = cClusterSize;
-		constantBuffer.ClusterSize.y = cClusterSize;
-		constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
-		constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
-		constantBuffer.ClusterDimensions[2] = cClusterCountZ;
+		constantBuffer.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+		constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 
 		pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(constantBuffer));
 		pContext->SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetUAV());
@@ -116,26 +113,23 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 					struct PerFrameParameters
 					{
-						uint32_t ClusterDimensions[4]{};
-						float ClusterSize[2]{};
+						IntVector3 ClusterDimensions;
+                        int padding0;
+						IntVector2 ClusterSize;
 						float SliceMagicA{ 0 };
 						float SliceMagicB{ 0 };
-					} perFrameParameters;
+					} perFrameParameters{};
 
                     struct PerObjectParameters
                     {
                         Matrix WorldView;
                         Matrix WorldViewProjection;
-                    } perObjectParameters;
+                    } perObjectParameters{};
 
 					perFrameParameters.SliceMagicA = sliceMagicA;
 					perFrameParameters.SliceMagicB = sliceMagicB;
-					perFrameParameters.ClusterDimensions[0] = m_ClusterCountX;
-					perFrameParameters.ClusterDimensions[1] = m_ClusterCountY;
-					perFrameParameters.ClusterDimensions[2] = cClusterCountZ;
-					perFrameParameters.ClusterDimensions[3] = 0;
-					perFrameParameters.ClusterSize[0] = cClusterSize;
-					perFrameParameters.ClusterSize[1] = cClusterSize;
+					perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+					perFrameParameters.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 
                     context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(perFrameParameters));
                     context.SetDynamicDescriptor(2, 0, m_pUniqueClusterBuffer->GetUAV());
@@ -189,7 +183,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                     context.SetDynamicDescriptor(0, 0, m_pUniqueClusterBuffer->GetSRV());
                     context.SetDynamicDescriptor(1, 0, m_pCompactedClusterBuffer->GetUAV());
 
-                    context.Dispatch(Math::RoundUp(m_MaxClusters / 64.f), 1, 1);
+                    context.Dispatch(Math::RoundUp(m_MaxClusters / 64.f));
             };
         });
 
@@ -231,7 +225,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                     {
                         Matrix View;
                         int LightCount{ 0 };
-                    } constantBuffer;
+                    } constantBuffer{};
 
                     constantBuffer.View = inputResource.pCamera->GetView();
                     constantBuffer.LightCount = (int)inputResource.pLightBuffer->GetDesc().ElementCount;
@@ -244,7 +238,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                     context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
                     context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
 
-                    context.ExecuteIndirect(m_pLightCullingCommandSignature->GetCommandSignature(), m_pIndirectArguments.get());
+                    context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), m_pIndirectArguments.get());
 
             };
         });
@@ -265,27 +259,24 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					Matrix View;
 					Matrix Projection;
 					Matrix ViewInverse;
-					uint32_t ClusterDimensions[4]{};
+					IntVector3 ClusterDimensions;
+                    int padding0;
 					Vector2 ScreenDimensions;
-					float NearZ{ 0 };
-					float FarZ{ 0 };
-					float ClusterSize[2]{};
-					float SliceMagicA{ 0 };
-					float SliceMagicB{ 0 };
-				} frameData;
+					float NearZ;
+					float FarZ;
+					IntVector2 ClusterSize;
+					float SliceMagicA;
+					float SliceMagicB;
+				} frameData{};
 
 				frameData.View = inputResource.pCamera->GetView();
 				frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
 				frameData.Projection = inputResource.pCamera->GetProjection();
-				frameData.ClusterDimensions[0] = m_ClusterCountX;
-				frameData.ClusterDimensions[1] = m_ClusterCountY;
-				frameData.ClusterDimensions[2] = cClusterCountZ;
-				frameData.ClusterDimensions[3] = m_MaxClusters;
+				frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 				frameData.ScreenDimensions = screenDimensions;
 				frameData.NearZ = nearZ;
 				frameData.FarZ = farZ;
-				frameData.ClusterSize[0] = cClusterSize;
-				frameData.ClusterSize[1] = cClusterSize;
+				frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 				frameData.SliceMagicA = sliceMagicA;
 				frameData.SliceMagicB = sliceMagicB;
 

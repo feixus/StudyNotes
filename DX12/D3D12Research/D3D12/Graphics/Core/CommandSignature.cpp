@@ -1,12 +1,6 @@
 #include "stdafx.h"
 #include "CommandSignature.h"
 
-CommandSignature::CommandSignature()
-{}
-
-CommandSignature::~CommandSignature()
-{}
-
 void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
 {
     D3D12_COMMAND_SIGNATURE_DESC desc = {};
@@ -16,7 +10,7 @@ void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
     desc.NodeMask = 0;
 
     HR(pDevice->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())));
-    SetD3DObjectName(m_pCommandSignature.Get(), pName);
+    D3D_SETNAME(m_pCommandSignature.Get(), pName);
 }
 
 void CommandSignature::AddDispatch()
@@ -24,7 +18,8 @@ void CommandSignature::AddDispatch()
     D3D12_INDIRECT_ARGUMENT_DESC desc = {};
     desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
     m_ArgumentDescs.push_back(desc);
-    m_Stride += 3 * sizeof(uint32_t); // 3 uint32_t for x, y, z dimensions
+    constexpr int drawArgumentsCount = 3; // 3 uint32_t for x, y, z dimensions
+    m_Stride += drawArgumentsCount * sizeof(uint32_t); 
 }
 
 void CommandSignature::AddDraw()
@@ -32,5 +27,15 @@ void CommandSignature::AddDraw()
     D3D12_INDIRECT_ARGUMENT_DESC desc = {};
     desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
     m_ArgumentDescs.push_back(desc);
-    m_Stride += 4 * sizeof(uint32_t);
+    constexpr int drawArgumentsCount = 4;
+    m_Stride += drawArgumentsCount * sizeof(uint32_t);
+}
+
+void CommandSignature::AddDrawIndexed()
+{
+    D3D12_INDIRECT_ARGUMENT_DESC desc;
+    desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+    m_ArgumentDescs.push_back(desc);
+    constexpr int drawArgumentsCount = 4;
+    m_Stride += drawArgumentsCount * sizeof(uint32_t);
 }

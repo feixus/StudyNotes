@@ -31,54 +31,55 @@ struct ParticleData
 };
 
 GpuParticles::GpuParticles(Graphics* pGraphics)
-    : m_pGraphics(pGraphics)
-{}
-
-void GpuParticles::Initialize()
 {
-    CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Initialize(pGraphics);
+}
 
-    m_pCounterBuffer = std::make_unique<Buffer>(m_pGraphics, "GpuParticle CounterBuffer");
+void GpuParticles::Initialize(Graphics* pGraphics)
+{
+    CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+    m_pCounterBuffer = std::make_unique<Buffer>(pGraphics, "GpuParticle CounterBuffer");
     m_pCounterBuffer->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));
     uint32_t aliveCount = cMaxParticleCount;
     m_pCounterBuffer->SetData(pContext, &aliveCount, sizeof(uint32_t), 0);
 
     BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32_t));
-    m_pAliveList1 = std::make_unique<Buffer>(m_pGraphics, "GpuParticle AliveList1");
+    m_pAliveList1 = std::make_unique<Buffer>(pGraphics, "GpuParticle AliveList1");
     m_pAliveList1->Create(particleBufferDesc);
-    m_pAliveList2 = std::make_unique<Buffer>(m_pGraphics, "GpuParticle AliveList2");
+    m_pAliveList2 = std::make_unique<Buffer>(pGraphics, "GpuParticle AliveList2");
     m_pAliveList2->Create(particleBufferDesc);
 
-    m_pDeadList = std::make_unique<Buffer>(m_pGraphics, "GpuParticle DeadList");
+    m_pDeadList = std::make_unique<Buffer>(pGraphics, "GpuParticle DeadList");
     m_pDeadList->Create(particleBufferDesc);
     std::vector<uint32_t> deadList(cMaxParticleCount);
     std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
     m_pDeadList->SetData(pContext, deadList.data(), sizeof(uint32_t) * deadList.size());
     
-    m_pParticleBuffer = std::make_unique<Buffer>(m_pGraphics, "GpuParticle ParticleBuffer");
+    m_pParticleBuffer = std::make_unique<Buffer>(pGraphics, "GpuParticle ParticleBuffer");
     m_pParticleBuffer->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)));
     
-    m_pEmitArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle EmitArgs");
+    m_pEmitArguments = std::make_unique<Buffer>(pGraphics, "GpuParticle EmitArgs");
     m_pEmitArguments->Create(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)));
-    m_pSimulateArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle SimulateArgs");
+    m_pSimulateArguments = std::make_unique<Buffer>(pGraphics, "GpuParticle SimulateArgs");
     m_pSimulateArguments->Create(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)));
-    m_pDrawArguments = std::make_unique<Buffer>(m_pGraphics, "GpuParticle RenderArgs");
+    m_pDrawArguments = std::make_unique<Buffer>(pGraphics, "GpuParticle RenderArgs");
     m_pDrawArguments->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));
 
     pContext->Execute(true);
 
     m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>();
     m_pSimpleDispatchCommandSignature->AddDispatch();
-    m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch", m_pGraphics->GetDevice());
+    m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch", pGraphics->GetDevice());
 
     m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>();
     m_pSimpleDrawCommandSignature->AddDraw();
-    m_pSimpleDrawCommandSignature->Finalize("Simple Draw", m_pGraphics->GetDevice());
+    m_pSimpleDrawCommandSignature->Finalize("Simple Draw", pGraphics->GetDevice());
 
     {
         Shader computerShader("Resources/Shaders/ParticleSimulate.hlsl", Shader::Type::Compute, "UpdateSimulationParameters");
         m_pSimulateRS = std::make_unique<RootSignature>();
-        m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computerShader, m_pGraphics->GetDevice());
+        m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computerShader, pGraphics->GetDevice());
     }
 
     {
@@ -86,7 +87,7 @@ void GpuParticles::Initialize()
         m_pPrepareArgumentsPSO = std::make_unique<PipelineState>();
         m_pPrepareArgumentsPSO->SetComputeShader(computerShader.GetByteCode(), computerShader.GetByteCodeSize());
         m_pPrepareArgumentsPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
-        m_pPrepareArgumentsPSO->Finalize("Prepare Particle Arguments PSO", m_pGraphics->GetDevice());
+        m_pPrepareArgumentsPSO->Finalize("Prepare Particle Arguments PSO", pGraphics->GetDevice());
     }
 
     {
@@ -94,7 +95,7 @@ void GpuParticles::Initialize()
         m_pEmitPSO = std::make_unique<PipelineState>();
         m_pEmitPSO->SetComputeShader(computerShader.GetByteCode(), computerShader.GetByteCodeSize());
         m_pEmitPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
-        m_pEmitPSO->Finalize("Particles Emit PSO", m_pGraphics->GetDevice());
+        m_pEmitPSO->Finalize("Particles Emit PSO", pGraphics->GetDevice());
     }
 
     {
@@ -102,7 +103,7 @@ void GpuParticles::Initialize()
         m_pSimulatePSO = std::make_unique<PipelineState>();
         m_pSimulatePSO->SetComputeShader(simulateShader.GetByteCode(), simulateShader.GetByteCodeSize());
         m_pSimulatePSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
-        m_pSimulatePSO->Finalize("Particles Simulate PSO", m_pGraphics->GetDevice());        
+        m_pSimulatePSO->Finalize("Particles Simulate PSO", pGraphics->GetDevice());        
     }
 
     {
@@ -110,7 +111,7 @@ void GpuParticles::Initialize()
         m_pSimulateEndPSO = std::make_unique<PipelineState>();
         m_pSimulateEndPSO->SetComputeShader(simulateShader.GetByteCode(), simulateShader.GetByteCodeSize());
         m_pSimulateEndPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
-        m_pSimulateEndPSO->Finalize("Particles Simulate End PSO", m_pGraphics->GetDevice());
+        m_pSimulateEndPSO->Finalize("Particles Simulate End PSO", pGraphics->GetDevice());
     }
 
     {
@@ -120,7 +121,7 @@ void GpuParticles::Initialize()
 		m_pParticleRenderRS = std::make_unique<RootSignature>();
         m_pParticleRenderRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
         m_pParticleRenderRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_VERTEX);
-        m_pParticleRenderRS->Finalize("Particles Render RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        m_pParticleRenderRS->Finalize("Particles Render RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		m_pParticleRenderPSO = std::make_unique<PipelineState>();
 		m_pParticleRenderPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
@@ -132,11 +133,11 @@ void GpuParticles::Initialize()
         m_pParticleRenderPSO->SetCullMode(D3D12_CULL_MODE_NONE);
         m_pParticleRenderPSO->SetDepthEnable(false);
         m_pParticleRenderPSO->SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
-        m_pParticleRenderPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
-        m_pParticleRenderPSO->Finalize("Particles Render PSO", m_pGraphics->GetDevice());		
+        m_pParticleRenderPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
+        m_pParticleRenderPSO->Finalize("Particles Render PSO", pGraphics->GetDevice());		
     }
 
-    m_pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
+    pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
         ImGui::Begin("Parameters");
         ImGui::Text("Particles");
         ImGui::Checkbox("Simulate", &g_Simulate);
@@ -146,7 +147,7 @@ void GpuParticles::Initialize()
     }));
 }
 
-void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedDepth)
+void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pSourceDepth, const Camera& camera)
 {
     if (!g_Simulate)
     {
@@ -184,7 +185,7 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 
     D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
         m_pCounterBuffer->GetSRV()->GetDescriptor(),
-        pResolvedDepth->GetSRV(),
+        pSourceDepth->GetSRV(),
     };
 
     context.SetDynamicDescriptors(1, 0, uavs, std::size(uavs));
@@ -226,7 +227,7 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 			});
 		context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), (uint32_t)(sizeof(Vector4) * randomDirections.size()));
 
-		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pEmitArguments.get());
+		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pEmitArguments.get());
 
 		context.InsertUavBarrier();
     }
@@ -248,16 +249,16 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
 		} parameters;
 		parameters.DeltaTime = GameTimer::DeltaTime();
 		parameters.ParticleLifetime = g_LifeTime;
-		parameters.ViewProjection = m_pGraphics->GetCamera()->GetViewProjection();
-        parameters.DimensionsInv.x = 1.0f / pResolvedDepth->GetWidth();
-        parameters.DimensionsInv.y = 1.0f / pResolvedDepth->GetHeight();
-        parameters.ViewProjectionInv = m_pGraphics->GetCamera()->GetProjectionInverse() * m_pGraphics->GetCamera()->GetViewInverse();
-		parameters.Near = m_pGraphics->GetCamera()->GetNear();
-		parameters.Far = m_pGraphics->GetCamera()->GetFar();
+		parameters.ViewProjection = camera.GetViewProjection();
+        parameters.DimensionsInv.x = 1.0f / pSourceDepth->GetWidth();
+        parameters.DimensionsInv.y = 1.0f / pSourceDepth->GetHeight();
+        parameters.ViewProjectionInv = camera.GetProjectionInverse() * camera.GetViewInverse();
+		parameters.Near = camera.GetNear();
+		parameters.Far = camera.GetFar();
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
-		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pSimulateArguments.get());
+		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pSimulateArguments.get());
 
 		context.InsertUavBarrier();
     }
@@ -275,18 +276,18 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pResolvedD
     std::swap(m_pAliveList1, m_pAliveList2);
 }
 
-void GpuParticles::Render(CommandContext& context)
+void GpuParticles::Render(CommandContext& context, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera)
 {
 	context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 	context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	context.InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+	context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_DontCare));
+    context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_DontCare));
 
 	context.SetPipelineState(m_pParticleRenderPSO.get());
 	context.SetGraphicsRootSignature(m_pParticleRenderRS.get());
 
-	Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
+	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 	context.SetViewport(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
 	context.SetScissorRect(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
 
@@ -296,9 +297,9 @@ void GpuParticles::Render(CommandContext& context)
 		Matrix View;
 		Matrix Projection;
 	} frameData;
-	frameData.ViewInverse = m_pGraphics->GetCamera()->GetViewInverse();
-	frameData.View = m_pGraphics->GetCamera()->GetView();
-	frameData.Projection = m_pGraphics->GetCamera()->GetProjection();
+	frameData.ViewInverse = camera.GetViewInverse();
+	frameData.View = camera.GetView();
+	frameData.Projection = camera.GetProjection();
 
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
@@ -306,7 +307,7 @@ void GpuParticles::Render(CommandContext& context)
 	context.SetDynamicDescriptor(1, 0, m_pParticleBuffer->GetSRV());
 	context.SetDynamicDescriptor(1, 1, m_pAliveList1->GetSRV());
 
-	context.ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get(), DescriptorTableType::Graphics);
+	context.ExecuteIndirect(m_pSimpleDrawCommandSignature.get(), m_pDrawArguments.get(), DescriptorTableType::Graphics);
 
 	context.EndRenderPass();
 }
