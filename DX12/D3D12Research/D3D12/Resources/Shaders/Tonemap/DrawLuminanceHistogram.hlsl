@@ -1,8 +1,8 @@
+#include "TonemappingCommon.hlsli"
+
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1)), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 2))"
-
-#define BIN_COUNT 256
 
 #define BACKGROUND_COLOR float4(0, 0, 0, 0.6f)
 #define FOREGROUND_COLOR float4(1, 0, 0, 0.8f)
@@ -19,7 +19,7 @@ cbuffer LuminanceHistogramBuffer : register(b0)
     float cInverseLogLuminanceRange;
 }
 
-groupshared uint gsHistogram[BIN_COUNT];
+groupshared uint gsHistogram[NUM_HISTOGRAM_BINS];
 
 void BlendPixel(uint2 location, uint2 offset, float4 color)
 {
@@ -27,7 +27,7 @@ void BlendPixel(uint2 location, uint2 offset, float4 color)
 }
 
 [RootSignature(RootSig)]
-[numthreads(BIN_COUNT, 1, 1)]
+[numthreads(NUM_HISTOGRAM_BINS, 1, 1)]
 void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV_DispatchThreadID)
 {
     uint maxBinValue = 1;
@@ -36,7 +36,7 @@ void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV
 
     GroupMemoryBarrierWithGroupSync();
 
-    for (int i = 0; i < BIN_COUNT; i++)
+    for (int i = 0; i < NUM_HISTOGRAM_BINS; i++)
     {
         maxBinValue = max(maxBinValue, gsHistogram[i]);
     }
@@ -46,7 +46,7 @@ void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV
     uint2 dimensions;
     uOutTexture.GetDimensions(dimensions.x, dimensions.y);
     // every histogram bin occupy 4 pixel, from left to right(256 * 4)
-    uint2 s = uint2(dimensions.x, 0) + uint2(-BIN_COUNT * 4 + groupIndex * 4, threadId.y);
+    uint2 s = uint2(dimensions.x, 0) + uint2(-NUM_HISTOGRAM_BINS * 4 + groupIndex * 4, threadId.y);
 
     float currentAverage = tAverageLuminance[0];
     float targetAverage = tAverageLuminance[1];
@@ -55,16 +55,16 @@ void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV
 
     // megenta shows the average luminance position
     float4 outColor = BACKGROUND_COLOR;
-    if (floor(tCurrent * BIN_COUNT) == groupIndex)
+    if (floor(tCurrent * NUM_HISTOGRAM_BINS) == groupIndex)
     {
         outColor = CURSOR_COLOR;
     }
-    else if (floor(tTarget * BIN_COUNT) == groupIndex)
+    else if (floor(tTarget * NUM_HISTOGRAM_BINS) == groupIndex)
     {
         outColor = TARGET_COLOR;
     }
     // red show the histogram values
-    else if (BIN_COUNT - threadId.y < (currentBinValue * BIN_COUNT / maxBinValue ))
+    else if (NUM_HISTOGRAM_BINS - threadId.y < (currentBinValue * NUM_HISTOGRAM_BINS / maxBinValue ))
     {
         outColor = FOREGROUND_COLOR;
     }

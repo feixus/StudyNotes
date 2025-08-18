@@ -148,4 +148,31 @@ namespace Math
         float angle = RandomRange(-PI, PI);
         return Vector3(cos(angle), sin(angle), 0);
     }
+
+	Color MakeFromColorTemperature(float Temp)
+	{
+        Temp = Clamp(Temp, 1000.0f, 15000.0f);
+
+        //[Krystek85] Algorithm works in the CIE 1960 (UCS) space,
+        float u = (0.860117757f + 1.54118254e-4f * Temp + 1.28641212e-7f * Temp * Temp) / (1.0f + 8.42420235e-4f * Temp + 7.08145166e-7f * Temp * Temp);
+        float v = (0.317398726f + 4.22806221e-5f * Temp + 4.20481691e-8f * Temp * Temp) / (1.0f + 2.89741816e-5f * Temp + 1.61456053e-7f * Temp * Temp);
+
+        // UCS to xyY
+        float x = 3.0f * u / (2.0f * u - 8.0f * v + 4.0f);
+        float y = 2.0f * v / (2.0f * u - 8.0f * v + 4.0f);
+        float z = 1.0f - x - y;
+
+        // xyY to XYZ
+        float Y = 1.0f;
+        float X = Y / y * x;
+        float Z = Y / y * z;
+
+        // XYZ to RGB
+        float r = X *  3.2404542f + Y * -1.5371385f + Z * -0.4985314f;
+        float g = X * -0.9692660f + Y *  1.8760108f + Z *  0.0415560f;
+        float b = X *  0.0556434f + Y * -0.2040259f + Z *  1.0572252f;
+
+        return Color(r, g, b);
+	}
+
 }

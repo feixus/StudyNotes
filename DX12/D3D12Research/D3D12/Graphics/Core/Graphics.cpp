@@ -42,11 +42,11 @@
 
 bool g_DumpRenderGraph = true;
 
-float g_WhitePoint = 4;
+float g_WhitePoint = 1;
 float g_MinLogLuminance = -10.0f;
-float g_MaxLogLuminance = 2.0f;
-float g_Tau = 1;
-uint32_t g_ToneMapper = 0;
+float g_MaxLogLuminance = 20.0f;
+float g_Tau = 2;
+uint32_t g_ToneMapper = 2;
 bool g_DrawHistogram = true;
 
 bool g_ShowSDSM = true;
@@ -731,21 +731,19 @@ void Graphics::Update()
 						constBuffer.WhitePoint = g_WhitePoint;
 						constBuffer.ToneMapper = g_ToneMapper;
 
-						context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-						context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-						context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+						context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+						context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 						context.SetPipelineState(m_pToneMapPSO.get());
-						context.SetGraphicsRootSignature(m_pToneMapRS.get());
-						context.SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-						context.BeginRenderPass(RenderPassInfo(m_pTonemapTarget.get(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess));
+						context.SetComputeRootSignature(m_pToneMapRS.get());
 
-						context.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
-						context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
-						context.SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
-						context.Draw(0, 3);
-						context.EndRenderPass();
+						context.SetComputeDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+						context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
+						context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+						context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
+						
+						context.Dispatch(Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16), Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16));
 					};
 			});
 
@@ -1198,7 +1196,7 @@ void Graphics::InitializeAssets()
 
 	// luminance histogram
 	{
-		Shader computeShader("Resources/Shaders/LuminanceHistogram.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("Resources/Shaders/Tonemap/LuminanceHistogram.hlsl", Shader::Type::Compute, "CSMain");
 
 		// root signature
 		m_pLuminanceHistogramRS = std::make_unique<RootSignature>();
@@ -1213,12 +1211,12 @@ void Graphics::InitializeAssets()
 		m_pLuminanceHistogram = std::make_unique<Buffer>(this, "Luminance Histogram");
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32_t) * 256));
 		m_pAverageLuminance = std::make_unique<Buffer>(this, "Average Luminance");
-		m_pAverageLuminance->Create(BufferDesc::CreateStructured(2, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
+		m_pAverageLuminance->Create(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
 	}
 
 	// draw histogram
 	{
-		Shader computeShader("Resources/Shaders/DrawLuminanceHistogram.hlsl", Shader::Type::Compute, "DrawLuminanceHistogram");
+		Shader computeShader("Resources/Shaders/Tonemap/DrawLuminanceHistogram.hlsl", Shader::Type::Compute, "DrawLuminanceHistogram");
 		m_pDrawHistogramRS = std::make_unique<RootSignature>();
 		m_pDrawHistogramRS->FinalizeFromShader("Draw Histogram RS", computeShader, m_pDevice.Get());
 
@@ -1230,7 +1228,7 @@ void Graphics::InitializeAssets()
 
 	// average luminance
 	{
-		Shader computeShader("Resources/Shaders/AverageLuminance.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("Resources/Shaders/Tonemap/AverageLuminance.hlsl", Shader::Type::Compute, "CSMain");
 
 		// root signature
 		m_pAverageLuminanceRS = std::make_unique<RootSignature>();
@@ -1245,22 +1243,17 @@ void Graphics::InitializeAssets()
 
 	// tonemapping
 	{
-		Shader vertexShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader computeShader("Resources/Shaders/Tonemap/Tonemapping.hlsl", Shader::Type::Compute, "CSMain");
 
 		// rootSignature
 		m_pToneMapRS = std::make_unique<RootSignature>();
-		m_pToneMapRS->FinalizeFromShader("Tonemapping RS", vertexShader, m_pDevice.Get());
+		m_pToneMapRS->FinalizeFromShader("Tonemapping RS", computeShader, m_pDevice.Get());
 
 		// pipeline state
 		m_pToneMapPSO = std::make_unique<PipelineState>();
-		m_pToneMapPSO->SetDepthEnable(false);
-		m_pToneMapPSO->SetDepthWrite(false);
 		m_pToneMapPSO->SetRootSignature(m_pToneMapRS->GetRootSignature());
-		m_pToneMapPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pToneMapPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pToneMapPSO->SetRenderTargetFormat(SWAPCHAIN_FORMAT, DEPTH_STENCIL_FORMAT, 1, 0);
-		m_pToneMapPSO->Finalize("Tonemapping Pipeline", m_pDevice.Get());
+		m_pToneMapPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pToneMapPSO->Finalize("Tonemapping PSO", m_pDevice.Get());
 	}
 
 	// depth resolve
