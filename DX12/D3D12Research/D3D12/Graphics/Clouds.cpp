@@ -18,8 +18,8 @@ struct CloudParameters
 {
 	Vector4 FrustumCorners[4];
 	Matrix ViewInverse;
-	float NearPlane;
-	float FarPlane;
+	float NearPlane{0};
+	float FarPlane{0};
 	
 	float CloudScale{0.02f};
 	float CloudThreshold{0.4f};
@@ -56,7 +56,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 	}));
 
 	{
-		Shader shader("Resources/Shaders/WorleyNoise.hlsl", Shader::Type::Compute, "WorleyNoiseCS");
+		Shader shader("WorleyNoise.hlsl", Shader::Type::Compute, "WorleyNoiseCS");
 		
 		m_pWorleyNoiseRS = std::make_unique<RootSignature>();
 		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
@@ -73,8 +73,8 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{
-		Shader vertexShader("Resources/Shaders/Clouds.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/Clouds.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("Clouds.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader pixelShader("Clouds.hlsl", Shader::Type::Pixel, "PSMain");
 		m_pCloudsRS = std::make_unique<RootSignature>();
 		m_pCloudsRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pCloudsRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
@@ -103,7 +103,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pCloudsPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		m_pCloudsPS->SetDepthEnable(false);
 		m_pCloudsPS->SetDepthWrite(false);
-		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
+		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 		m_pCloudsPS->SetRootSignature(m_pCloudsRS->GetRootSignature());
 		m_pCloudsPS->Finalize("Clouds PS", pGraphics->GetDevice());
 	}

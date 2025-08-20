@@ -112,6 +112,47 @@ public:
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 	OfflineDescriptorAllocator* GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE type) const { return m_DescriptorHeaps[type].get(); }
 
+	template<typename DESC_TYPE>
+	struct DescriptorSelector {};
+
+	template<> 
+	struct DescriptorSelector<D3D12_SHADER_RESOURCE_VIEW_DESC>
+	{
+		static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+	};
+	template<>
+	struct DescriptorSelector<D3D12_UNORDERED_ACCESS_VIEW_DESC>
+	{
+		static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+	};
+	template<>
+	struct DescriptorSelector<D3D12_CONSTANT_BUFFER_VIEW_DESC>
+	{
+		static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
+	};
+	template<>
+	struct DescriptorSelector<D3D12_RENDER_TARGET_VIEW_DESC>
+	{
+		static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_RTV; }
+	};
+	template<>
+	struct DescriptorSelector<D3D12_DEPTH_STENCIL_VIEW_DESC>
+	{
+		static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_DSV; }
+	};
+
+	template<typename DESC_TYPE>
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor()
+	{
+		return m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->AllocateDescriptor();
+	}
+
+	template<typename DESC_TYPE>
+	void FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
+	{
+		return m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
+	}
+
 	int32_t GetWindowWidth() const { return m_WindowWidth; }
 	int32_t GetWindowHeight() const { return m_WindowHeight; }
 
@@ -129,13 +170,13 @@ public:
 	Camera* GetCamera() const { return m_pCamera.get(); }
 
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
-	uint32_t GetMultiSampleQualityLevel(uint32_t msaa, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
+	uint32_t GetMaxMSAAQuality(uint32_t msaa, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
-	static const int32_t SHADOW_MAP_SIZE = 4096;
+	static const uint32_t SHADOW_MAP_SIZE = 4096;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
@@ -173,7 +214,6 @@ private:
 	int m_ShaderModelMinor{-1};
 
 	int m_SampleCount{1};
-	int m_SampleQuality{0};
 
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;

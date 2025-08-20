@@ -14,7 +14,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
-	if (bufferSize > PAGE_SIZE)
+	if (bufferSize > DynamicAllocationManager::PAGE_SIZE)
 	{
 		AllocationPage* pPage = m_pPageManager->CreateNewPage(bufferSize);
 		m_UsedLargePages.push_back(pPage);
@@ -28,9 +28,9 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 	{
 		m_CurrentOffset = Math::AlignUp<size_t>(m_CurrentOffset, alignment);
 		
-		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize > PAGE_SIZE)
+		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize > DynamicAllocationManager::PAGE_SIZE)
 		{
-			m_pCurrentPage = m_pPageManager->AllocatePage(PAGE_SIZE);
+			m_pCurrentPage = m_pPageManager->AllocatePage(DynamicAllocationManager::PAGE_SIZE);
 			m_CurrentOffset = 0;
 
 			m_UsedPages.push_back(m_pCurrentPage);
@@ -117,6 +117,25 @@ void DynamicAllocationManager::FreeLargePages(uint64_t fenceValue, const std::ve
 	{
 		m_DeleteQueue.emplace(fenceValue, pPage);
 	}
+}
+
+void DynamicAllocationManager::FlushAll()
+{
+	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
+	m_pGraphics->IdleGPU();
+	m_Pages.clear();
+	m_FreedPages = {};
+	m_DeleteQueue = {};
+}
+
+uint64_t DynamicAllocationManager::GetMemoryUsage() const
+{
+	uint64_t size = 0;
+	for (const auto& pPage : m_Pages)
+	{
+		size += pPage->GetSize();
+	}
+	return size;
 }
 
 AllocationPage::AllocationPage(Graphics* pGraphics) : Buffer(pGraphics, "Dynamic Allocation Page")

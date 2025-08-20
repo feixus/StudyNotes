@@ -15,6 +15,10 @@ namespace Math
 	constexpr float ToMegaBytes = 1.0f / (1 << 20);
 	constexpr float ToGigaBytes = 1.0f / (1 << 30);
 
+	constexpr uint32_t FromKilobytes = 1 << 10;
+	constexpr uint32_t FromMegabytes = 1 << 20;
+	constexpr uint32_t FromGigabytes = 1 << 30;
+
     template<typename T>
     T AlignUp(T value, T alignment)
     {
@@ -100,10 +104,17 @@ namespace Math
 
     Quaternion LookRotation(const Vector3& direction);
 
-    std::string ToBase(unsigned int number, unsigned int base);
-    std::string ToBinaryString(unsigned int number);
-    std::string ToOctalString(unsigned int number);
-    std::string ToHexString(unsigned int number);
+    std::string ToBase(unsigned int number, unsigned int base, bool addPrefix = true);
+
+    inline std::string ToBinary(unsigned int number, bool addPrefix = true)
+    {
+        return ToBase(number, 2, addPrefix);
+    }
+
+    inline std::string ToHex(unsigned int number, bool addPrefix = true)
+    {
+        return ToBase(number, 16, addPrefix);
+    }
 
     Vector3 RandVector();
     Vector3 RandCircleVector();

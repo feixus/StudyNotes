@@ -53,7 +53,7 @@ void OfflineDescriptorAllocator::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE hand
         }
     }
 
-    assert(heapIndex >= 0);
+    check(heapIndex >= 0);
     Heap* pHeap = m_Heaps[heapIndex].get();
     Heap::Range newRange {
         CD3DX12_CPU_DESCRIPTOR_HANDLE(handle),

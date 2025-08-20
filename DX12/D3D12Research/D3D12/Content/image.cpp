@@ -172,7 +172,7 @@ bool Image::GetSurfaceInfo(int width, int height, int depth, int mipLevel, MipLe
 	}
 	else if (IsCompressed())
 	{
-		int blockSize = (m_Format == ImageFormat::DXT1 || m_Format == ImageFormat::BC4) ? 8 : 16;
+		int blockSize = (m_Format == ImageFormat::BC1 || m_Format == ImageFormat::BC4) ? 8 : 16;
 		mipLevelInfo.RowSize = ((mipLevelInfo.Width + 3) / 4) * blockSize;
 		mipLevelInfo.Rows = ((mipLevelInfo.Height + 3) / 4);
 		mipLevelInfo.DataSize = mipLevelInfo.RowSize * mipLevelInfo.Rows * mipLevelInfo.Depth;
@@ -189,56 +189,20 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 {
 	switch (format)
  	{
- 	case ImageFormat::RGBA:
- 		if (sRgb)
- 		{
- 			return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
- 		}
- 		return DXGI_FORMAT_R8G8B8A8_UNORM;
- 	case ImageFormat::BGRA:
- 		if (sRgb)
- 		{
- 			return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
- 		}
- 		return DXGI_FORMAT_B8G8R8A8_UNORM;
- 	case ImageFormat::RGB32:
- 		return DXGI_FORMAT_R32G32B32_FLOAT;
- 	case ImageFormat::RGBA16:
- 		return DXGI_FORMAT_R16G16B16A16_FLOAT;
- 	case ImageFormat::RGBA32:
- 		return DXGI_FORMAT_R32G32B32A32_FLOAT;
- 	case ImageFormat::DXT1:
- 		if (sRgb)
- 		{
- 			return DXGI_FORMAT_BC1_UNORM_SRGB;
- 		}
- 		return DXGI_FORMAT_BC1_UNORM;
- 	case ImageFormat::DXT3:
- 		if (sRgb)
- 		{
- 			return DXGI_FORMAT_BC2_UNORM_SRGB;
- 		}
- 		return DXGI_FORMAT_BC2_UNORM;
- 	case ImageFormat::DXT5:
- 		if (sRgb)
- 		{
- 			return DXGI_FORMAT_BC3_UNORM_SRGB;
- 		}
- 		return DXGI_FORMAT_BC3_UNORM;
- 	case ImageFormat::BC4:
- 		return DXGI_FORMAT_BC4_UNORM;
- 	case ImageFormat::BC5:
- 		return DXGI_FORMAT_BC5_UNORM;
- 	case ImageFormat::BC6H:
- 		return DXGI_FORMAT_BC6H_UF16;
- 	case ImageFormat::BC7:
- 		if (sRgb)
- 		{
- 			return DXGI_FORMAT_BC7_UNORM_SRGB;
- 		}
- 		return DXGI_FORMAT_BC7_UNORM;
+ 	case ImageFormat::RGBA: return sRgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+ 	case ImageFormat::BGRA: return sRgb ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
+ 	case ImageFormat::RGB32: return DXGI_FORMAT_R32G32B32_FLOAT;
+ 	case ImageFormat::RGBA16: return DXGI_FORMAT_R16G16B16A16_FLOAT;
+ 	case ImageFormat::RGBA32: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+ 	case ImageFormat::BC1: return sRgb ? DXGI_FORMAT_BC1_UNORM_SRGB : DXGI_FORMAT_BC1_UNORM;
+ 	case ImageFormat::BC2: return sRgb ? DXGI_FORMAT_BC2_UNORM_SRGB : DXGI_FORMAT_BC2_UNORM;
+ 	case ImageFormat::BC3: return sRgb ? DXGI_FORMAT_BC3_UNORM_SRGB : DXGI_FORMAT_BC3_UNORM;
+ 	case ImageFormat::BC4: return DXGI_FORMAT_BC4_UNORM;
+ 	case ImageFormat::BC5: return DXGI_FORMAT_BC5_UNORM;
+ 	case ImageFormat::BC6H: return DXGI_FORMAT_BC6H_UF16;
+ 	case ImageFormat::BC7: return sRgb ? DXGI_FORMAT_BC7_UNORM_SRGB : DXGI_FORMAT_BC7_UNORM;
  	default:
- 		return 0;
+ 		return DXGI_FORMAT_UNKNOWN;
  	}
 }
 
@@ -247,7 +211,7 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 //  +-----------------------+
 //  | DDS_HEADER (124 bytes)| // Contains size, width, height, etc.
 //  +-----------------------+
-//  | Optional DDS_HEADER_DXT10 (20 bytes) |
+//  | Optional DDS_HEADER_BC10 (20 bytes) |
 //  +-----------------------+
 //  | Image Data            |
 //  +-----------------------+
@@ -366,19 +330,19 @@ bool Image::LoadDds(const char* inputStream)
 				m_Components = 3;
 				m_sRgb = true;
 			case IMAGE_FORMAT::BC1_UNORM:
-				m_Format = ImageFormat::DXT1;
+				m_Format = ImageFormat::BC1;
 				break;
 			case IMAGE_FORMAT::BC2_UNORM_SRGB:
 				m_Components = 4;
 				m_sRgb = true;
 			case IMAGE_FORMAT::BC2_UNORM:
-				m_Format = ImageFormat::DXT3;
+				m_Format = ImageFormat::BC2;
 				break;
 			case IMAGE_FORMAT::BC3_UNORM_SRGB:
 				m_Components = 4;
 				m_sRgb = true;
 			case IMAGE_FORMAT::BC3_UNORM:
-				m_Format = ImageFormat::DXT5;
+				m_Format = ImageFormat::BC3;
 				break;
 			case IMAGE_FORMAT::BC4_UNORM:
 				m_Components = 1;
@@ -413,17 +377,17 @@ bool Image::LoadDds(const char* inputStream)
 			switch (fourCC)
 			{
 			case MAKEFOURCC('D', 'X', 'T', '1'):
-				m_Format = ImageFormat::DXT1;
+				m_Format = ImageFormat::BC1;
 				m_Components = 3;
 				m_sRgb = false;
 				break;
 			case MAKEFOURCC('D', 'X', 'T', '3'):
-				m_Format = ImageFormat::DXT3;
+				m_Format = ImageFormat::BC2;
 				m_Components = 4;
 				m_sRgb = false;
 				break;
 			case MAKEFOURCC('D', 'X', 'T', '5'):
-				m_Format = ImageFormat::DXT5;
+				m_Format = ImageFormat::BC3;
 				m_Components = 4;
 				m_sRgb = false;
 				break;
@@ -454,6 +418,8 @@ bool Image::LoadDds(const char* inputStream)
 						return false;
 					}
 				}
+#undef ISBITMASK
+#undef MAKEFOURCC
 				break;
 			default:
 				return false;

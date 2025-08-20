@@ -207,7 +207,7 @@ void Profiler::Initialize(Graphics* pGraphics)
 	desc.Count = HEAP_SIZE * Graphics::FRAME_COUNT * 2;
 	desc.NodeMask = 0;
 	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-	HR(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())));
+	VERIFY_HR_EX(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pGraphics->GetDevice());
 
 	int bufferSize = HEAP_SIZE * sizeof(uint64_t) * 2 * Graphics::FRAME_COUNT;
 	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
@@ -266,7 +266,7 @@ void Profiler::BeginReadback(int frameIndex)
 	int backBufferIndex = frameIndex % Graphics::FRAME_COUNT;
 	m_pPreviousBlock = nullptr;
 
-	assert(m_pCurrentReadBackData == nullptr);
+	check(m_pCurrentReadBackData == nullptr);
 	m_pGraphics->WaitForFence(m_FenceValues[backBufferIndex]);
 
 	m_pCurrentReadBackData = (uint64_t*)m_pReadBackBuffer->Map(0, 0, m_pReadBackBuffer->GetSize());
@@ -295,7 +295,7 @@ void Profiler::EndReadBack(int frameIndex)
 
 float Profiler::GetGpuTime(int timerIndex) const
 {
-	assert(m_pCurrentReadBackData != nullptr);
+	check(m_pCurrentReadBackData != nullptr);
 	uint64_t start = m_pCurrentReadBackData[timerIndex * 2];
 	uint64_t end = m_pCurrentReadBackData[timerIndex * 2 + 1];
 	return (float)(end - start) * m_SecondsPerGpuTick * 1000.0f;

@@ -119,8 +119,8 @@ void ImGuiRenderer::InitializeImGui()
 void ImGuiRenderer::CreatePipeline()
 {
 	// shaders
-	Shader vertexShader("Resources/Shaders/imgui.hlsl", Shader::Type::Vertex, "VSMain");
-	Shader pixelShader("Resources/Shaders/imgui.hlsl", Shader::Type::Pixel, "PSMain");
+	Shader vertexShader("imgui.hlsl", Shader::Type::Vertex, "VSMain");
+	Shader pixelShader("imgui.hlsl", Shader::Type::Pixel, "PSMain");
 
 	// root signature
 	m_pRootSignature = std::make_unique<RootSignature>();
@@ -140,7 +140,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineStateObject->SetDepthEnable(false);
 	m_pPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 	m_pPipelineStateObject->SetInputLayout(elementDesc.data(), (uint32_t)elementDesc.size());
-	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT,1 , 0);
+	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());

@@ -23,8 +23,8 @@ public:
 
 	void Finalize(const char* pName, ID3D12Device* pDevice);
 
-	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality);
-	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32_t count, DXGI_FORMAT dsvFormat, uint32_t msaa, uint32_t msaaQuality);
+	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32_t msaa);
+	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32_t count, DXGI_FORMAT dsvFormat, uint32_t msaa);
 
 	// blend state
 	void SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage);

@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Console.h"
+#include "CommandLine.h"
 
 static Console* consoleInstance = nullptr;
 
@@ -15,14 +16,16 @@ Console::~Console()
 
 void Console::Startup()
 {
-    assert(consoleInstance == nullptr);
+    check(!consoleInstance);
     static Console instance;
     consoleInstance = &instance;
 
+#if WITH_CONSOLE
     if (!CommandLine::GetBool("noconsole"))
     {
         consoleInstance->InitializeConsoleWindow();
     }
+#endif
 }
 
 bool Console::LogHRESULT(const char* source, HRESULT hr)

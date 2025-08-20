@@ -5,7 +5,7 @@
 
 bool Paths::IsSlash(const char c)
 {
-    if (c == '\\')
+    if (c == '/')
         return true;
     return c == '/';
 }
@@ -84,47 +84,52 @@ bool Paths::DirectoryExists(const std::string& path)
 
 std::string Paths::GameDir()
 {
-    return ".\\";
+    return "./";
 }
 
 std::string Paths::SavedDir()
 {
-    return GameDir() + "Save\\";
+    return GameDir() + "Save/";
 }
 
 std::string Paths::ScreenshotDir()
 {
-    return GameDir() + "Screenshot\\";
+    return GameDir() + "Screenshot/";
 }
 
 std::string Paths::LogsDir()
 {
-    return SavedDir() + "Logs\\";
+    return SavedDir() + "Logs/";
 }
 
 std::string Paths::ProfilingDir()
 {
-    return SavedDir() + "Profiling\\";
+    return SavedDir() + "Profiling/";
 }
 
 std::string Paths::PakFilesDir()
 {
-    return GameDir() + "Paks\\";
+    return GameDir() + "Paks/";
 }
 
 std::string Paths::ResourcesDir()
 {
-    return GameDir() + "Resources\\";
+    return GameDir() + "Resources/";
 }
 
 std::string Paths::ConfigDir()
 {
-    return SavedDir() + "Config\\";
+    return SavedDir() + "Config/";
 }
 
 std::string Paths::ShaderCacheDir()
 {
-    return SavedDir() + "ShaderCache\\";
+    return SavedDir() + "ShaderCache/";
+}
+
+std::string Paths::ShaderDir()
+{
+    return ResourcesDir() + "Shaders/";
 }
 
 std::string Paths::GameIniFile()

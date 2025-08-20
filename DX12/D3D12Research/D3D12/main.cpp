@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Core/Input.h"
 #include "Graphics/Core/Graphics.h"
+#include "Core/CommandLine.h"
 
 // maps memory functions to debug versions, to help track memory allocations and find memory leaks
 #define _CRTDBG_MAP_ALLOC

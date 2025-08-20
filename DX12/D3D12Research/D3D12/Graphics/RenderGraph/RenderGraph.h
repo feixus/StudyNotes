@@ -162,7 +162,7 @@ public:
 
     void Execute(const RGPassResource& resources, CommandContext& renderContext)
     {
-        assert(m_pPassExecutor);
+        check(m_pPassExecutor);
         m_pPassExecutor->Execute(resources, renderContext);
     }
 
@@ -237,7 +237,7 @@ public:
 
     RGResourceHandle ImportTexture(const char* pName, GraphicsTexture* pTexture)
     {
-        assert(pTexture);
+        check(pTexture);
         RGResource* pResource = new RGTexture(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
         m_Resources.push_back(pResource);
         return CreateResourceNode(pResource);
@@ -252,7 +252,7 @@ public:
 
     RGResourceHandle ImportBuffer(const char* pName, Buffer* pBuffer)
     {
-        assert(pBuffer);
+        check(pBuffer);
         BufferDesc desc{};
         RGResource* pResource = new RGBuffer(pName, (int)m_Resources.size(), desc, pBuffer);
         m_Resources.push_back(pResource);

@@ -260,7 +260,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 
         m_pGlobalRS->Finalize("Ray Global RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
         
-        ShaderLibrary shaderLibrary("Resources/Shaders/RTAO.hlsl");
+        ShaderLibrary shaderLibrary("RTAO.hlsl");
 
         CD3DX12_STATE_OBJECT_DESC desc(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE);
 
@@ -316,7 +316,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
         }
         D3D12_STATE_OBJECT_DESC stateObject = *desc;
 
-        HR(pGraphics->GetRaytracingDevice()->CreateStateObject(&stateObject, IID_PPV_ARGS(m_pStateObject.GetAddressOf())));
-        HR(m_pStateObject->QueryInterface(IID_PPV_ARGS(m_pStateObjectProperties.GetAddressOf())));
+        VERIFY_HR_EX(pGraphics->GetRaytracingDevice()->CreateStateObject(&stateObject, IID_PPV_ARGS(m_pStateObject.GetAddressOf())), pGraphics->GetDevice());
+        VERIFY_HR_EX(m_pStateObject->QueryInterface(IID_PPV_ARGS(m_pStateObjectProperties.GetAddressOf())), pGraphics->GetDevice());
     }
 }

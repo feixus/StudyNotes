@@ -4,6 +4,7 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
+#include "Core/CommandLine.h"
 
 RGResourceHandle RGPassBuilder::Read(const RGResourceHandle& resource)
 {

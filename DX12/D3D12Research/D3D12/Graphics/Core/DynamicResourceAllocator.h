@@ -34,6 +34,10 @@ public:
 
 	void FreePages(uint64_t fenceValue, const std::vector<AllocationPage*> pPages);
 	void FreeLargePages(uint64_t fenceValue, const std::vector<AllocationPage*> pLargePages);
+	void FlushAll();
+
+	constexpr static uint64_t PAGE_SIZE = Math::FromMegabytes * 2;
+	uint64_t GetMemoryUsage() const;
 
 private:
 	std::mutex m_PageMutex;
@@ -51,8 +55,6 @@ public:
 	void Free(uint64_t fenceValue);
 
 private:
-	constexpr static size_t PAGE_SIZE = 0xFFFF;
-
 	DynamicAllocationManager* m_pPageManager;
 
 	AllocationPage* m_pCurrentPage{ nullptr };

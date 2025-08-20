@@ -70,7 +70,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 			const aiFace& face = pMesh->mFaces[k];
 			for (uint32_t m = 0; m < 3; m++)
 			{
-				assert(face.mNumIndices == 3);
+				check(face.mNumIndices == 3);
 				indices[k * 3 + m] = face.mIndices[m];
 			}
 		}

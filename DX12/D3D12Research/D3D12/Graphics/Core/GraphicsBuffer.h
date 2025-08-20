@@ -58,7 +58,7 @@ struct BufferDesc
 
 	static BufferDesc CreateByteAddress(uint64_t bytes, BufferFlag usage = BufferFlag::ShaderResource)
 	{
-		assert(bytes % 4 == 0);
+		check(bytes % 4 == 0);
 		BufferDesc desc;
 		desc.ElementCount = (uint32_t)bytes / 4;
 		desc.ElementSize = 4;
@@ -76,13 +76,24 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateAccelerationStructure(uint64_t bytes, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateAccelerationStructure(uint64_t bytes)
 	{
-		assert(bytes % 4 == 0);
+		check(bytes % 4 == 0);
 		BufferDesc desc;
 		desc.ElementCount = (uint32_t)bytes / 4;
 		desc.ElementSize = 4;
-		desc.Usage = usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
+		desc.Usage = desc.Usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
+		return desc;
+	}
+
+	static BufferDesc CreateTyped(int elementCount, DXGI_FORMAT format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
+	{
+		check(!D3D::IsBlockCompressFormat(format));
+		BufferDesc desc;
+		desc.ElementCount = elementCount;
+		desc.ElementSize = D3D::GetFormatRowDataSize(format, 1);
+		desc.Usage = usage;
+		desc.Format = format;
 		return desc;
 	}
 
@@ -96,9 +107,10 @@ struct BufferDesc
 		return !(*this == other);
 	}
 
-	uint32_t ElementCount{ 0 };
-	uint32_t ElementSize{ 0 };
-	BufferFlag Usage{ BufferFlag::None };
+	uint32_t ElementCount{0};
+	uint32_t ElementSize{0};
+	BufferFlag Usage{BufferFlag::None};
+	DXGI_FORMAT Format{DXGI_FORMAT_UNKNOWN};
 };
 
 class Buffer : public GraphicsResource
@@ -132,7 +144,6 @@ protected:
 
 	std::string m_Name;
 	BufferDesc m_Desc;
-	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 };
 
 

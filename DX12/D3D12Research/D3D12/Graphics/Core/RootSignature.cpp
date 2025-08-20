@@ -11,7 +11,7 @@ void RootSignature::SetSize(uint32_t size, bool shrink /*= true*/)
 {
     if (size != m_NumParameters && (shrink || size > m_NumParameters))
     {
-		assert(size <= MAX_NUM_DESCRIPTORS);
+		check(size <= MAX_NUM_DESCRIPTORS);
 
         m_NumParameters = size;
         m_RootParameters.resize(size);
@@ -76,7 +76,7 @@ void RootSignature::SetDescriptorTable(uint32_t rootIndex, uint32_t rangeCount, 
 
 void RootSignature::SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIndex, uint32_t startshaderRegister, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, uint32_t heapSlotOffset)
 {
-    assert(rangeIndex < MAX_NUM_DESCRIPTORS);
+    check(rangeIndex < MAX_NUM_DESCRIPTORS);
     D3D12_DESCRIPTOR_RANGE& range = m_DescriptorTableRanges[rootIndex][rangeIndex];
     range.RangeType = type;
     range.NumDescriptors = count;
@@ -147,7 +147,7 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
         default:
         case D3D12_SHADER_VISIBILITY_DOMAIN:
         case D3D12_SHADER_VISIBILITY_HULL:
-            assert(false);
+            noEntry();
             break;
         }
 
@@ -165,7 +165,7 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
                 m_SamplerMask.SetBit((uint32_t)i);
                 break;
             default:
-                assert(false);
+                noEntry();
                 break;
             }
            
@@ -219,14 +219,14 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
         E_LOG(LogType::Error, "RootSignature::Finalize serialization error: %s", pError);
         return;
     }
-    HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
+    VERIFY_HR_EX(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())), pDevice);
     D3D_SETNAME(m_pRootSignature.Get(), pName);
 }
 
 void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, ID3D12Device* pDevice)
 {
     ComPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
-    HR(D3D12CreateVersionedRootSignatureDeserializer(shader.GetByteCode(), shader.GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())));
+    VERIFY_HR_EX(D3D12CreateVersionedRootSignatureDeserializer(shader.GetByteCode(), shader.GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())), pDevice);
 
     const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc = pDeserializer->GetUnconvertedRootSignatureDesc();
 

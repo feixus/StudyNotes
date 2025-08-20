@@ -60,6 +60,8 @@ float g_SunInclination = 0.579f;
 float g_SunOrientation = -3.055f;
 float g_SunTemperature = 5000.0f;
 
+bool g_EnableUI = true;
+
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount) :
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
@@ -86,6 +88,8 @@ void Graphics::Initialize(HWND hWnd)
 	g_ShowRaytraced = SupportsRaytracing();
 
 	RandomizeLights(m_DesiredLightCount);
+
+	m_pDynamicAllocationManager->FlushAll();
 }
 
 void Graphics::Update()
@@ -250,6 +254,11 @@ void Graphics::Update()
 	}
 
 	PROFILE_END();
+
+	if (Input::Instance().IsKeyPressed('U'))
+	{
+		g_EnableUI = !g_EnableUI;
+	}
 
 	////////////////////////////////
 	// Rendering Begin
@@ -762,7 +771,7 @@ void Graphics::Update()
 					};
 			});
 
-		if (g_DrawHistogram)
+		if (g_EnableUI && g_DrawHistogram)
 		{
 			graph.AddPass("Average Luminance", [&](RGPassBuilder& builder)
 			{
@@ -797,9 +806,13 @@ void Graphics::Update()
 
 	// UI
 	//  - ImGui render, pretty straight forward
+	if (g_EnableUI)
 	{
-		//ImGui::ShowDemoWindow();
 		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
+	}
+	else
+	{
+		ImGui::Render();
 	}
 
 	graph.AddPass("Temp Barriers", [&](RGPassBuilder& builder)
@@ -864,13 +877,17 @@ void Graphics::InitD3D()
 #if D3D_VALIDATION
 	// enable debug layer
 	ComPtr<ID3D12Debug> pDebugController;
-	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
-	pDebugController->EnableDebugLayer();  // CPU-side
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+	{
+		pDebugController->EnableDebugLayer();  // CPU-side
+	}
 
 #if GPU_VALIDATION
 	ComPtr<ID3D12Debug1> pDebugController1;
-	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController1)));
-	pDebugController1->SetEnableGPUBasedValidation(true);  // GPU-side
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController1))))
+	{
+		pDebugController1->SetEnableGPUBasedValidation(true);  // GPU-side
+	}
 #endif
 
 	// additional DXGI debug layers
@@ -878,7 +895,7 @@ void Graphics::InitD3D()
 #endif
 
 	// factory
-	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
+	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
 	// look for an adapter
 	ComPtr<IDXGIAdapter4> pAdapter;
@@ -908,13 +925,13 @@ void Graphics::InitD3D()
 		D3D_FEATURE_LEVEL_11_0
 	};
 
-	HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
+	VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
 	D3D12_FEATURE_DATA_FEATURE_LEVELS caps = {
 		.NumFeatureLevels = std::size(featureLevels),
 		.pFeatureLevelsRequested = featureLevels,
 	};
-	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)));
-	HR(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
+	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)), GetDevice());
+	VERIFY_HR_EX(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())), GetDevice());
 		
 	pAdapter.Reset();
 
@@ -922,7 +939,7 @@ void Graphics::InitD3D()
 
 #if D3D_VALIDATION
 	ID3D12InfoQueue* pInfoQueue = nullptr;
-	if (HR(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
 	{
 		// Suppress whole categories of messages
 		//D3D12_MESSAGE_CATEGORY Categories[] = {};
@@ -951,7 +968,7 @@ void Graphics::InitD3D()
 		NewFilter.DenyList.pIDList = DenyIds;
 
 #if 1
-		HR(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
+		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
 #endif
 
 		pInfoQueue->PushStorageFilter(&NewFilter);
@@ -959,29 +976,26 @@ void Graphics::InitD3D()
 	}
 #endif
 
-	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options{};
-	if (m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options, sizeof(options)) == S_OK)
+	 // feature checks
 	{
-		m_RenderPassTier = options.RenderPassesTier;
-		m_RayTracingTier = options.RaytracingTier;
+		D3D12_FEATURE_DATA_D3D12_OPTIONS5 options{};
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
+		{
+			m_RenderPassTier = options.RenderPassesTier;
+			m_RayTracingTier = options.RaytracingTier;
+		}
+
+		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
+			.HighestShaderModel = D3D_SHADER_MODEL_6_7
+		};
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(shaderModelSupport))))
+		{
+			m_ShaderModelMajor = shaderModelSupport.HighestShaderModel >> 0x4;
+			m_ShaderModelMinor = shaderModelSupport.HighestShaderModel & 0xF;
+
+			E_LOG(LogType::Info, "D3D12 Shader Model %d.%d", m_ShaderModelMajor, m_ShaderModelMinor);
+		}
 	}
-
-	D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
-		.HighestShaderModel = D3D_SHADER_MODEL_6_6
-	};
-	m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(shaderModelSupport));
-	m_ShaderModelMajor = shaderModelSupport.HighestShaderModel >> 0x4;
-	m_ShaderModelMinor = shaderModelSupport.HighestShaderModel & 0xF;
-	E_LOG(LogType::Info, "D3D12 Shader Model %d.%d", m_ShaderModelMajor, m_ShaderModelMinor);
-
-	// check msaa support
-	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
-	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-	qualityLevels.Format = RENDER_TARGET_FORMAT;
-	qualityLevels.NumQualityLevels = 0;
-	qualityLevels.SampleCount = m_SampleCount;
-	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
-	m_SampleQuality = qualityLevels.NumQualityLevels - 1;
 
 	// create all the required command queues
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -990,7 +1004,7 @@ void Graphics::InitD3D()
 	//m_CommandQueues[D3D12_COMMAND_LIST_TYPE_BUNDLE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_BUNDLE);
 
 	// allocate descriptor heaps pool
-	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
+	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
@@ -1067,13 +1081,13 @@ void Graphics::CreateSwapchain()
 	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 	fsDesc.Windowed = true;
 
-	HR(m_pFactory->CreateSwapChainForHwnd(
+	VERIFY_HR_EX(m_pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
 		m_pWindow,
 		&swapchainDesc,
 		&fsDesc,
 		nullptr,
-		pSwapChain.GetAddressOf()));
+		pSwapChain.GetAddressOf()), GetDevice());
 
 	pSwapChain.As(&m_pSwapchain);
 }
@@ -1093,12 +1107,12 @@ void Graphics::OnResize(int width, int height)
 	m_pDepthStencil->Release();
 
 	// resize the buffers
-	HR(m_pSwapchain->ResizeBuffers(
+	VERIFY_HR_EX(m_pSwapchain->ResizeBuffers(
 		FRAME_COUNT,
 		m_WindowWidth,
 		m_WindowHeight,
 		SWAPCHAIN_FORMAT,
-		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
+		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH), GetDevice());
 
 	m_CurrentBackBufferIndex = 0;
 
@@ -1106,7 +1120,7 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
 		ID3D12Resource* pResource = nullptr;
-		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+		VERIFY_HR_EX(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)), GetDevice());
 		m_Backbuffers[i]->CreateForSwapChain(pResource);
 	}
 
@@ -1176,7 +1190,7 @@ void Graphics::InitializeAssets()
 	{
 
 		// opaque
-		Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader vertexShader("DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
 
 		// root signature
 		m_pShadowRS = std::make_unique<RootSignature>();
@@ -1187,14 +1201,14 @@ void Graphics::InitializeAssets()
 		m_pShadowPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 		m_pShadowPSO->SetRootSignature(m_pShadowRS->GetRootSignature());
 		m_pShadowPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pShadowPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1, 0);
+		m_pShadowPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
 		m_pShadowPSO->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pShadowPSO->SetDepthBias(-1, -5.f, -4.f);
 		m_pShadowPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pShadowPSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
 
 		// transparent
-		Shader alphaPixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader alphaPixelShader("DepthOnly.hlsl", Shader::Type::Pixel, "PSMain");
 
 		m_pShadowAlphaPSO = std::make_unique<PipelineState>(*m_pShadowPSO);
 		m_pShadowAlphaPSO->SetPixelShader(alphaPixelShader.GetByteCode(), alphaPixelShader.GetByteCodeSize());
@@ -1207,7 +1221,7 @@ void Graphics::InitializeAssets()
 	// depth prepass
 	// simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader vertexShader("DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
 
 		// root signature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>();
@@ -1219,13 +1233,13 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		m_pDepthPrepassPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount);
 		m_pDepthPrepassPSO->Finalize("Depth Prepass PSO", m_pDevice.Get());
 	}
 
 	// luminance histogram
 	{
-		Shader computeShader("Resources/Shaders/Tonemap/LuminanceHistogram.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("Tonemap/LuminanceHistogram.hlsl", Shader::Type::Compute, "CSMain");
 
 		// root signature
 		m_pLuminanceHistogramRS = std::make_unique<RootSignature>();
@@ -1245,7 +1259,7 @@ void Graphics::InitializeAssets()
 
 	// draw histogram
 	{
-		Shader computeShader("Resources/Shaders/Tonemap/DrawLuminanceHistogram.hlsl", Shader::Type::Compute, "DrawLuminanceHistogram");
+		Shader computeShader("Tonemap/DrawLuminanceHistogram.hlsl", Shader::Type::Compute, "DrawLuminanceHistogram");
 		m_pDrawHistogramRS = std::make_unique<RootSignature>();
 		m_pDrawHistogramRS->FinalizeFromShader("Draw Histogram RS", computeShader, m_pDevice.Get());
 
@@ -1257,7 +1271,7 @@ void Graphics::InitializeAssets()
 
 	// average luminance
 	{
-		Shader computeShader("Resources/Shaders/Tonemap/AverageLuminance.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("Tonemap/AverageLuminance.hlsl", Shader::Type::Compute, "CSMain");
 
 		// root signature
 		m_pAverageLuminanceRS = std::make_unique<RootSignature>();
@@ -1272,7 +1286,7 @@ void Graphics::InitializeAssets()
 
 	// tonemapping
 	{
-		Shader computeShader("Resources/Shaders/Tonemap/Tonemapping.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("Tonemap/Tonemapping.hlsl", Shader::Type::Compute, "CSMain");
 
 		// rootSignature
 		m_pToneMapRS = std::make_unique<RootSignature>();
@@ -1289,7 +1303,7 @@ void Graphics::InitializeAssets()
 	// resolves a multisampled buffer to a normal depth buffer
 	// only required when the sample count > 1
 	{
-		Shader computeShader("Resources/Shaders/ResolveDepth.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("ResolveDepth.hlsl", Shader::Type::Compute, "CSMain");
 
 		m_pResolveDepthRS = std::make_unique<RootSignature>();
 		m_pResolveDepthRS->FinalizeFromShader("Resolve Depth RS", computeShader, m_pDevice.Get());
@@ -1302,9 +1316,9 @@ void Graphics::InitializeAssets()
 
 	// depth reduce
 	{
-		Shader prepareReduceShader("Resources/Shaders/ReduceDepth.hlsl", Shader::Type::Compute, "PrepareReduceDepth");
-		Shader prepareReduceShaderMSAA("Resources/Shaders/ReduceDepth.hlsl", Shader::Type::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
-		Shader reduceShader("Resources/Shaders/ReduceDepth.hlsl", Shader::Type::Compute, "ReduceDepth");
+		Shader prepareReduceShader("ReduceDepth.hlsl", Shader::Type::Compute, "PrepareReduceDepth");
+		Shader prepareReduceShaderMSAA("ReduceDepth.hlsl", Shader::Type::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
+		Shader reduceShader("ReduceDepth.hlsl", Shader::Type::Compute, "ReduceDepth");
 
 		m_pReduceDepthRS = std::make_unique<RootSignature>();
 		m_pReduceDepthRS->FinalizeFromShader("Reduce Depth RS", reduceShader, m_pDevice.Get());
@@ -1325,7 +1339,7 @@ void Graphics::InitializeAssets()
 
 	// mip generation
 	{
-		Shader computeShader("Resources/Shaders/GenerateMips.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("GenerateMips.hlsl", Shader::Type::Compute, "CSMain");
 
 		m_pGenerateMipsRS = std::make_unique<RootSignature>();
 		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips RS", computeShader, m_pDevice.Get());
@@ -1344,8 +1358,8 @@ void Graphics::InitializeAssets()
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		Shader vertexShader("Resources/Shaders/ProceduralSky.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/ProceduralSky.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("ProceduralSky.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader pixelShader("ProceduralSky.hlsl", Shader::Type::Pixel, "PSMain");
 
 		// root signature
 		m_pSkyboxRS = std::make_unique<RootSignature>();
@@ -1358,7 +1372,7 @@ void Graphics::InitializeAssets()
 		m_pSkyboxPSO->SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		m_pSkyboxPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pSkyboxPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pSkyboxPSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pSkyboxPSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount);
 		m_pSkyboxPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pSkyboxPSO->Finalize("Skybox", m_pDevice.Get());
 	}
@@ -1478,9 +1492,9 @@ void Graphics::UpdateImGui()
 			case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
 				ImGui::TextWrapped("CBV_SRV_UAV");
 				break;
-			case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
+			/*case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
 				ImGui::TextWrapped("Sampler");
-				break;
+				break;*/
 			case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
 				ImGui::TextWrapped("RTV");
 				break;
@@ -1497,6 +1511,12 @@ void Graphics::UpdateImGui()
 			str << usedDescriptors << "/" << totalDescriptors;
 			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
 		}
+		ImGui::TreePop();
+	}
+	if (ImGui::TreeNodeEx("Memory", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Text("Dynamic Upload Memory");
+		ImGui::Text("%f MB", Math::ToMegaBytes * m_pDynamicAllocationManager->GetMemoryUsage());
 		ImGui::TreePop();
 	}
 
@@ -1789,7 +1809,7 @@ bool Graphics::EndPixCapture() const
 bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 {
 	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
-	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData)));
+	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData)), GetDevice());
 
 	switch (format)
 	{
@@ -1846,7 +1866,7 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 		if (featureData.TypedUAVLoadAdditionalFormats)
 		{
 			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
-			HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport)));
+			VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport)), GetDevice());
 			const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
 			return ((formatSupport.Support2 & mask) == mask);
 		}
@@ -1869,13 +1889,13 @@ bool Graphics::IsFenceComplete(uint64_t fenceValue)
 	return pQueue->IsFenceComplete(fenceValue);
 }
 
-uint32_t Graphics::GetMultiSampleQualityLevel(uint32_t msaa, DXGI_FORMAT format)
+uint32_t Graphics::GetMaxMSAAQuality(uint32_t msaa, DXGI_FORMAT format)
 {
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
 	qualityLevels.Format = format == DXGI_FORMAT_UNKNOWN ? RENDER_TARGET_FORMAT : format;
 	qualityLevels.SampleCount = msaa;
 	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
+	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)), GetDevice());
 	return qualityLevels.NumQualityLevels - 1;
 }
 
@@ -1884,13 +1904,13 @@ ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_
 	ID3D12Resource* pResource;
 
 	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(heapType);
-	HR(m_pDevice->CreateCommittedResource(
+	VERIFY_HR_EX(m_pDevice->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
 		initialState,
 		pClearValue,
-		IID_PPV_ARGS(&pResource)));
+		IID_PPV_ARGS(&pResource)), GetDevice());
 
 	return pResource;
 }

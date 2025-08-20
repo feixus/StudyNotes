@@ -26,7 +26,7 @@ ID3D12Resource* PersistentResourceAllocatorHeap::CreateResource(const D3D12_RESO
 	}
 
 	ID3D12Resource* pResource;
-	HR(m_pDevice->CreatePlacedResource(
+	VERIFY_HR(m_pDevice->CreatePlacedResource(
 		m_pCurrentHeap,
 		offset,
 		&desc,

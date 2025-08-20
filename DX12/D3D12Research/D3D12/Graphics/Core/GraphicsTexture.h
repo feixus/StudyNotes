@@ -106,8 +106,8 @@ struct TextureDesc
 
 	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureFlag flag = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
 	{
-		assert(width);
-		assert(height);
+		check(width);
+		check(height);
 		TextureDesc desc{};
 		desc.Width = width;
 		desc.Height = height;
@@ -123,9 +123,9 @@ struct TextureDesc
 
 	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
-		assert(width);
-		assert(height);
-		assert(Any(flags, TextureFlag::DepthStencil));
+		check(width);
+		check(height);
+		check(Any(flags, TextureFlag::DepthStencil));
 		TextureDesc desc{};
 		desc.Width = width;
 		desc.Height = height;
@@ -141,9 +141,9 @@ struct TextureDesc
 
 	static TextureDesc CreateRenderTarget(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::RenderTarget, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
 	{
-		assert(width);
-		assert(height);
-		assert(Any(flags, TextureFlag::RenderTarget));
+		check(width);
+		check(height);
+		check(Any(flags, TextureFlag::RenderTarget));
 		TextureDesc desc{};
 		desc.Width = width;
 		desc.Height = height;
@@ -159,8 +159,8 @@ struct TextureDesc
 
 	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, TextureDimension dimension = TextureDimension::Texture3D, int sampleCount = 1)
 	{
-		assert(width);
-		assert(height);
+		check(width);
+		check(height);
 		TextureDesc desc{};
 		desc.Width = width;
 		desc.Height = height;
@@ -206,7 +206,7 @@ public:
 	int GetMipLevels() const { return m_Desc.Mips; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
-	void Create(const TextureDesc& desc, ID3D12Heap* pHeap = nullptr, uint64_t offset = 0);
+	void Create(const TextureDesc& desc);
 	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
 	bool Create(CommandContext* pContext, const Image& image, bool srgb = false);
 	void CreateForSwapChain(ID3D12Resource* pTexture);
@@ -223,12 +223,10 @@ public:
 	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 
-	static int GetRowDataSize(DXGI_FORMAT format, unsigned int width);
-	static DXGI_FORMAT GetSrvFormatFromDepth(DXGI_FORMAT format);
+	static DXGI_FORMAT GetSrvFormat(DXGI_FORMAT format);
 
 private:
 	TextureDesc m_Desc;
-	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 
 	ShaderResourceView* m_pSrv{ nullptr };
 	UnorderedAccessView* m_pUav{ nullptr };
@@ -236,5 +234,5 @@ private:
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv{D3D12_DEFAULT};
 
-	const char* m_pName{nullptr};
+	std::string m_Name{nullptr};
 };

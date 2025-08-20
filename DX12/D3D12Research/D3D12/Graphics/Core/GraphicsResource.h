@@ -1,6 +1,46 @@
 #pragma once
 
 class Graphics;
+class ResourceView;
+
+class ResourceState
+{
+public:
+	ResourceState(D3D12_RESOURCE_STATES initialState) : m_CommonState(initialState), m_AllSameState(true) {}
+
+	void Set(D3D12_RESOURCE_STATES state, int subResource)
+	{
+		if (subResource != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+		{
+			check(subResource < m_ResourceStates.size());
+			if (m_AllSameState)
+			{
+				for (D3D12_RESOURCE_STATES& s : m_ResourceStates)
+				{
+					s = m_CommonState;
+				}
+				m_AllSameState = false;
+			}
+			m_ResourceStates[subResource] = state;
+		}
+		else
+		{
+			m_AllSameState = true;
+			m_CommonState = state;
+		}
+	}
+
+	D3D12_RESOURCE_STATES Get(int subResource) const
+	{
+		check(m_AllSameState || subResource < m_ResourceStates.size());
+		return m_AllSameState ? m_CommonState : m_ResourceStates[subResource];
+	}
+
+private:
+	bool m_AllSameState;
+	D3D12_RESOURCE_STATES m_CommonState;
+	std::array<D3D12_RESOURCE_STATES, 12> m_ResourceStates{};
+};
 
 class GraphicsObject
 {
@@ -27,13 +67,21 @@ public:
 	std::string GetName() const;
 
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
-	inline ID3D12Resource** GetResourceAddressOf() { return &m_pResource; }
 	inline D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
-	inline D3D12_RESOURCE_STATES GetResourceState() const { return m_CurrentState; }
+
+	void SetResourceState(D3D12_RESOURCE_STATES state, uint32_t subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+	{
+		m_ResourceState.Set(state, subResource);
+	}
+	inline D3D12_RESOURCE_STATES GetResourceState(uint32_t subResource = 0) const 
+	{ 
+		return m_ResourceState.Get(subResource); 
+	}
 
 	void PrintRefCount(std::string_view prefix);
 
 protected:
 	ID3D12Resource* m_pResource{nullptr};	// when use ComPtr, the render target created from swap chain, reference counter is confusing
-	D3D12_RESOURCE_STATES m_CurrentState;
+	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;	
+	ResourceState m_ResourceState;
 };

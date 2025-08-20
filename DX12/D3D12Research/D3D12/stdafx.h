@@ -1,5 +1,17 @@
 #pragma once
 
+#ifndef D3D12_USE_RENDERPASSES
+#define D3D12_USE_RENDERPASSES 1
+#endif
+
+#ifndef WITH_CONSOLE
+#define WITH_CONSOLE 1
+#endif
+
+#define check(expression) assert(expression)
+#define checkf(expression, msg) assert(expression && msg)
+#define noEntry() assert(false && "Should not have reached this point!")
+
 #include <windows.h>
 #include <wrl/client.h>
 
@@ -86,3 +98,14 @@ inline constexpr ENUMTYPE operator ^ (ENUMTYPE a, ENUMTYPE b) throw() { return E
 inline constexpr ENUMTYPE& operator ^= (ENUMTYPE& a, ENUMTYPE b) throw() { return (ENUMTYPE&)(((EnumFlagSize<ENUMTYPE>::type&)a) ^= ((EnumFlagSize<ENUMTYPE>::type)b)); } \
 inline constexpr bool Any(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) != (ENUMTYPE)0;} \
 inline constexpr bool All(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) == b; }
+
+
+inline int ToMultibyte(const wchar_t* pStr, char* pOut, int len)
+{
+	return WideCharToMultiByte(CP_UTF8, 0, pStr, -1, pOut, len, nullptr, nullptr);
+}
+
+inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
+{
+	return MultiByteToWideChar(CP_UTF8, 0, pStr, -1, pOut, len);
+}
