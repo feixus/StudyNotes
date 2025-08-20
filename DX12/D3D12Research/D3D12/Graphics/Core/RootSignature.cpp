@@ -121,7 +121,7 @@ void RootSignature::AddStaticSampler(uint32_t shaderRegister, D3D12_SAMPLER_DESC
 
 void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
-    std::array<bool, (uint32_t)Shader::Type::MAX> shaderVisibility{};
+    std::array<bool, (uint32_t)ShaderType::MAX> shaderVisibility{};
 
     for (size_t i = 0; i < m_RootParameters.size(); i++)
     {
@@ -130,13 +130,13 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
         switch (rootParameter.ShaderVisibility)
         {
         case D3D12_SHADER_VISIBILITY_VERTEX:
-            shaderVisibility[(uint32_t)Shader::Type::Vertex] = true;
+            shaderVisibility[(uint32_t)ShaderType::Vertex] = true;
             break;
         case D3D12_SHADER_VISIBILITY_PIXEL:
-            shaderVisibility[(uint32_t)Shader::Type::Pixel] = true;
+            shaderVisibility[(uint32_t)ShaderType::Pixel] = true;
             break;
         case D3D12_SHADER_VISIBILITY_GEOMETRY:
-            shaderVisibility[(uint32_t)Shader::Type::Geometry] = true;
+            shaderVisibility[(uint32_t)ShaderType::Geometry] = true;
             break;
         case D3D12_SHADER_VISIBILITY_ALL:
             for (bool& v : shaderVisibility)
@@ -180,17 +180,17 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
     // it's illegal to have RS flags if it's a local root signature
     if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
     {
-        if (shaderVisibility[(uint32_t)Shader::Type::Vertex] == false)
+        if (shaderVisibility[(uint32_t)ShaderType::Vertex] == false)
         {
             flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
         }
 
-        if (shaderVisibility[(uint32_t)Shader::Type::Pixel] == false)
+        if (shaderVisibility[(uint32_t)ShaderType::Pixel] == false)
         {
             flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
         }
 
-        if (shaderVisibility[(uint32_t)Shader::Type::Geometry] == false)
+        if (shaderVisibility[(uint32_t)ShaderType::Geometry] == false)
         {
             flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
         }

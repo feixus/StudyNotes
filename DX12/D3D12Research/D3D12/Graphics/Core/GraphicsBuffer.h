@@ -44,7 +44,7 @@ struct BufferDesc
 
 	static BufferDesc CreateReadback(uint32_t size)
 	{
-		return BufferDesc(size, sizeof(uint64_t), BufferFlag::Readback);
+		return BufferDesc(size, sizeof(uint8_t), BufferFlag::Readback);
 	}
 
 	static BufferDesc CreateStructured(uint32_t elementCount, uint32_t elementSize, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)

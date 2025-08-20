@@ -97,8 +97,11 @@ public:
     RGPassBuilder(const RGPassBuilder& other) = delete;
     RGPassBuilder& operator=(const RGPassBuilder& other) = delete;
 
+    template<typename ExecuteCallback>
+    void Bind(ExecuteCallback&& callback);
+
     RGResourceHandle Read(const RGResourceHandle& resource);
-    RGResourceHandle& Write(RGResourceHandle& resource);
+    [[nodiscard]]RGResourceHandle& Write(RGResourceHandle& resource);
     RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
     RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
 
@@ -169,6 +172,7 @@ public:
     template<typename ExecuteCallback>
     void SetCallback(ExecuteCallback&& callback)
     {
+        RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "the execute callback exceeds the maximum size");
         m_pPassExecutor = std::make_unique<PassExecutor<ExecuteCallback>>(std::move(callback));
     }
 
@@ -215,18 +219,12 @@ public:
   
     RGResourceHandle MoveResource(RGResourceHandle from, RGResourceHandle to);
 
-    template<typename Callback>
-    RGPass& AddPass(const char* pName, const Callback& passCallback)
+    RGPassBuilder AddPass(const char* pName)
     {
-        using ExecuteCallback = std::invoke_result_t<Callback, RGPassBuilder&>;
-        RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "The Execute callback exceeds the maximum size");
         RGPass* pPass = new RGPass(*this, pName, (int)m_RenderPasses.size());
-        RGPassBuilder builder(*this, *pPass);
-        pPass->SetCallback<ExecuteCallback>(std::move(passCallback(builder)));
-        return AddPass(pPass);
+        AddPass(pPass);
+        return RGPassBuilder(*this, *pPass);
     }
-
-    RGPass& AddPass(RGPass* pPass);
 
     RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc)
     {
@@ -284,6 +282,7 @@ public:
     }
 
 private:
+    RGPass& AddPass(RGPass* pPass);
     void ExecutePass(RGPass* pPass, CommandContext& renderContext);
     void PrepareResources(RGPass* pPass);
     void ReleaseResources(RGPass* pPass);
@@ -309,3 +308,8 @@ private:
     std::vector<RGNode> m_RGNodes;
 };
 
+template<typename ExecuteCallback>
+void RGPassBuilder::Bind(ExecuteCallback&& callback)
+{
+	m_Pass.SetCallback(std::move(callback));
+}

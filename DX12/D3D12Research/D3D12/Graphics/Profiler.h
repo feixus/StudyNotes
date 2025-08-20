@@ -31,7 +31,7 @@ public:
 	GpuTimer();
 	void Begin(CommandContext* pContext);
 	void End(CommandContext* pContext);
-	float GetTime() const;
+	float GetTime(const uint64_t* pReadbackData) const;
 
 private:
 	int m_TimerIndex{-1};
@@ -101,7 +101,7 @@ public:
 	void StartTimer(CommandContext* pContext);
 	void EndTimer(CommandContext* pContext);
 
-	void PopulateTimes(int frameIndex);
+	void PopulateTimes(const uint64_t* pReadbackData, int frameIndex);
 	void RenderImGui(int frameIndex);
 
 	bool HashChild(const char* pName);
@@ -137,33 +137,32 @@ public:
 	void Begin(const char* pName, CommandContext* context = nullptr);
 	void End(CommandContext* context = nullptr);
 	
-	void BeginReadback(int frameIndex);
-	void EndReadBack(int frameIndex);
+	void Resolve(Graphics* pGraphics, int frameIndex);
 
-	float GetGpuTime(int timerIndex) const;
+	float GetGpuTime(const uint64_t* pReadbackData, int timerIndex) const;
 	void StartGpuTimer(CommandContext* pContext, int timerIndex);
 	void StopGpuTimer(CommandContext* pContext, int timerIndex);
 
 	int32_t GetNextTimerIndex();
 	float GetSecondsPerGpuTick() const { return m_SecondsPerGpuTick; }
 	float GetSecondsPerCpuTick() const { return m_SecondsPerCpuTick; }
-	inline const uint64_t* GetData() const { return m_pCurrentReadBackData; }
 	ID3D12QueryHeap* GetQueryHeap() const { return m_pQueryHeap.Get(); }
 	ProfileNode* GetRootNode() const { return m_pRootBlock.get(); }
 
 private:
 	Profiler() = default;
 
-	constexpr static int HEAP_SIZE = 512;
+	constexpr static int MAX_GPU_TIME_QUERIES = 512;
+	constexpr static int QUERY_PAIR_NUM = 2;
+	constexpr static int HEAP_SIZE = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM;
 
 	std::array<uint64_t, Graphics::FRAME_COUNT> m_FenceValues{};
-	uint64_t* m_pCurrentReadBackData{nullptr};
 
-	Graphics* m_pGraphics{nullptr};
 	float m_SecondsPerGpuTick{ 0.f };
 	float m_SecondsPerCpuTick{ 0.f };
 	int m_CurrentTimer{0};
 	int m_LastTimer{0};
+	int m_CurrentReadbackFrame{0};
 	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
 	std::unique_ptr<Buffer> m_pReadBackBuffer;
 

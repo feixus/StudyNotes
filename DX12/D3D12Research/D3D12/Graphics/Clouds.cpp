@@ -56,7 +56,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 	}));
 
 	{
-		Shader shader("WorleyNoise.hlsl", Shader::Type::Compute, "WorleyNoiseCS");
+		Shader shader("WorleyNoise.hlsl", ShaderType::Compute, "WorleyNoiseCS");
 		
 		m_pWorleyNoiseRS = std::make_unique<RootSignature>();
 		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
@@ -73,8 +73,8 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{
-		Shader vertexShader("Clouds.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Clouds.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("Clouds.hlsl", ShaderType::Vertex, "VSMain");
+		Shader pixelShader("Clouds.hlsl", ShaderType::Pixel, "PSMain");
 		m_pCloudsRS = std::make_unique<RootSignature>();
 		m_pCloudsRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pCloudsRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);

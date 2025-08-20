@@ -1,14 +1,12 @@
 #pragma once
 
-class ShaderCompiler
+enum class ShaderType : uint8_t
 {
-public:
-	static bool CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32_t shaderSourceSize,
-					IDxcBlob** pOutput, const char* pEntryPoint = "", const char* pTarget = "",
-					const std::vector<std::string>& defines = {});
-	static bool CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32_t shaderSourceSize,
-					ID3DBlob** pOutput, const char* pEntryPoint = "", const char* pTarget = "",
-					const std::vector<std::string>& defines = {});
+	Vertex,
+	Pixel,
+	Geometry,
+	Compute,
+	MAX
 };
 
 class ShaderBase
@@ -29,26 +27,14 @@ protected:
 class Shader : public ShaderBase
 {
 public:
+	Shader(const char* pFilePath, ShaderType shaderType, const char* pEntryPoint, const std::vector<std::string> defines = {});
 
-	enum class Type : uint8_t
-	{
-		Vertex,
-		Pixel,
-		Geometry,
-		Compute,
-		MAX
-	};
-
-	Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines = {});
-
-	inline Type GetType() const { return m_Type; }
+	inline ShaderType GetType() const { return m_Type; }
 
 private:
-	bool Compile(const char* pFilePath, Type shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string>& defines = {});
+	bool Compile(const char* pFilePath, ShaderType shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string>& defines = {});
 	
-	static std::string GetShaderTarget(Type shaderType, char shaderModelMajor, char shaderModelMinor);
-
-	Type m_Type{ Type::MAX };
+	ShaderType m_Type{ ShaderType::MAX };
 };
 
 class ShaderLibrary : public ShaderBase
@@ -57,7 +43,5 @@ public:
 	ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines = {});
 
 private:
-	static std::string GetShaderTarget(char shaderModelMajor, char shaderModelMinor);
-
 	bool Compile(const char* pFilePath, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string> defines = {});
 };

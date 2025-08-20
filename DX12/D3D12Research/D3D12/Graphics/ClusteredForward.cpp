@@ -92,294 +92,282 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
     float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
     float sliceMagicB = (float)cClusterCountZ * log(farZ) / log(nearZ / farZ);
 
-    graph.AddPass("Mark Clusters", [&](RGPassBuilder& builder)
+    RGPassBuilder markClusters = graph.AddPass("Mark Clusters");
+    markClusters.Read(inputResource.DepthBuffer);
+    markClusters.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
-            builder.Read(inputResource.DepthBuffer);
-            return [=](CommandContext& context, const RGPassResource& passResources)
+            GraphicsTexture* depthBuffer = passResources.GetTexture(inputResource.DepthBuffer);
+			context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            context.InsertResourceBarrier(depthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
+
+            context.ClearUavUInt(m_pUniqueClusterBuffer.get(), m_pUniqueClusterBufferRawUAV);
+
+            context.BeginRenderPass(RenderPassInfo(depthBuffer, RenderPassAccess::Load_DontCare, true));
+
+            context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
+            context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
+            context.SetViewport(FloatRect(0.0f, 0.0f, screenDimensions.x, screenDimensions.y));
+            context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			struct PerFrameParameters
+			{
+				IntVector3 ClusterDimensions;
+                int padding0;
+				IntVector2 ClusterSize;
+				float SliceMagicA{ 0 };
+				float SliceMagicB{ 0 };
+			} perFrameParameters{};
+
+            struct PerObjectParameters
+            {
+                Matrix WorldView;
+                Matrix WorldViewProjection;
+            } perObjectParameters{};
+
+			perFrameParameters.SliceMagicA = sliceMagicA;
+			perFrameParameters.SliceMagicB = sliceMagicB;
+			perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+			perFrameParameters.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+
+            context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(perFrameParameters));
+            context.SetDynamicDescriptor(2, 0, m_pUniqueClusterBuffer->GetUAV());
+			{
+				GPU_PROFILE_SCOPE("Opaque", &context);
+
+				for (const Batch& b : *inputResource.pOpaqueBatches)
+				{
+                    perObjectParameters.WorldView = b.WorldMatrix * inputResource.pCamera->GetView();
+                    perObjectParameters.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
+
+                    context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
+					b.pMesh->Draw(&context);
+				}
+			}
+
+			{
+				GPU_PROFILE_SCOPE("Transparent", &context);
+
+                context.SetPipelineState(m_pMarkUniqueClustersTransparentPSO.get());
+                for (const Batch& b : *inputResource.pTransparentBatches)
                 {
-                    GraphicsTexture* depthBuffer = passResources.GetTexture(inputResource.DepthBuffer);
-					context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-					context.InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                    context.InsertResourceBarrier(depthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
+                    perObjectParameters.WorldView = b.WorldMatrix * inputResource.pCamera->GetView();
+                    perObjectParameters.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
+                    context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
 
-                    context.ClearUavUInt(m_pUniqueClusterBuffer.get(), m_pUniqueClusterBufferRawUAV);
+                    context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+					b.pMesh->Draw(&context);
+				}
+			}
 
-                    context.BeginRenderPass(RenderPassInfo(depthBuffer, RenderPassAccess::Load_DontCare, true));
-
-                    context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
-                    context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
-                    context.SetViewport(FloatRect(0.0f, 0.0f, screenDimensions.x, screenDimensions.y));
-                    context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-					struct PerFrameParameters
-					{
-						IntVector3 ClusterDimensions;
-                        int padding0;
-						IntVector2 ClusterSize;
-						float SliceMagicA{ 0 };
-						float SliceMagicB{ 0 };
-					} perFrameParameters{};
-
-                    struct PerObjectParameters
-                    {
-                        Matrix WorldView;
-                        Matrix WorldViewProjection;
-                    } perObjectParameters{};
-
-					perFrameParameters.SliceMagicA = sliceMagicA;
-					perFrameParameters.SliceMagicB = sliceMagicB;
-					perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-					perFrameParameters.ClusterSize = IntVector2(cClusterSize, cClusterSize);
-
-                    context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(perFrameParameters));
-                    context.SetDynamicDescriptor(2, 0, m_pUniqueClusterBuffer->GetUAV());
-					{
-						GPU_PROFILE_SCOPE("Opaque", &context);
-
-						for (const Batch& b : *inputResource.pOpaqueBatches)
-						{
-                            perObjectParameters.WorldView = b.WorldMatrix * inputResource.pCamera->GetView();
-                            perObjectParameters.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
-
-                            context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
-							b.pMesh->Draw(&context);
-						}
-					}
-
-					{
-						GPU_PROFILE_SCOPE("Transparent", &context);
-
-                        context.SetPipelineState(m_pMarkUniqueClustersTransparentPSO.get());
-                        for (const Batch& b : *inputResource.pTransparentBatches)
-                        {
-                            perObjectParameters.WorldView = b.WorldMatrix * inputResource.pCamera->GetView();
-                            perObjectParameters.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
-                            context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
-
-                            context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-							b.pMesh->Draw(&context);
-						}
-					}
-
-                    context.EndRenderPass();
-                };
+            context.EndRenderPass();
         });
 
-	graph.AddPass("Compact Clusters", [&](RGPassBuilder& builder)
-		{
-			return [=](CommandContext& context, const RGPassResource& passResources)
-            {
-					context.InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                    context.InsertResourceBarrier(m_pCompactedClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                    UnorderedAccessView* pCompactedClusterUav = m_pCompactedClusterBuffer->GetUAV();
-                    context.InsertResourceBarrier(pCompactedClusterUav->GetCounter(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-                    context.ClearUavUInt(m_pCompactedClusterBuffer.get(), m_pCompactedClusterBufferRawUAV);
-                    context.ClearUavUInt(pCompactedClusterUav->GetCounter(), pCompactedClusterUav->GetCounterUAV());
-
-                    context.SetPipelineState(m_pCompactClusterListPSO.get());
-                    context.SetComputeRootSignature(m_pCompactClusterListRS.get());
-
-                    context.SetDynamicDescriptor(0, 0, m_pUniqueClusterBuffer->GetSRV());
-                    context.SetDynamicDescriptor(1, 0, m_pCompactedClusterBuffer->GetUAV());
-
-                    context.Dispatch(Math::RoundUp(m_MaxClusters / 64.f));
-            };
-        });
-
-	graph.AddPass("Update Indirect Arguments", [&](RGPassBuilder& builder)
-		{
-			return [=](CommandContext& context, const RGPassResource& passResources)
-            {
-				UnorderedAccessView* pCompactedClusterUav = m_pCompactedClusterBuffer->GetUAV();
-                context.InsertResourceBarrier(pCompactedClusterUav->GetCounter(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-                context.SetPipelineState(m_pUpdateIndirectArgumentsPSO.get());
-                context.SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
-
-                context.SetDynamicDescriptor(0, 0, m_pCompactedClusterBuffer->GetUAV()->GetCounter()->GetSRV());
-                context.SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
-
-                context.Dispatch(1, 1, 1);
-            };
-        });
-
-    graph.AddPass("Clustered Light Culling", [&](RGPassBuilder& builder)
+    RGPassBuilder compactClusters = graph.AddPass("Compact Clusters");
+    compactClusters.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
-            return[=](CommandContext& context, const RGPassResource& passResources)
-            {
-                    context.SetPipelineState(m_pLightCullingPSO.get());
-                    context.SetComputeRootSignature(m_pLightCullingRS.get());
+			context.InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pCompactedClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            UnorderedAccessView* pCompactedClusterUav = m_pCompactedClusterBuffer->GetUAV();
+            context.InsertResourceBarrier(pCompactedClusterUav->GetCounter(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-                    context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-                    context.InsertResourceBarrier(m_pCompactedClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                    context.InsertResourceBarrier(m_pAabbBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                    context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                    context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            context.ClearUavUInt(m_pCompactedClusterBuffer.get(), m_pCompactedClusterBufferRawUAV);
+            context.ClearUavUInt(pCompactedClusterUav->GetCounter(), pCompactedClusterUav->GetCounterUAV());
 
-                    context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
-                    context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
+            context.SetPipelineState(m_pCompactClusterListPSO.get());
+            context.SetComputeRootSignature(m_pCompactClusterListRS.get());
 
-                    struct ConstantBuffer
-                    {
-                        Matrix View;
-                        int LightCount{ 0 };
-                    } constantBuffer{};
+            context.SetDynamicDescriptor(0, 0, m_pUniqueClusterBuffer->GetSRV());
+            context.SetDynamicDescriptor(1, 0, m_pCompactedClusterBuffer->GetUAV());
 
-                    constantBuffer.View = inputResource.pCamera->GetView();
-                    constantBuffer.LightCount = (int)inputResource.pLightBuffer->GetDesc().ElementCount;
-
-                    context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-                    context.SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());
-                    context.SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
-                    context.SetDynamicDescriptor(1, 2, m_pCompactedClusterBuffer->GetSRV());
-                    context.SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
-                    context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
-                    context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
-
-                    context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), m_pIndirectArguments.get());
-
-            };
+            context.Dispatch(Math::RoundUp(m_MaxClusters / 64.f));
         });
+
+    RGPassBuilder updateArguments = graph.AddPass("Update Indirect Arguments");
+    updateArguments.Bind([=](CommandContext& context, const RGPassResource& passResources)
+        {
+			UnorderedAccessView* pCompactedClusterUav = m_pCompactedClusterBuffer->GetUAV();
+            context.InsertResourceBarrier(pCompactedClusterUav->GetCounter(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+            context.SetPipelineState(m_pUpdateIndirectArgumentsPSO.get());
+            context.SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
+
+            context.SetDynamicDescriptor(0, 0, m_pCompactedClusterBuffer->GetUAV()->GetCounter()->GetSRV());
+            context.SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
+
+            context.Dispatch(1, 1, 1);
+        });
+
+    RGPassBuilder lightCulling = graph.AddPass("Clustered Light Culling");
+    lightCulling.Bind([=](CommandContext& context, const RGPassResource& passResources)
+        {
+            context.SetPipelineState(m_pLightCullingPSO.get());
+            context.SetComputeRootSignature(m_pLightCullingRS.get());
+
+            context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+            context.InsertResourceBarrier(m_pCompactedClusterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pAabbBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+            context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
+            context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
+
+            struct ConstantBuffer
+            {
+                Matrix View;
+                int LightCount{ 0 };
+            } constantBuffer{};
+
+            constantBuffer.View = inputResource.pCamera->GetView();
+            constantBuffer.LightCount = (int)inputResource.pLightBuffer->GetDesc().ElementCount;
+
+            context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+            context.SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());
+            context.SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
+            context.SetDynamicDescriptor(1, 2, m_pCompactedClusterBuffer->GetSRV());
+            context.SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
+            context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
+            context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+
+            context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), m_pIndirectArguments.get());
+    });
     
-	graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
-		{
-            builder.Read(inputResource.DepthBuffer);
-			return[=](CommandContext& context, const RGPassResource& passResources)
+    RGPassBuilder basePass = graph.AddPass("Base Pass");
+    basePass.Read(inputResource.DepthBuffer);
+    basePass.Bind([=](CommandContext& context, const RGPassResource& passResources)
+        {
+			struct PerObjectData
+			{
+				Matrix World;
+                Matrix WorldViewProjection;
+			} objectData;
+
+			struct PerFrameData
+			{
+				Matrix View;
+				Matrix Projection;
+				Matrix ViewInverse;
+				IntVector3 ClusterDimensions;
+                int padding0;
+				Vector2 ScreenDimensions;
+				float NearZ;
+				float FarZ;
+				IntVector2 ClusterSize;
+				float SliceMagicA;
+				float SliceMagicB;
+			} frameData{};
+
+			frameData.View = inputResource.pCamera->GetView();
+			frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
+			frameData.Projection = inputResource.pCamera->GetProjection();
+			frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+			frameData.ScreenDimensions = screenDimensions;
+			frameData.NearZ = nearZ;
+			frameData.FarZ = farZ;
+			frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+			frameData.SliceMagicA = sliceMagicA;
+			frameData.SliceMagicB = sliceMagicB;
+
+            context.InsertResourceBarrier(inputResource.pShadowMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+            context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+            context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(inputResource.DepthBuffer), RenderPassAccess::Load_DontCare));
+            context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+
+            context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            context.SetGraphicsRootSignature(m_pDiffuseRS.get());
+
+            auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
+			{
+                D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
+                {
+                    b.pMaterial->pDiffuseTexture->GetSRV(),
+                    b.pMaterial->pNormalTexture->GetSRV(),
+                    b.pMaterial->pSpecularTexture->GetSRV()
+                };
+
+				context.SetDynamicDescriptors(3, 0, srvs, std::size(srvs));
+			};
+
             {
-				struct PerObjectData
-				{
-					Matrix World;
-                    Matrix WorldViewProjection;
-				} objectData;
+                GPU_PROFILE_SCOPE("Opaque", &context);
 
-				struct PerFrameData
-				{
-					Matrix View;
-					Matrix Projection;
-					Matrix ViewInverse;
-					IntVector3 ClusterDimensions;
-                    int padding0;
-					Vector2 ScreenDimensions;
-					float NearZ;
-					float FarZ;
-					IntVector2 ClusterSize;
-					float SliceMagicA;
-					float SliceMagicB;
-				} frameData{};
+                context.SetPipelineState(m_pDiffusePSO.get());
 
-				frameData.View = inputResource.pCamera->GetView();
-				frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
-				frameData.Projection = inputResource.pCamera->GetProjection();
-				frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-				frameData.ScreenDimensions = screenDimensions;
-				frameData.NearZ = nearZ;
-				frameData.FarZ = farZ;
-				frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
-				frameData.SliceMagicA = sliceMagicA;
-				frameData.SliceMagicB = sliceMagicB;
+                context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+                context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
+                context.SetDynamicDescriptor(4, 0, inputResource.pShadowMap->GetSRV());
+                context.SetDynamicDescriptor(4, 1, m_pLightGrid->GetSRV());
+                context.SetDynamicDescriptor(4, 2, m_pLightIndexGrid->GetSRV());
+                context.SetDynamicDescriptor(4, 3, inputResource.pLightBuffer->GetSRV());
+                context.SetDynamicDescriptor(4, 4, inputResource.pAO->GetSRV());
 
-                context.InsertResourceBarrier(inputResource.pShadowMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-                context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-                context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-                context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-                context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-                context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(inputResource.DepthBuffer), RenderPassAccess::Load_DontCare));
-                context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-
-                context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-                context.SetGraphicsRootSignature(m_pDiffuseRS.get());
-
-                auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
-				{
-                    D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
-                    {
-                        b.pMaterial->pDiffuseTexture->GetSRV(),
-                        b.pMaterial->pNormalTexture->GetSRV(),
-                        b.pMaterial->pSpecularTexture->GetSRV()
-                    };
-
-					context.SetDynamicDescriptors(3, 0, srvs, std::size(srvs));
-				};
-
+                for (const Batch& b : *inputResource.pOpaqueBatches)
                 {
-                    GPU_PROFILE_SCOPE("Opaque", &context);
-
-                    context.SetPipelineState(m_pDiffusePSO.get());
-
-                    context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-                    context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
-                    context.SetDynamicDescriptor(4, 0, inputResource.pShadowMap->GetSRV());
-                    context.SetDynamicDescriptor(4, 1, m_pLightGrid->GetSRV());
-                    context.SetDynamicDescriptor(4, 2, m_pLightIndexGrid->GetSRV());
-                    context.SetDynamicDescriptor(4, 3, inputResource.pLightBuffer->GetSRV());
-                    context.SetDynamicDescriptor(4, 4, inputResource.pAO->GetSRV());
-
-                    for (const Batch& b : *inputResource.pOpaqueBatches)
-                    {
-                        objectData.World = b.WorldMatrix;
-                        objectData.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
-                        context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-                        setMaterialDescriptors(context, b);
-                        b.pMesh->Draw(&context);
-                    }
+                    objectData.World = b.WorldMatrix;
+                    objectData.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
+                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+                    setMaterialDescriptors(context, b);
+                    b.pMesh->Draw(&context);
                 }
+            }
 
+            {
+                GPU_PROFILE_SCOPE("Transparent", &context);
+                context.SetPipelineState(m_pDiffuseTransparencyPSO.get());
+
+                for (const Batch& b : *inputResource.pTransparentBatches)
                 {
-                    GPU_PROFILE_SCOPE("Transparent", &context);
-                    context.SetPipelineState(m_pDiffuseTransparencyPSO.get());
-
-                    for (const Batch& b : *inputResource.pTransparentBatches)
-                    {
-                        objectData.World = Matrix::Identity;
-                        context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-                        setMaterialDescriptors(context, b);
-                        b.pMesh->Draw(&context);
-                    }
+                    objectData.World = Matrix::Identity;
+                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+                    setMaterialDescriptors(context, b);
+                    b.pMesh->Draw(&context);
                 }
+            }
 
-                context.EndRenderPass();
-            };
-         });
+            context.EndRenderPass();
+        });
  
 
     if (g_VisualizeClusters)
     {
-		graph.AddPass("Visualize Clusters", [&](RGPassBuilder& builder)
-			{
-				return[=](CommandContext& context, const RGPassResource& passResources)
-                {
-					if (m_DidCopyDebugClusterData == false)
-					{
-                        context.CopyResource(m_pCompactedClusterBuffer.get(), m_pDebugCompactedClusterBuffer.get());
-                        context.CopyResource(m_pLightGrid.get(), m_pDebugLightGrid.get());
-                        m_DebugClusterViewMatrix = inputResource.pCamera->GetView();
-                        m_DebugClusterViewMatrix.Invert(m_DebugClusterViewMatrix);
-                        m_DidCopyDebugClusterData = true;
-                    }
+        RGPassBuilder visualize = graph.AddPass("Visualize Clusters");
+        visualize.Read(inputResource.DepthBuffer);
+        visualize.Bind([=](CommandContext& context, const RGPassResource& passResources)
+            {
+				if (m_DidCopyDebugClusterData == false)
+				{
+                    context.CopyResource(m_pCompactedClusterBuffer.get(), m_pDebugCompactedClusterBuffer.get());
+                    context.CopyResource(m_pLightGrid.get(), m_pDebugLightGrid.get());
+                    m_DebugClusterViewMatrix = inputResource.pCamera->GetView();
+                    m_DebugClusterViewMatrix.Invert(m_DebugClusterViewMatrix);
+                    m_DidCopyDebugClusterData = true;
+                }
 
-                    context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Load_Store, passResources.GetTexture(inputResource.DepthBuffer), RenderPassAccess::Load_DontCare));
+                context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Load_Store, passResources.GetTexture(inputResource.DepthBuffer), RenderPassAccess::Load_DontCare));
 
-                    context.SetPipelineState(m_pDebugClusterPSO.get());
-                    context.SetGraphicsRootSignature(m_pDebugClusterRS.get());
+                context.SetPipelineState(m_pDebugClusterPSO.get());
+                context.SetGraphicsRootSignature(m_pDebugClusterRS.get());
 
-                    context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-                    context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+                context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+                context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-                    Matrix p = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
+                Matrix p = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
 
-                    context.SetDynamicConstantBufferView(0, &p, sizeof(Matrix));
-                    context.SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetSRV());
-                    context.SetDynamicDescriptor(1, 1, m_pDebugCompactedClusterBuffer->GetSRV());
-                    context.SetDynamicDescriptor(1, 2, m_pDebugLightGrid->GetSRV());
-                    context.SetDynamicDescriptor(1, 3, m_pHeatMapTexture->GetSRV());
-                    context.Draw(0, m_MaxClusters);
+                context.SetDynamicConstantBufferView(0, &p, sizeof(Matrix));
+                context.SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetSRV());
+                context.SetDynamicDescriptor(1, 1, m_pDebugCompactedClusterBuffer->GetSRV());
+                context.SetDynamicDescriptor(1, 2, m_pDebugLightGrid->GetSRV());
+                context.SetDynamicDescriptor(1, 3, m_pHeatMapTexture->GetSRV());
+                context.Draw(0, m_MaxClusters);
 
-                    context.EndRenderPass();
-                };
-             });
+                context.EndRenderPass();
+            });
     }
     else
     {
@@ -414,7 +402,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 {
     // AABB
     {
-        Shader computeShader = Shader("CL_GenerateAABBs.hlsl", Shader::Type::Compute, "GenerateAABBs");
+        Shader computeShader = Shader("CL_GenerateAABBs.hlsl", ShaderType::Compute, "GenerateAABBs");
 
         m_pCreateAabbRS = std::make_unique<RootSignature>();
         m_pCreateAabbRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
@@ -435,8 +423,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
             { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         };
 
-        Shader vertexShader = Shader("CL_MarkUniqueClusters.hlsl", Shader::Type::Vertex, "MarkClusters_VS");
-		Shader pixelShaderOpaque = Shader("CL_MarkUniqueClusters.hlsl", Shader::Type::Pixel, "MarkClusters_PS");
+        Shader vertexShader = Shader("CL_MarkUniqueClusters.hlsl", ShaderType::Vertex, "MarkClusters_VS");
+		Shader pixelShaderOpaque = Shader("CL_MarkUniqueClusters.hlsl", ShaderType::Pixel, "MarkClusters_PS");
 
         m_pMarkUniqueClustersRS = std::make_unique<RootSignature>();
         m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", vertexShader, pGraphics->GetDevice());
@@ -458,7 +446,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // compact cluster list
     {
-        Shader computeShader = Shader("CL_CompactClusters.hlsl", Shader::Type::Compute, "CompactClusters");
+        Shader computeShader = Shader("CL_CompactClusters.hlsl", ShaderType::Compute, "CompactClusters");
 
         m_pCompactClusterListRS = std::make_unique<RootSignature>();
         m_pCompactClusterListRS->FinalizeFromShader("Compact Cluster List", computeShader, pGraphics->GetDevice());
@@ -471,7 +459,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // prepare indirect dispatch buffer
     {
-        Shader computeShader = Shader("CL_UpdateIndirectArguments.hlsl", Shader::Type::Compute, "UpdateIndirectArguments");
+        Shader computeShader = Shader("CL_UpdateIndirectArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
 
         m_pUpdateIndirectArgumentsRS = std::make_unique<RootSignature>();
         m_pUpdateIndirectArgumentsRS->FinalizeFromShader("Update Indirect Dispatch Buffer", computeShader, pGraphics->GetDevice());
@@ -484,7 +472,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // light culling
     {
-        Shader computeShader = Shader("CL_LightCulling.hlsl", Shader::Type::Compute, "LightCulling");
+        Shader computeShader = Shader("CL_LightCulling.hlsl", ShaderType::Compute, "LightCulling");
 
         m_pLightCullingRS = std::make_unique<RootSignature>();
         m_pLightCullingRS->FinalizeFromShader("Light Culling", computeShader, pGraphics->GetDevice());
@@ -510,8 +498,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
             { "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         };
 
-        Shader vertexShader = Shader("CL_Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { });
-        Shader pixelShader = Shader("CL_Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { });
+        Shader vertexShader = Shader("CL_Diffuse.hlsl", ShaderType::Vertex, "VSMain", { });
+        Shader pixelShader = Shader("CL_Diffuse.hlsl", ShaderType::Pixel, "PSMain", { });
 
         m_pDiffuseRS = std::make_unique<RootSignature>();
         m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
@@ -537,9 +525,9 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // cluster debug rendering
     {
-        Shader vertexShader = Shader("CL_DebugDrawClusters.hlsl", Shader::Type::Vertex, "VSMain");
-        Shader geometryShader = Shader("CL_DebugDrawClusters.hlsl", Shader::Type::Geometry, "GSMain");
-        Shader pixelShader = Shader("CL_DebugDrawClusters.hlsl", Shader::Type::Pixel, "PSMain");
+        Shader vertexShader = Shader("CL_DebugDrawClusters.hlsl", ShaderType::Vertex, "VSMain");
+        Shader geometryShader = Shader("CL_DebugDrawClusters.hlsl", ShaderType::Geometry, "GSMain");
+        Shader pixelShader = Shader("CL_DebugDrawClusters.hlsl", ShaderType::Pixel, "PSMain");
 
         m_pDebugClusterRS = std::make_unique<RootSignature>();
         m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", vertexShader, pGraphics->GetDevice());

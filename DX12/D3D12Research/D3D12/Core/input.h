@@ -18,6 +18,7 @@ public:
 	void Update();
 	void UpdateKey(uint32_t keyCode, bool isDown);
 	void UpdateMouseKey(uint32_t keyCode, bool isDown);
+	void UpdateMouseWheel(float mouseWheel);
 
 	bool IsKeyDown(uint32_t keyCode);
 	bool IsKeyPressed(uint32_t keyCode);
@@ -27,6 +28,7 @@ public:
 
 	Vector2 GetMousePosition() const;
 	Vector2 GetMouseDelta() const;
+	float GetMouseWheelDelta() const { return m_MouseWheel; }
 
 private:
 	void UpdateMousePosition();
@@ -39,4 +41,5 @@ private:
 	HWND m_pWindow{};
 	Vector2 m_LastMousePosition;
 	Vector2 m_CurrentMousePosition;
+	float m_MouseWheel{0};
 };

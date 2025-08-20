@@ -3,15 +3,6 @@
 #include "Graphics/Core/Graphics.h"
 #include "Core/input.h"
 
-Camera::Camera(Graphics* pGraphics)
-    : m_pGraphics(pGraphics)
-{
-}
-
-Camera::~Camera()
-{
-}
-
 void Camera::SetPosition(const Vector3& position)
 {
     m_Position = position;
@@ -22,31 +13,15 @@ void Camera::SetRotation(const Quaternion& rotation)
     m_Rotation = rotation;
 }
 
-FloatRect Camera::GetAbsoluteViewport() const
-{
-    float renderTargetWidth = (float)m_pGraphics->GetWindowWidth();
-    float renderTargetHeight = (float)m_pGraphics->GetWindowHeight();
-    
-    FloatRect absoluteViewport;
-    absoluteViewport.Left = m_Viewport.Left * renderTargetWidth;
-    absoluteViewport.Top = m_Viewport.Top * renderTargetHeight;
-    absoluteViewport.Right = m_Viewport.Right * renderTargetWidth;
-    absoluteViewport.Bottom = m_Viewport.Bottom * renderTargetHeight;
-    return absoluteViewport;
-}
-
 void Camera::SetFoV(float fov)
 {
     m_FoV = fov;
     OnDirty();
 }
 
-void Camera::SetViewport(float x, float y, float width, float height)
+void Camera::SetAspectRatio(float aspectRatio)
 {
-    m_Viewport.Left = x;
-    m_Viewport.Top = y;
-    m_Viewport.Right = x + width;
-    m_Viewport.Bottom = y + height;
+    m_AspectRatio = aspectRatio;
     OnDirty();
 }
 
@@ -57,15 +32,13 @@ void Camera::SetClippingPlanes(float nearPlane, float farPlane)
     OnDirty();
 }
 
-void Camera::SetOrthographic(bool orthographic)
+void Camera::SetOrthographic(bool orthographic, float size)
 {
     m_Perspective = !orthographic;
-    OnDirty();
-}
-
-void Camera::SetOrthographicSize(float size)
-{
-    m_Size = size;
+    if (orthographic)
+    {
+        m_OrthographicSize = size;
+    }
     OnDirty();
 }
 
@@ -132,14 +105,13 @@ void Camera::UpdateMatrices() const
     m_ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
     m_ViewInverse.Invert(m_View);
 
-    FloatRect rect = GetAbsoluteViewport();
     if (m_Perspective)
     {
-        m_Projection = Math::CreatePerspectiveMatrix(m_FoV, rect.GetWidth() / rect.GetHeight(), m_NearPlane, m_FarPlane);
+        m_Projection = Math::CreatePerspectiveMatrix(m_FoV, m_AspectRatio, m_NearPlane, m_FarPlane);
     }
     else
     {
-        m_Projection = Math::CreateOrthographicMatrix(rect.GetWidth(), rect.GetHeight(), m_NearPlane, m_FarPlane);
+        m_Projection = Math::CreateOrthographicMatrix(m_OrthographicSize * m_AspectRatio, m_OrthographicSize, m_NearPlane, m_FarPlane);
     }
 
     m_Projection.Invert(m_ProjectionInverse);
@@ -152,11 +124,6 @@ void Camera::UpdateMatrices() const
     }
     BoundingFrustum::CreateFromMatrix(m_Frustum, p);
     m_Frustum.Transform(m_Frustum, m_ViewInverse);
-}
-
-FreeCamera::FreeCamera(Graphics* pGraphics)
-    : Camera(pGraphics)
-{
 }
 
 void FreeCamera::Update()

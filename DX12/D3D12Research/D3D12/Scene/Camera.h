@@ -1,12 +1,9 @@
 #pragma once
 
-class Graphics;
-
 class Camera
 {
 public:
-    explicit Camera(Graphics* pGraphics);
-    virtual ~Camera();
+    virtual ~Camera() = default;
 
     virtual void Update() {}
 
@@ -19,19 +16,16 @@ public:
     void SetDirty() { m_Dirty = true; }
 
     void SetFoV(float fov);
-    void SetViewport(float x, float y, float width, float height);
-    FloatRect GetViewport() const { return GetAbsoluteViewport(); }
+    void SetAspectRatio(float aspectRatio);
     void SetClippingPlanes(float nearPlane, float farPlane);
 
-    void SetOrthographic(bool orthographic);
-    void SetOrthographicSize(float size);
+    void SetOrthographic(bool orthographic, float size = -1.0f);
 
     void SetNewPlane(float nearPlane);
     void SetFarPlane(float farPlane);
 
     float GetNear() const { return m_NearPlane; }
     float GetFar() const { return m_FarPlane; }
-
     float GetFoV() const { return m_FoV; }
 
     const Matrix& GetView() const;
@@ -49,16 +43,12 @@ protected:
 private:
     void UpdateMatrices() const;
 
-    FloatRect GetAbsoluteViewport() const;
-
-    Graphics* m_pGraphics{nullptr};
-
-    float m_Size{50.f};
     float m_FoV{60.f * Math::PI / 180};
     float m_NearPlane{1.f};
     float m_FarPlane{500.f};
+    float m_OrthographicSize{1};
+    float m_AspectRatio{1};
 
-    FloatRect m_Viewport;
     mutable Matrix m_Projection;
     mutable Matrix m_View;
     mutable Matrix m_ViewProjection;
@@ -72,9 +62,6 @@ private:
 
 class FreeCamera : public Camera
 {
-public:
-    FreeCamera(Graphics* pGraphics);
-
 private:
     virtual void Update() override;
 

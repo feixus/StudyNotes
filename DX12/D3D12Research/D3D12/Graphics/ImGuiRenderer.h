@@ -17,7 +17,7 @@ public:
 	ImGuiRenderer(Graphics* pDevice);
 	~ImGuiRenderer();
 
-	void NewFrame();
+	void NewFrame(uint32_t width, uint32_t height);
 	void Render(RGGraph& graph, GraphicsTexture* pRenderTarget);
 	void Update();
 	DelegateHandle AddUpdateCallback(ImGuiCallbackDelegate&& callback);
@@ -27,12 +27,11 @@ private:
 	static const uint32_t m_WindowWidth{ 1240 };
 	static const uint32_t m_WindowHeight{ 720 };
 
-	void CreatePipeline();
-	void InitializeImGui();
+	void CreatePipeline(Graphics* pGraphics);
+	void InitializeImGui(Graphics* pGraphics);
 		
 	ImGuiCallback m_UpdateCallback;
 
-	Graphics* m_pGraphics;
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsTexture> m_pFontTexture;

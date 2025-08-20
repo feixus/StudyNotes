@@ -248,13 +248,8 @@ void RGGraph::Present(RGResourceHandle resource)
 {
     RG_ASSERT(IsValidHandle(resource), "resource is invalid");
 
-    AddPass("Present",
-            [&](RGPassBuilder& builder) {
-                builder.Read(resource);
-            
-                return [=](CommandContext&, const RGPassResource&) {
-                };
-            });
+    RGPassBuilder builder = AddPass("Present");
+    builder.Bind([=](CommandContext&, const RGPassResource&){});
 }
 
 RGResourceHandle RGGraph::MoveResource(RGResourceHandle from, RGResourceHandle to)
