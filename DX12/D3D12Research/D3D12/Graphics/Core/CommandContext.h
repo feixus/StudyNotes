@@ -18,6 +18,7 @@ class CopyCommandContext;
 class UnorderedAccessView;
 class ShaderResourceView;
 class CommandSignature;
+class ShaderBindingTable;
 
 enum class CommandListContext
 {
@@ -143,11 +144,14 @@ public:
 	virtual void Reset();
 	virtual uint64_t Execute(bool wait);
 	
-	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false, uint32_t subResource = 0xffffffff);
-	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
+	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32_t subResource = 0xffffffff);
+	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
 	void FlushResourceBarriers();
 
-	void CopyResource(GraphicsResource* pSource, GraphicsResource* pDest);
+	void CopyTexture(GraphicsResource* pSource, GraphicsResource* pDest);
+	void CopyTexture(GraphicsTexture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion = 0, int destinationOffset = 0);
+	void CopyTexture(GraphicsTexture* pSource, GraphicsTexture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, int sourceSubregion = 0, int destinationSubregion = 0);
+	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint32_t size, uint32_t sourceOffset = 0, uint32_t destinationOffset = 0);
 	void InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 
@@ -162,6 +166,9 @@ public:
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
+	
+	void DispatchRays(ShaderBindingTable& table, uint32_t width = 1, uint32_t height = 1, uint32_t depth = 1);
+
 	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values = nullptr);
@@ -178,6 +185,7 @@ public:
 	// bindings
 	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void SetPipelineState(PipelineState* pPipelineState);
+	void SetPipelineState(ID3D12StateObject* pStateObject);
 	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 

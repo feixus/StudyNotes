@@ -41,10 +41,10 @@
 #include <unordered_map>
 
 #include "Math/MathTypes.h"
-#include "Math/MathHelp.h"
+#include "Math/Math.h"
 #include "Core/CommandLine.h"
 #include "Core/Delegates.h"
-#include "Core/GameTimer.h"
+#include "Core/Time.h"
 #include "Core/BitField.h"
 #include "Core/Console.h"
 #include "Core/StringHash.h"

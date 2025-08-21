@@ -1,3 +1,7 @@
+#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+                "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 2), visibility = SHADER_VISIBILITY_VERTEX), "
+                
 struct ParticleData
 {
     float3 Position;
@@ -38,6 +42,7 @@ static const float3 BILLBOARD[] = {
     float3( 1,  1, 0),
 };
 
+[RootSignature(RootSig)]
 PS_INPUT VSMain(VS_INPUT input)
 {
     PS_INPUT output;

@@ -1,8 +1,7 @@
 #include "stdafx.h"
 #include "GpuParticles.h"
-#include "Profiler.h"
 #include "Scene/Camera.h"
-#include "RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/CommandSignature.h"
 #include "Graphics/Core/Graphics.h"
@@ -14,7 +13,8 @@
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Core/OnlineDescriptorAllocator.h"
-#include "ImGuiRenderer.h"
+#include "Graphics/Profiler.h"
+#include "Graphics/ImGuiRenderer.h"
 
 static int32_t g_EmitCount = 30;
 static float g_LifeTime = 4.0f;
@@ -119,10 +119,8 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 		Shader pixelShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pParticleRenderRS = std::make_unique<RootSignature>();
-        m_pParticleRenderRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-        m_pParticleRenderRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_VERTEX);
-        m_pParticleRenderRS->Finalize("Particles Render RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
+        m_pParticleRenderRS->FinalizeFromShader("Particles Render RS", vertexShader, pGraphics->GetDevice());
+        
 		m_pParticleRenderPSO = std::make_unique<PipelineState>();
 		m_pParticleRenderPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pParticleRenderPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
@@ -155,7 +153,7 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pSourceDep
     }
 
     static float time = 0;
-    time += GameTimer::DeltaTime();
+    time += Time::DeltaTime();
     if (time > g_LifeTime)
     {
         time = 0;
@@ -247,7 +245,7 @@ void GpuParticles::Simulate(CommandContext& context, GraphicsTexture* pSourceDep
 			float Near{0};
 			float Far{0};
 		} parameters;
-		parameters.DeltaTime = GameTimer::DeltaTime();
+		parameters.DeltaTime = Time::DeltaTime();
 		parameters.ParticleLifetime = g_LifeTime;
 		parameters.ViewProjection = camera.GetViewProjection();
         parameters.DimensionsInv.x = 1.0f / pSourceDepth->GetWidth();

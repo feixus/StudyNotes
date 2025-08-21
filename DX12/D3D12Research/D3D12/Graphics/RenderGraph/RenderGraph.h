@@ -203,8 +203,35 @@ private:
 
 class RGGraph
 {
+    class Allocator
+    {
+    public:
+        Allocator(uint64_t size) : m_Size(size), m_pData(new char[size]), m_pCurrentOffset(m_pData) {}
+        ~Allocator() { delete[] m_pData; }
+
+        template<typename T, typename... Args>
+        T* Allocate(Args&&... args)
+        {
+            check(m_pCurrentOffset - m_pData + sizeof(T) <= m_Size);
+            void* pData = m_pCurrentOffset;
+            m_pCurrentOffset += sizeof(T);
+            return new (pData) T(std::forward<Args>(args)...);
+        }
+
+        template<typename T>
+        void Release(T* pPtr)
+        {
+            pPtr->~T();
+        }
+
+    private:
+        uint64_t m_Size;
+        char* m_pData;
+        char* m_pCurrentOffset;
+    };
+
 public:
-    RGGraph(Graphics* pAllocator);
+    explicit RGGraph(Graphics* pAllocator, uint64_t allocatorSize = 0xFFFF);
     ~RGGraph();
 
     RGGraph(const RGGraph& other) = delete;
@@ -221,14 +248,14 @@ public:
 
     RGPassBuilder AddPass(const char* pName)
     {
-        RGPass* pPass = new RGPass(*this, pName, (int)m_RenderPasses.size());
+        RGPass* pPass = m_Allocator.Allocate<RGPass>(std::ref(*this), pName, (int)m_RenderPasses.size());
         AddPass(pPass);
         return RGPassBuilder(*this, *pPass);
     }
 
     RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc)
     {
-        RGResource* pResource = new RGTexture(pName, (int)m_Resources.size(), desc, nullptr);
+        RGResource* pResource = m_Allocator.Allocate<RGTexture>(pName, (int)m_Resources.size(), desc, nullptr);
         m_Resources.push_back(pResource);
         return CreateResourceNode(pResource);
     }
@@ -236,14 +263,14 @@ public:
     RGResourceHandle ImportTexture(const char* pName, GraphicsTexture* pTexture)
     {
         check(pTexture);
-        RGResource* pResource = new RGTexture(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
+        RGResource* pResource = m_Allocator.Allocate<RGTexture>(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
         m_Resources.push_back(pResource);
         return CreateResourceNode(pResource);
     }
 
     RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc)
     {
-        RGResource* pResource = new RGBuffer(pName, (int)m_Resources.size(), desc, nullptr);
+        RGResource* pResource = m_Allocator.Allocate<RGBuffer>(pName, (int)m_Resources.size(), desc, nullptr);
         m_Resources.push_back(pResource);
         return CreateResourceNode(pResource);
     }
@@ -252,7 +279,7 @@ public:
     {
         check(pBuffer);
         BufferDesc desc{};
-        RGResource* pResource = new RGBuffer(pName, (int)m_Resources.size(), desc, pBuffer);
+        RGResource* pResource = m_Allocator.Allocate<RGBuffer>(pName, (int)m_Resources.size(), desc, pBuffer);
         m_Resources.push_back(pResource);
         return CreateResourceNode(pResource);
     }
@@ -298,6 +325,7 @@ private:
     };
 
     Graphics* m_pGraphics;
+    Allocator m_Allocator;
     std::unique_ptr<RGResourceAllocator> m_pAllocator;
     uint64_t m_LastFenceValue{0};
     bool m_ImmediateMode{false};

@@ -2,17 +2,14 @@
 #include "RTAO.h"
 #include "Scene/Camera.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/Profiler.h"
-#include "RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/CommandQueue.h"
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/GraphicsTexture.h"
-#include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Core/RaytracingCommon.h"
 
 RTAO::RTAO(Graphics* pGraphics) : m_pGraphics(pGraphics)
@@ -34,7 +31,7 @@ void RTAO::OnSwapchainCreated(int windowWidth, int windowHeight)
     }
 }
 
-void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
+void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera)
 {
 	if (!m_pGraphics->SupportsRaytracing())
 	{
@@ -55,12 +52,11 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
     RGPassBuilder raytracing = graph.AddPass("Raytracing");
     raytracing.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
-            context.InsertResourceBarrier(inputResources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(inputResources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 
             context.SetComputeRootSignature(m_pGlobalRS.get());
-			ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
-			pCmd->SetPipelineState1(m_pStateObject.Get());
+			context.SetPipelineState(m_pStateObject.Get());
                 
             constexpr const int numRandomVectors = 64;
             struct Parameters
@@ -89,30 +85,23 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& inputResources)
             }
             memcpy(parameters.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
 
-            parameters.ViewInverse = inputResources.pCamera->GetViewInverse();
-            parameters.ProjectionInverse = inputResources.pCamera->GetProjectionInverse();
+            parameters.ViewInverse = camera.GetViewInverse();
+            parameters.ProjectionInverse = camera.GetProjectionInverse();
             parameters.Power = g_AoPower;
             parameters.Radius = g_AoRadius;
             parameters.Samples = g_AoSamples;
-
-            D3D12_DISPATCH_RAYS_DESC rayDesc{};
-            rayDesc.Width = inputResources.pRenderTarget->GetWidth();
-            rayDesc.Height = inputResources.pRenderTarget->GetHeight();
-            rayDesc.Depth = 1;
 
             ShaderBindingTable bindingTable(m_pStateObject.Get());
             bindingTable.AddRayGenEntry("RayGen", {});
             bindingTable.AddMissEntry("Miss", {});
             bindingTable.AddHitGroupEntry("HitGroup", {});
-            bindingTable.Commit(context, rayDesc);
 
             context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-			context.SetDynamicDescriptor(1, 0, inputResources.pRenderTarget->GetUAV());
+			context.SetDynamicDescriptor(1, 0, pColor->GetUAV());
 			context.SetDynamicDescriptor(2, 0, m_pTLAS->GetSRV());
-            context.SetDynamicDescriptor(2, 1, inputResources.pDepthTexture->GetSRV());
+            context.SetDynamicDescriptor(2, 1, pDepth->GetSRV());
                 
-            context.PrepareDraw(DescriptorTableType::Compute);
-            pCmd->DispatchRays(&rayDesc);
+            context.DispatchRays(bindingTable, pColor->GetWidth(), pColor->GetHeight());
         });
 }
 
@@ -175,7 +164,8 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
         };
 
         pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-        context.InsertUavBarrier(m_pBLAS.get(), true);
+        context.InsertUavBarrier(m_pBLAS.get());
+        context.FlushResourceBarriers();
     }
 
     // top level acceleration structure
@@ -222,7 +212,8 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
         };
 
         pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-        context.InsertUavBarrier(m_pTLAS.get(), true);
+        context.InsertUavBarrier(m_pTLAS.get());
+        context.FlushResourceBarriers();
     }
 }
 
@@ -246,73 +237,20 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
         m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
-
-		D3D12_SAMPLER_DESC samplerDesc{};
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        m_pGlobalRS->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_ALL);
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-        m_pGlobalRS->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_ALL);
-
+        m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP), D3D12_SHADER_VISIBILITY_ALL);
         m_pGlobalRS->Finalize("Ray Global RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
         
         ShaderLibrary shaderLibrary("RTAO.hlsl");
 
-        CD3DX12_STATE_OBJECT_DESC desc(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE);
-
-        // shaders
-        {
-            CD3DX12_DXIL_LIBRARY_SUBOBJECT* pShaderDesc = desc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-            auto shaderBytecode = CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize());
-            pShaderDesc->SetDXILLibrary(&shaderBytecode);
-            pShaderDesc->DefineExport(L"RayGen");
-            pShaderDesc->DefineExport(L"ClosestHit");
-            pShaderDesc->DefineExport(L"Miss");
-        }
-
-        // hit group
-        {
-            CD3DX12_HIT_GROUP_SUBOBJECT* pHitGroupDesc = desc.CreateSubobject<CD3DX12_HIT_GROUP_SUBOBJECT>();
-            pHitGroupDesc->SetHitGroupExport(L"HitGroup");
-            pHitGroupDesc->SetClosestHitShaderImport(L"ClosestHit");
-        }
-
-        // root signatures and associations
-        {
-            CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pRayGenRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-            pRayGenRs->SetRootSignature(m_pRayGenSignature->GetRootSignature());
-            CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pMissRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-            pMissRs->SetRootSignature(m_pMissSignature->GetRootSignature());
-            CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pHitRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-            pHitRs->SetRootSignature(m_pHitSignature->GetRootSignature());
-            CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pHitAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-            
-            CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pRayGenAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-            pRayGenAssociation->AddExport(L"RayGen");
-            pRayGenAssociation->SetSubobjectToAssociate(*pRayGenRs);
-
-            CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pMissAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-            pMissAssociation->AddExport(L"Miss");
-            pMissAssociation->SetSubobjectToAssociate(*pMissRs);
-
-            pHitAssociation->AddExport(L"HitGroup");
-            pHitAssociation->SetSubobjectToAssociate(*pHitRs);
-        }
-
-        // raytracing config
-        {
-            CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT* pRtConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
-            pRtConfig->Config(sizeof(float), 2 * sizeof(float));
-
-            CD3DX12_RAYTRACING_PIPELINE_CONFIG1_SUBOBJECT* pRtPipelineConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG1_SUBOBJECT>();
-            pRtPipelineConfig->Config(1, D3D12_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES);
-
-            CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT* pGlobalRs = desc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
-            pGlobalRs->SetRootSignature(m_pGlobalRS->GetRootSignature());
-        }
-        D3D12_STATE_OBJECT_DESC stateObject = *desc;
-
-        VERIFY_HR_EX(pGraphics->GetRaytracingDevice()->CreateStateObject(&stateObject, IID_PPV_ARGS(m_pStateObject.GetAddressOf())), pGraphics->GetDevice());
-        VERIFY_HR_EX(m_pStateObject->QueryInterface(IID_PPV_ARGS(m_pStateObjectProperties.GetAddressOf())), pGraphics->GetDevice());
+        StateObjectDesc stateObjectDesc;
+        stateObjectDesc.AddLibrary(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize(), { "RayGen", "ClosestHit", "Miss"});
+        stateObjectDesc.AddHitGroup("HitGroup", "ClosestHit");
+		stateObjectDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
+		stateObjectDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());
+		stateObjectDesc.BindLocalRootSignature("HitGroup", m_pHitSignature->GetRootSignature());
+        stateObjectDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
+        stateObjectDesc.SetRaytracingPipelineConfig(1, D3D12_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES);
+        stateObjectDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
+        m_pStateObject = stateObjectDesc.Finalize("RTAO SO", pGraphics->GetRaytracingDevice());
     }
 }

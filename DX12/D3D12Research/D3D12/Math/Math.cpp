@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "MathHelp.h"
+#include "Math.h"
 
 namespace Math
 {
@@ -113,17 +113,17 @@ namespace Math
             if (base == 2)
             {
 				*pCurrent++ = 'b';
-				*pCurrent++ = '0';
+				*pCurrent = '0';
             }
             else if (base == 8)
             {
 				*pCurrent++ = 'c';
-				*pCurrent++ = '0';
+				*pCurrent = '0';
             }
             else if (base == 16)
             {
 				*pCurrent++ = 'x';
-				*pCurrent++ = '0';
+				*pCurrent = '0';
             }
         }
         std::string result = buffer;

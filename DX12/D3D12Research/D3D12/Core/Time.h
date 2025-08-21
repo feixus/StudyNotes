@@ -1,10 +1,10 @@
 #pragma once
 
-class GameTimer
+class Time
 {
 public:
-	GameTimer();
-	~GameTimer();
+	Time();
+	~Time();
 
 	static float GameTime();
 	static float DeltaTime();

@@ -1,8 +1,6 @@
 #include "stdafx.h"
 #include "DebugRenderer.h"
-#include "Mesh.h"
 #include "Light.h"
-#include "Scene/Camera.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Core/GraphicsBuffer.h"
 #include "Core/Graphics.h"
@@ -18,12 +16,12 @@ struct DebugSphere
 		: Center(center), Radius(radius)
 	{}
 
-	Vector3 GetPoint(const float theta, const float phi) const
+	Vector3 GetPoint(float theta, float phi) const
 	{
 		return Center + GetLocalPoint(theta, phi);
 	}
 
-	Vector3 GetLocalPoint(const float theta, const float phi) const
+	Vector3 GetLocalPoint(float theta, float phi) const
 	{
 		return Vector3(
 			Radius * sin(theta) * sin(phi),
@@ -139,12 +137,12 @@ void DebugRenderer::AddRay(const Vector3& start, const Vector3& direction, const
     AddLine(start, start + direction, color);
 }
 
-void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& color, const bool solid)
+void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& color, bool solid)
 {
     AddTriangle(a, b, c, color, color, color, solid);
 }
 
-void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& colorA, const Color& colorB, const Color& colorC, const bool solid)
+void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& colorA, const Color& colorB, const Color& colorC, bool solid)
 {
     if (solid)
     {
@@ -164,7 +162,7 @@ void DebugRenderer::AddPolygon(const Vector3& a, const Vector3& b, const Vector3
     AddTriangle(a, c, d, color);
 }
 
-void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, const Color& color, const bool solid)
+void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, const Color& color, bool solid)
 {
     Vector3 minV(position.x - extents.x, position.y - extents.y, position.z - extents.z);
     Vector3 maxV(position.x + extents.x, position.y + extents.y, position.z + extents.z);
@@ -202,12 +200,12 @@ void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, cons
     }
 }
 
-void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, const bool solid)
+void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, bool solid)
 {
     AddBox(boundingBox.Center, boundingBox.Extents, color, solid);
 }
 
-void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, const bool solid)
+void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, bool solid)
 {
     Vector3 minV(boundingBox.Center.x - boundingBox.Extents.x, boundingBox.Center.y - boundingBox.Extents.y, boundingBox.Center.z - boundingBox.Extents.z);
     Vector3 maxV(boundingBox.Center.x + boundingBox.Extents.x, boundingBox.Center.y + boundingBox.Extents.y, boundingBox.Center.z + boundingBox.Extents.z);
@@ -247,12 +245,12 @@ void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix&
     }
 }
 
-void DebugRenderer::AddSphere(const Vector3& position, const float radius, const int slices, const int stacks, const Color& color, const bool solid)
+void DebugRenderer::AddSphere(const Vector3& position, float radius, int slices, int stacks, const Color& color, bool solid)
 {
     DebugSphere sphere(position, radius);
 
-	const float jStep = Math::PI / slices;
-	const float iStep = Math::PI / stacks;
+	float jStep = Math::PI / slices;
+	float iStep = Math::PI / stacks;
 
     if (!solid)
     {
@@ -308,7 +306,7 @@ void DebugRenderer::AddFrustrum(const BoundingFrustum& frustrum, const Color& co
     AddLine(corners[3], corners[7], color);
 }
 
-void DebugRenderer::AddAxisSystem(const Matrix& transform, const float lineLength)
+void DebugRenderer::AddAxisSystem(const Matrix& transform, float lineLength)
 {
     Matrix newMatrix = Matrix::CreateScale(Math::ScaleFromMatrix(transform));
     newMatrix.Invert(newMatrix);
@@ -324,7 +322,7 @@ void DebugRenderer::AddAxisSystem(const Matrix& transform, const float lineLengt
     AddLine(origin, z, Color(0, 0, 1, 1));
 }
 
-void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, const float height, const float radius, const int segments, const Color& color)
+void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const Color& color)
 {
     Vector3 d;
     direction.Normalize(d);
@@ -343,7 +341,7 @@ void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& dire
     }
 }
 
-void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& direction, const float height, const float angle, const int segments, const Color& color)
+void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const Color& color)
 {
     Vector3 d;
     direction.Normalize(d);
@@ -362,7 +360,7 @@ void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& directio
     }
 }
 
-void DebugRenderer::AddBone(const Matrix& matrix, const float length, const Color& color)
+void DebugRenderer::AddBone(const Matrix& matrix, float length, const Color& color)
 {
     float boneSize = 2;
     Vector3 start = Vector3::Transform(Vector3::Zero, matrix);

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "RenderGraph/RenderGraph.h"
-
 class Mesh;
 class Graphics;
 class RootSignature;
@@ -11,13 +9,6 @@ class CommandContext;
 class Buffer;
 class RGGraph;
 
-struct RtaoInputResources
-{
-    GraphicsTexture* pRenderTarget{};
-    GraphicsTexture* pDepthTexture{};
-    Camera* pCamera{};
-};
-
 class RTAO
 {
 public:
@@ -25,7 +16,7 @@ public:
 
     void OnSwapchainCreated(int widowWidth, int windowHeight);
 
-    void Execute(RGGraph& graph, const RtaoInputResources& inputResources);
+    void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera);
     void GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context);
 
 private:
@@ -46,5 +37,4 @@ private:
     std::unique_ptr<RootSignature> m_pGlobalRS;
 
     ComPtr<ID3D12StateObject> m_pStateObject;
-    ComPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;
 };

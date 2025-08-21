@@ -1,18 +1,15 @@
 #include "stdafx.h"
 #include "ClusteredForward.h"
-#include "RenderGraph/RenderGraph.h"
 #include "Scene/Camera.h"
-#include "Core/CommandSignature.h"
-#include "Core/Shader.h"
-#include "Core/PipelineState.h"
-#include "Core/RootSignature.h"
-#include "Core/GraphicsBuffer.h"
-#include "Core/GraphicsTexture.h"
-#include "Core/CommandContext.h"
-#include "Core/CommandQueue.h"
-#include "Core/ResourceViews.h"
+#include "Graphics/Core/CommandSignature.h"
+#include "Graphics/Core/Shader.h"
+#include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/RootSignature.h"
+#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/GraphicsTexture.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/Light.h"
 #include "Graphics/Profiler.h"
 
 static constexpr int cClusterSize = 64;
@@ -342,8 +339,8 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
             {
 				if (m_DidCopyDebugClusterData == false)
 				{
-                    context.CopyResource(m_pCompactedClusterBuffer.get(), m_pDebugCompactedClusterBuffer.get());
-                    context.CopyResource(m_pLightGrid.get(), m_pDebugLightGrid.get());
+                    context.CopyTexture(m_pCompactedClusterBuffer.get(), m_pDebugCompactedClusterBuffer.get());
+                    context.CopyTexture(m_pLightGrid.get(), m_pDebugLightGrid.get());
                     m_DebugClusterViewMatrix = inputResource.pCamera->GetView();
                     m_DebugClusterViewMatrix.Invert(m_DebugClusterViewMatrix);
                     m_DidCopyDebugClusterData = true;

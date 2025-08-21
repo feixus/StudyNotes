@@ -1,3 +1,9 @@
+#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+                "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 3), visibility = SHADER_VISIBILITY_ALL), " \
+                "StaticSampler(s0, filter = FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
+                "StaticSampler(s1, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL)"
+                
 struct VSInput
 {
     float3 position : POSITION;
@@ -13,10 +19,9 @@ struct PSInput
 
 Texture2D tSceneTexture : register(t0);
 Texture2D tDepthTexture : register(t1);
+Texture3D tCloudsTexture : register(t2);
 
 SamplerState sSceneSampler : register(s0);
-
-Texture3D tCloudsTexture : register(t2);
 SamplerState sCloudsSampler : register(s1);
 
 cbuffer Constants : register(b0)
@@ -35,6 +40,7 @@ cbuffer Constants : register(b0)
     float3 cMaxExtents;
 }
 
+[RootSignature(RootSig)]
 PSInput VSMain(VSInput input)
 {
     PSInput output;

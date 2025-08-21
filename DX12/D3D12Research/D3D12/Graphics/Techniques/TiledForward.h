@@ -1,5 +1,6 @@
 #pragma once
-#include "RenderGraph/RenderGraph.h"
+
+#include "Graphics/RenderGraph/RenderGraph.h"
 
 class Graphics;
 class RootSignature;

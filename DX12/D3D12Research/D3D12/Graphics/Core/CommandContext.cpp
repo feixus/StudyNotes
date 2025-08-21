@@ -11,6 +11,7 @@
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
 #include "CommandSignature.h"
+#include "RaytracingCommon.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON |
 													D3D12_RESOURCE_STATE_UNORDERED_ACCESS | 
@@ -101,7 +102,7 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 	return before != after;
 }
 
-void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate, uint32_t subResource)
+void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32_t subResource)
 {
 	D3D12_RESOURCE_STATES beforeState = pBuffer->GetResourceState();
 	if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
@@ -118,27 +119,14 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	if (NeedsTransition(beforeState, state))
 	{
 		m_BarrierBatcher.AddTransition(pBuffer->GetResource(), pBuffer->GetResourceState(), state, subResource);
-		if (executeImmediate)
-		{
-			FlushResourceBarriers();
-		}
 	
 		pBuffer->SetResourceState(state);
 	}
 }
 
-void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer, bool executeImmediate)
+void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer)
 {
 	m_BarrierBatcher.AddUAV(pBuffer ? pBuffer->GetResource() : nullptr);	
-	if (executeImmediate)
-	{
-		FlushResourceBarriers();
-	}
-
-	if (pBuffer)
-	{
-		pBuffer->SetResourceState(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	}
 }
 
 void CommandContext::FlushResourceBarriers()
@@ -146,17 +134,47 @@ void CommandContext::FlushResourceBarriers()
 	m_BarrierBatcher.Flush(m_pCommandList);
 }
 
-void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* pDest)
+void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pDest)
 {
-	check(pSource);
-	check(pDest);
+	check(pSource && pDest);
 	D3D12_RESOURCE_STATES sourceState = pSource->GetResourceState();
 	D3D12_RESOURCE_STATES destState = pDest->GetResourceState();
 	InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	InsertResourceBarrier(pDest, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	InsertResourceBarrier(pDest, D3D12_RESOURCE_STATE_COPY_DEST);
+	FlushResourceBarriers();
 	m_pCommandList->CopyResource(pDest->GetResource(), pSource->GetResource());
 	InsertResourceBarrier(pSource, sourceState);
 	InsertResourceBarrier(pDest, destState);
+}
+
+void CommandContext::CopyTexture(GraphicsTexture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion, int destinationOffset)
+{
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {
+		.Offset = 0,
+		.Footprint = {
+			.Format = pDestination->GetDesc().Format,
+			.Width = (uint32_t)pDestination->GetSize(),
+			.Height = 1,
+			.Depth = 1,
+			.RowPitch = Math::AlignUp<uint32_t>((uint32_t)pDestination->GetSize(), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
+		}
+	};
+
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), bufferFootprint);
+	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
+}
+
+void CommandContext::CopyTexture(GraphicsTexture* pSource, GraphicsTexture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, int sourceSubregion, int destinationSubregion)
+{
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), destinationSubregion);
+	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
+}
+
+void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint32_t size, uint32_t sourceOffset, uint32_t destinationOffset)
+{
+	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
 
 void CommandContext::InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset)
@@ -164,9 +182,11 @@ void CommandContext::InitializeBuffer(GraphicsResource* pResource, const void* p
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
+	FlushResourceBarriers();
 	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
-	InsertResourceBarrier(pResource, previousState, true);
+	InsertResourceBarrier(pResource, previousState);
+	FlushResourceBarriers();
 }
 
 void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount)
@@ -180,9 +200,11 @@ void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESO
 	*/
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
+	FlushResourceBarriers();
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubresource, subresourceCount, pSubresources);
-	InsertResourceBarrier(pResource, previousState, true);
+	InsertResourceBarrier(pResource, previousState);
+	FlushResourceBarriers();
 }
 
 void CommandContext::Dispatch(const IntVector3& groupCounts)
@@ -194,6 +216,20 @@ void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32
 {
 	PrepareDraw(DescriptorTableType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
+}
+
+void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uint32_t height, uint32_t depth)
+{
+	check(m_pRaytracingCommandList);
+
+	D3D12_DISPATCH_RAYS_DESC rayDesc = {};
+	table.Commit(*this, rayDesc);
+	rayDesc.Width = width;
+	rayDesc.Height = height;
+	rayDesc.Depth = depth;
+	
+	PrepareDraw(DescriptorTableType::Compute);
+	m_pRaytracingCommandList->DispatchRays(&rayDesc);
 }
 
 // GPU-driven rendering
@@ -430,7 +466,7 @@ void CommandContext::EndRenderPass()
 				else
 				{
 					FlushResourceBarriers();
-					CopyResource(data.Target, data.ResolveTarget);
+					CopyTexture(data.Target, data.ResolveTarget);
 					FlushResourceBarriers();
 				}
 			}
@@ -581,6 +617,12 @@ void CommandContext::PrepareDraw(DescriptorTableType type)
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 {
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
+}
+
+void CommandContext::SetPipelineState(ID3D12StateObject* pPipelineState)
+{
+	check(m_pRaytracingCommandList);
+	m_pRaytracingCommandList->SetPipelineState1(pPipelineState);
 }
 
 void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)

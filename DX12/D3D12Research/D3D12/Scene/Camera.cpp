@@ -1,16 +1,17 @@
 #include "stdafx.h"
 #include "Camera.h"
-#include "Graphics/Core/Graphics.h"
 #include "Core/input.h"
 
 void Camera::SetPosition(const Vector3& position)
 {
     m_Position = position;
+    OnDirty();
 }
 
 void Camera::SetRotation(const Quaternion& rotation)
 {
     m_Rotation = rotation;
+    OnDirty();
 }
 
 void Camera::SetFoV(float fov)
@@ -132,8 +133,8 @@ void FreeCamera::Update()
 	if (Input::Instance().IsMouseDown(VK_LBUTTON) && ImGui::IsAnyItemActive() == false)
 	{
 		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
-		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * GameTimer::DeltaTime() * 0.1f, 0);
-		Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * GameTimer::DeltaTime() * 0.1f, 0, 0);
+		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);
+		Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * Time::DeltaTime() * 0.1f, 0, 0);
 		// yaw first, then pitch
         m_Rotation = yr * m_Rotation * pr;
 	}
@@ -148,7 +149,7 @@ void FreeCamera::Update()
 	movement = Vector3::Transform(movement, m_Rotation);
 
     m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.1f);
-	m_Position += m_Velocity * GameTimer::DeltaTime() * 40.0f;
+	m_Position += m_Velocity * Time::DeltaTime() * 40.0f;
 
     // update camera matrices
     OnDirty();

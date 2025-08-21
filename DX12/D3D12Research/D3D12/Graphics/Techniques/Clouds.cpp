@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "Clouds.h"
-#include "Profiler.h"
 #include "Scene/Camera.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
@@ -9,7 +8,8 @@
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/GraphicsBuffer.h"
-#include "ImGuiRenderer.h"
+#include "Graphics/Profiler.h"
+#include "Graphics/ImGuiRenderer.h"
 
 static const int Resolution = 256;
 static const int MaxPoints = 256;
@@ -76,20 +76,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 		Shader vertexShader("Clouds.hlsl", ShaderType::Vertex, "VSMain");
 		Shader pixelShader("Clouds.hlsl", ShaderType::Pixel, "PSMain");
 		m_pCloudsRS = std::make_unique<RootSignature>();
-		m_pCloudsRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pCloudsRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		D3D12_SAMPLER_DESC samplerDesc{};
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		m_pCloudsRS->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-		m_pCloudsRS->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		m_pCloudsRS->Finalize("Clouds RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		m_pCloudsRS->FinalizeFromShader("Clouds RS", vertexShader, pGraphics->GetDevice());
 
 		D3D12_INPUT_ELEMENT_DESC quadIL[] = {
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -233,7 +220,7 @@ void Clouds::Render(CommandContext& context, GraphicsTexture* pSceneTexture, Gra
 		context.InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 		context.FlushResourceBarriers();
 
-		context.CopyResource(m_pIntermediateColor.get(), pSceneTexture);
+		context.CopyTexture(m_pIntermediateColor.get(), pSceneTexture);
 
 		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		context.FlushResourceBarriers();

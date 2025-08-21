@@ -1,6 +1,5 @@
 #pragma once
 
-#include "RenderGraph/RenderGraph.h"
 class Mesh;
 class Graphics;
 class RootSignature;
@@ -9,13 +8,7 @@ class Camera;
 class CommandContext;
 class Buffer;
 class PipelineState;
-
-struct SsaoInputResources
-{
-	GraphicsTexture* pRenderTarget{ nullptr };
-	GraphicsTexture* pDepthTexture{ nullptr };
-	Camera* pCamera{ nullptr };
-};
+class RGGraph;
 
 class SSAO
 {
@@ -24,7 +17,7 @@ public:
 
 	void OnSwapchainCreated(int widowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SsaoInputResources& inputResources);
+	void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera);
 
 private:
 	void SetupResources(Graphics* pGraphics);

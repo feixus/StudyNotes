@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "Graphics.h"
-#include "CommandAllocatorPool.h"
 #include "CommandQueue.h"
 #include "CommandContext.h"
 #include "OfflineDescriptorAllocator.h"
@@ -16,16 +15,16 @@
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
-#include "Graphics/ClusteredForward.h"
-#include "Graphics/TiledForward.h"
-#include "Graphics/Clouds.h"
+#include "Graphics/DebugRenderer.h"
+#include "Graphics/Techniques/ClusteredForward.h"
+#include "Graphics/Techniques/TiledForward.h"
+#include "Graphics/Techniques/Clouds.h"
+#include "Graphics/Techniques/GpuParticles.h"
+#include "Graphics/Techniques/RTAO.h"
+#include "Graphics/Techniques/SSAO.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RenderGraph/Blackboard.h"
 #include "Graphics/RenderGraph/ResourceAllocator.h"
-#include "Graphics/DebugRenderer.h"
-#include "Graphics/RTAO.h"
-#include "Graphics/SSAO.h"
-#include "Graphics/GpuParticles.h"
 #include "Graphics/Core/CommandSignature.h"
 
 #ifdef _DEBUG
@@ -291,7 +290,7 @@ void Graphics::Update()
 
 			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light));
 			memcpy(allocation.pMappedMemory, m_Lights.data(), m_Lights.size() * sizeof(Light));
-			renderContext.GetCommandList()->CopyBufferRegion(m_pLightBuffer->GetResource(), 0, allocation.pBackingResource->GetResource(), allocation.Offset, m_pLightBuffer->GetSize());
+			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
 		});
 
 	// depth prepass
@@ -369,21 +368,11 @@ void Graphics::Update()
 
 	if (g_ShowRaytraced)
 	{
-		RtaoInputResources resources = {
-			.pRenderTarget = m_pAmbientOcclusion.get(),
-			.pDepthTexture = GetResolveDepthStencil(),
-			.pCamera = m_pCamera.get()
-		};
-		m_pRTAO->Execute(graph, resources);
+		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), *m_pCamera);
 	}
 	else
 	{
-		SsaoInputResources ssaoResources = {
-			.pRenderTarget = m_pAmbientOcclusion.get(),
-			.pDepthTexture = GetResolveDepthStencil(),
-			.pCamera = m_pCamera.get(),
-		};
-		m_pSSAO->Execute(graph, ssaoResources);
+		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), *m_pCamera);
 	}
 
 	// shadow mapping
@@ -433,21 +422,22 @@ void Graphics::Update()
 					renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 					renderContext.FlushResourceBarriers();
 
-					D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {
-						.Offset = 0,
-						.Footprint = {
-							.Format = DXGI_FORMAT_R32G32_FLOAT,
-							.Width = 1,
-							.Height = 1,
-							.Depth = 1,
-							.RowPitch = Math::AlignUp<uint32_t>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
-						}
-					};
+					// D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {
+					// 	.Offset = 0,
+					// 	.Footprint = {
+					// 		.Format = DXGI_FORMAT_R32G32_FLOAT,
+					// 		.Width = 1,
+					// 		.Height = 1,
+					// 		.Depth = 1,
+					// 		.RowPitch = Math::AlignUp<uint32_t>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
+					// 	}
+					// };
 
-					CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
-					CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
+					// CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
+					// CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
 
-					renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+					// renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+					renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
 			});
 		}
 
@@ -701,7 +691,7 @@ void Graphics::Update()
 				AverageParameters.PixelCount = pTonemapInput->GetWidth() * pTonemapInput->GetHeight();
 				AverageParameters.MinLogLuminance = g_MinLogLuminance;
 				AverageParameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
-				AverageParameters.TimeDelta = GameTimer::DeltaTime();
+				AverageParameters.TimeDelta = Time::DeltaTime();
 				AverageParameters.Tau = g_Tau;
 
 				context.SetComputeDynamicConstantBufferView(0, &AverageParameters, sizeof(AverageLuminanceParameters));
@@ -782,7 +772,7 @@ void Graphics::Update()
 	RGPassBuilder tempBarriers = graph.AddPass("Temp Barriers");
 	tempBarriers.Bind([=](CommandContext& context, const RGPassResource& resources)
 		{
-			context.CopyResource(m_pTonemapTarget.get(), GetCurrentBackbuffer());
+			context.CopyTexture(m_pTonemapTarget.get(), GetCurrentBackbuffer());
 			context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
 		});
@@ -948,7 +938,7 @@ void Graphics::InitD3D()
 		}
 
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
-			.HighestShaderModel = D3D_SHADER_MODEL_6_7
+			.HighestShaderModel = D3D_SHADER_MODEL_6_6
 		};
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(shaderModelSupport))))
 		{
@@ -1124,7 +1114,7 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
 		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this);
-		pBuffer->Create(BufferDesc::CreateStructured(2, sizeof(float), BufferFlag::Readback));
+		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
 }
@@ -1369,12 +1359,12 @@ void Graphics::InitializeAssets()
 
 void Graphics::UpdateImGui()
 {
-	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
+	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("MS: %4.2f", GameTimer::DeltaTime() * 1000.0f);
+	ImGui::Text("MS: %4.2f", Time::DeltaTime() * 1000.0f);
 	ImGui::SameLine(100);
 	ImGui::Text("%d x %d", m_WindowWidth, m_WindowHeight);
 	ImGui::SameLine(180.0f);
