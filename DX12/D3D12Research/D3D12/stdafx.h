@@ -23,8 +23,12 @@
 #include <DirectXMath.h>
 
 #include "External/d3dx12/d3dx12.h"
+#include "External/d3dx12/d3dx12_extra.h"
 #include "External/imgui/imgui.h"
 #include <External/Dxc/dxcapi.h>
+
+using Microsoft::WRL::ComPtr;
+using namespace DirectX;
 
 #include <iostream>
 #include <vector>
@@ -49,11 +53,6 @@
 #include "Core/Console.h"
 #include "Core/StringHash.h"
 #include "Graphics/Core/D3DUtils.h"
-
-using Microsoft::WRL::ComPtr;
-using namespace DirectX;
-using namespace DirectX::SimpleMath;
-using namespace DirectX::Colors;
 
 template <size_t S>
 struct EnumSize;

@@ -26,6 +26,7 @@
 #include "Graphics/RenderGraph/Blackboard.h"
 #include "Graphics/RenderGraph/ResourceAllocator.h"
 #include "Graphics/Core/CommandSignature.h"
+#include "Core/CommandLine.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -96,7 +97,7 @@ void Graphics::Update()
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
-	PIX_CAPTURE_SCOPE();
+	D3D::PixCaptureScope pixScope;
 	PROFILE_BEGIN("UpdateGameState");
 
 	m_pCamera->Update();
@@ -826,25 +827,37 @@ void Graphics::InitD3D()
 	E_LOG(LogType::Info, "Graphics::InitD3D");
 	UINT dxgiFactoryFlags = 0;
 
-#if D3D_VALIDATION
-	// enable debug layer
-	ComPtr<ID3D12Debug> pDebugController;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+	bool debugD3D = CommandLine::GetBool("d3dvalidation") || D3D_VALIDATION;
+	bool gpuValidation = CommandLine::GetBool("gpuvalidation") || GPU_VALIDATION;
+	if (debugD3D)
 	{
-		pDebugController->EnableDebugLayer();  // CPU-side
+		ComPtr<ID3D12Debug> pDebugController;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		{
+			pDebugController->EnableDebugLayer();  // CPU-side
+		}
+	
+		if (gpuValidation)
+		{
+			ComPtr<ID3D12Debug1> pDebugController1;
+			if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController1))))
+			{
+				pDebugController1->SetEnableGPUBasedValidation(true);  // GPU-side
+			}
+		}
+
+		// additional DXGI debug layers
+		dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
 
-#if GPU_VALIDATION
-	ComPtr<ID3D12Debug1> pDebugController1;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController1))))
+	ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
 	{
-		pDebugController1->SetEnableGPUBasedValidation(true);  // GPU-side
+		E_LOG(LogType::Info, "DRED Enabled");
+		// turn on auto-breadcrumbs and page fault reporting
+		pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+		pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 	}
-#endif
-
-	// additional DXGI debug layers
-	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
-#endif
 
 	// factory
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
@@ -889,44 +902,43 @@ void Graphics::InitD3D()
 
 	m_pDevice.As(&m_pRaytracingDevice);
 
-#if D3D_VALIDATION
-	ID3D12InfoQueue* pInfoQueue = nullptr;
-	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+	if (debugD3D)
 	{
-		// Suppress whole categories of messages
-		//D3D12_MESSAGE_CATEGORY Categories[] = {};
-
-		// Suppress messages based on their severity level
-		D3D12_MESSAGE_SEVERITY Severities[] =
+		ID3D12InfoQueue* pInfoQueue = nullptr;
+		if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
 		{
-			D3D12_MESSAGE_SEVERITY_INFO
-		};
+			// Suppress messages based on their severity level
+			D3D12_MESSAGE_SEVERITY Severities[] =
+			{
+				D3D12_MESSAGE_SEVERITY_INFO
+			};
 
-		// Suppress individual messages by their ID
-		D3D12_MESSAGE_ID DenyIds[] =
-		{
-			// This occurs when there are uninitialized descriptors in a descriptor table, even when a
-			// shader does not access the missing descriptors.  I find this is common when switching
-			// shader permutations and not wanting to change much code to reorder resources.
-			D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
-		};
+			// Suppress individual messages by their ID
+			D3D12_MESSAGE_ID DenyIds[] =
+			{
+				// This occurs when there are uninitialized descriptors in a descriptor table, even when a
+				// shader does not access the missing descriptors.  I find this is common when switching
+				// shader permutations and not wanting to change much code to reorder resources.
+				D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
+			};
 
-		D3D12_INFO_QUEUE_FILTER NewFilter = {};
-		//NewFilter.DenyList.NumCategories = _countof(Categories);
-		//NewFilter.DenyList.pCategoryList = Categories;
-		NewFilter.DenyList.NumSeverities = _countof(Severities);
-		NewFilter.DenyList.pSeverityList = Severities;
-		NewFilter.DenyList.NumIDs = _countof(DenyIds);
-		NewFilter.DenyList.pIDList = DenyIds;
+			D3D12_INFO_QUEUE_FILTER NewFilter = {};
+			//NewFilter.DenyList.NumCategories = _countof(Categories);
+			//NewFilter.DenyList.pCategoryList = Categories;
+			NewFilter.DenyList.NumSeverities = _countof(Severities);
+			NewFilter.DenyList.pSeverityList = Severities;
+			NewFilter.DenyList.NumIDs = _countof(DenyIds);
+			NewFilter.DenyList.pIDList = DenyIds;
 
-#if 1
-		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
-#endif
+			if (CommandLine::GetBool("d3dbreakvalidation"))
+			{
+				VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+			}
 
-		pInfoQueue->PushStorageFilter(&NewFilter);
-		pInfoQueue->Release();
+			pInfoQueue->PushStorageFilter(&NewFilter);
+			pInfoQueue->Release();
+		}
 	}
-#endif
 
 	 // feature checks
 	{
@@ -962,9 +974,6 @@ void Graphics::InitD3D()
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
-	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	Profiler::Get()->Initialize(this);
-
 	// swap chain
 	CreateSwapchain();
 
@@ -982,6 +991,12 @@ void Graphics::InitD3D()
 		m_pResolvedRenderTarget = std::make_unique<GraphicsTexture>(this, "Resolved Render Target");
 	}
 
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
+	m_pResourceAllocator = std::make_unique<RGResourceAllocator>(this);
+
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
+	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
+
 	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
 	m_pTonemapTarget = std::make_unique<GraphicsTexture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<GraphicsTexture>(this, "Downscaled HDR Target");
@@ -989,28 +1004,20 @@ void Graphics::InitD3D()
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
+
 	m_pRTAO = std::make_unique<RTAO>(this);
 	m_pSSAO = std::make_unique<SSAO>(this);
+	m_pClouds = std::make_unique<Clouds>(this);
+	m_pGpuParticles = std::make_unique<GpuParticles>(this);
 
-	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
-	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
-
-	m_pResourceAllocator = std::make_unique<RGResourceAllocator>(this);
-
-	m_pClouds = std::make_unique<Clouds>();
-	m_pClouds->Initialize(this);
-
-	OnResize(m_WindowWidth, m_WindowHeight);
-
+	Profiler::Get()->Initialize(this);
 	DebugRenderer::Get()->Initialize(this);
 
-	m_pGpuParticles = std::make_unique<GpuParticles>(this);
+	OnResize(m_WindowWidth, m_WindowHeight);
 }
 
 void Graphics::CreateSwapchain()
 {
-	m_pSwapchain.Reset();
-
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 	swapchainDesc.Width = m_WindowWidth;
 	swapchainDesc.Height = m_WindowHeight;
@@ -1033,14 +1040,15 @@ void Graphics::CreateSwapchain()
 	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 	fsDesc.Windowed = true;
 
-	VERIFY_HR_EX(m_pFactory->CreateSwapChainForHwnd(
+	VERIFY_HR(m_pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
 		m_pWindow,
 		&swapchainDesc,
 		&fsDesc,
 		nullptr,
-		pSwapChain.GetAddressOf()), GetDevice());
+		pSwapChain.GetAddressOf()));
 
+	m_pSwapchain.Reset();
 	pSwapChain.As(&m_pSwapchain);
 }
 
@@ -1125,17 +1133,17 @@ void Graphics::InitializeAssets()
 
 	// input layout
 	// universal
-	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
-			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
+			CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
+			CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32_FLOAT },
+			CD3DX12_INPUT_ELEMENT_DESC{ "NORMAL", DXGI_FORMAT_R32G32B32_FLOAT },
+			CD3DX12_INPUT_ELEMENT_DESC{ "TANGENT", DXGI_FORMAT_R32G32B32_FLOAT },
+			CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1 },
 	};
 
-	D3D12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
-			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
+			CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
+			CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT },
 	};
 
 	// shadow mapping
@@ -1307,8 +1315,8 @@ void Graphics::InitializeAssets()
 
 	// sky
 	{
-		D3D12_INPUT_ELEMENT_DESC cubeInputElements[] = {
-			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		CD3DX12_INPUT_ELEMENT_DESC cubeInputElements[] = {
+			CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
 		};
 
 		Shader vertexShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");

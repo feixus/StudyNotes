@@ -127,10 +127,10 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pRootSignature->FinalizeFromShader("imgui", vertexShader, pGraphics->GetDevice());
 
 	// input layout
-	std::vector<D3D12_INPUT_ELEMENT_DESC> elementDesc = {
-		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	CD3DX12_INPUT_ELEMENT_DESC elementDesc[] = {
+		CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32_FLOAT },
+		CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32_FLOAT },
+		CD3DX12_INPUT_ELEMENT_DESC{ "COLOR", DXGI_FORMAT_R8G8B8A8_UNORM }
 	};
 
 	// pipeline state
@@ -139,7 +139,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineStateObject->SetDepthWrite(false);
 	m_pPipelineStateObject->SetDepthEnable(false);
 	m_pPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
-	m_pPipelineStateObject->SetInputLayout(elementDesc.data(), (uint32_t)elementDesc.size());
+	m_pPipelineStateObject->SetInputLayout(elementDesc, (uint32_t)std::size(elementDesc));
 	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());

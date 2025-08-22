@@ -1,12 +1,5 @@
 #pragma once
 
-#include <filesystem>
-#include <fstream>
-#include <vector>
-#include <cstddef>
-#include <stdexcept>
-#include <string>
-
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
 
@@ -16,51 +9,188 @@
 #define D3D_SETNAME(obj, name)
 #endif
 
-/**
- * @brief Reads a file into a byte vector
- * @param filePath Path to the file to read
- * @param mode File open mode (default: std::ios::ate for reading from end)
- * @return std::vector<std::byte> containing the file contents
- * @throws std::runtime_error if file cannot be opened or read
- */
-static std::vector<std::byte> ReadFile(const std::filesystem::path& filePath, std::ios_base::openmode mode = std::ios::ate)
-{
-	if (filePath.empty())
-	{
-		throw std::runtime_error("File path is empty");
-	}
-
-	if (!std::filesystem::exists(filePath))
-	{
-		throw std::runtime_error("File does not exist: " + filePath.string());
-	}
-
-	std::ifstream file(filePath, mode | std::ios::binary);
-	if (!file)
-	{
-		throw std::runtime_error("Failed to open file: " + filePath.string());
-	}
-
-	const auto size = static_cast<size_t>(file.tellg());
-	if (size == 0)
-	{
-		return {};
-	}
-
-	std::vector<std::byte> buffer(size);
-	file.seekg(0);
-	
-	if (!file.read(reinterpret_cast<char*>(buffer.data()), size))
-	{
-		throw std::runtime_error("Failed to read file: " + filePath.string());
-	}
-
-	file.close();
-	return buffer;
-}
-
 namespace D3D
 {
+	inline void BeginPixCapture()
+	{
+		ComPtr<IDXGraphicsAnalysis> pAnalysis;
+		if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pAnalysis.GetAddressOf()))))
+		{
+			pAnalysis->BeginCapture();
+		}
+	}
+
+	inline void EndPixCapture()
+	{
+		ComPtr<IDXGraphicsAnalysis> pAnalysis;
+		if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pAnalysis.GetAddressOf()))))
+		{
+			pAnalysis->EndCapture();
+		}
+	}
+
+	class PixCaptureScope
+	{
+	public:
+		PixCaptureScope()
+		{
+			BeginPixCapture();
+		}
+
+		~PixCaptureScope()
+		{
+			EndPixCapture();
+		}
+	};
+
+	// device removed extend data
+	inline void DREDHandler(ID3D12Device* pDevice)
+	{
+		//D3D12_AUTO_BREADCRUMB_OP
+		constexpr const TCHAR* OpNames[] =
+		{
+			TEXT("SetMarker"),
+			TEXT("BeginEvent"),
+			TEXT("EndEvent"),
+			TEXT("DrawInstanced"),
+			TEXT("DrawIndexedInstanced"),
+			TEXT("ExecuteIndirect"),
+			TEXT("Dispatch"),
+			TEXT("CopyBufferRegion"),
+			TEXT("CopyTextureRegion"),
+			TEXT("CopyResource"),
+			TEXT("CopyTiles"),
+			TEXT("ResolveSubresource"),
+			TEXT("ClearRenderTargetView"),
+			TEXT("ClearUnorderedAccessView"),
+			TEXT("ClearDepthStencilView"),
+			TEXT("ResourceBarrier"),
+			TEXT("ExecuteBundle"),
+			TEXT("Present"),
+			TEXT("ResolveQueryData"),
+			TEXT("BeginSubmission"),
+			TEXT("EndSubmission"),
+			TEXT("DecodeFrame"),
+			TEXT("ProcessFrames"),
+			TEXT("AtomicCopyBufferUint"),
+			TEXT("AtomicCopyBufferUint64"),
+			TEXT("ResolveSubresourceRegion"),
+			TEXT("WriteBufferImmediate"),
+			TEXT("DecodeFrame1"),
+			TEXT("SetProtectedResourceSession"),
+			TEXT("DecodeFrame2"),
+			TEXT("ProcessFrames1"),
+			TEXT("BuildRaytracingAccelerationStructure"),
+			TEXT("EmitRaytracingAccelerationStructurePostBuildInfo"),
+			TEXT("CopyRaytracingAccelerationStructure"),
+			TEXT("DispatchRays"),
+			TEXT("InitializeMetaCommand"),
+			TEXT("ExecuteMetaCommand"),
+			TEXT("EstimateMotion"),
+			TEXT("ResolveMotionVectorHeap"),
+			TEXT("SetPipelineState1"),
+			TEXT("InitializeExtensionCommand"),
+			TEXT("ExecuteExtensionCommand"),
+			TEXT("DispatchMesh"),
+			TEXT("EncodeFrame"),
+			TEXT("ResolveEncoderOutputMetadata")
+		};
+
+		// D3D12_DRED_ALLOCATION_TYPE
+		constexpr const TCHAR* AllocTypeNames[] =
+		{
+			TEXT("CommandQueue"),
+			TEXT("CommandAllocator"),
+			TEXT("PipelineState"),
+			TEXT("CommandList"),
+			TEXT("Fence"),
+			TEXT("DescriptorHeap"),
+			TEXT("Heap"),
+			TEXT("QueryHeap"),
+			TEXT("CommandSignature"),
+			TEXT("PipelineLibrary"),
+			TEXT("VideoDecoder"),
+			TEXT("VideoProcessor"),
+			TEXT("Resource"),
+			TEXT("Pass"),
+			TEXT("CryptoSession"),
+			TEXT("CryptoSessionPolicy"),
+			TEXT("ProtectedResourceSession"),
+			TEXT("VideoDecoderHeap"),
+			TEXT("CommandPool"),
+			TEXT("CommandRecorder"),
+			TEXT("StateObject"),
+			TEXT("MetaCommand"),
+			TEXT("SchedulingGroup"),
+			TEXT("VideoMotionEstimator"),
+			TEXT("VideoMotionVectorHeap"),
+			TEXT("VideoExtensionCommand"),
+			TEXT("VideoEncoder"),
+			TEXT("VideoEncoderHeap")
+		};
+
+		ID3D12DeviceRemovedExtendedData2* pDred = nullptr;
+		if (SUCCEEDED(pDevice->QueryInterface(IID_PPV_ARGS(&pDred))))
+		{
+			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT dredAutoBreadcrumbsOutput;
+			if (SUCCEEDED(pDred->GetAutoBreadcrumbsOutput(&dredAutoBreadcrumbsOutput)))
+			{
+				E_LOG(LogType::Warning, "[DRED] last tracked GPU operation:");
+
+				const D3D12_AUTO_BREADCRUMB_NODE* node = dredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
+				while (node)
+				{
+					int32_t lastCompletedOp = *node->pLastBreadcrumbValue;
+
+					E_LOG(LogType::Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", node->pCommandListDebugNameW, node->pCommandQueueDebugNameW, lastCompletedOp, node->BreadcrumbCount);
+					
+					int32_t firstOp = Math::Max(lastCompletedOp - 5, 0);
+					int32_t lastOp = Math::Min(lastCompletedOp + 5, int32_t(node->BreadcrumbCount) - 1);
+
+					for (int32_t op = firstOp; op <= lastOp; op++)
+					{
+						D3D12_AUTO_BREADCRUMB_OP breadcrumbOp = node->pCommandHistory[op];
+						const TCHAR* opName = (breadcrumbOp < std::size(OpNames)) ? OpNames[breadcrumbOp] : TEXT("Unknown Op");
+						E_LOG(LogType::Warning, "\tOp: %d, %s%s", op, opName, (op + 1 == lastCompletedOp) ? TEXT(" - Last completed") : TEXT(""));
+					}
+					node = node->pNext;
+				}
+			}
+
+			D3D12_DRED_PAGE_FAULT_OUTPUT dredPageFaultOutput;
+			if (SUCCEEDED(pDred->GetPageFaultAllocationOutput(&dredPageFaultOutput)) && dredPageFaultOutput.PageFaultVA != 0)
+			{
+				E_LOG(LogType::Warning, "[DRED] PageFault at VA GPUAddress \"0x%x\"", dredPageFaultOutput.PageFaultVA);
+
+				const D3D12_DRED_ALLOCATION_NODE* node = dredPageFaultOutput.pHeadExistingAllocationNode;
+				if (node)
+				{
+					E_LOG(LogType::Warning, "[DRED] active objects with VS ranges that match the faulting VA:");
+					while(node)
+					{
+						int32_t alloc_type_index = node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
+						const TCHAR* allocTypeName = (alloc_type_index < std::size(AllocTypeNames)) ? AllocTypeNames[alloc_type_index] : TEXT("Unknown Alloc");
+						E_LOG(LogType::Warning, "\tName: %s (Type: %s)", node->ObjectNameW, allocTypeName);
+						node = node->pNext;
+					}
+				}
+
+				node = dredPageFaultOutput.pHeadRecentFreedAllocationNode;
+				if (node)
+				{
+					E_LOG(LogType::Warning, "[DRED] recent freed objects with VA ranges that match the faulting VA:");
+					while(node)
+					{
+						int32_t alloc_type_index = node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
+						const TCHAR* allocTypeName = (alloc_type_index < std::size(AllocTypeNames)) ? AllocTypeNames[alloc_type_index] : TEXT("Unknown Alloc");
+						E_LOG(LogType::Warning, "\tName: %s (Type: %s)", node->ObjectNameW, allocTypeName);
+						node = node->pNext;
+					}
+				}
+			}
+		}
+	}
+
 	inline std::string GetErrorString(HRESULT errorCode, ID3D12Device* pDevice)
 	{
 		std::stringstream str;
@@ -77,6 +207,8 @@ namespace D3D
 		{
 			HRESULT removedReason = pDevice->GetDeviceRemovedReason();
 			str << " - Device Removed Reason: " << GetErrorString(removedReason, nullptr);
+			
+			DREDHandler(pDevice);
 		}
 		return str.str();
 	}
@@ -260,6 +392,42 @@ namespace D3D
 			assert(false);
 			return 0;
 		}
+	}
+
+	static std::vector<std::byte> ReadFile11(const std::filesystem::path& filePath, std::ios_base::openmode mode = std::ios::ate)
+	{
+		if (filePath.empty())
+		{
+			throw std::runtime_error("File path is empty");
+		}
+
+		if (!std::filesystem::exists(filePath))
+		{
+			throw std::runtime_error("File does not exist: " + filePath.string());
+		}
+
+		std::ifstream file(filePath, mode | std::ios::binary);
+		if (!file)
+		{
+			throw std::runtime_error("Failed to open file: " + filePath.string());
+		}
+
+		const auto size = static_cast<size_t>(file.tellg());
+		if (size == 0)
+		{
+			return {};
+		}
+
+		std::vector<std::byte> buffer(size);
+		file.seekg(0);
+		
+		if (!file.read(reinterpret_cast<char*>(buffer.data()), size))
+		{
+			throw std::runtime_error("Failed to read file: " + filePath.string());
+		}
+
+		file.close();
+		return buffer;
 	}
 }
 

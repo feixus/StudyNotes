@@ -11,7 +11,7 @@ class CommandContext;
 class Clouds
 {
 public:
-	Clouds();
+	Clouds(Graphics* pGraphics);
 	void Initialize(Graphics* pGraphics);
 	void Render(CommandContext& context, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera);
 

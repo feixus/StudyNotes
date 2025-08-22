@@ -414,10 +414,10 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // mark unique clusters
     {
-        D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+        CD3DX12_INPUT_ELEMENT_DESC inputElementDescs[] =
         {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
+            CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
         };
 
         Shader vertexShader = Shader("CL_MarkUniqueClusters.hlsl", ShaderType::Vertex, "MarkClusters_VS");
@@ -486,13 +486,13 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // diffuse
     {
-        D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+        CD3DX12_INPUT_ELEMENT_DESC inputElementDescs[] =
         {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
+            { "TEXCOORD", DXGI_FORMAT_R32G32_FLOAT },
+            { "NORMAL", DXGI_FORMAT_R32G32B32_FLOAT },
+            { "TANGENT", DXGI_FORMAT_R32G32B32_FLOAT },
+            { "TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1 },
         };
 
         Shader vertexShader = Shader("CL_Diffuse.hlsl", ShaderType::Vertex, "VSMain", { });

@@ -32,10 +32,12 @@ struct CloudParameters
 
 static CloudParameters sCloudParameters;
 
-Clouds::Clouds()
+Clouds::Clouds(Graphics* pGraphics)
 {
 	m_CloudBounds.Center = Vector3(0, 150, 0);
 	m_CloudBounds.Extents = Vector3(50, 20, 50);
+
+	Initialize(pGraphics);
 }
 
 void Clouds::Initialize(Graphics *pGraphics)
