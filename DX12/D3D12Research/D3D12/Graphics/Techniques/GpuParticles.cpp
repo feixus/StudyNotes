@@ -129,8 +129,8 @@ void GpuParticles::Initialize(Graphics* pGraphics)
         m_pParticleRenderPSO->SetInputLayout(nullptr, 0);
         m_pParticleRenderPSO->SetBlendMode(BlendMode::Alpha, false);
         m_pParticleRenderPSO->SetCullMode(D3D12_CULL_MODE_NONE);
-        m_pParticleRenderPSO->SetDepthEnable(false);
-        m_pParticleRenderPSO->SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+        m_pParticleRenderPSO->SetDepthWrite(false);
+        m_pParticleRenderPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
         m_pParticleRenderPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
         m_pParticleRenderPSO->Finalize("Particles Render PSO", pGraphics->GetDevice());		
     }

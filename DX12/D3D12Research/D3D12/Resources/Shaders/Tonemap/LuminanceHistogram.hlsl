@@ -42,7 +42,7 @@ void CSMain(uint groupIndex : SV_GroupIndex, uint3 threadId : SV_DispatchThreadI
 
     if (threadId.x < cWidth && threadId.y < cHeight)
     {
-        float3 hdrColor = tHDRTexture.Load(uint3(threadId.xy, 0)).rgb;
+        float3 hdrColor = tHDRTexture.Load(int3(threadId.xy, 0)).rgb;
         uint binIndex = HDRToHistogramBin(hdrColor);
         InterlockedAdd(HistogramShared[binIndex], 1);
     }

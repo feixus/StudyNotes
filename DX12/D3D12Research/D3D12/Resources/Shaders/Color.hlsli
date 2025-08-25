@@ -31,7 +31,7 @@ float3 xyY_to_XYZ(float3 xyY)
     float3 xyz;
     xyz.x = xyY.x * xyY.z / xyY.y;
     xyz.y = xyY.z;
-    xyz.z = (1 - xyY.z - xyY.y) * xyY.z / xyY.y;
+    xyz.z = (1 - xyY.x - xyY.y) * xyY.z / xyY.y;
     return xyz;
 }
 

@@ -44,20 +44,25 @@ void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 #endif
 
     float exposure = tAverageLuminance[2];
-    //value *= exposure;
+    value *= exposure;
 
     switch(cTonemapper)
     {
     case TONEMAP_REINHARD:
         value = Reinhard(value);
+        break;
     case TONEMAP_REINHARD_EXTENDED:
         value = ReinhardExtended(value, cWhitePoint);
+        break;
     case TONEMAP_ACES_FAST:
         value = ACES_Fast(value);
+        break;
     case TONEMAP_UNREAL3:
         value = Unreal3(value);
+        break;
     case TONEMAP_UNCHARTED2:
         value = Uncharted2(value);
+        break;
     }
 
 #if TONEMAP_LUMINANCE

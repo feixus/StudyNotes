@@ -47,16 +47,16 @@ float g_MinLogLuminance = -10.0f;
 float g_MaxLogLuminance = 20.0f;
 float g_Tau = 2;
 uint32_t g_ToneMapper = 2;
-bool g_DrawHistogram = true;
+bool g_DrawHistogram = false;
 
-bool g_ShowSDSM = true;
+bool g_ShowSDSM = false;
 bool g_StabilizeCascases = true;
 float g_PSSMFactor = 1.0f;
 
 bool g_ShowRaytraced = false;
 bool g_VisualizeLights = false;
 
-float g_SunInclination = 0.579f;
+float g_SunInclination = 0.2f;
 float g_SunOrientation = -3.055f;
 float g_SunTemperature = 5000.0f;
 
@@ -97,7 +97,7 @@ void Graphics::Update()
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
-	D3D::PixCaptureScope pixScope;
+	//D3D::PixCaptureScope pixScope;
 	PROFILE_BEGIN("UpdateGameState");
 
 	m_pCamera->Update();
@@ -122,17 +122,21 @@ void Graphics::Update()
 		}
 	}
 
+	if (Input::Instance().IsKeyPressed('U'))
+	{
+		g_EnableUI = !g_EnableUI;
+	}
+
 	// shadow map partitioning
 	//////////////////////////////////
 
 	constexpr uint32_t MAX_CASCADES = 4;
 
-	ShadowData lightData;
-	std::array<float, MAX_CASCADES> cascadeSplits;
 	m_ShadowCasters = 0;
-	
 	float minPoint = 0;
 	float maxPoint = 1;
+	ShadowData lightData;
+	std::array<float, MAX_CASCADES> cascadeSplits;
 
 	if (g_ShowSDSM)
 	{
@@ -145,7 +149,7 @@ void Graphics::Update()
 
 	float nearPlane = m_pCamera->GetFar();
 	float farPlane = m_pCamera->GetNear();
-	float clipPlaneRange = abs(farPlane - nearPlane);
+	float clipPlaneRange = farPlane - nearPlane;
 	float minZ = nearPlane + minPoint * clipPlaneRange;
 	float maxZ = nearPlane + maxPoint * clipPlaneRange;
 
@@ -198,7 +202,8 @@ void Graphics::Update()
 		{
 			center += corner;
 		}
-		center /= frustumCorners->Length();
+
+		center /= std::size(frustumCorners);
 
 		Vector3 minExtents(FLT_MAX);
 		Vector3 maxExtents(-FLT_MAX);
@@ -209,8 +214,8 @@ void Graphics::Update()
 			float radius = 0;
 			for (const Vector3& corner : frustumCorners)
 			{
-				float distance = Vector3::DistanceSquared(corner, center);
-				radius = Math::Max(radius, distance);
+				float distS = Vector3::DistanceSquared(corner, center);
+				radius = Math::Max(radius, distS);
 			}
 			radius = std::sqrt(radius);
 			maxExtents  = Vector3(radius);
@@ -234,7 +239,7 @@ void Graphics::Update()
 		// snap projection to shadowmap texels to avoid flickering edges
 		if (g_StabilizeCascases)
 		{
-			float shadowMapSize = m_pShadowMap->GetWidth() * 0.5f;
+			float shadowMapSize = m_pShadowMap->GetHeight() * 0.5f;
 			Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
 			shadowOrigin *= shadowMapSize * 0.5f;
 			Vector4 rounded = XMVectorRound(shadowOrigin);
@@ -249,16 +254,11 @@ void Graphics::Update()
 		
 		lightData.LightViewProjections[i] = lightViewProjection;
 		lightData.CascadeDepths[i] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
-		lightData.ShadowMapOffsets[i] = Vector4((float)(m_ShadowCasters % 2) * 0.5f, (float)(m_ShadowCasters / 2) * 0.5f, 0.5f, 0.5f);
+		lightData.ShadowMapOffsets[i] = Vector4((m_ShadowCasters % 2) * 0.5f, (m_ShadowCasters / 2) * 0.5f, 0.5f, 0.5f);
 		m_ShadowCasters++;
 	}
 
 	PROFILE_END();
-
-	if (Input::Instance().IsKeyPressed('U'))
-	{
-		g_EnableUI = !g_EnableUI;
-	}
 
 	////////////////////////////////
 	// Rendering Begin
@@ -286,7 +286,7 @@ void Graphics::Update()
 			float cosphi = cosf(g_SunInclination * Math::PIDIV2);
 			float sinphi = sinf(g_SunInclination * Math::PIDIV2);
 
-			m_Lights[0].Direction = Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
+			m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
 			m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
 
 			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light));
@@ -1483,7 +1483,7 @@ void Graphics::UpdateImGui()
 
 	ImGui::End();
 
-	static bool showOutputLog = true;
+	static bool showOutputLog = false;
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 	ImGui::SetNextWindowPos(ImVec2(300, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
 	ImGui::SetNextWindowSize(ImVec2(showOutputLog ? (float)(m_WindowWidth - 300) * 0.5f : (float)m_WindowWidth - 250, 250));
@@ -1574,7 +1574,7 @@ void Graphics::UpdateImGui()
 
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &g_SunOrientation, -Math::PI, Math::PI);
-	ImGui::SliderFloat("Sun Inclination", &g_SunInclination, 0, 1);
+	ImGui::SliderFloat("Sun Inclination", &g_SunInclination, 0.001f, 1);
 	ImGui::SliderFloat("Sun Temperature", &g_SunTemperature, 1000, 15000);
 
 	ImGui::Text("Shadows");
