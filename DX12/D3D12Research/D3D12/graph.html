@@ -5,23 +5,28 @@ classDef referencedResource fill:#bef,stroke:#333,stroke-width:2px;
 classDef importedResource fill:#9bd,stroke:#333,stroke-width:2px;
 Pass0[Setup Lights<br/>Refs: 2<br/>Index: 0]:::referencedPass
 Pass1[Depth Prepass<br/>Refs: 2<br/>Index: 1]:::referencedPass
-Pass2[Simulate Particles<br/>Refs: 1<br/>Index: 2]:::referencedPass
-Pass3[SSAO<br/>Refs: 1<br/>Index: 3]:::referencedPass
-Pass4[Blur SSAO<br/>Refs: 1<br/>Index: 4]:::referencedPass
-Pass5[Shadow Mapping<br/>Refs: 1<br/>Index: 5]:::referencedPass
-Pass6[Mark Clusters<br/>Refs: 1<br/>Index: 6]:::referencedPass
-Pass7[Compact Clusters<br/>Refs: 1<br/>Index: 7]:::referencedPass
-Pass8[Update Indirect Arguments<br/>Refs: 1<br/>Index: 8]:::referencedPass
-Pass9[Clustered Light Culling<br/>Refs: 1<br/>Index: 9]:::referencedPass
-Pass10[Base Pass<br/>Refs: 1<br/>Index: 10]:::referencedPass
-Pass11[Draw Particles<br/>Refs: 1<br/>Index: 11]:::referencedPass
-Pass12[Draw Clouds<br/>Refs: 1<br/>Index: 12]:::referencedPass
-Pass13[Sky<br/>Refs: 1<br/>Index: 13]:::referencedPass
-Pass14[Luminance Histogram<br/>Refs: 1<br/>Index: 14]:::referencedPass
-Pass15[Average Luminance<br/>Refs: 1<br/>Index: 15]:::referencedPass
-Pass16[Tonemap<br/>Refs: 1<br/>Index: 16]:::referencedPass
-Pass17[RenderUI<br/>Refs: 1<br/>Index: 17]:::referencedPass
-Pass18[Temp Barriers<br/>Refs: 1<br/>Index: 18]:::referencedPass
+Pass2[Prepare Arguments<br/>Refs: 1<br/>Index: 2]:::referencedPass
+Pass3[Emit<br/>Refs: 1<br/>Index: 3]:::referencedPass
+Pass4[Simulate<br/>Refs: 1<br/>Index: 4]:::referencedPass
+Pass5[Simulate End<br/>Refs: 1<br/>Index: 5]:::referencedPass
+Pass6[SSAO<br/>Refs: 1<br/>Index: 6]:::referencedPass
+Pass7[Blur SSAO<br/>Refs: 1<br/>Index: 7]:::referencedPass
+Pass8[Shadow Mapping<br/>Refs: 1<br/>Index: 8]:::referencedPass
+Pass9[Mark Clusters<br/>Refs: 1<br/>Index: 9]:::referencedPass
+Pass10[Compact Clusters<br/>Refs: 1<br/>Index: 10]:::referencedPass
+Pass11[Update Indirect Arguments<br/>Refs: 1<br/>Index: 11]:::referencedPass
+Pass12[Clustered Light Culling<br/>Refs: 1<br/>Index: 12]:::referencedPass
+Pass13[Base Pass<br/>Refs: 1<br/>Index: 13]:::referencedPass
+Pass14[Render Particles<br/>Refs: 1<br/>Index: 14]:::referencedPass
+Pass15[Compute Worley Noise<br/>Refs: 1<br/>Index: 15]:::referencedPass
+Pass16[Clouds<br/>Refs: 1<br/>Index: 16]:::referencedPass
+Pass17[Blit to Main Render Target<br/>Refs: 1<br/>Index: 17]:::referencedPass
+Pass18[Sky<br/>Refs: 1<br/>Index: 18]:::referencedPass
+Pass19[Luminance Histogram<br/>Refs: 1<br/>Index: 19]:::referencedPass
+Pass20[Average Luminance<br/>Refs: 1<br/>Index: 20]:::referencedPass
+Pass21[Tonemap<br/>Refs: 1<br/>Index: 21]:::referencedPass
+Pass22[RenderUI<br/>Refs: 1<br/>Index: 22]:::referencedPass
+Pass23[Temp Barriers<br/>Refs: 1<br/>Index: 23]:::referencedPass
 Resource0_0([Depth Stencil<br/>Id: 0<br/>Refs: 5]):::importedResource
 Resource1_0([Resolved Depth Stencil<br/>Id: 1<br/>Refs: 0]):::unreferenced
 Resource0_1([Depth Stencil<br/>Id: 0<br/>Refs: 5]):::importedResource
@@ -32,13 +37,13 @@ linkStyle 0 stroke:#f82,stroke-width:2px;
 Pass1 --> Resource0_2
 linkStyle 1 stroke:#f82,stroke-width:2px;
 
-Resource0_2 --> Pass6
+Resource0_2 --> Pass9
 linkStyle 2 stroke:#9c9,stroke-width:2px;
-Resource0_2 --> Pass10
-linkStyle 3 stroke:#9c9,stroke-width:2px;
 Resource0_2 --> Pass13
+linkStyle 3 stroke:#9c9,stroke-width:2px;
+Resource0_2 --> Pass18
 linkStyle 4 stroke:#9c9,stroke-width:2px;
-Resource2_0 --> Pass14
+Resource2_0 --> Pass19
 linkStyle 5 stroke:#9c9,stroke-width:2px;
 
 </div>

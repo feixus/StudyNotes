@@ -10,6 +10,7 @@
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
 
 static const int Resolution = 256;
 static const int MaxPoints = 256;
@@ -66,7 +67,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pWorleyNoiseRS->Finalize("Worley Noise RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 		m_pWorleyNoisePS = std::make_unique<PipelineState>();
-		m_pWorleyNoisePS->SetComputeShader(shader.GetByteCode(), shader.GetByteCodeSize());
+		m_pWorleyNoisePS->SetComputeShader(shader);
 		m_pWorleyNoisePS->SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
 		m_pWorleyNoisePS->Finalize("Worley Noise PS", pGraphics->GetDevice());
 
@@ -86,8 +87,8 @@ void Clouds::Initialize(Graphics *pGraphics)
 		};
 
 		m_pCloudsPS = std::make_unique<PipelineState>();
-		m_pCloudsPS->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pCloudsPS->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pCloudsPS->SetVertexShader(vertexShader);
+		m_pCloudsPS->SetPixelShader(pixelShader);
 		m_pCloudsPS->SetInputLayout(quadIL, std::size(quadIL));
 		m_pCloudsPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		m_pCloudsPS->SetDepthEnable(false);
@@ -123,108 +124,117 @@ void Clouds::Initialize(Graphics *pGraphics)
 	pContext->Execute(true);
 }
 
-void Clouds::Render(CommandContext& context, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera)
+void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera)
 {
 	if (pSceneTexture->GetWidth() != m_pIntermediateColor->GetWidth() || pSceneTexture->GetHeight() != m_pIntermediateColor->GetHeight())
 	{
 		m_pIntermediateColor->Create(pSceneTexture->GetDesc());
 	}
 
+	RG_GRAPH_SCOPE("Clouds", graph);
+
 	if (m_UpdateNoise)
 	{
 		m_UpdateNoise = false;
 
-		GPU_PROFILE_SCOPE("Compute Worley Noise", &context);
+		RGPassBuilder worleyNoisePass = graph.AddPass("Compute Worley Noise");
+		worleyNoisePass.Bind([=](CommandContext& context, const RGPassResource& passResources)
+			{
+				context.SetPipelineState(m_pWorleyNoisePS.get());
+				context.SetComputeRootSignature(m_pWorleyNoiseRS.get());
 
-		context.SetPipelineState(m_pWorleyNoisePS.get());
-		context.SetComputeRootSignature(m_pWorleyNoiseRS.get());
+				struct
+				{
+					Vector4 WorleyNoisePosition[MaxPoints];
+					uint32_t PointsPerRow[4]{};
+					uint32_t Resolution{0};
+				} Constants;
 
-		struct
-		{
-			Vector4 WorleyNoisePosition[MaxPoints];
-			uint32_t PointsPerRow[4]{};
-			uint32_t Resolution{0};
-		} Constants;
+				for (int i = 0; i < MaxPoints; i++)
+				{
+					Constants.WorleyNoisePosition[i].x = Math::RandomRange(0.f, 1.f);
+					Constants.WorleyNoisePosition[i].y = Math::RandomRange(0.f, 1.f);
+					Constants.WorleyNoisePosition[i].z = Math::RandomRange(0.f, 1.f);
+				}
 
-		for (int i = 0; i < MaxPoints; i++)
-		{
-			Constants.WorleyNoisePosition[i].x = Math::RandomRange(0.f, 1.f);
-			Constants.WorleyNoisePosition[i].y = Math::RandomRange(0.f, 1.f);
-			Constants.WorleyNoisePosition[i].z = Math::RandomRange(0.f, 1.f);
-		}
+				Constants.Resolution = Resolution;
+				Constants.PointsPerRow[0] = 4;
+				Constants.PointsPerRow[1] = 8;
+				Constants.PointsPerRow[2] = 10;
+				Constants.PointsPerRow[3] = 12;
 
-		Constants.Resolution = Resolution;
-		Constants.PointsPerRow[0] = 4;
-		Constants.PointsPerRow[1] = 8;
-		Constants.PointsPerRow[2] = 10;
-		Constants.PointsPerRow[3] = 12;
+				context.InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.FlushResourceBarriers();
 
-		context.InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.FlushResourceBarriers();
-
-		context.SetComputeDynamicConstantBufferView(0, &Constants, sizeof(Constants));
-		context.SetDynamicDescriptor(1, 0, m_pWorleyNoiseTexture->GetUAV());
+				context.SetComputeDynamicConstantBufferView(0, &Constants, sizeof(Constants));
+				context.SetDynamicDescriptor(1, 0, m_pWorleyNoiseTexture->GetUAV());
 		
-		context.Dispatch(Resolution / 8, Resolution / 8, Resolution / 8);
+				context.Dispatch(Resolution / 8, Resolution / 8, Resolution / 8);
+			});
 	}
 
 	{
-		GPU_PROFILE_SCOPE("Clouds", &context);
+		RGPassBuilder cloudsPass = graph.AddPass("Clouds");
+		cloudsPass.Bind([=](CommandContext& context, const RGPassResource& passResources)
+			{
+				context.InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.FlushResourceBarriers();
 
-		context.InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		context.InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-		context.FlushResourceBarriers();
+				context.SetViewport(FloatRect(0, 0, (float)pSceneTexture->GetWidth(), (float)pSceneTexture->GetHeight()));
+				context.SetScissorRect(FloatRect(0, 0, (float)pSceneTexture->GetWidth(), (float)pSceneTexture->GetHeight()));
 
-		context.SetViewport(FloatRect(0, 0, (float)pSceneTexture->GetWidth(), (float)pSceneTexture->GetHeight()));
-		context.SetScissorRect(FloatRect(0, 0, (float)pSceneTexture->GetWidth(), (float)pSceneTexture->GetHeight()));
+				context.BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, nullptr, RenderPassAccess::NoAccess));
 
-		context.BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, nullptr, RenderPassAccess::NoAccess));
+				context.SetPipelineState(m_pCloudsPS.get());
+				context.SetGraphicsRootSignature(m_pCloudsRS.get());
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		context.SetPipelineState(m_pCloudsPS.get());
-		context.SetGraphicsRootSignature(m_pCloudsRS.get());
-		context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				float fov = pCamera->GetFoV();
+				float aspect = (float)pSceneTexture->GetWidth() / (float)pSceneTexture->GetHeight();
+				float halfFov = fov * 0.5f;
+				float tanFov = tan(halfFov);
+				Vector3 toRight = Vector3::Right * tanFov * aspect;  // right vector to frustum edge
+				Vector3 toTop = Vector3::Up * tanFov;				// top vector to frustum edge
 
-		float fov = pCamera->GetFoV();
-		float aspect = (float)pSceneTexture->GetWidth() / (float)pSceneTexture->GetHeight();
-		float halfFov = fov * 0.5f;
-		float tanFov = tan(halfFov);
-		Vector3 toRight = Vector3::Right * tanFov * aspect;  // right vector to frustum edge
-		Vector3 toTop = Vector3::Up * tanFov;				// top vector to frustum edge
+				sCloudParameters.FrustumCorners[0] = Vector4(-Vector3::Forward - toRight + toTop);
+				sCloudParameters.FrustumCorners[1] = Vector4(-Vector3::Forward + toRight + toTop);
+				sCloudParameters.FrustumCorners[2] = Vector4(-Vector3::Forward + toRight - toTop);
+				sCloudParameters.FrustumCorners[3] = Vector4(-Vector3::Forward - toRight - toTop);
 
-		sCloudParameters.FrustumCorners[0] = Vector4(-Vector3::Forward - toRight + toTop);
-		sCloudParameters.FrustumCorners[1] = Vector4(-Vector3::Forward + toRight + toTop);
-		sCloudParameters.FrustumCorners[2] = Vector4(-Vector3::Forward + toRight - toTop);
-		sCloudParameters.FrustumCorners[3] = Vector4(-Vector3::Forward - toRight - toTop);
+				sCloudParameters.ViewInverse = pCamera->GetViewInverse();
+				sCloudParameters.NearPlane = pCamera->GetNear();
+				sCloudParameters.FarPlane = pCamera->GetFar();
+				sCloudParameters.MinExtents = Vector4(Vector3(m_CloudBounds.Center) - Vector3(m_CloudBounds.Extents));
+				sCloudParameters.MaxExtents = Vector4(Vector3(m_CloudBounds.Center) + Vector3(m_CloudBounds.Extents));
 
-		sCloudParameters.ViewInverse = pCamera->GetViewInverse();
-		sCloudParameters.NearPlane = pCamera->GetNear();
-		sCloudParameters.FarPlane = pCamera->GetFar();
-		sCloudParameters.MinExtents = Vector4(Vector3(m_CloudBounds.Center) - Vector3(m_CloudBounds.Extents));
-		sCloudParameters.MaxExtents = Vector4(Vector3(m_CloudBounds.Center) + Vector3(m_CloudBounds.Extents));
+				context.SetDynamicConstantBufferView(0, &sCloudParameters, sizeof(sCloudParameters));
 
-		context.SetDynamicConstantBufferView(0, &sCloudParameters, sizeof(sCloudParameters));
+				context.SetDynamicDescriptor(1, 0, pSceneTexture->GetSRV());
+				context.SetDynamicDescriptor(1, 1, pDepthTexture->GetSRV());
+				context.SetDynamicDescriptor(1, 2, m_pWorleyNoiseTexture->GetSRV());
 
-		context.SetDynamicDescriptor(1, 0, pSceneTexture->GetSRV());
-		context.SetDynamicDescriptor(1, 1, pDepthTexture->GetSRV());
-		context.SetDynamicDescriptor(1, 2, m_pWorleyNoiseTexture->GetSRV());
+				context.SetVertexBuffer(m_pQuadVertexBuffer.get());
+				context.Draw(0, 6);
 
-		context.SetVertexBuffer(m_pQuadVertexBuffer.get());
-		context.Draw(0, 6);
-	
-		context.EndRenderPass();
+				context.EndRenderPass();
+			});
 	}
 
 	{
-		GPU_PROFILE_SCOPE("Blit to Main Render Target", &context);
-		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_COPY_DEST);
-		context.InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-		context.FlushResourceBarriers();
+		RGPassBuilder blitToMainPass = graph.AddPass("Blit to Main Render Target");
+		blitToMainPass.Bind([=](CommandContext& context, const RGPassResource& passResources)
+			{
+				context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_COPY_DEST);
+				context.InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+				context.FlushResourceBarriers();
 
-		context.CopyTexture(m_pIntermediateColor.get(), pSceneTexture);
+				context.CopyTexture(m_pIntermediateColor.get(), pSceneTexture);
 
-		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
-		context.FlushResourceBarriers();
+				context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.FlushResourceBarriers();
+			});
 	}
 }

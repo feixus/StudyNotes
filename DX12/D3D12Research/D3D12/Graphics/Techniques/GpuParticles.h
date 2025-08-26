@@ -18,8 +18,8 @@ public:
     GpuParticles(Graphics* pGraphics);
     ~GpuParticles() = default;
 
-    void Simulate(CommandContext& context, GraphicsTexture* pSourceDepth, const Camera& camera);
-    void Render(CommandContext& context, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera);
+    void Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const Camera& camera);
+    void Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera);
 
 private:
     void Initialize(Graphics* pGraphics);

@@ -35,6 +35,8 @@ void TiledForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 
 void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inputResource)
 {
+    RG_GRAPH_SCOPE("Tiled Lighting", graph);
+
 	// 3. light culling
     //  - compute shader to buckets lights in tiles depending on their screen position
     //  - require a depth buffer
@@ -192,7 +194,7 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 
     m_pComputeLightCullPipeline = std::make_unique<PipelineState>();
     m_pComputeLightCullPipeline->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
-    m_pComputeLightCullPipeline->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+    m_pComputeLightCullPipeline->SetComputeShader(computeShader);
     m_pComputeLightCullPipeline->Finalize("Tiled Light Culling PSO", pGraphics->GetDevice());
 
     m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
@@ -227,8 +229,8 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 			m_pDiffusePSO = std::make_unique<PipelineState>();
 			m_pDiffusePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 			m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
-			m_pDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+			m_pDiffusePSO->SetVertexShader(vertexShader);
+			m_pDiffusePSO->SetPixelShader(pixelShader);
 			m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 			m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			m_pDiffusePSO->SetDepthWrite(false);
@@ -241,7 +243,7 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 
             // debug light density
             m_pVisualizeDensityPSO = std::make_unique<PipelineState>(*m_pDiffusePSO.get());
-            m_pVisualizeDensityPSO->SetPixelShader(debugPixelShader.GetByteCode(), debugPixelShader.GetByteCodeSize());
+            m_pVisualizeDensityPSO->SetPixelShader(debugPixelShader);
             m_pVisualizeDensityPSO->Finalize("Debug Light Density PSO", pGraphics->GetDevice());
 		}
 	}

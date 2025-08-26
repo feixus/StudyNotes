@@ -3,6 +3,8 @@
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "RenderGraphDefinition.h"
 
+#define RG_GRAPH_SCOPE(name, graph) RGGraphScope rgScope_##__COUNTER__(name, graph)
+
 class Graphics;
 class CommandContext;
 class RGResourceAllocator;
@@ -77,9 +79,6 @@ class RGPassBuilder
 public:
     RGPassBuilder(RGGraph& renderGraph, RGPass& pass)
         : m_RenderGraph(renderGraph), m_Pass(pass) {}
-
-    RGPassBuilder(const RGPassBuilder& other) = delete;
-    RGPassBuilder& operator=(const RGPassBuilder& other) = delete;
 
     template<typename ExecuteCallback>
     void Bind(ExecuteCallback&& callback);
@@ -269,6 +268,9 @@ public:
         return node.m_pResource;
     }
 
+    void PushEvent(const char* pName);
+    void PopEvent();
+
 private:
     RGPass& AddPass(RGPass* pPass);
     void ExecutePass(RGPass* pPass, CommandContext& renderContext);
@@ -279,11 +281,24 @@ private:
     void ConditionallyCreateResource(RGResource* pResource);
     void ConditionallyReleaseResource(RGResource* pResource);
 
+    void ProcessEvents(CommandContext& context, uint32_t passIndex, bool begin);
+
     struct ResourceAlias
     {
         RGResourceHandle From;
         RGResourceHandle To;
     };
+
+    struct  ProfileEvent
+    {
+        const char* pName;
+        bool Begin;
+        uint32_t PassIndex;
+    };
+
+    uint32_t m_CurrentEvent{0};
+    std::vector<ProfileEvent> m_Events;
+    int m_EventStackSize{0};
 
     Graphics* m_pGraphics;
     Allocator m_Allocator;
@@ -295,6 +310,23 @@ private:
     std::vector<RGPass*> m_RenderPasses;
     std::vector<RGResource*> m_Resources;
     std::vector<RGNode> m_RGNodes;
+};
+
+class RGGraphScope
+{
+public:
+    RGGraphScope(const char* pName, RGGraph& graph) : m_Graph(graph)
+    {
+        m_Graph.PushEvent(pName);
+    }
+
+    ~RGGraphScope()
+    {
+        m_Graph.PopEvent();
+    }
+
+private:
+    RGGraph& m_Graph;
 };
 
 template<typename ExecuteCallback>

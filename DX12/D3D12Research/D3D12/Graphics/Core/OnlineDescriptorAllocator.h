@@ -41,6 +41,7 @@ private:
 
     inline static std::vector<ComPtr<ID3D12DescriptorHeap>> m_DescriptorHeaps;
     inline static std::array<std::queue<std::pair<uint64_t, ID3D12DescriptorHeap*>>, 2> m_FreeDescriptors;
+    inline static std::mutex m_HeapAllocationMutex;
 
     uint32_t GetRequiredSpace();
     ID3D12DescriptorHeap* RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type);

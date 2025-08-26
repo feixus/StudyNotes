@@ -142,8 +142,8 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineStateObject->SetInputLayout(elementDesc, (uint32_t)std::size(elementDesc));
 	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
-	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+	m_pPipelineStateObject->SetVertexShader(vertexShader);
+	m_pPipelineStateObject->SetPixelShader(pixelShader);
 	m_pPipelineStateObject->Finalize("ImGui Pipeline", pGraphics->GetDevice());
 }
 

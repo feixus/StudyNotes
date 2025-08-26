@@ -174,9 +174,12 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 void OnlineDescriptorAllocator::ReleaseUsedHeaps(uint64_t fenceValue)
 {
     ReleaseHeap();
-    for (ID3D12DescriptorHeap* pHeap : m_UsedDescriptorHeaps)
     {
-        m_FreeDescriptors[m_Type].emplace(fenceValue, pHeap);
+        std::scoped_lock lock(m_HeapAllocationMutex);
+        for (ID3D12DescriptorHeap* pHeap : m_UsedDescriptorHeaps)
+        {
+            m_FreeDescriptors[m_Type].emplace(fenceValue, pHeap);
+        }
     }
     m_UsedDescriptorHeaps.clear();
 }
@@ -197,6 +200,8 @@ uint32_t OnlineDescriptorAllocator::GetRequiredSpace()
 
 ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
+    std::scoped_lock lock(m_HeapAllocationMutex);
+
     if (m_FreeDescriptors[m_Type].size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors[m_Type].front().first))
     {
         ID3D12DescriptorHeap* pHeap = m_FreeDescriptors[m_Type].front().second;

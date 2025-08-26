@@ -365,11 +365,7 @@ void Graphics::Update()
 			});
 	}
 
-	RGPassBuilder simulateParticles = graph.AddPass("Simulate Particles");
-	simulateParticles.Bind([=](CommandContext& context, const RGPassResource& passResources)
-		{
-			m_pGpuParticles->Simulate(context, GetResolveDepthStencil(), *m_pCamera);
-		});
+	m_pGpuParticles->Simulate(graph, GetResolveDepthStencil(), *m_pCamera);
 
 	if (g_ShowRaytraced)
 	{
@@ -533,17 +529,8 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
-	RGPassBuilder drawParticles = graph.AddPass("Draw Particles");
-	drawParticles.Bind([=](CommandContext& context, const RGPassResource& passResources)
-		{
-			m_pGpuParticles->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
-		});
-
-	RGPassBuilder drawClouds = graph.AddPass("Draw Clouds");
-	drawClouds.Bind([=](CommandContext& context, const RGPassResource& passResources)
-		{
-			m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera());
-		});
+	m_pGpuParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
+	m_pClouds->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera());
 
 	RGPassBuilder sky = graph.AddPass("Sky");
 	sceneData.DepthStencil = sky.Read(sceneData.DepthStencil);
@@ -1187,7 +1174,7 @@ void Graphics::InitializePipelines()
 		m_pShadowPSO = std::make_unique<PipelineState>();
 		m_pShadowPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 		m_pShadowPSO->SetRootSignature(m_pShadowRS->GetRootSignature());
-		m_pShadowPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pShadowPSO->SetVertexShader(vertexShader);
 		m_pShadowPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
 		m_pShadowPSO->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pShadowPSO->SetDepthBias(-1, -5.f, -4.f);
@@ -1198,7 +1185,7 @@ void Graphics::InitializePipelines()
 		Shader alphaPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pShadowAlphaPSO = std::make_unique<PipelineState>(*m_pShadowPSO);
-		m_pShadowAlphaPSO->SetPixelShader(alphaPixelShader.GetByteCode(), alphaPixelShader.GetByteCodeSize());
+		m_pShadowAlphaPSO->SetPixelShader(alphaPixelShader);
 		m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<GraphicsTexture>(this, "Shadow Map");
@@ -1218,7 +1205,7 @@ void Graphics::InitializePipelines()
 		m_pDepthPrepassPSO = std::make_unique<PipelineState>();
 		m_pDepthPrepassPSO->SetInputLayout(depthOnlyInputElements, std::size(depthOnlyInputElements));
 		m_pDepthPrepassPSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
-		m_pDepthPrepassPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pDepthPrepassPSO->SetVertexShader(vertexShader);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount);
 		m_pDepthPrepassPSO->Finalize("Depth Prepass PSO", m_pDevice.Get());
@@ -1234,7 +1221,7 @@ void Graphics::InitializePipelines()
 
 		// pipeline state
 		m_pLuminanceHistogramPSO = std::make_unique<PipelineState>();
-		m_pLuminanceHistogramPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pLuminanceHistogramPSO->SetComputeShader(computeShader);
 		m_pLuminanceHistogramPSO->SetRootSignature(m_pLuminanceHistogramRS->GetRootSignature());
 		m_pLuminanceHistogramPSO->Finalize("Luminance Histogram PSO", m_pDevice.Get());
 
@@ -1251,7 +1238,7 @@ void Graphics::InitializePipelines()
 		m_pDrawHistogramRS->FinalizeFromShader("Draw Histogram RS", computeShader, m_pDevice.Get());
 
 		m_pDrawHistogramPSO = std::make_unique<PipelineState>();
-		m_pDrawHistogramPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pDrawHistogramPSO->SetComputeShader(computeShader);
 		m_pDrawHistogramPSO->SetRootSignature(m_pDrawHistogramRS->GetRootSignature());
 		m_pDrawHistogramPSO->Finalize("Draw Histogram PSO", m_pDevice.Get());
 	}
@@ -1266,7 +1253,7 @@ void Graphics::InitializePipelines()
 
 		// pipeline state
 		m_pAverageLuminancePSO = std::make_unique<PipelineState>();
-		m_pAverageLuminancePSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pAverageLuminancePSO->SetComputeShader(computeShader);
 		m_pAverageLuminancePSO->SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
 		m_pAverageLuminancePSO->Finalize("Average Luminance PSO", m_pDevice.Get());
 	}
@@ -1282,7 +1269,7 @@ void Graphics::InitializePipelines()
 		// pipeline state
 		m_pToneMapPSO = std::make_unique<PipelineState>();
 		m_pToneMapPSO->SetRootSignature(m_pToneMapRS->GetRootSignature());
-		m_pToneMapPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pToneMapPSO->SetComputeShader(computeShader);
 		m_pToneMapPSO->Finalize("Tonemapping PSO", m_pDevice.Get());
 	}
 
@@ -1296,7 +1283,7 @@ void Graphics::InitializePipelines()
 		m_pResolveDepthRS->FinalizeFromShader("Resolve Depth RS", computeShader, m_pDevice.Get());
 
 		m_pResolveDepthPSO = std::make_unique<PipelineState>();
-		m_pResolveDepthPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pResolveDepthPSO->SetComputeShader(computeShader);
 		m_pResolveDepthPSO->SetRootSignature(m_pResolveDepthRS->GetRootSignature());
 		m_pResolveDepthPSO->Finalize("Resolve Depth Pipeline", m_pDevice.Get());
 	}
@@ -1311,16 +1298,16 @@ void Graphics::InitializePipelines()
 		m_pReduceDepthRS->FinalizeFromShader("Reduce Depth RS", reduceShader, m_pDevice.Get());
 
 		m_pPrepareReduceDepthPSO = std::make_unique<PipelineState>();
-		m_pPrepareReduceDepthPSO->SetComputeShader(prepareReduceShader.GetByteCode(), prepareReduceShader.GetByteCodeSize());
+		m_pPrepareReduceDepthPSO->SetComputeShader(prepareReduceShader);
 		m_pPrepareReduceDepthPSO->SetRootSignature(m_pReduceDepthRS->GetRootSignature());
 		m_pPrepareReduceDepthPSO->Finalize("Prepare Reduce Depth PSO", m_pDevice.Get());
 
 		m_pPrepareReduceDepthMsaaPSO = std::make_unique<PipelineState>(*m_pPrepareReduceDepthPSO);
-		m_pPrepareReduceDepthMsaaPSO->SetComputeShader(prepareReduceShaderMSAA.GetByteCode(), prepareReduceShaderMSAA.GetByteCodeSize());
+		m_pPrepareReduceDepthMsaaPSO->SetComputeShader(prepareReduceShaderMSAA);
 		m_pPrepareReduceDepthMsaaPSO->Finalize("Prepare Reduce Depth MSAA PSO", m_pDevice.Get());
 
 		m_pReduceDepthPSO = std::make_unique<PipelineState>(*m_pPrepareReduceDepthPSO);
-		m_pReduceDepthPSO->SetComputeShader(reduceShader.GetByteCode(), reduceShader.GetByteCodeSize());
+		m_pReduceDepthPSO->SetComputeShader(reduceShader);
 		m_pReduceDepthPSO->Finalize("Reduce Depth PSO", m_pDevice.Get());
 	}
 
@@ -1332,7 +1319,7 @@ void Graphics::InitializePipelines()
 		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips RS", computeShader, m_pDevice.Get());
 
 		m_pGenerateMipsPSO = std::make_unique<PipelineState>();
-		m_pGenerateMipsPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pGenerateMipsPSO->SetComputeShader(computeShader);
 		m_pGenerateMipsPSO->SetRootSignature(m_pGenerateMipsRS->GetRootSignature());
 		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
 	}
@@ -1350,8 +1337,8 @@ void Graphics::InitializePipelines()
 		m_pSkyboxPSO = std::make_unique<PipelineState>();
 		m_pSkyboxPSO->SetInputLayout(nullptr, 0);
 		m_pSkyboxPSO->SetRootSignature(m_pSkyboxRS->GetRootSignature());
-		m_pSkyboxPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pSkyboxPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pSkyboxPSO->SetVertexShader(vertexShader);
+		m_pSkyboxPSO->SetPixelShader(pixelShader);
 		m_pSkyboxPSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount);
 		m_pSkyboxPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pSkyboxPSO->Finalize("Skybox", m_pDevice.Get());
@@ -1686,12 +1673,13 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 	int typeIndex = type;
 
 	std::scoped_lock lockGuard(m_ContextAllocationMutex);
+
+	CommandContext* pCommandContext = nullptr;
 	if (m_FreeCommandContexts[typeIndex].size() > 0)
 	{
-		CommandContext* pCommandContext = m_FreeCommandContexts[typeIndex].front();
+		pCommandContext = m_FreeCommandContexts[typeIndex].front();
 		m_FreeCommandContexts[typeIndex].pop();
 		pCommandContext->Reset();
-		return pCommandContext;
 	}
 	else
 	{
@@ -1699,11 +1687,11 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
 		m_CommandLists.push_back(std::move(pCommandList));
-
 		m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
-
-		return m_CommandListPool[typeIndex].back().get();
+		pCommandContext = m_CommandListPool[typeIndex].back().get();
 	}
+
+	return pCommandContext;
 }
 
 void Graphics::WaitForFence(uint64_t fenceValue)

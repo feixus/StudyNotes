@@ -195,9 +195,9 @@ public:
 	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
 	void SetDynamicDescriptor(int rootIndex, int offset, ShaderResourceView* pSrv);
 	void SetDynamicDescriptor(int rootIndex, int offset, UnorderedAccessView* pUav);
-	void SetDynamicDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
+	void SetDynamicDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
 	void SetDynamicSamplerDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
-	void SetDynamicSamplerDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
+	void SetDynamicSamplerDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
 
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
 

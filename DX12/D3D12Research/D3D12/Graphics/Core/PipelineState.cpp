@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "PipelineState.h"
+#include "Shader.h"
 
 PipelineState::PipelineState()
 {
@@ -211,62 +212,62 @@ void PipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)
 	m_Desc.pRootSignature = pRootSignature;
 }
 
-void PipelineState::SetVertexShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetVertexShader(const Shader& shader)
 {
     m_Type = PipelineStateType::Graphics;
-    m_Desc.VS = { pByteCode, byteCodeLength };
+    m_Desc.VS = { shader.GetByteCode(), shader.GetByteCodeSize() };
 }
 
-void PipelineState::SetPixelShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetPixelShader(const Shader& shader)
 {
-	m_Desc.PS = { pByteCode, byteCodeLength };
+	m_Desc.PS = { shader.GetByteCode(), shader.GetByteCodeSize() };
 }
 
-void PipelineState::SetHullShader(const void* pByteCode, uint32_t byteCodeLength)
-{
-	m_Type = PipelineStateType::Graphics;
-	m_Desc.HS = { pByteCode, byteCodeLength };
-}
-
-void PipelineState::SetDomainShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetHullShader(const Shader& shader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.DS = { pByteCode, byteCodeLength };
+	m_Desc.HS = { shader.GetByteCode(), shader.GetByteCodeSize() };
 }
 
-void PipelineState::SetGeometryShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetDomainShader(const Shader& shader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.GS = { pByteCode, byteCodeLength };
+	m_Desc.DS = { shader.GetByteCode(), shader.GetByteCodeSize() };
 }
 
-void PipelineState::SetComputeShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetGeometryShader(const Shader& shader)
+{
+	m_Type = PipelineStateType::Graphics;
+	m_Desc.GS = { shader.GetByteCode(), shader.GetByteCodeSize() };
+}
+
+void PipelineState::SetComputeShader(const Shader& shader)
 {
 	m_Type = PipelineStateType::Compute;
-	m_Desc.CS = { pByteCode, byteCodeLength };
+	m_Desc.CS = { shader.GetByteCode(), shader.GetByteCodeSize() };
 }
 
-void PipelineState::SetMeshShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetMeshShader(const Shader& shader)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Desc.MS = { pByteCode, byteCodeLength };
+	m_Desc.MS = { shader.GetByteCode(), shader.GetByteCodeSize() };
 }
 
-void PipelineState::SetAmplificationShader(const void* pByteCode, uint32_t byteCodeLength)
+void PipelineState::SetAmplificationShader(const Shader& shader)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Desc.AS = { pByteCode, byteCodeLength };
+	m_Desc.AS = { shader.GetByteCode(), shader.GetByteCodeSize() };
 }
 
 StateObjectDesc::StateObjectDesc(D3D12_STATE_OBJECT_TYPE type)
     : m_ScratchAllocator(0xFFFF), m_StateObjectAllocator(0xFF), m_Type(type)
 {}
 
-uint32_t StateObjectDesc::AddLibrary(const void* pByteCode, uint32_t byteCodeLength, const std::vector<std::string>& exports)
+uint32_t StateObjectDesc::AddLibrary(const ShaderLibrary& shader, const std::vector<std::string>& exports)
 {
     D3D12_DXIL_LIBRARY_DESC* pDesc = m_ScratchAllocator.Allocate<D3D12_DXIL_LIBRARY_DESC>();
-    pDesc->DXILLibrary.pShaderBytecode = pByteCode;
-    pDesc->DXILLibrary.BytecodeLength = byteCodeLength;
+    pDesc->DXILLibrary.pShaderBytecode = shader.GetByteCode();
+    pDesc->DXILLibrary.BytecodeLength = shader.GetByteCodeSize();
     if (exports.size())
     {
         D3D12_EXPORT_DESC* pExports = m_ScratchAllocator.Allocate<D3D12_EXPORT_DESC>((uint32_t)exports.size());

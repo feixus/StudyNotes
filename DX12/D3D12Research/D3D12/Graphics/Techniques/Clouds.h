@@ -7,13 +7,14 @@ class Buffer;
 class Graphics;
 class Camera;
 class CommandContext;
+class RGGraph;
 
 class Clouds
 {
 public:
 	Clouds(Graphics* pGraphics);
 	void Initialize(Graphics* pGraphics);
-	void Render(CommandContext& context, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera);
+	void Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera);
 
 private:
 	std::unique_ptr<PipelineState> m_pWorleyNoisePS;

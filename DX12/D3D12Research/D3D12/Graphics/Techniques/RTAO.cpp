@@ -39,7 +39,9 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 	ImGui::SliderInt("Samples", &g_AoSamples, 4, 64);
 	ImGui::End();
 
-    RGPassBuilder raytracing = graph.AddPass("Raytracing");
+    RG_GRAPH_SCOPE("Ambient Occlusion", graph);
+
+    RGPassBuilder raytracing = graph.AddPass("RTAO");
     raytracing.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
             context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -233,7 +235,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
         ShaderLibrary shaderLibrary("RTAO.hlsl");
 
         StateObjectDesc stateObjectDesc;
-        stateObjectDesc.AddLibrary(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize(), { "RayGen", "ClosestHit", "Miss"});
+        stateObjectDesc.AddLibrary(shaderLibrary, { "RayGen", "ClosestHit", "Miss"});
         stateObjectDesc.AddHitGroup("HitGroup", "ClosestHit");
 		stateObjectDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
 		stateObjectDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());

@@ -78,6 +78,30 @@ void RGGraph::DestroyData()
     m_Aliases.clear();
 }
 
+void RGGraph::PushEvent(const char* pName)
+{
+    ProfileEvent e = {
+        .pName = pName,
+        .Begin = true,
+        .PassIndex = (uint32_t)m_RenderPasses.size()
+    };
+    m_Events.push_back(e);
+    m_EventStackSize++;
+}
+
+void RGGraph::PopEvent()
+{
+    RG_ASSERT(m_RenderPasses.size() > 0, "Can't pop event before a RenderPass has been added");
+    RG_ASSERT(m_EventStackSize > 0, "No Event to Pop");
+    ProfileEvent e = {
+        .pName = nullptr,
+        .Begin = false,
+        .PassIndex = (uint32_t)m_RenderPasses.size() - 1
+    };
+    m_Events.push_back(e);
+    m_EventStackSize--;
+}
+
 void RGGraph::Compile()
 {
     // process all the resource aliases
@@ -204,19 +228,28 @@ int64_t RGGraph::Execute()
         return m_LastFenceValue;
     }
 
+    RG_ASSERT(m_EventStackSize == 0, "Missing PopEvent");
+
     int exlFrequency = 4;
     CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-    for (size_t i = 0; i < m_RenderPasses.size(); i++)
+    for (int passIdx = 0; passIdx < m_RenderPasses.size(); passIdx++)
     {
-        if (m_RenderPasses[i]->m_References > 0)
-        {
-            ExecutePass(m_RenderPasses[i], *pContext);
-        }
+        RGPass* pPass = m_RenderPasses[passIdx];
 
-        if (i % exlFrequency == 0 || i == m_RenderPasses.size() - 1)
+        ProcessEvents(*pContext, passIdx, true);
+        if (m_RenderPasses[passIdx]->m_References > 0)
+        {
+            ExecutePass(m_RenderPasses[passIdx], *pContext);
+        }
+        ProcessEvents(*pContext, passIdx, false);
+
+        if (passIdx % exlFrequency == 0 || passIdx == m_RenderPasses.size() - 1)
         {
             m_LastFenceValue = pContext->Execute(false);
-			pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+            if (passIdx != m_RenderPasses.size() - 1)
+            {
+                pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+            }
 		}
     }
 
@@ -323,6 +356,24 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource)
             break;
         default:
             RG_ASSERT(false, "Invalid resource type");
+        }
+    }
+}
+
+void RGGraph::ProcessEvents(CommandContext& context, uint32_t passIdx, bool begin)
+{
+    for (uint32_t eventIdx = m_CurrentEvent; eventIdx < m_Events.size() && m_Events[eventIdx].PassIndex == passIdx; ++eventIdx)
+    {
+        ProfileEvent e = m_Events[eventIdx];
+        if (e.Begin && begin)
+        {
+            m_CurrentEvent++;
+            GPU_PROFILE_BEGIN(e.pName, &context);
+        }
+        else if (!e.Begin && !begin)
+        {
+            m_CurrentEvent++;
+            GPU_PROFILE_END(&context);
         }
     }
 }

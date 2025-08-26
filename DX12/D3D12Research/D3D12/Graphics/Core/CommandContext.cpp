@@ -667,7 +667,7 @@ void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, UnorderedAc
 	SetDynamicDescriptor(rootIndex, offset, pUav->GetDescriptor());
 }
 
-void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
@@ -677,7 +677,7 @@ void CommandContext::SetDynamicSamplerDescriptor(int rootIndex, int offset, D3D1
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
-void CommandContext::SetDynamicSamplerDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::SetDynamicSamplerDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, handles);
 }
