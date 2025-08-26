@@ -11,6 +11,7 @@
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/ResourceViews.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;

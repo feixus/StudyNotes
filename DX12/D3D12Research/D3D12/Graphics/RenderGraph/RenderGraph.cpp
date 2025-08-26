@@ -235,7 +235,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& renderContext)
 
     {
         GPU_PROFILE_SCOPE(pPass->m_Name, &renderContext);
-        pPass->Execute(resources, renderContext);
+        pPass->Execute(renderContext, resources);
     }
     
 

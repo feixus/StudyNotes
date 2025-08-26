@@ -33,6 +33,7 @@ CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* p
 		m_pSamplerDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 	}
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
+	pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
 }
 
 CommandContext::~CommandContext()
@@ -216,6 +217,13 @@ void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32
 {
 	PrepareDraw(DescriptorTableType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
+}
+
+void CommandContext::DispatchMesh(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+	check(m_pMeshShadingCommandList);
+	PrepareDraw(DescriptorTableType::Graphics);
+	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
 void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uint32_t height, uint32_t depth)

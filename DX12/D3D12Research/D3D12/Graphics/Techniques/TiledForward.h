@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/RenderGraphDefinition.h"
 
 class Graphics;
 class RootSignature;
@@ -11,6 +11,7 @@ class GraphicsTexture;
 class Buffer;
 class Camera;
 class UnorderedAccessView;
+class RGGraph;
 struct Batch;
 struct ShadowData;
 

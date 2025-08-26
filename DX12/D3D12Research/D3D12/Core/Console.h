@@ -1,7 +1,6 @@
 #pragma once
 
-#define E_LOG(level, message, ...) \
-    Console::LogFormat(level, message, __VA_ARGS__);
+#define E_LOG(level, message, ...) Console::LogFormat(LogType::level, message, __VA_ARGS__);
 
 enum class LogType
 {

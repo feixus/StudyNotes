@@ -28,4 +28,15 @@ struct CD3DX12_INPUT_ELEMENT_DESC : public D3D12_INPUT_ELEMENT_DESC
     }
 };
 
+struct CD3DX12_QUERY_HEAP_DESC : public D3D12_QUERY_HEAP_DESC
+{
+    CD3DX12_QUERY_HEAP_DESC() = default;
+    CD3DX12_QUERY_HEAP_DESC(uint32_t count, D3D12_QUERY_HEAP_TYPE type, uint32_t nodeMask = 0)
+    {
+        Type = type;
+        Count = count;
+        NodeMask = nodeMask;
+    }
+};
+
 #endif

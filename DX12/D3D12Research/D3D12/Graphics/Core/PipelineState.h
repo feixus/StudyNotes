@@ -14,6 +14,14 @@ enum class BlendMode : uint8_t
 	Undefined,
 };
 
+enum class PipelineStateType
+{
+	Graphics,
+	Compute,
+	Mesh,
+	MAX
+};
+
 class StateObjectDesc
 {
 	class PODLinearAllocator
@@ -27,7 +35,7 @@ class StateObjectDesc
 
 		~PODLinearAllocator()
 		{
-			delete m_pData;
+			delete[] m_pData;
 			m_pData = nullptr;
 		}
 
@@ -122,10 +130,17 @@ public:
 
 	void SetVertexShader(const void* pByteCode, uint32_t byteCodeLength);
 	void SetPixelShader(const void* pByteCode, uint32_t byteCodeLength);
+	void SetHullShader(const void* pByteCode, uint32_t byteCodeLength);
+	void SetDomainShader(const void* pByteCode, uint32_t byteCodeLength);
 	void SetGeometryShader(const void* pByteCode, uint32_t byteCodeLength);
 	void SetComputeShader(const void* pByteCode, uint32_t byteCodeLength);
+	void SetMeshShader(const void* pByteCode, uint32_t byteCodeLength);
+	void SetAmplificationShader(const void* pByteCode, uint32_t byteCodeLength);
+
+	PipelineStateType GetType() const { return m_Type; }
 
 protected:
 	ComPtr<ID3D12PipelineState> m_pPipelineState;
 	CD3DX12_PIPELINE_STATE_STREAM2 m_Desc{};
+	PipelineStateType m_Type{PipelineStateType::MAX};
 };

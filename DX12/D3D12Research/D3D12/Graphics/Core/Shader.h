@@ -4,8 +4,12 @@ enum class ShaderType : uint8_t
 {
 	Vertex,
 	Pixel,
+	Hull,
+	Domain,
 	Geometry,
 	Compute,
+	Mesh,
+	Amplification,
 	MAX
 };
 

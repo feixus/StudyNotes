@@ -69,9 +69,6 @@ public:
 	void WaitForFence(uint64_t fenceValue);
 	void IdleGPU();
 
-	bool BeginPixCapture() const;
-	bool EndPixCapture() const;
-
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -127,6 +124,7 @@ public:
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
 	bool UseRenderPasses() const;
 	bool SupportsRaytracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
+	bool SupportMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
 	bool GetShaderModel(int& major, int& minor) const;
 	bool IsFenceComplete(uint64_t fenceValue);
 
@@ -155,7 +153,8 @@ private:
 	void EndFrame(uint64_t fenceValue);
 
 	void InitD3D();
-	void InitializeAssets();
+	void InitializePipelines();
+	void InitializeAssets(CommandContext& context);
 	void CreateSwapchain();
 
 	void UpdateImGui();
@@ -180,6 +179,7 @@ private:
 	D3D12_RAYTRACING_TIER m_RayTracingTier{D3D12_RAYTRACING_TIER_NOT_SUPPORTED};
 	int m_ShaderModelMajor{-1};
 	int m_ShaderModelMinor{-1};
+	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{D3D12_MESH_SHADER_TIER_NOT_SUPPORTED};
 
 	int m_SampleCount{1};
 

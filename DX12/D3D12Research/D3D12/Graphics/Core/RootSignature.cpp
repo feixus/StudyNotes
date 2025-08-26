@@ -116,6 +116,9 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
         case D3D12_SHADER_VISIBILITY_GEOMETRY:
             shaderVisibility[(uint32_t)ShaderType::Geometry] = true;
             break;
+        case D3D12_SHADER_VISIBILITY_MESH:
+            shaderVisibility[(uint32_t)ShaderType::Mesh] = true;
+            break;
         case D3D12_SHADER_VISIBILITY_ALL:
             for (bool& v : shaderVisibility)
             {
@@ -172,18 +175,22 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
             flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
         }
 
+        if (!shaderVisibility[(uint32_t)ShaderType::Mesh])
+        {
+		    flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;
+		    flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
+        }
+
         //#todo tesellation not supported yet
         flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
 		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
     }
 
     constexpr uint32_t recommendedDwords = 12;
     uint32_t dwords = GetDWordSize();
     if (dwords > recommendedDwords)
     {
-        E_LOG(LogType::Warning, "[RootSignature::Finalize] RootSignature '%s' uses %d DWORDs while under %d is recommended", pName, dwords, recommendedDwords);
+        E_LOG(Warning, "[RootSignature::Finalize] RootSignature '%s' uses %d DWORDs while under %d is recommended", pName, dwords, recommendedDwords);
     }
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc{};
@@ -195,7 +202,7 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
     if (pErrorBlob)
     {
         const char* pError = (char*)pErrorBlob->GetBufferPointer();
-        E_LOG(LogType::Error, "RootSignature::Finalize serialization error: %s", pError);
+        E_LOG(Error, "RootSignature::Finalize serialization error: %s", pError);
         return;
     }
     VERIFY_HR_EX(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())), pDevice);

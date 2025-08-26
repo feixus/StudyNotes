@@ -129,20 +129,20 @@ namespace D3D
 			TEXT("VideoEncoderHeap")
 		};
 
-		ID3D12DeviceRemovedExtendedData2* pDred = nullptr;
+		ID3D12DeviceRemovedExtendedData1* pDred = nullptr;
 		if (SUCCEEDED(pDevice->QueryInterface(IID_PPV_ARGS(&pDred))))
 		{
 			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT dredAutoBreadcrumbsOutput;
 			if (SUCCEEDED(pDred->GetAutoBreadcrumbsOutput(&dredAutoBreadcrumbsOutput)))
 			{
-				E_LOG(LogType::Warning, "[DRED] last tracked GPU operation:");
+				E_LOG(Warning, "[DRED] last tracked GPU operation:");
 
 				const D3D12_AUTO_BREADCRUMB_NODE* node = dredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
 				while (node)
 				{
 					int32_t lastCompletedOp = *node->pLastBreadcrumbValue;
 
-					E_LOG(LogType::Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", node->pCommandListDebugNameW, node->pCommandQueueDebugNameW, lastCompletedOp, node->BreadcrumbCount);
+					E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", node->pCommandListDebugNameW, node->pCommandQueueDebugNameW, lastCompletedOp, node->BreadcrumbCount);
 					
 					int32_t firstOp = Math::Max(lastCompletedOp - 5, 0);
 					int32_t lastOp = Math::Min(lastCompletedOp + 5, int32_t(node->BreadcrumbCount) - 1);
@@ -151,7 +151,7 @@ namespace D3D
 					{
 						D3D12_AUTO_BREADCRUMB_OP breadcrumbOp = node->pCommandHistory[op];
 						const TCHAR* opName = (breadcrumbOp < std::size(OpNames)) ? OpNames[breadcrumbOp] : TEXT("Unknown Op");
-						E_LOG(LogType::Warning, "\tOp: %d, %s%s", op, opName, (op + 1 == lastCompletedOp) ? TEXT(" - Last completed") : TEXT(""));
+						E_LOG(Warning, "\tOp: %d, %s%s", op, opName, (op + 1 == lastCompletedOp) ? TEXT(" - Last completed") : TEXT(""));
 					}
 					node = node->pNext;
 				}
@@ -160,17 +160,17 @@ namespace D3D
 			D3D12_DRED_PAGE_FAULT_OUTPUT dredPageFaultOutput;
 			if (SUCCEEDED(pDred->GetPageFaultAllocationOutput(&dredPageFaultOutput)) && dredPageFaultOutput.PageFaultVA != 0)
 			{
-				E_LOG(LogType::Warning, "[DRED] PageFault at VA GPUAddress \"0x%x\"", dredPageFaultOutput.PageFaultVA);
+				E_LOG(Warning, "[DRED] PageFault at VA GPUAddress \"0x%x\"", dredPageFaultOutput.PageFaultVA);
 
 				const D3D12_DRED_ALLOCATION_NODE* node = dredPageFaultOutput.pHeadExistingAllocationNode;
 				if (node)
 				{
-					E_LOG(LogType::Warning, "[DRED] active objects with VS ranges that match the faulting VA:");
+					E_LOG(Warning, "[DRED] active objects with VS ranges that match the faulting VA:");
 					while(node)
 					{
 						int32_t alloc_type_index = node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
 						const TCHAR* allocTypeName = (alloc_type_index < std::size(AllocTypeNames)) ? AllocTypeNames[alloc_type_index] : TEXT("Unknown Alloc");
-						E_LOG(LogType::Warning, "\tName: %s (Type: %s)", node->ObjectNameW, allocTypeName);
+						E_LOG(Warning, "\tName: %s (Type: %s)", node->ObjectNameW, allocTypeName);
 						node = node->pNext;
 					}
 				}
@@ -178,12 +178,12 @@ namespace D3D
 				node = dredPageFaultOutput.pHeadRecentFreedAllocationNode;
 				if (node)
 				{
-					E_LOG(LogType::Warning, "[DRED] recent freed objects with VA ranges that match the faulting VA:");
+					E_LOG(Warning, "[DRED] recent freed objects with VA ranges that match the faulting VA:");
 					while(node)
 					{
 						int32_t alloc_type_index = node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
 						const TCHAR* allocTypeName = (alloc_type_index < std::size(AllocTypeNames)) ? AllocTypeNames[alloc_type_index] : TEXT("Unknown Alloc");
-						E_LOG(LogType::Warning, "\tName: %s (Type: %s)", node->ObjectNameW, allocTypeName);
+						E_LOG(Warning, "\tName: %s (Type: %s)", node->ObjectNameW, allocTypeName);
 						node = node->pNext;
 					}
 				}
@@ -220,7 +220,7 @@ namespace D3D
 			return true;
 		}
 
-		E_LOG(LogType::Error, "%s:%d: %s - %s", pFileName, lineNumber, GetErrorString(hr, pDevice).c_str(), pCode);
+		E_LOG(Error, "%s:%d: %s - %s", pFileName, lineNumber, GetErrorString(hr, pDevice).c_str(), pCode);
 		__debugbreak();
 
 		return false;

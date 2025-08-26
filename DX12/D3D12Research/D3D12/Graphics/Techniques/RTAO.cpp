@@ -12,9 +12,9 @@
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/RaytracingCommon.h"
 
-RTAO::RTAO(Graphics* pGraphics) : m_pGraphics(pGraphics)
+RTAO::RTAO(Graphics* pGraphics)
 {
-	if (!m_pGraphics->SupportsRaytracing())
+	if (!pGraphics->SupportsRaytracing())
 	{
 		return;
 	}
@@ -24,20 +24,10 @@ RTAO::RTAO(Graphics* pGraphics) : m_pGraphics(pGraphics)
 }
 
 void RTAO::OnSwapchainCreated(int windowWidth, int windowHeight)
-{
-    if (!m_pGraphics->SupportsRaytracing())
-    {
-        return;
-    }
-}
+{}
 
 void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera)
 {
-	if (!m_pGraphics->SupportsRaytracing())
-	{
-		return;
-	}
-
     static float g_AoPower = 3;
     static float g_AoRadius = 0.5f;
     static int g_AoSamples = 1;
@@ -119,7 +109,7 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
         std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
         for (size_t i = 0; i < pMesh->GetMeshCount(); i++)
         {
-            SubMesh* pSubMesh = pMesh->GetMesh((int)i);
+            const SubMesh* pSubMesh = pMesh->GetMesh((int)i);
             if (pMesh->GetMaterial(pSubMesh->GetMaterialId()).IsTransparent)
             {
                 continue; // skip transparent meshes

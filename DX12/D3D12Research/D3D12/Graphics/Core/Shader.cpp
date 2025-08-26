@@ -7,6 +7,9 @@
 #define USE_SHADER_LINE_DIRECTIVE 1
 #endif
 
+#define SM_MAJ 6
+#define SM_MIN 5
+
 namespace ShaderCompiler
 {
 	const constexpr char* pShaderSymbolsPath = "_Temp/ShaderSymbols/";
@@ -15,10 +18,14 @@ namespace ShaderCompiler
 	{
 		switch (t)
 		{
-		case ShaderType::Vertex: return "vs";
-		case ShaderType::Pixel: return "ps";
-		case ShaderType::Geometry: return "gs";
-		case ShaderType::Compute: return "cs";
+		case ShaderType::Vertex:		return "vs";
+		case ShaderType::Pixel:			return "ps";
+		case ShaderType::Geometry:		return "gs";
+		case ShaderType::Compute:		return "cs";
+		case ShaderType::Hull:			return "hs";
+		case ShaderType::Domain:		return "ds";
+		case ShaderType::Mesh:			return "ms";
+		case ShaderType::Amplification: return "as";
 		default: noEntry();	return "";
 		}
 	}
@@ -56,11 +63,9 @@ namespace ShaderCompiler
 		std::vector<std::wstring> wDefines;
 		for (const auto& define : defines)
 		{
-			std::wstringstream str;
 			wchar_t intermediate[256];
 			ToWidechar(define.c_str(), intermediate, 256);
-			str << intermediate << "=1";
-			wDefines.push_back(str.str());
+			wDefines.push_back(intermediate);
 		}
 
 		std::vector<LPCWSTR> arguments;
@@ -111,7 +116,7 @@ namespace ShaderCompiler
 		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
 		if (pErrors && pErrors->GetStringLength() > 0)
 		{
-			E_LOG(LogType::Warning, "%s", (uint8_t*)pErrors->GetBufferPointer());
+			E_LOG(Warning, (char*)pErrors->GetBufferPointer());
 			return false;
 		}
 
@@ -132,7 +137,7 @@ namespace ShaderCompiler
 				ComPtr<IDxcBlobUtf8> pPrintBlobUtf8;
 				pResult->GetErrorBuffer(pPrintBlob.GetAddressOf());
 				pUtils->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlobUtf8.GetAddressOf());
-				E_LOG(LogType::Warning, "%s", pPrintBlobUtf8->GetBufferPointer());
+				E_LOG(Warning, "%s", pPrintBlobUtf8->GetBufferPointer());
 			}
 		}
 
@@ -232,9 +237,17 @@ namespace ShaderCompiler
 		target[i++] = '0' + shaderModelMinor;
 		target[i++] = 0;
 
-		std::vector<std::string> definesActual = defines;
-		definesActual.push_back(std::format("_SM_MAJ={}", shaderModelMajor));
-		definesActual.push_back(std::format("_SM_MIN={}", shaderModelMinor));
+		std::vector<std::string> definesActual(defines);
+		for (std::string& define : definesActual)
+		{
+			if (define.find('=') == std::string::npos)
+			{
+				define += std::string("=1");
+			}
+		}
+
+		definesActual.push_back("_SM_MAJ=" + shaderModelMajor);
+		definesActual.push_back("_SM_MIN=" + shaderModelMinor);
 
 		if (shaderModelMajor < 6)
 		{
@@ -264,7 +277,7 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 	std::ifstream fileStream(filePath, std::ios::binary);
 	if (fileStream.fail())
 	{
-		E_LOG(LogType::Error, "Failed to open shader file: %s", filePath.c_str());
+		E_LOG(Error, "Failed to open shader file: %s", filePath.c_str());
 		return false;
 	}
 
@@ -277,7 +290,7 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 			size_t end = line.rfind('"');
 			if (end == std::string::npos || start == std::string::npos || start == end)
 			{
-				E_LOG(LogType::Error, "Include syntax error: %s", line.c_str());
+				E_LOG(Error, "Include syntax error: %s", line.c_str());
 				return false;
 			}
 
@@ -329,7 +342,7 @@ Shader::Shader(const char* pFilePath, ShaderType shaderType, const char* pEntryP
 {
 	m_Path = Paths::ShaderDir() + pFilePath;
 	m_Type = shaderType;
-	Compile(m_Path.c_str(), shaderType, pEntryPoint, 6, 3, defines);
+	Compile(m_Path.c_str(), shaderType, pEntryPoint, SM_MAJ, SM_MIN, defines);
 }
 
 bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string>& defines)
@@ -349,7 +362,7 @@ bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* p
 ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines)
 {
 	m_Path = Paths::ShaderDir() + pFilePath;
-	Compile(m_Path.c_str(), 6, 3, defines);
+	Compile(m_Path.c_str(), SM_MAJ, SM_MIN, defines);
 }
 
 bool ShaderLibrary::Compile(const char* pFilePath, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string> defines)

@@ -18,15 +18,16 @@ const int gMsaaSampleCount = 1;
 class ViewWrapper
 {
 public:
-	void Run()
+	void Run(HINSTANCE hInstance)
 	{
 		m_DisplayWidth = gWindowWidth;
 		m_DisplayHeight = gWindowHeight;
 
-		MakeWindow();
+		HWND window = MakeWindow(hInstance);
+		Input::Instance().SetWindow(window);
 
-		m_pGraphics = std::make_unique<Graphics>(m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
-		m_pGraphics->Initialize(m_Hwnd);
+		m_pGraphics = new Graphics(m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
+		m_pGraphics->Initialize(window);
 
 		Time::Reset();
 
@@ -38,45 +39,32 @@ public:
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
 			}
-			else
-			{
-				Time::Tick();
-				m_pGraphics->Update();
-				Input::Instance().Update();
-			}
+
+			Time::Tick();
+			m_pGraphics->Update();
+			Input::Instance().Update();
 		}
 
 		m_pGraphics->Shutdown();
+		delete m_pGraphics;
 	}
 
 private:
-	void OnPause(const bool paused)
+	HWND MakeWindow(HINSTANCE hInstance)
 	{
-		m_Pause = paused;
-		if (m_Pause)
-			Time::Stop();
-		else
-			Time::Start();
-	}
+		WNDCLASSEX wc{};
 
-	void MakeWindow()
-	{
-		WNDCLASS wc;
-
-		wc.hInstance = GetModuleHandle(0);
-		wc.cbClsExtra = 0;
-		wc.cbWndExtra = 0;
-		wc.hIcon = 0;
+		wc.cbSize = sizeof(WNDCLASSEX);
+		wc.hInstance = hInstance;
 		wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 		wc.lpfnWndProc = WndProcStatic;
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		wc.lpszClassName = TEXT("wndClass");
-		wc.lpszMenuName = nullptr;
 		wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
 
-		if (!RegisterClass(&wc))
+		if (!RegisterClassEx(&wc))
 		{
-			return;
+			return nullptr;
 		}
 
 		int displayWidth = GetSystemMetrics(SM_CXSCREEN);
@@ -93,7 +81,7 @@ private:
 		int x = (displayWidth - m_DisplayWidth) / 2;
 		int y = (displayHeight - m_DisplayHeight) / 2;
 
-		m_Hwnd = CreateWindow(
+		HWND window = CreateWindowA(
 			TEXT("wndClass"),
 			TEXT("Hello World DX12"),
 			windowStyle,
@@ -103,22 +91,19 @@ private:
 			windowHeight,
 			nullptr,
 			nullptr,
-			GetModuleHandle(0),
+			hInstance,
 			this
 		);
 
-		if (!m_Hwnd) return;
-
-		ShowWindow(m_Hwnd, SW_SHOWDEFAULT);
-
-		if (!UpdateWindow(m_Hwnd))
+		if (!window)
 		{
-			return;
+			return nullptr;
 		}
 
-		Input::Instance().SetWindow(m_Hwnd);
-	}
+		ShowWindow(window, SW_SHOWDEFAULT);
 
+		return window;
+	}
 
 	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
@@ -126,7 +111,7 @@ private:
 		{
 		case WM_ACTIVATE:
 		{
-			OnPause(LOWORD(wParam) == WA_INACTIVE);
+			(LOWORD(wParam) == WA_INACTIVE) ? Time::Stop() : Time::Start();
 			break;
 		}
 		// resize the window
@@ -138,13 +123,13 @@ private:
 			{
 				if (wParam == SIZE_MINIMIZED)
 				{
-					OnPause(true);
+					Time::Stop();
 					m_Minimized = true;
 					m_Maximized = false;
 				}
 				else if (wParam == SIZE_MAXIMIZED)
 				{
-					OnPause(false);
+					Time::Start();
 					m_Minimized = false;
 					m_Maximized = true;
 					m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
@@ -153,13 +138,13 @@ private:
 				{
 					if (m_Minimized)
 					{
-						OnPause(false);
+						Time::Start();
 						m_Minimized = false;
 						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
 					}
 					else if (m_Maximized)
 					{
-						OnPause(false);
+						Time::Start();
 						m_Maximized = false;
 						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
 					}
@@ -219,13 +204,13 @@ private:
 		}
 		case WM_ENTERSIZEMOVE: // resizing or moving window with the mouse
 		{
-			OnPause(true);
+			Time::Stop();
 			m_IsResizing = true;
 			break;	
 		}
 		case WM_EXITSIZEMOVE:
 		{
-			OnPause(false);
+			Time::Start();
 			m_IsResizing = false;
 			m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
 			break;
@@ -245,34 +230,24 @@ private:
 		if (message == WM_NCCREATE)
 		{
 			pThis = static_cast<ViewWrapper*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
-			SetLastError(0);
-			if (!SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis)))
-			{
-				if (GetLastError() != 0)
-					return 0;
-			}
+			SetWindowLongPtrA(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
 		}
 		else
 		{
 			pThis = reinterpret_cast<ViewWrapper*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+			return pThis->WndProc(hWnd, message, wParam, lParam);
 		}
-		if (pThis)
-		{
-			LRESULT callback = pThis->WndProc(hWnd, message, wParam, lParam);
-			return callback;
-		}
+		
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
 
 private:
-	bool m_Pause = false;
 	bool m_Minimized = false;
 	bool m_Maximized = false;
 	int m_DisplayWidth = 1240;
 	int m_DisplayHeight = 720;
 	bool m_IsResizing = false;
-	HWND m_Hwnd = nullptr;
-	std::unique_ptr<Graphics> m_pGraphics;
+	Graphics* m_pGraphics{nullptr};
 };
 
 static std::wstring GetLatestWinPixGpuCapturerPath()
@@ -308,6 +283,7 @@ static std::wstring GetLatestWinPixGpuCapturerPath()
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	CommandLine::Parse(lpCmdLine);
+	
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 
 	// Check to see if a copy of WinPixGpuCapturer.dll has already been injected into the application.
@@ -321,10 +297,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}*/
 
 	Console::Startup();
-	E_LOG(LogType::Info, "Startup hello dx12");
+	E_LOG(Info, "Startup hello dx12");
 
 	ViewWrapper vw;
-	vw.Run();
+	vw.Run(hInstance);
 
 	return 0;
 }

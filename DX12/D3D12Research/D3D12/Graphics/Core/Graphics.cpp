@@ -82,7 +82,11 @@ void Graphics::Initialize(HWND hWnd)
 	m_pCamera->SetFarPlane(10.f);
 
 	InitD3D();
-	InitializeAssets();
+	InitializePipelines();
+
+	CommandContext* pContext = AllocateCommandContext();
+	InitializeAssets(*pContext);
+	pContext->Execute(true);
 
 	g_ShowRaytraced = SupportsRaytracing();
 
@@ -824,7 +828,7 @@ void Graphics::EndFrame(uint64_t fenceValue)
 
 void Graphics::InitD3D()
 {
-	E_LOG(LogType::Info, "Graphics::InitD3D");
+	E_LOG(Info, "Graphics::InitD3D");
 	UINT dxgiFactoryFlags = 0;
 
 	bool debugD3D = CommandLine::GetBool("d3dvalidation") || D3D_VALIDATION;
@@ -853,7 +857,7 @@ void Graphics::InitD3D()
 	ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
 	{
-		E_LOG(LogType::Info, "DRED Enabled");
+		E_LOG(Info, "DRED Enabled");
 		// turn on auto-breadcrumbs and page fault reporting
 		pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 		pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
@@ -875,7 +879,7 @@ void Graphics::InitD3D()
 			char name[256];
 			ToMultibyte(desc.Description, name, 256);
 			
-			E_LOG(LogType::Info, "\t%s - %f GB", name, (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
+			E_LOG(Info, "\t%s - %f GB", name, (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
 
 			break;
 		}
@@ -957,7 +961,13 @@ void Graphics::InitD3D()
 			m_ShaderModelMajor = shaderModelSupport.HighestShaderModel >> 0x4;
 			m_ShaderModelMinor = shaderModelSupport.HighestShaderModel & 0xF;
 
-			E_LOG(LogType::Info, "D3D12 Shader Model %d.%d", m_ShaderModelMajor, m_ShaderModelMinor);
+			E_LOG(Info, "D3D12 Shader Model %d.%d", m_ShaderModelMajor, m_ShaderModelMinor);
+		}
+
+		D3D12_FEATURE_DATA_D3D12_OPTIONS7 caps7{};
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
+		{
+			m_MeshShaderSupport = caps7.MeshShaderTier;
 		}
 	}
 
@@ -1054,7 +1064,7 @@ void Graphics::CreateSwapchain()
 
 void Graphics::OnResize(int width, int height)
 {
-	E_LOG(LogType::Info, "Viewport resized: %dx%d", width, height);
+	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 	m_WindowWidth = width;
 	m_WindowHeight = height;
 
@@ -1127,20 +1137,36 @@ void Graphics::OnResize(int width, int height)
 	}
 }
 
-void Graphics::InitializeAssets()
+void Graphics::InitializeAssets(CommandContext& context)
+{
+	m_pMesh = std::make_unique<Mesh>();
+	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
+
+	for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
+	{
+		Batch b;
+		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
+		b.pMesh = m_pMesh->GetMesh(i);
+		b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
+		b.WorldMatrix = Matrix::Identity;
+		if (b.pMaterial->IsTransparent)
+		{
+			m_TransparentBatches.push_back(b);
+		}
+		else
+		{
+			m_OpaqueBatches.push_back(b);
+		}
+	}
+
+	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), context);
+}
+
+void Graphics::InitializePipelines()
 {
 	m_pLightBuffer = std::make_unique<Buffer>(this, "Light Buffer");
 
 	// input layout
-	// universal
-	CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-			CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
-			CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32_FLOAT },
-			CD3DX12_INPUT_ELEMENT_DESC{ "NORMAL", DXGI_FORMAT_R32G32B32_FLOAT },
-			CD3DX12_INPUT_ELEMENT_DESC{ "TANGENT", DXGI_FORMAT_R32G32B32_FLOAT },
-			CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1 },
-	};
-
 	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
 			CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
 			CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT },
@@ -1311,14 +1337,8 @@ void Graphics::InitializeAssets()
 		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
 	}
 
-	CommandContext* pCommandContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 	// sky
 	{
-		CD3DX12_INPUT_ELEMENT_DESC cubeInputElements[] = {
-			CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
-		};
-
 		Shader vertexShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
 		Shader pixelShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
@@ -1328,7 +1348,6 @@ void Graphics::InitializeAssets()
 
 		// pipeline state
 		m_pSkyboxPSO = std::make_unique<PipelineState>();
-		//m_pSkyboxPSO->SetInputLayout(cubeInputElements, std::size(cubeInputElements));
 		m_pSkyboxPSO->SetInputLayout(nullptr, 0);
 		m_pSkyboxPSO->SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		m_pSkyboxPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
@@ -1337,32 +1356,6 @@ void Graphics::InitializeAssets()
 		m_pSkyboxPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pSkyboxPSO->Finalize("Skybox", m_pDevice.Get());
 	}
-
-	// geometry
-	{
-		m_pMesh = std::make_unique<Mesh>();
-		m_pMesh->Load("Resources/sponza/sponza.dae", this, pCommandContext);
-
-		for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
-		{
-			Batch b;
-			b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
-			b.pMesh = m_pMesh->GetMesh(i);
-			b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
-			b.WorldMatrix = Matrix::Identity;
-			if (b.pMaterial->IsTransparent)
-			{
-				m_TransparentBatches.push_back(b);
-			}
-			else
-			{
-				m_OpaqueBatches.push_back(b);
-			}
-		}
-	}
-
-	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), *pCommandContext);
-	pCommandContext->Execute(true);
 }
 
 void Graphics::UpdateImGui()
@@ -1743,28 +1736,6 @@ void Graphics::IdleGPU()
 			pCommandQueue->WaitForIdle();
 		}
 	}
-}
-
-bool Graphics::BeginPixCapture() const
-{
-	ComPtr<IDXGraphicsAnalysis> pAnalysis;
-	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pAnalysis.GetAddressOf()))))
-	{
-		pAnalysis->BeginCapture();
-		return true;
-	}
-	return false;
-}
-
-bool Graphics::EndPixCapture() const
-{
-	ComPtr<IDXGraphicsAnalysis> pAnalysis;
-	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pAnalysis.GetAddressOf()))))
-	{
-		pAnalysis->EndCapture();
-		return true;
-	}
-	return false;
 }
 
 bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
