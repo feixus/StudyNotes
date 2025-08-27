@@ -401,10 +401,10 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
     m_pLightGrid = std::make_unique<Buffer>(pGraphics, "Light Grid");
     m_pDebugLightGrid = std::make_unique<Buffer>(pGraphics, "Debug Light Grid");
 
-    CommandContext* pCopyContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+    CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
     m_pHeatMapTexture = std::make_unique<GraphicsTexture>(pGraphics, "Heatmap texture");
-    m_pHeatMapTexture->Create(pCopyContext, "Resources/textures/HeatMap.png");
-    pCopyContext->Execute(true);
+    m_pHeatMapTexture->Create(pContext, "Resources/textures/HeatMap.png");
+    pContext->Execute(true);
 }
 
 void ClusteredForward::SetupPipelines(Graphics* pGraphics)
@@ -548,7 +548,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         if (m_pGraphics->SupportMeshShaders())
         {
 		    Shader meshShader = Shader("CL_DebugDrawClusters.hlsl", ShaderType::Mesh, "MSMain");
-            
+
 		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", meshShader, pGraphics->GetDevice());
             
             m_pDebugClusterPSO->SetRootSignature(m_pDebugClusterRS->GetRootSignature());
