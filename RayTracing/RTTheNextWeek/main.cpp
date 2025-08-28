@@ -381,7 +381,7 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth) {
 int main() {
     auto start = std::chrono::high_resolution_clock::now();
 
-    switch (99) {
+    switch (1) {
         case 1: bouncing_spheres(); break;
         case 2: checkered_shpere(); break;
         case 3: earth(); break;

@@ -241,7 +241,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 		stateObjectDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());
 		stateObjectDesc.BindLocalRootSignature("HitGroup", m_pHitSignature->GetRootSignature());
         stateObjectDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
-        stateObjectDesc.SetRaytracingPipelineConfig(1, D3D12_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES);
+        stateObjectDesc.SetRaytracingPipelineConfig(1);
         stateObjectDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
         m_pStateObject = stateObjectDesc.Finalize("RTAO SO", pGraphics->GetRaytracingDevice());
     }

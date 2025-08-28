@@ -2,6 +2,7 @@
 #include "Core/Input.h"
 #include "Graphics/Core/Graphics.h"
 #include "Core/CommandLine.h"
+#include "Core/TaskQueue.h"
 
 // maps memory functions to debug versions, to help track memory allocations and find memory leaks
 #define _CRTDBG_MAP_ALLOC
@@ -23,6 +24,8 @@ public:
 		m_DisplayWidth = gWindowWidth;
 		m_DisplayHeight = gWindowHeight;
 
+		TaskQueue::Initialize(std::thread::hardware_concurrency());
+
 		HWND window = MakeWindow(hInstance);
 		Input::Instance().SetWindow(window);
 
@@ -39,14 +42,12 @@ public:
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
 			}
-
-			Time::Tick();
-			m_pGraphics->Update();
-			Input::Instance().Update();
 		}
 
 		m_pGraphics->Shutdown();
 		delete m_pGraphics;
+
+		TaskQueue::Shutdown();
 	}
 
 private:
@@ -109,6 +110,13 @@ private:
 	{
 		switch (message)
 		{
+		case WM_PAINT:
+		{
+			Time::Tick();
+			m_pGraphics->Update();
+			Input::Instance().Update();
+			return 0;
+		}
 		case WM_ACTIVATE:
 		{
 			(LOWORD(wParam) == WA_INACTIVE) ? Time::Stop() : Time::Start();

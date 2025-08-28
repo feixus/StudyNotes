@@ -41,23 +41,33 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 
 	D3D12_RESOURCE_DESC desc = GetResourceDesc(bufferDesc);
 	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
+	D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN;
 
 	if (Any(bufferDesc.Usage, BufferFlag::Readback))
 	{
-		SetResourceState(D3D12_RESOURCE_STATE_COPY_DEST);
+		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		initialState = D3D12_RESOURCE_STATE_COPY_DEST;
 		heapType = D3D12_HEAP_TYPE_READBACK;
 	}
 	else if (Any(bufferDesc.Usage, BufferFlag::Upload))
 	{
-		SetResourceState(D3D12_RESOURCE_STATE_GENERIC_READ);
+		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
 		heapType = D3D12_HEAP_TYPE_UPLOAD;
 	}
 	if (Any(bufferDesc.Usage, BufferFlag::AccelerationStructure))
 	{
-		SetResourceState(D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
+		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		initialState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 	}
 
-	m_pResource = m_pGraphics->CreateResource(desc, GetResourceState(), heapType);
+	if (initialState == D3D12_RESOURCE_STATE_UNKNOWN)
+	{
+		initialState = D3D12_RESOURCE_STATE_COMMON;
+	}
+	
+	m_pResource = m_pGraphics->CreateResource(desc, initialState, heapType);
+	SetResourceState(initialState);
 
 	SetName(m_Name.c_str());
 

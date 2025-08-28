@@ -99,7 +99,19 @@ void RootSignature::AddStaticSampler(uint32_t shaderRegister, const D3D12_STATIC
 
 void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
-    std::array<bool, (uint32_t)ShaderType::MAX> shaderVisibility{};
+    D3D12_ROOT_SIGNATURE_FLAGS visibilityFlags =
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7 featuresCaps{};
+    pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &featuresCaps, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7));
+    if (featuresCaps.MeshShaderTier != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED)
+    {
+        visibilityFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS | 
+                           D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
+    }
 
     for (size_t i = 0; i < m_RootParameters.size(); i++)
     {
@@ -108,26 +120,24 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
         switch (rootParameter.ShaderVisibility)
         {
         case D3D12_SHADER_VISIBILITY_VERTEX:
-            shaderVisibility[(uint32_t)ShaderType::Vertex] = true;
+            visibilityFlags = visibilityFlags & ~D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
             break;
         case D3D12_SHADER_VISIBILITY_PIXEL:
-            shaderVisibility[(uint32_t)ShaderType::Pixel] = true;
+            visibilityFlags = visibilityFlags & ~D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
             break;
         case D3D12_SHADER_VISIBILITY_GEOMETRY:
-            shaderVisibility[(uint32_t)ShaderType::Geometry] = true;
+            visibilityFlags = visibilityFlags & ~D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
             break;
         case D3D12_SHADER_VISIBILITY_MESH:
-            shaderVisibility[(uint32_t)ShaderType::Mesh] = true;
+            visibilityFlags = visibilityFlags & ~D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;
             break;
+		case D3D12_SHADER_VISIBILITY_AMPLIFICATION:
+			visibilityFlags = visibilityFlags & ~D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
+			break;
         case D3D12_SHADER_VISIBILITY_ALL:
-            for (bool& v : shaderVisibility)
-            {
-                v = true;
-            }
+            visibilityFlags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
             break;
         default:
-        case D3D12_SHADER_VISIBILITY_DOMAIN:
-        case D3D12_SHADER_VISIBILITY_HULL:
             noEntry();
             break;
         }
@@ -160,30 +170,7 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
     // it's illegal to have RS flags if it's a local root signature
     if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
     {
-        if (shaderVisibility[(uint32_t)ShaderType::Vertex] == false)
-        {
-            flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
-        }
-
-        if (shaderVisibility[(uint32_t)ShaderType::Pixel] == false)
-        {
-            flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-        }
-
-        if (shaderVisibility[(uint32_t)ShaderType::Geometry] == false)
-        {
-            flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-        }
-
-        if (!shaderVisibility[(uint32_t)ShaderType::Mesh])
-        {
-		    flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;
-		    flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
-        }
-
-        //#todo tesellation not supported yet
-        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+        flags |= visibilityFlags;
     }
 
     constexpr uint32_t recommendedDwords = 12;

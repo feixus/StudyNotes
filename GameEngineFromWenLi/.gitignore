@@ -11,3 +11,5 @@
 *.exe
 
 build*/
+
+External/ispc/*

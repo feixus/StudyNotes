@@ -21,5 +21,40 @@
     <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="DebugMessager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="HelloTriangleApplication.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="HelpUtility.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="MacrosDefine.h">
+      <Filter>头文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Vertex.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ConstDefine.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ConstStruct.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugMessager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="HelloTriangleApplication.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="HelpUtility.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Vertex.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

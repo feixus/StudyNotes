@@ -7,3 +7,4 @@
 7. memory allocator | cache locality  
 8. std::align_val_t in c++17: aligned memory allocation, to replace the platform-specific functions(posix_memalign(POSIX), _aligned_malloc(Windows)...)  
 9. memory alignment, aligned means the data's memory address is a multiple of the data size.  on a 64-bit system, the CPU fetched data from memory is 8 bytes at once.  
+10. GPU Addressing  

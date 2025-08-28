@@ -1,1 +1,6 @@
 x64
+VulkanTest/
+*.vcxproj
+*.vcxproj.filters
+*.pdb
+Debug/

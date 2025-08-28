@@ -7,7 +7,6 @@ class Graphics;
 class GraphicsResource;
 class GraphicsTexture;
 class Buffer;
-class BufferUAV;
 class OnlineDescriptorAllocator;
 class RootSignature;
 class PipelineState;
@@ -19,6 +18,7 @@ class UnorderedAccessView;
 class ShaderResourceView;
 class CommandSignature;
 class ShaderBindingTable;
+struct BufferView;
 
 enum class CommandListContext
 {
@@ -209,9 +209,9 @@ public:
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(Buffer* pVertexBuffer);
-	void SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount);
-	void SetIndexBuffer(Buffer* pIndexBuffer);
+	void SetVertexBuffer(BufferView pVertexBuffer);
+	void SetVertexBuffers(BufferView* pVertexBuffers, int bufferCount);
+	void SetIndexBuffer(BufferView pIndexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 
@@ -227,12 +227,25 @@ public:
 		uint32_t SubResource;
 	};
 	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
-	ResourceState GetResourceState(GraphicsResource* pResource) const
+
+	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32_t subResource) const
 	{
 		auto iter = m_ResourceStates.find(pResource);
 		check(iter != m_ResourceStates.end());
-		return iter->second;
+		return iter->second.Get(subResource);
 	}
+
+	D3D12_RESOURCE_STATES GetResourceStateWithFallback(GraphicsResource* pResource, uint32_t subResource) const
+	{
+		 auto it = m_ResourceStates.find(pResource);
+		 if (it == m_ResourceStates.end())
+		 {
+			return pResource->GetResourceState(subResource);
+		 }
+		 return it->second.Get(subResource);
+	}
+
+	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandListType, D3D12_RESOURCE_STATES state);
 
 private:
 	void BindDescriptorHeaps();
@@ -256,4 +269,27 @@ private:
 
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
 	std::vector<PendingBarrier> m_PendingBarriers;
+};
+
+class ScopedBarrier
+{
+public:
+	ScopedBarrier(CommandContext& context, GraphicsResource* pResource, D3D12_RESOURCE_STATES newState, uint32_t subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+		: m_Context(context), m_pResource(pResource), m_SubResource(subResource)
+	{
+		m_BeforeState = context.GetResourceStateWithFallback(pResource, subResource);
+
+		context.InsertResourceBarrier(pResource, newState, subResource);
+	}
+
+	~ScopedBarrier()
+	{
+		m_Context.InsertResourceBarrier(m_pResource, m_BeforeState, m_SubResource);
+	}
+
+private:
+	CommandContext& m_Context;
+	GraphicsResource* m_pResource;
+	uint32_t m_SubResource;
+	D3D12_RESOURCE_STATES m_BeforeState{D3D12_RESOURCE_STATE_UNKNOWN};
 };

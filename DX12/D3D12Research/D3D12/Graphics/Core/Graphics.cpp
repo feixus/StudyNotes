@@ -134,6 +134,14 @@ void Graphics::Update()
 	// shadow map partitioning
 	//////////////////////////////////
 
+	float costheta = cosf(g_SunOrientation);
+	float sintheta = sinf(g_SunOrientation);
+	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
+	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+
+	m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
+	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
+
 	constexpr uint32_t MAX_CASCADES = 4;
 
 	m_ShadowCasters = 0;
@@ -285,14 +293,6 @@ void Graphics::Update()
 	sceneData.DepthStencil = setupLights.Write(sceneData.DepthStencil);
 	setupLights.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
 		{
-			float costheta = cosf(g_SunOrientation);
-			float sintheta = sinf(g_SunOrientation);
-			float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-			float sinphi = sinf(g_SunInclination * Math::PIDIV2);
-
-			m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
-			m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
-
 			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light));
 			memcpy(allocation.pMappedMemory, m_Lights.data(), m_Lights.size() * sizeof(Light));
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
@@ -1671,24 +1671,32 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
 	int typeIndex = type;
-
-	std::scoped_lock lockGuard(m_ContextAllocationMutex);
-
+	bool isNew = false;
 	CommandContext* pCommandContext = nullptr;
-	if (m_FreeCommandContexts[typeIndex].size() > 0)
+
 	{
-		pCommandContext = m_FreeCommandContexts[typeIndex].front();
-		m_FreeCommandContexts[typeIndex].pop();
-		pCommandContext->Reset();
+		std::scoped_lock lockGuard(m_ContextAllocationMutex);
+
+		if (m_FreeCommandContexts[typeIndex].size() > 0)
+		{
+			pCommandContext = m_FreeCommandContexts[typeIndex].front();
+			m_FreeCommandContexts[typeIndex].pop();
+		}
+		else
+		{
+			ComPtr<ID3D12CommandList> pCommandList;
+			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
+			m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
+			m_CommandLists.push_back(std::move(pCommandList));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
+			pCommandContext = m_CommandListPool[typeIndex].back().get();
+			isNew = true;
+		}
 	}
-	else
+
+	if (!isNew)
 	{
-		ComPtr<ID3D12CommandList> pCommandList;
-		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
-		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
-		m_CommandLists.push_back(std::move(pCommandList));
-		m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
-		pCommandContext = m_CommandListPool[typeIndex].back().get();
+		pCommandContext->Reset();
 	}
 
 	return pCommandContext;

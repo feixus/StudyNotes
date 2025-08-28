@@ -65,31 +65,52 @@ CommandQueue::~CommandQueue()
 
 uint64_t CommandQueue::ExecuteCommandList(CommandContext** pCommandContexts, uint32_t numContexts)
 {
-	std::vector<ID3D12CommandList*> commandLists{};
+	check(pCommandContexts);
+	check(numContexts > 0);
+
+	// commandlist can be recorded in parallel.
+	// the before state of a resource transition can't be know so commandlists keep local resource state
+	// and insert "pending resource barriers" which are barriers with an unknown before state.
+	// during commandlist execution, these pending resource barriers are resolved by inserting new barriers in the previous commndlist before closing it.
+	// the first commandlist will resolve the barriers of the next so the first one will just contain resource barriers
+
+	std::vector<ID3D12CommandList*> commandLists;
+	commandLists.reserve(numContexts + 1);
+	CommandContext* pCurrentContext = nullptr;
 	for (uint32_t i = 0; i < numContexts; i++)
 	{
-		CommandContext* pContext = pCommandContexts[i];
+		CommandContext* pNextContext = pCommandContexts[i];
 
 		ResourceBarrierBatcher barriers;
-		for (const CommandContext::PendingBarrier& pending : pContext->GetPendingBarriers())
+		for (const CommandContext::PendingBarrier& pending : pNextContext->GetPendingBarriers())
 		{
 			uint32_t subResource = pending.SubResource;
 			GraphicsResource* pResource = pending.pResource;
-			barriers.AddTransition(pResource->GetResource(), pResource->GetResourceState(subResource), pending.State.Get(subResource), subResource);
-			pending.pResource->SetResourceState(pContext->GetResourceState(pending.pResource).Get(subResource));
+			D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
+			checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState), "the resource can not transitions from this state on this queue. insert a barrier on another queue before executing this one.");
+			barriers.AddTransition(pResource->GetResource(), beforeState, pending.State.Get(subResource), subResource);
+			pending.pResource->SetResourceState(pNextContext->GetResourceState(pending.pResource, subResource));
 		}
 		if (barriers.HasWork())
 		{
-			CommandContext* pC = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-			barriers.Flush(pC->GetCommandList());
-			pC->GetCommandList()->Close();
-			pC->Free(m_NextFenceValue);
-			commandLists.push_back(pC->GetCommandList());
+			if (!pCurrentContext)
+			{
+				pCurrentContext = m_pGraphics->AllocateCommandContext(m_Type);
+				pCurrentContext->Free(m_NextFenceValue);
+			}
+			barriers.Flush(pCurrentContext->GetCommandList());
 		}
 
-		commandLists.push_back((ID3D12CommandList*)pContext->GetCommandList());
-		VERIFY_HR_EX(pContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+		if (pCurrentContext)
+		{
+			VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+			commandLists.push_back((ID3D12CommandList*)pCurrentContext->GetCommandList());
+		}
+		pCurrentContext = pNextContext;
 	}
+
+	VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+	commandLists.push_back((ID3D12CommandList*)pCurrentContext->GetCommandList());
 
 	m_pCommandQueue->ExecuteCommandLists((uint32_t)commandLists.size(), commandLists.data());
 

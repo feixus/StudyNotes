@@ -20,6 +20,7 @@ public:
     ~TaskQueue();
 
     static void Initialize(uint32_t threads);
+    static void Shutdown();
     
     template<typename Callback>
     static void Execute(Callback&& action, TaskContext& context)
@@ -34,6 +35,7 @@ public:
     }
 
     static void Join(TaskContext& context);
+    static uint32_t ThreadCount();
 
 private:
     static void Distribute(TaskContext& context, const AsyncDistributeDelegate& action, uint32_t count, int32_t groupSize = -1);

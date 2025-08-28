@@ -13,6 +13,7 @@ static std::mutex m_QueueMutex;
 static std::mutex m_SleepMutex;
 static bool m_Shutdown = false;
 static bool m_Paused = true;
+static std::vector<HANDLE> m_Threads;
 
 TaskQueue::~TaskQueue()
 {
@@ -22,6 +23,19 @@ TaskQueue::~TaskQueue()
 void TaskQueue::Initialize(uint32_t threads)
 {
     CreateThreads(threads);
+}
+
+void TaskQueue::Shutdown()
+{
+    m_Shutdown = true;
+    m_WakeUpCondition.notify_all();
+
+    for (HANDLE thread : m_Threads)
+    {
+        WaitForSingleObject(thread, INFINITE);
+        CloseHandle(thread);
+    }
+    m_Threads.clear();
 }
 
 bool DoWork(uint32_t threadIndex)
@@ -45,7 +59,7 @@ bool DoWork(uint32_t threadIndex)
 
 DWORD WINAPI WorkFunction(LPVOID lpParameter)
 {
-    for (;;)
+    while (!m_Shutdown)
     {
         size_t threadIndex = reinterpret_cast<size_t>(lpParameter);
         bool didWork = DoWork((uint32_t)threadIndex);
@@ -63,10 +77,14 @@ void TaskQueue::CreateThreads(size_t count)
     for (size_t i = 0; i < count; ++i)
     {
         HANDLE thread = CreateThread(nullptr, 0, WorkFunction, reinterpret_cast<LPVOID>(i), 0, nullptr);
-        SetThreadAffinityMask(thread, 1ull << i);
+        
+        //DWORD_PTR result = SetThreadAffinityMask(thread, 1ull << i);
+        //DWORD_PTR resultPriority = SetThreadAffinityMask(thread, THREAD_PRIORITY_HIGHEST);
+
         std::wstringstream name;
         name << "TaskQueue Thread " << i;
         SetThreadDescription(thread, name.str().c_str());
+        m_Threads.push_back(thread);
     }
 }
 
@@ -92,6 +110,11 @@ void TaskQueue::Join(TaskContext& context)
     }
 }
 
+uint32_t TaskQueue::ThreadCount()
+{
+    return (uint32_t)m_Threads.size() + 1;
+}
+
 void TaskQueue::Distribute(TaskContext& context, const AsyncDistributeDelegate& action, uint32_t count, int32_t groupSize)
 {
     if (count == 0)
@@ -100,7 +123,7 @@ void TaskQueue::Distribute(TaskContext& context, const AsyncDistributeDelegate& 
     }
     if (groupSize == -1)
     {
-        groupSize = std::thread::hardware_concurrency();
+        groupSize = ThreadCount();
     }
 
     uint32_t jobs = (uint32_t)ceil((float)count / groupSize);

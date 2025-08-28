@@ -10,6 +10,15 @@ class ResourceView;
 struct BufferSRVDesc;
 struct BufferUAVDesc;
 
+struct BufferView
+{
+	BufferView(Buffer* pBuffer) : pBuffer(pBuffer), Offset(0) {}
+	BufferView( Buffer* pBuffer, uint32_t offset ) : pBuffer(pBuffer), Offset(offset) {}
+
+	Buffer* pBuffer;
+	uint32_t Offset;
+};
+
 enum class BufferFlag
 {
 	None = 0,

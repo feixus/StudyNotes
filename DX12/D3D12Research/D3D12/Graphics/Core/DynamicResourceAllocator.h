@@ -36,7 +36,6 @@ public:
 	void FreeLargePages(uint64_t fenceValue, const std::vector<AllocationPage*> pLargePages);
 	void FlushAll();
 
-	constexpr static uint64_t PAGE_SIZE = Math::FromMegabytes * 2;
 	uint64_t GetMemoryUsage() const;
 
 private:

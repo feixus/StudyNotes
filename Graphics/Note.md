@@ -20,7 +20,8 @@
 
 5. PDF(Probability Density Function)/CDF(Cumulative distribution function)/Importance Sampling  
 	a continuous function that specify the probability of the continuous random variable falling with a particular range of values.  such as normal distribution.  
-	https://stats.libretexts.org/Courses/Saint_Mary's_College_Notre_Dame/MATH_345__-_Probability_(Kuter)  
+   
+   https://stats.libretexts.org/Courses/Saint_Mary's_College_Notre_Dame/MATH_345__-_Probability_(Kuter)  
   
    https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-20-gpu-based-importance-sampling  
    https://www.tobias-franke.eu/log/2014/03/30/notes_on_importance_sampling.html  
@@ -76,6 +77,10 @@
 	  
 15. Sky  
 	A Practical Analytic Model for Daylight (https://dl.acm.org/doi/pdf/10.1145/311535.311545)  
+	
+16. Monte Carlo Integration  
+	PDF为求和公式(Monte Carlo estimator)的分母的原因 (https://www.pbr-book.org/4ed/Monte_Carlo_Integration/Monte_Carlo_Basics)  
+	
 	
 	
 	

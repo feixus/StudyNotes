@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+	<!-- Visualizer for BlockHeader (simple linked list) -->
+	<Type Name="BlockHeader">
+		<DisplayString>Next Block: 0x{pNext}</DisplayString>
+		<Expand>
+			<Item Name="[Next]">pNext</Item>
+		</Expand>
+	</Type>
+
+	<!-- Visualizer for PageHeader -->
+	<Type Name="PageHeader">
+		<DisplayString>Next Page: 0x{pNext}</DisplayString>
+		<Expand>
+			<Item Name="[Next]">pNext</Item>
+			<Item Name="[Blocks]">Blocks()</Item>
+			<!-- If Blocks is useful to visualize -->
+		</Expand>
+	</Type>
+
+	<!-- Visualizer for the allocator (contains m_pPageList and m_pFreeList) -->
+	<Type Name="MyAllocator">
+		<!-- Replace with your actual class/struct name -->
+		<DisplayString>Pages: {m_pPageList}, Free Blocks: {m_pFreeList}</DisplayString>
+		<Expand>
+			<!-- Page List -->
+			<LinkedListItems>
+				<Size>10</Size>
+				<HeadPointer>m_pPageList</HeadPointer>
+				<NextPointer>pNext</NextPointer>
+				<ValueNode>this</ValueNode>
+				<!-- This is the key: show the current PageHeader -->
+			</LinkedListItems>
+
+			<!-- Free Block List -->
+			<LinkedListItems>
+				<Size>10</Size>
+				<HeadPointer>m_pFreeList</HeadPointer>
+				<NextPointer>pNext</NextPointer>
+				<ValueNode>this</ValueNode>
+				<!-- This is the key: show the current PageHeader -->
+			</LinkedListItems>
+		</Expand>
+	</Type>
+
+
+</AutoVisualizer>
