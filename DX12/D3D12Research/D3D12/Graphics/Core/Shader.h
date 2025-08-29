@@ -16,6 +16,8 @@ enum class ShaderType : uint8_t
 class ShaderBase
 {
 public:
+	virtual ~ShaderBase() = default;
+
 	void* GetByteCode() const;
 	uint32_t GetByteCodeSize() const;
 	const std::vector<std::string>& GetDependencies() const { return m_Dependencies; }
@@ -25,7 +27,7 @@ protected:
 
 	std::vector<std::string> m_Dependencies;
 	std::string m_Path;
-	ComPtr<ID3DBlob> m_pByteCode;
+	ComPtr<IDxcBlob> m_pByteCode;
 };
 
 class Shader : public ShaderBase

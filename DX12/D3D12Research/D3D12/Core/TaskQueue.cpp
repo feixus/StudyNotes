@@ -12,12 +12,11 @@ static std::condition_variable m_WakeUpCondition;
 static std::mutex m_QueueMutex;
 static std::mutex m_SleepMutex;
 static bool m_Shutdown = false;
-static bool m_Paused = true;
-static std::vector<HANDLE> m_Threads;
+static std::vector<Thread> m_Threads;
 
 TaskQueue::~TaskQueue()
 {
-    m_Shutdown = true;
+    Shutdown();
 }
 
 void TaskQueue::Initialize(uint32_t threads)
@@ -29,13 +28,6 @@ void TaskQueue::Shutdown()
 {
     m_Shutdown = true;
     m_WakeUpCondition.notify_all();
-
-    for (HANDLE thread : m_Threads)
-    {
-        WaitForSingleObject(thread, INFINITE);
-        CloseHandle(thread);
-    }
-    m_Threads.clear();
 }
 
 bool DoWork(uint32_t threadIndex)
@@ -74,17 +66,15 @@ DWORD WINAPI WorkFunction(LPVOID lpParameter)
 
 void TaskQueue::CreateThreads(size_t count)
 {
+    m_Threads.resize(count);
     for (size_t i = 0; i < count; ++i)
     {
-        HANDLE thread = CreateThread(nullptr, 0, WorkFunction, reinterpret_cast<LPVOID>(i), 0, nullptr);
-        
-        //DWORD_PTR result = SetThreadAffinityMask(thread, 1ull << i);
-        //DWORD_PTR resultPriority = SetThreadAffinityMask(thread, THREAD_PRIORITY_HIGHEST);
+        Thread& thread = m_Threads[i];
+        thread.RunThread(WorkFunction, reinterpret_cast<LPVOID>(i));
 
-        std::wstringstream name;
+        std::stringstream name;
         name << "TaskQueue Thread " << i;
-        SetThreadDescription(thread, name.str().c_str());
-        m_Threads.push_back(thread);
+        thread.SetName(name.str());
     }
 }
 

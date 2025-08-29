@@ -2,3 +2,5 @@
 Vulkan/VulkanTutorial/.vs/
 Vulkan/VulkanTutorial/x64/
 Vulkan/VulkanTutorial/.vcxproj
+.vs/
+.vscode/

@@ -41,7 +41,8 @@ public:
 private:
 	bool m_AllSameState;
 	D3D12_RESOURCE_STATES m_CommonState;
-	std::array<D3D12_RESOURCE_STATES, 12> m_ResourceStates{};
+	constexpr static uint32_t MAX_SUBRESOURCES = 12;
+	std::array<D3D12_RESOURCE_STATES, MAX_SUBRESOURCES> m_ResourceStates{};
 };
 
 class GraphicsObject

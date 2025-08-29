@@ -35,13 +35,24 @@ public:
 		Time::Reset();
 
 		MSG msg = {};
-		while (msg.message != WM_QUIT)
+		bool quit = false;
+		while (!quit)
 		{
-			if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+			while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 			{
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
+
+				if (msg.message == WM_QUIT)
+				{
+					quit = true;
+					break;
+				}
 			}
+
+			Time::Tick();
+			m_pGraphics->Update();
+			Input::Instance().Update();
 		}
 
 		m_pGraphics->Shutdown();
@@ -110,13 +121,6 @@ private:
 	{
 		switch (message)
 		{
-		case WM_PAINT:
-		{
-			Time::Tick();
-			m_pGraphics->Update();
-			Input::Instance().Update();
-			return 0;
-		}
 		case WM_ACTIVATE:
 		{
 			(LOWORD(wParam) == WA_INACTIVE) ? Time::Stop() : Time::Start();

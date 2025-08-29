@@ -35,6 +35,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64_t fenceValue)
 
 void CommandAllocatorPool::FreeAllocator(ID3D12CommandAllocator* pAllocator, uint64_t fenceValue)
 {
+	std::scoped_lock lock(m_AllocationMutex);
 	m_FreeAllocators.push(std::pair<ID3D12CommandAllocator*, uint64_t>(pAllocator, fenceValue));
 }
 
@@ -169,11 +170,9 @@ void CommandQueue::WaitForFence(uint64_t fenceValue)
 	m_pFence->SetEventOnCompletion(fenceValue, m_pFenceEventHandle);
 	DWORD result = WaitForSingleObject(m_pFenceEventHandle, INFINITE);
 
-	switch(result)
+	if(WAIT_OBJECT_0)
 	{
-	case WAIT_OBJECT_0:
 		PIXNotifyWakeFromFenceSignal(m_pFenceEventHandle); // the event was successfully signaled, so notify PIX
-		break;
 	}
 
 	m_LastCompletedFenceValue = fenceValue;
