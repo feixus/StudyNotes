@@ -27,6 +27,8 @@
 #include "Graphics/RenderGraph/ResourceAllocator.h"
 #include "Graphics/Core/CommandSignature.h"
 #include "Core/CommandLine.h"
+#include "Core/TaskQueue.h"
+#include "Content/image.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -40,7 +42,8 @@
 #define GPU_VALIDATION 0
 #endif
 
-bool g_DumpRenderGraph = true;
+bool g_DumpRenderGraph = false;
+bool g_Screenshot = false;
 
 float g_WhitePoint = 1;
 float g_MinLogLuminance = -10.0f;
@@ -288,6 +291,61 @@ void Graphics::Update()
 	sceneData.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolveDepthStencil());
 
 	uint64_t nextFenceValue = 0;
+
+	if (g_Screenshot && m_ScreenshotDelay < 0)
+	{
+		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
+		screenshot.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+			{
+				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+				D3D12_RESOURCE_DESC desc = m_pTonemapTarget->GetResource()->GetDesc();
+				m_pDevice->GetCopyableFootprints(&desc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+				m_pScreenshotBuffer = std::make_unique<Buffer>(this, "Screenshot Texture");			
+				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
+				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+				renderContext.InsertResourceBarrier(m_pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+				renderContext.CopyTexture(m_pTonemapTarget.get(), m_pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
+				m_ScreenshotRowPitch = textureFootprint.Footprint.RowPitch;
+			});
+		m_ScreenshotDelay = 4;
+		g_Screenshot = false;
+	}
+
+	if (m_pScreenshotBuffer)
+	{
+		if (m_ScreenshotDelay == 0)
+		{
+			TaskContext taskContext;
+			TaskQueue::Execute([&](uint32_t) {
+				char* pData = (char*)m_pScreenshotBuffer->Map(0, m_pScreenshotBuffer->GetSize());
+				Image img;
+				img.SetSize(m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight(), 4);
+				uint32_t imageRowPitch = m_pTonemapTarget->GetWidth() * 4;
+				uint32_t targetOffset = 0;
+				for (int i = 0; i < m_pTonemapTarget->GetHeight(); i++)
+				{
+					img.SetData(pData, targetOffset, imageRowPitch);
+					pData += m_ScreenshotRowPitch;
+					targetOffset += imageRowPitch;
+				}
+				m_pScreenshotBuffer->UnMap();
+
+				SYSTEMTIME time;
+				GetSystemTime(&time);
+				char stringTarget[128];
+				GetTimeFormat(LOCALE_INVARIANT, TIME_FORCE24HOURFORMAT, &time, "hh_mm_ss", stringTarget, 128);
+				std::stringstream filePath;
+				filePath << "Screenshot_" << stringTarget << ".jpg";
+				img.Save(filePath.str().c_str());
+				m_pScreenshotBuffer.reset();
+			}, taskContext);
+			m_ScreenshotDelay = -1;
+		}
+		else
+		{
+			m_ScreenshotDelay--;	
+		}
+	}
 
 	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
 	sceneData.DepthStencil = setupLights.Write(sceneData.DepthStencil);
@@ -1402,7 +1460,11 @@ void Graphics::UpdateImGui()
 		{
 			g_DumpRenderGraph = true;
 		}
-
+		if (ImGui::Button("Screenshot"))
+		{
+			g_Screenshot = true;
+		}
+	
 		if (ImGui::BeginCombo("DebugTexture", items[currentItemIndex]))
 		{
 			for (int n = 0; n < IM_ARRAYSIZE(items); n++)

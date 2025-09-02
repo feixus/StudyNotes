@@ -2,28 +2,55 @@
 #include "Console.h"
 #include "CommandLine.h"
 
-static Console* consoleInstance = nullptr;
+static HANDLE sConsoleHandle = nullptr;
 
-Console::Console()
-    : m_ConvertBufferSize(4096), m_ConvertBuffer(new char[m_ConvertBufferSize])
+std::mutex sLogMutex;
+static std::queue<Console::LogEntry> sMessageQueue;
+static LogType sVerbosity;
+static std::deque<Console::LogEntry> sHistory;
+
+void InitializeConsoleWindow()
 {
+    if (AllocConsole())
+    {
+        // redirect the CRT standard input, output, and error handles to the console
+        FILE* pCout;
+        freopen_s(&pCout, "CONIN$", "r", stdin);
+        freopen_s(&pCout, "CONOUT$", "w", stdout);
+        freopen_s(&pCout, "CONOUT$", "w", stderr);
+
+        // clear the error state for each of the C++ standard stream objects.
+        // we need to do this, as attempts to access the standard streams before they refer to a valid target will cause the iostream objects to enter an error state. 
+        //In the error state, they will refuse to perform any input or output operations.
+        std::wcout.clear();
+        std::cout.clear();
+        std::cerr.clear();
+        std::wcerr.clear();
+        std::wcin.clear();
+        std::cin.clear();
+
+        // set consoleHandle
+        sConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+        // disable close-button
+        HWND hwnd = GetConsoleWindow();
+        if (hwnd != nullptr)
+        {
+            HMENU hMenu = GetSystemMenu(hwnd, FALSE);
+            if (hMenu != nullptr)
+            {
+                DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
+            }
+        }
+    }
 }
 
-Console::~Console()
+void Console::Initialize()
 {
-    delete[] m_ConvertBuffer;
-}
-
-void Console::Startup()
-{
-    check(!consoleInstance);
-    static Console instance;
-    consoleInstance = &instance;
-
 #if WITH_CONSOLE
     if (!CommandLine::GetBool("noconsole"))
     {
-        consoleInstance->InitializeConsoleWindow();
+        InitializeConsoleWindow();
     }
 #endif
 }
@@ -52,7 +79,7 @@ bool Console::LogHRESULT(const char* source, HRESULT hr)
 
 void Console::Log(const char* message, LogType type)
 {
-    if ((int)type < (int)consoleInstance->m_Verbosity)
+    if ((int)type < (int)sVerbosity)
     {
         return;
     }
@@ -70,17 +97,17 @@ void Console::Log(const char* message, LogType type)
             stream << "[Info] ";
             break;
         case LogType::Warning:
-            if (consoleInstance->m_ConsoleHandle)
+            if (sConsoleHandle)
             {
-                SetConsoleTextAttribute(consoleInstance->m_ConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+                SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
             }
             stream << "[Warning] ";
             break;
         case LogType::Error:
         case LogType::FatalError:
-            if (consoleInstance->m_ConsoleHandle)
+            if (sConsoleHandle)
             {
-                SetConsoleTextAttribute(consoleInstance->m_ConsoleHandle, FOREGROUND_RED | FOREGROUND_INTENSITY);
+                SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_INTENSITY);
             }
             stream << "[Error] ";
             break;
@@ -94,15 +121,33 @@ void Console::Log(const char* message, LogType type)
     OutputDebugStringA(output.c_str());
     OutputDebugStringA("\n");
 
-    if (consoleInstance->m_ConsoleHandle)
+    if (sConsoleHandle)
     {
-        SetConsoleTextAttribute(consoleInstance->m_ConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+        SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     }
 
-    consoleInstance->m_History.push_back({ message, type });
-    if (consoleInstance->m_History.size() > 50)
+    if (Thread::IsMainThread())
     {
-        consoleInstance->m_History.pop_front();
+        {
+            std::scoped_lock lock(sLogMutex);
+            while (!sMessageQueue.empty())
+            {
+                const LogEntry& entry = sMessageQueue.front();
+                sHistory.push_back(entry);
+                sMessageQueue.pop();
+            }
+        }
+
+        sHistory.push_back({ message, type });
+        if (sHistory.size() > 50)
+        {
+            sHistory.pop_front();
+        }
+    }
+    else
+    {
+        std::scoped_lock lock(sLogMutex);
+        sMessageQueue.push(LogEntry(message, type));
     }
 
     if (type == LogType::Error)
@@ -117,52 +162,20 @@ void Console::Log(const char* message, LogType type)
 
 void Console::LogFormat(LogType type, const char* format, ...)
 {
+    static char sConvertBuffer[4096];
     va_list args;
     va_start(args, format);
-    _vsnprintf_s(&consoleInstance->m_ConvertBuffer[0], consoleInstance->m_ConvertBufferSize, consoleInstance->m_ConvertBufferSize, format, args);
+    _vsnprintf_s(sConvertBuffer, 4096, 4096, format, args);
     va_end(args);
-    Log(&consoleInstance->m_ConvertBuffer[0], type);
+    Log(sConvertBuffer, type);
 }
 
 void Console::SetVerbosity(LogType type)
 {
-    consoleInstance->m_Verbosity = type;
+    sVerbosity = type;
 }
 
 const std::deque<Console::LogEntry>& Console::GetHistory()
 {
-    return consoleInstance->m_History;
-}
-
-void Console::InitializeConsoleWindow()
-{
-    if (AllocConsole())
-    {
-        // redirect the CRT standard input, output, and error handles to the console
-        FILE* pCout;
-        freopen_s(&pCout, "CONIN$", "r", stdin);
-        freopen_s(&pCout, "CONOUT$", "w", stdout);
-        freopen_s(&pCout, "CONOUT$", "w", stderr);
-
-        std::wcout.clear();
-        std::cout.clear();
-        std::cerr.clear();
-        std::wcerr.clear();
-        std::wcin.clear();
-        std::cin.clear();
-
-        // set consoleHandle
-        m_ConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-
-        // disable close-button
-        HWND hwnd = GetConsoleWindow();
-        if (hwnd != nullptr)
-        {
-            HMENU hMenu = GetSystemMenu(hwnd, FALSE);
-            if (hMenu != nullptr)
-            {
-                DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
-            }
-        }
-    }
+    return sHistory;
 }

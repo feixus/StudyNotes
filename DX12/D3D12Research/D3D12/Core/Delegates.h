@@ -1,6 +1,19 @@
 #pragma once
 
-#define CPP_DELEGATES_USE_OLD_NAMING 0
+#ifndef DELEGATE_ASSERT
+#include <assert.h>
+#define DELEGATE_ASSERT(expression, ...) assert(expression)
+#endif
+
+#ifndef DELEGATE_STATIC_ASSERT
+#define DELEGATE_STATIC_ASSERT(expression, msg)
+#endif
+
+// the allocation size of delegate data.
+// delegates larger than this will be heap allocated.
+#ifndef DELEGATE_INLINE_ALLOCATION_SIZE
+#define DELEGATE_INLINE_ALLOCATION_SIZE 32
+#endif
 
 #define DECLARE_DELEGATE(name, ...) \
 using name = Delegate<void, __VA_ARGS__>
@@ -21,6 +34,51 @@ private: \
     using MulticastDelegate::RemoveAll; \
     using MulticastDelegate::Remove; \
 };
+
+
+/////////////////////////////////////////////////////////////////
+/////////////////INTERNAL SECTION////////////////////////////////
+/////////////////////////////////////////////////////////////////
+
+namespace _DelegateInternal
+{
+    template<bool IsConst, typename Object, typename RetVal, typename... Args>
+    struct MemberFunction;
+
+    template<typename Object, typename RetVal, typename... Args>
+    struct MemberFunction<true, Object, RetVal, Args...>
+    {
+        using Type = RetVal(Object::*)(Args...) const;
+    };
+
+	template<typename Object, typename RetVal, typename... Args>
+	struct MemberFunction<false, Object, RetVal, Args...>
+	{
+		using Type = RetVal(Object::*)(Args...);
+	};
+
+    static void* (*Alloc)(size_t size) = [](size_t size) { return malloc(size); };
+    static void (*Free)(void* pPtr) = [](void* pPtr) { free(pPtr); };
+
+    template<typename T>
+    void DelegateDeleteFunc(T* pPtr)
+    {
+        pPtr->~T();
+        DelegateFreeFunc(pPtr);
+    }
+}
+
+namespace Delegates
+{
+    using AllocateCallback = void* (*)(size_t size);
+    using FreeCallback = void(*)(void* pPtr);
+
+    inline void SetAllocationCallbacks(AllocateCallback allocateCallback, FreeCallback freeCallback)
+    {
+        _DelegateInternal::Alloc = allocateCallback;
+        _DelegateInternal::Free = freeCallback;
+    }
+}
 
 // base type for delegates
 template<typename RetVal, typename... Args>
@@ -66,14 +124,14 @@ private:
     std::tuple<Args2...> m_Payload;
 };
 
-template<typename T, typename RetVal, typename... Args2>
+template<bool IsConst, typename T, typename RetVal, typename... Args2>
 class RawDelegate;
 
-template<typename T, typename RetVal, typename... Args, typename... Args2>
-class RawDelegate<T, RetVal(Args...), Args2...> : public IDelegate<RetVal, Args...>
+template<bool IsConst, typename T, typename RetVal, typename... Args, typename... Args2>
+class RawDelegate<IsConst, T, RetVal(Args...), Args2...> : public IDelegate<RetVal, Args...>
 {
 public:
-    using DelegateFunction = RetVal(T::*)(Args..., Args2...);
+    using DelegateFunction = typename _DelegateInternal::MemberFunction<IsConst, T, RetVal, Args..., Args2...>::Type;
 
     RawDelegate(T* pObject,DelegateFunction function, Args2&&... args)
         : m_pObject(pObject), m_Function(function), m_Payload(std::forward<Args2>(args)...)
@@ -131,14 +189,14 @@ private:
     std::tuple<Args2...> m_Payload;
 };
 
-template<typename T, typename RetVal, typename... Args>
+template<bool IsConst, typename T, typename RetVal, typename... Args>
 class SPDelegate;
 
-template<typename RetVal, typename T, typename... Args, typename... Args2>
-class SPDelegate<T, RetVal(Args...), Args2...> : public IDelegate<RetVal, Args...>
+template<bool IsConst, typename RetVal, typename T, typename... Args, typename... Args2>
+class SPDelegate<IsConst, T, RetVal(Args...), Args2...> : public IDelegate<RetVal, Args...>
 {
 public:
-    using DelegateFunction = RetVal(T::*)(Args..., Args2...);
+    using DelegateFunction = typename _DelegateInternal::MemberFunction<IsConst, T, RetVal, Args..., Args2...>::Type;
 
     SPDelegate(const std::shared_ptr<T>& pObject, DelegateFunction function, Args2&&... args)
         : m_pObject(pObject), m_Function(function), m_Payload(std::forward<Args2>(args)...)
@@ -185,7 +243,7 @@ private:
 class DelegateHandle
 {
 public:
-    constexpr DelegateHandle() noexcept : m_Id(-1) {}
+    constexpr DelegateHandle() noexcept : m_Id(INVALID_ID) {}
     explicit DelegateHandle(bool) noexcept : m_Id(GetNewID()) {}
 
     ~DelegateHandle() noexcept = default;
@@ -222,18 +280,28 @@ public:
 
     inline bool IsValid() const noexcept
     {
-        return m_Id != -1;
+        return m_Id != INVALID_ID;
     }
 
     inline void Reset() noexcept
     {
-        m_Id = -1;
+        m_Id = INVALID_ID;
     }
 
+    constexpr static const uint32_t INVALID_ID = (uint32_t)~0;
+
 private:
-    __int64 m_Id;
-    inline static __int64 CURRENT_ID{0};
-    static __int64 GetNewID();
+    uint32_t m_Id;
+    inline static uint32_t CURRENT_ID{INVALID_ID};
+    static uint32_t GetNewID()
+	{
+        DelegateHandle::CURRENT_ID++;
+		if (DelegateHandle::CURRENT_ID == INVALID_ID)
+		{
+			DelegateHandle::CURRENT_ID = 0;
+		}
+		return DelegateHandle::CURRENT_ID;
+	}
 };
 
 template<size_t MaxStackSize>
@@ -242,7 +310,7 @@ class InlineAllocator
 public:
     constexpr InlineAllocator() noexcept : m_Size(0)
     {
-        static_assert(MaxStackSize > sizeof(void*), "MaxStackSize is smaller or equal to the size of a pointer. This will make the use of an InlineAllocator pointless. Please increse the MaxStackSize");
+        DELEGATE_STATIC_ASSERT(MaxStackSize > sizeof(void*), "MaxStackSize is smaller or equal to the size of a pointer. This will make the use of an InlineAllocator pointless. Please increse the MaxStackSize");
     }
 
     ~InlineAllocator() noexcept
@@ -307,7 +375,7 @@ public:
             m_Size = size;
             if (m_Size > MaxStackSize)
             {
-                pPtr = new char[size];
+                pPtr = _DelegateInternal::Alloc(size);
                 return pPtr;
             }
         }
@@ -318,7 +386,7 @@ public:
     {
         if (m_Size > MaxStackSize)
         {
-            delete[] (char*)pPtr;
+            _DelegateInternal::Free(pPtr);
         }
         m_Size = 0;
     }
@@ -357,17 +425,25 @@ private:
 template<typename RetVal, typename... Args>
 class Delegate
 {
+private:
+    template<typename T, typename... Args2>
+    using ConstMemberFunction = typename _DelegateInternal::MemberFunction<true, T, RetVal, Args..., Args2...>::Type;
+	template<typename T, typename... Args2>
+	using NonConstMemberFunction = typename _DelegateInternal::MemberFunction<false, T, RetVal, Args..., Args2...>::Type;
+
 public:
     using IDelegateT = IDelegate<RetVal, Args...>;
 
-    constexpr Delegate() noexcept {}
+    constexpr Delegate() noexcept : m_Allocator() {}
 
     ~Delegate() noexcept
     {
         Release();
     }
 
+    // copy constructor
     Delegate(const Delegate& other) : m_Allocator(other.m_Allocator) {}
+    // copy assignment operator
     Delegate& operator=(const Delegate& other)
     {
         Release();
@@ -375,7 +451,9 @@ public:
         return *this;
     }
 
+    // move constructor
     Delegate(Delegate&& other) noexcept : m_Allocator(std::move(other.m_Allocator)) {}
+    // move assignment operator
     Delegate& operator=(Delegate&& other) noexcept
     {
         Release();
@@ -384,15 +462,23 @@ public:
     }
 
     template<typename T, typename... Args2>
-    static Delegate CreateRaw(T* pObj, RetVal(T::*pFunction)(Args..., Args2...), Args2... args)
+    [[nodiscard]] static Delegate CreateRaw(T* pObj, NonConstMemberFunction<T, Args2...> pFunction, Args2... args)
     {
         Delegate handler;
-        handler.Bind<RawDelegate<T, RetVal(Args...), Args2...>>(pObj, pFunction, std::forward<Args2>(args)...);
+        handler.Bind<RawDelegate<false, T, RetVal(Args...), Args2...>>(pObj, pFunction, std::forward<Args2>(args)...);
         return handler;
     }
 
+	template<typename T, typename... Args2>
+	[[nodiscard]] static Delegate CreateRaw(T* pObj, ConstMemberFunction<T, Args2...> pFunction, Args2... args)
+	{
+		Delegate handler;
+		handler.Bind<RawDelegate<true, T, RetVal(Args...), Args2...>>(pObj, pFunction, std::forward<Args2>(args)...);
+		return handler;
+	}
+
     template<typename... Args2>
-    static Delegate CreateStatic(RetVal(*pFunction)(Args..., Args2...), Args2... args)
+    [[nodiscard]] static Delegate CreateStatic(RetVal(*pFunction)(Args..., Args2...), Args2... args)
     {
         Delegate handler;
         handler.Bind<StaticDelegate<RetVal(Args...), Args2...>>(pFunction, std::forward<Args2>(args)...);
@@ -400,7 +486,7 @@ public:
     }
 
     template<typename TLambda, typename... Args2>
-    static Delegate CreateLambda(TLambda&& lambda, Args2... args)
+    [[nodiscard]] static Delegate CreateLambda(TLambda&& lambda, Args2... args)
     {
         Delegate handler;
         handler.Bind<LambdaDelegate<TLambda, RetVal(Args...), Args2...>>(std::forward<TLambda>(lambda), std::forward<Args2>(args)...);
@@ -408,19 +494,34 @@ public:
     }
 
     template<typename T, typename... Args2>
-    static Delegate CreateSP(const std::shared_ptr<T>& pObj, RetVal(T::*pFunction)(Args..., Args2...), Args2... args)
+    [[nodiscard]] static Delegate CreateSP(const std::shared_ptr<T>& pObj, NonConstMemberFunction<T, Args2...> pFunction, Args2... args)
     {
         Delegate handler;
-        handler.Bind<SPDelegate<T, RetVal(Args...), Args2...>>(pObj, pFunction, std::forward<Args2>(args)...);
+        handler.Bind<SPDelegate<false, T, RetVal(Args...), Args2...>>(pObj, pFunction, std::forward<Args2>(args)...);
         return handler;
     }
 
+	template<typename T, typename... Args2>
+	[[nodiscard]] static Delegate CreateSP(const std::shared_ptr<T>& pObj, ConstMemberFunction<T, Args2...> pFunction, Args2... args)
+	{
+		Delegate handler;
+		handler.Bind<SPDelegate<true, T, RetVal(Args...), Args2...>>(pObj, pFunction, std::forward<Args2>(args)...);
+		return handler;
+	}
+
     // bind a member function
     template<typename T, typename... Args2>
-    inline void BindRaw(T* pObj, RetVal(T::*pFunction)(Args..., Args2...), Args2&&... args)
+    inline void BindRaw(T* pObj, NonConstMemberFunction<T, Args2...> pFunction, Args2&&... args)
     {
+        DELEGATE_STATIC_ASSERT(!std::is_const<T>::value, "cant bind a non-const function on a const object");
         *this = CreateRaw<T, Args2...>(pObj, pFunction, std::forward<Args2>(args)...);
     }
+
+	template<typename T, typename... Args2>
+	inline void BindRaw(T* pObj, ConstMemberFunction<T, Args2...> pFunction, Args2&&... args)
+	{
+		*this = CreateRaw<T, Args2...>(pObj, pFunction, std::forward<Args2>(args)...);
+	}
 
     // bind a static/global function
     template<typename... Args2>
@@ -437,11 +538,18 @@ public:
     }
 
     // bind a member function with a shared pointer
-    template<typename T, typename... Args2>
-    inline void BindSP(const std::shared_ptr<T> pObj, RetVal(T::*pFunction)(Args..., Args2...), Args2&&... args)
-    {
-        *this = CreateSP<T, Args2...>(pObj, pFunction, std::forward<Args2>(args)...);
-    }
+	template<typename T, typename... Args2>
+	inline void BindSP(const std::shared_ptr<T> pObj, NonConstMemberFunction<T, Args2...> pFunction, Args2&&... args)
+	{
+        DELEGATE_STATIC_ASSERT(!std::is_const<T>::value, "cant bind a non-const function on a const object");
+		*this = CreateSP<T, Args2...>(pObj, pFunction, std::forward<Args2>(args)...);
+	}
+
+	template<typename T, typename... Args2>
+	inline void BindSP(const std::shared_ptr<T> pObj, ConstMemberFunction<T, Args2...> pFunction, Args2&&... args)
+	{
+		*this = CreateSP<T, Args2...>(pObj, pFunction, std::forward<Args2>(args)...);
+	}
 
     inline bool IsBound() const
     {
@@ -450,7 +558,7 @@ public:
 
     RetVal Execute(Args... args) const
     {
-        assert(m_Allocator.HasAllocation() && "Delegate is not bound");
+        DELEGATE_ASSERT(m_Allocator.HasAllocation(), "Delegate is not bound");
         return GetDelegate()->Execute(std::forward<Args>(args)...);
     }
 
@@ -532,11 +640,6 @@ private:
     InlineAllocator<Delegate::GetAllocatorStackSize()> m_Allocator;
 };
 
-#if CPP_DELEGATES_USE_OLD_NAMING
-template<typename RetVal, typename... Args>
-using SinglecastDelegate = Delegate<RetVal, Args...>;
-#endif
-
 // delegate that can be bound to by multiple objects
 template<typename... Args>
 class MulticastDelegate
@@ -545,7 +648,19 @@ public:
 	using DelegateT = Delegate<void, Args...>;
 
 private:
-    using DelegateHandlePair = std::pair<DelegateHandle, DelegateT>;
+    struct DelegateHandlerPair
+    {
+        DelegateHandle Handle;
+        DelegateT Callback;
+        DelegateHandlerPair() : Handle(false) {}
+		DelegateHandlerPair(const DelegateHandle& handle, const DelegateT& callback) : Handle(handle), Callback(callback) {}
+		DelegateHandlerPair(const DelegateHandle& handle, DelegateT&& callback) : Handle(handle), Callback(std::move(callback)) {}
+    };
+
+    template<typename T, typename... Args2>
+    using ConstMemberFunction = typename _DelegateInternal::MemberFunction<true, T, void, Args..., Args2...>::Type;
+	template<typename T, typename... Args2>
+	using NonConstMemberFunction = typename _DelegateInternal::MemberFunction<false, T, void, Args..., Args2...>::Type;
 
 public:
     constexpr MulticastDelegate() : m_Locks(0) {}
@@ -562,7 +677,7 @@ public:
     MulticastDelegate& operator=(MulticastDelegate&& other) noexcept
     {
         m_Events = std::move(other.m_Events);
-        m_Locks = other.m_Locks;
+        m_Locks = std::move(other.m_Locks);
         return *this;
 	}
 
@@ -581,23 +696,29 @@ public:
         // favour an empty space over a possible array relllocation
         for (size_t i = 0; i < m_Events.size(); i++)
         {
-            if (m_Events[i].first.IsValid() == false)
+            if (m_Events[i].Handle.IsValid() == false)
             {
-                m_Events[i] = std::make_pair(DelegateHandle(true), std::move(handler));
-                return m_Events[i].first;
+                m_Events[i] = DelegateHandlerPair(DelegateHandle(true), std::move(handler));
+                return m_Events[i].Handle;
             }
         }
 
-        m_Events.push_back(std::make_pair(DelegateHandle(true), std::move(handler)));
-        return m_Events.back().first;
+        m_Events.emplace_back(DelegateHandle(true), std::move(handler));
+        return m_Events.back().Handle;
     }
 
 	// bind a member function
     template<typename T, typename... Args2>
-    inline DelegateHandle AddRaw(T* pObject, void(T::* pFunction)(Args..., Args2...), Args2&&... args)
+    inline DelegateHandle AddRaw(T* pObject, NonConstMemberFunction<T, Args2...> pFunction, Args2&&... args)
     {
         return Add(DelegateT::CreateRaw(pObject, pFunction, std::forward<Args2>(args)...));
     }
+
+	template<typename T, typename... Args2>
+	inline DelegateHandle AddRaw(T* pObject, ConstMemberFunction<T, Args2...> pFunction, Args2&&... args)
+	{
+		return Add(DelegateT::CreateRaw(pObject, pFunction, std::forward<Args2>(args)...));
+	}
 
 	// bind a static/global function
     template<typename... Args2>
@@ -615,10 +736,16 @@ public:
 
     // bind a member function with a shared pointer
 	template<typename T, typename... Args2>
-    inline DelegateHandle AddSP(std::shared_ptr<T> pObject, void(T::* pFunction)(Args..., Args2...), Args2&&... args)
+    inline DelegateHandle AddSP(std::shared_ptr<T> pObject, NonConstMemberFunction<T, Args...> pFunction, Args2&&... args)
     {
 		return Add(DelegateT::CreateSP(pObject, pFunction, std::forward<Args2>(args)...));
     }
+
+	template<typename T, typename... Args2>
+	inline DelegateHandle AddSP(std::shared_ptr<T> pObject, ConstMemberFunction<T, Args...> pFunction, Args2&&... args)
+	{
+		return Add(DelegateT::CreateSP(pObject, pFunction, std::forward<Args2>(args)...));
+	}
 
     // removes all handles thar are bound from a specific object
 	// ignored when pObject is nullptr
@@ -632,7 +759,7 @@ public:
 
         for (size_t i = m_Events.size() - 1; i >= 0 ; i--)
         {
-            if (m_Events[i].second.GetOwner() == pObject)
+            if (m_Events[i].Callback.GetOwner() == pObject)
             {
                 if (IsLocked())
                 {
@@ -657,11 +784,11 @@ public:
 
         for (size_t i = 0; i < m_Events.size(); i++)
         {
-            if (m_Events[i].first == handle)
+            if (m_Events[i].Handle == handle)
             {
                 if (IsLocked())
                 {
-					m_Events[i].second.Clear();
+					m_Events[i].Callback.Clear();
                 }
                 else
                 {
@@ -684,7 +811,7 @@ public:
 
         for (const auto& event : m_Events)
         {
-            if (event.first == handle)
+            if (event.Handle == handle)
             {
                 return true;
             }
@@ -699,7 +826,7 @@ public:
         {
             for (auto& event : m_Events)
             {
-                event.second.Clear();
+                event.Callback.Clear();
             }
         }
         else
@@ -718,7 +845,7 @@ public:
         size_t toDelegate = 0;
         for (size_t i = 0; i < m_Events.size() - toDelegate; ++i)
         {
-            if (m_Events[i].first.IsValid() == false)
+            if (m_Events[i].Handle.IsValid() == false)
             {
 				std::swap(m_Events[i], m_Events[m_Events.size() - toDelegate - 1]);
 				++toDelegate;
@@ -736,9 +863,9 @@ public:
         Lock();
         for (const auto& event : m_Events)
         {
-            if (event.first.IsValid())
+            if (event.Handle.IsValid())
             {
-                event.second.Execute(std::forward<Args>(args)...);
+                event.Callback.Execute(std::forward<Args>(args)...);
             }
 		}
         Unlock();
@@ -763,6 +890,6 @@ private:
         return m_Locks > 0;
 	}
 
-	std::vector<DelegateHandlePair> m_Events;
+	std::vector<DelegateHandlerPair> m_Events;
     unsigned int m_Locks;
 };

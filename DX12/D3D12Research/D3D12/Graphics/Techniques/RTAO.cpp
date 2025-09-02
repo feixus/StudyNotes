@@ -244,8 +244,8 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
         
         ShaderLibrary shaderLibrary("RTAO.hlsl");
 
-        StateObjectDesc stateObjectDesc;
-        stateObjectDesc.AddLibrary(shaderLibrary, { "RayGen", "ClosestHit", "Miss"});
+        CD3DX12_STATE_OBJECT_HELPER stateObjectDesc;
+        stateObjectDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), {"RayGen", "ClosestHit", "Miss"});
         stateObjectDesc.AddHitGroup("HitGroup", "ClosestHit");
 		stateObjectDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
 		stateObjectDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());
@@ -253,6 +253,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
         stateObjectDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
         stateObjectDesc.SetRaytracingPipelineConfig(1);
         stateObjectDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
-        m_pStateObject = stateObjectDesc.Finalize("RTAO SO", pGraphics->GetRaytracingDevice());
+        D3D12_STATE_OBJECT_DESC desc = stateObjectDesc.Desc();
+        pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pStateObject.GetAddressOf()));
     }
 }

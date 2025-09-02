@@ -134,7 +134,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 		if (NeedsTransition(beforeState, state))
 		{
 			check(IsTransitionAllowed(m_Type, beforeState), "current resource state is not valid to transition from this commandlist type");
-			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), pBuffer->GetResourceState(), state, subResource);
+			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
 			resourceState.Set(state, subResource);	
 		}
 	}

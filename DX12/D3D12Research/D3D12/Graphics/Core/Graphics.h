@@ -209,6 +209,9 @@ private:
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
+	std::unique_ptr<Buffer> m_pScreenshotBuffer;
+	int32_t m_ScreenshotDelay{-1};
+	int32_t m_ScreenshotRowPitch{0};
 
 	// synchronization objects
 	uint32_t m_CurrentBackBufferIndex{0};

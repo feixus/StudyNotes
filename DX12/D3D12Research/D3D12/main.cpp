@@ -294,6 +294,8 @@ static std::wstring GetLatestWinPixGpuCapturerPath()
 //int main()
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
+	Thread::SetMainThread();
+
 	CommandLine::Parse(lpCmdLine);
 	
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -308,7 +310,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		LoadLibrary(name);
 	}*/
 
-	Console::Startup();
+	Console::Initialize();
 	E_LOG(Info, "Startup hello dx12");
 
 	ViewWrapper vw;
