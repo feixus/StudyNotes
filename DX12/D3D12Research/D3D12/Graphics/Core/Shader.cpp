@@ -195,12 +195,15 @@ namespace ShaderCompiler
 		compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 	#endif
 
+		std::vector<std::pair<std::string, std::string>> defineValues(defines.size());
 		std::vector<D3D_SHADER_MACRO> shaderDefines;
-		for (const std::string& define : defines)
+		for (size_t i = 0; i < defines.size(); ++i)
 		{
 			D3D_SHADER_MACRO m;
-			m.Name = define.c_str();
-			m.Definition = "1";
+			const std::string& define = defines[i];
+			defineValues[i] = std::make_pair<std::string, std::string>(define.substr(0, define.find('=')), define.substr(define.find('=') + 1));
+			m.Name = defineValues[i].first.c_str();
+			m.Definition = defineValues[i].second.c_str();
 			shaderDefines.push_back(m);
 		}
 
@@ -358,6 +361,7 @@ bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* p
 
 	if (shaderType == ShaderType::Mesh || shaderType == ShaderType::Amplification)
 	{
+		shaderModelMajor = Math::Max<uint32_t>(shaderModelMajor, 6);
 		shaderModelMinor = Math::Max<uint32_t>(shaderModelMinor, 5);
 	}
 
@@ -381,6 +385,7 @@ bool ShaderLibrary::Compile(const char* pFilePath, char shaderModelMajor, char s
 	}
 
 	std::string source = shaderSource.str();
+	shaderModelMajor = Math::Max<uint32_t>(shaderModelMajor, 6);
 	shaderModelMinor = Math::Max<uint32_t>(shaderModelMinor, 3);
 	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
 	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32_t)source.size(), "lib", pBlob, "", shaderModelMajor, shaderModelMinor, defines);

@@ -6,8 +6,6 @@ class GraphicsTexture;
 class Buffer;
 class CommandContext;
 class CommandContext;
-struct aiMesh;
-class Mesh;
 
 class SubMesh
 {

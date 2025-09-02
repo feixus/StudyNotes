@@ -58,7 +58,6 @@ struct VSOutput
 {
     float4 PositionCS : SV_Position;
     float3 TexCoord : TEXCOORD;
-    float3 cBias : BIAS;
 };
 
 [RootSignature(RootSig)]

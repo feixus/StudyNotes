@@ -114,10 +114,7 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Graphic
 
 			context.EndRenderPass();
         });
-}
 
-void DebugRenderer::EndFrame()
-{
     m_Lines.clear();
     m_Triangles.clear();
 }

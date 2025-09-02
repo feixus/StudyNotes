@@ -25,7 +25,6 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RenderGraph/Blackboard.h"
 #include "Graphics/RenderGraph/ResourceAllocator.h"
-#include "Graphics/Core/CommandSignature.h"
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
 #include "Content/image.h"
@@ -67,12 +66,10 @@ bool g_EnableUI = true;
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount) :
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
-{
-}
+{}
 
 Graphics::~Graphics()
-{
-}
+{}
 
 void Graphics::Initialize(HWND hWnd)
 {
@@ -104,10 +101,16 @@ void Graphics::Update()
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
-	//D3D::PixCaptureScope pixScope;
 	PROFILE_BEGIN("UpdateGameState");
 
 	m_pCamera->Update();
+
+	float costheta = cosf(g_SunOrientation);
+	float sintheta = sinf(g_SunOrientation);
+	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
+	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+	m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
+	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
 
 	std::sort(m_TransparentBatches.begin(), m_TransparentBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
@@ -136,14 +139,6 @@ void Graphics::Update()
 
 	// shadow map partitioning
 	//////////////////////////////////
-
-	float costheta = cosf(g_SunOrientation);
-	float sintheta = sinf(g_SunOrientation);
-	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
-
-	m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
-	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
 
 	constexpr uint32_t MAX_CASCADES = 4;
 
@@ -278,6 +273,11 @@ void Graphics::Update()
 	////////////////////////////////
 	// Rendering Begin
 	////////////////////////////////
+
+	if (m_CapturePix)
+	{
+		D3D::BeginPixCapture();
+	}
 
 	RGGraph graph(this);
 
@@ -481,21 +481,6 @@ void Graphics::Update()
 					renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 					renderContext.FlushResourceBarriers();
 
-					// D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {
-					// 	.Offset = 0,
-					// 	.Footprint = {
-					// 		.Format = DXGI_FORMAT_R32G32_FLOAT,
-					// 		.Width = 1,
-					// 		.Height = 1,
-					// 		.Depth = 1,
-					// 		.RowPitch = Math::AlignUp<uint32_t>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
-					// 	}
-					// };
-
-					// CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
-					// CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
-
-					// renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
 					renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
 			});
 		}
@@ -570,6 +555,7 @@ void Graphics::Update()
 		resources.pCamera = m_pCamera.get();
 		resources.pShadowMap = m_pShadowMap.get();
 		resources.pShadowData = &lightData;
+		resources.pAO = m_pAmbientOcclusion.get();
 		m_pTiledForward->Execute(graph, resources);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
@@ -841,6 +827,12 @@ void Graphics::Update()
 	//  - present the frame buffer
 	//  - wait for the next frame to be finished to start queueing work for it
 	EndFrame(nextFenceValue);
+
+	if (m_CapturePix)
+	{
+		D3D::EndPixCapture();
+		m_CapturePix = false;
+	}
 }
 
 void Graphics::Shutdown()
@@ -858,7 +850,6 @@ void Graphics::BeginFrame()
 void Graphics::EndFrame(uint64_t fenceValue)
 {
 	Profiler::Get()->Resolve(this, m_Frame);
-	DebugRenderer::Get()->EndFrame();
 
 	// the top third(triple buffer) is not need wait, just record the every frame fenceValue.
 	// the 'm_CurrentBackBufferIndex' is always in the new buffer frame
@@ -950,6 +941,7 @@ void Graphics::InitD3D()
 	pAdapter.Reset();
 
 	m_pDevice.As(&m_pRaytracingDevice);
+	m_pDevice->SetName(L"Main Device");
 
 	if (debugD3D)
 	{
@@ -1159,24 +1151,23 @@ void Graphics::OnResize(int width, int height)
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 	m_pTiledForward->OnSwapchainCreated(width, height);
-	m_pRTAO->OnSwapchainCreated(width, height);
 	m_pSSAO->OnSwapchainCreated(width, height);
 
 	m_ReductionTargets.clear();
-	int w = GetWindowWidth();
-	int h = GetWindowHeight();
+	int w = width;
+	int h = height;
 	while (w > 1 || h > 1)
 	{
 		w = Math::DivideAndRoundUp(w, 16);
 		h = Math::DivideAndRoundUp(h, 16);
-		std::unique_ptr<GraphicsTexture> pTexture = std::make_unique<GraphicsTexture>(this);
+		std::unique_ptr<GraphicsTexture> pTexture = std::make_unique<GraphicsTexture>(this, "SDSM Reduction Target");
 		pTexture->Create(TextureDesc::Create2D(w, h, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 		m_ReductionTargets.push_back(std::move(pTexture));
 	}
 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
-		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this);
+		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this, "SDSM Reduction Readback Target");
 		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
@@ -1463,6 +1454,10 @@ void Graphics::UpdateImGui()
 		if (ImGui::Button("Screenshot"))
 		{
 			g_Screenshot = true;
+		}
+		if (ImGui::Button("Pix Capture"))
+		{
+			m_CapturePix = true;
 		}
 	
 		if (ImGui::BeginCombo("DebugTexture", items[currentItemIndex]))

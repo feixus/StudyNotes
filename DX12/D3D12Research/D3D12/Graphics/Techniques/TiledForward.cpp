@@ -97,8 +97,12 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
         {
             struct PerFrameData
             {
-                Matrix ViewInverse;
                 Matrix View;
+                Matrix ViewInverse;
+                Matrix Projection;
+                Vector2 ScreenDimensions;
+                float NearZ;
+                float FarZ;
             } frameData{};
 
             struct PerObjectData
@@ -107,8 +111,12 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                 Matrix WorldViewProjection;
             } objectData{};
 
-            frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
             frameData.View = inputResource.pCamera->GetView();
+            frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
+            frameData.Projection = inputResource.pCamera->GetProjection();
+            frameData.ScreenDimensions = Vector2((float)inputResource.pRenderTarget->GetWidth(), (float)inputResource.pRenderTarget->GetHeight());
+            frameData.NearZ = inputResource.pCamera->GetNear();
+            frameData.FarZ = inputResource.pCamera->GetFar();
 
             GraphicsTexture* pDepthTexture = passResources.GetTexture(inputResource.DepthBuffer);
 
@@ -121,6 +129,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
             context.InsertResourceBarrier(inputResource.pShadowMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
             context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_READ);
+            context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
             context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, pDepthTexture, RenderPassAccess::Load_DontCare));
 
@@ -132,6 +141,17 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
 
             context.SetDynamicDescriptor(4, 0, inputResource.pShadowMap->GetSRV());
             context.SetDynamicDescriptor(4, 3, inputResource.pLightBuffer->GetSRV());
+            context.SetDynamicDescriptor(4, 4, inputResource.pAO->GetSRV());
+
+            auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
+            {
+                D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+                    b.pMaterial->pDiffuseTexture->GetSRV(),
+                    b.pMaterial->pNormalTexture->GetSRV(),
+                    b.pMaterial->pSpecularTexture->GetSRV()
+                };
+                context.SetDynamicDescriptors(3, 0, srvs, std::size(srvs));
+            };
 
             {
                 GPU_PROFILE_SCOPE("Opaque", &context);
@@ -144,11 +164,9 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                 {
                     objectData.World = b.WorldMatrix;
                     objectData.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
-                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
-                    context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-                    context.SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
-                    context.SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
+                    setMaterialDescriptors(context, b);
+                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
                     b.pMesh->Draw(&context);
                 }
@@ -165,11 +183,9 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                 {
                     objectData.World = b.WorldMatrix;
                     objectData.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
-                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
-                    context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-                    context.SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
-                    context.SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
+                    setMaterialDescriptors(context, b);
+                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
                     b.pMesh->Draw(&context);
                 }
@@ -216,9 +232,9 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
     // PBR diffuse passes
 	{
 		// shaders
-		Shader vertexShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { });
-		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { });
-		Shader debugPixelShader("Diffuse.hlsl", ShaderType::Pixel, "DebugLightDensityPS", { });
+		Shader vertexShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
+		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
+		Shader debugPixelShader("Diffuse.hlsl", ShaderType::Pixel, "DebugLightDensityPS", { "TILED_FORWARD" });
 
 		// root signature
 		m_pDiffuseRS = std::make_unique<RootSignature>();

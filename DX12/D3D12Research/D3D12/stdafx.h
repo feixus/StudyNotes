@@ -12,6 +12,8 @@
 #define checkf(expression, msg) assert(expression && msg)
 #define noEntry() checkf(false, "Should not have reached this point!")
 
+#define USE_PIX 1
+
 #include <windows.h>
 #include <wrl/client.h>
 

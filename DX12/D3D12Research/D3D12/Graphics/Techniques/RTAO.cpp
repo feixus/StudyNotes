@@ -23,9 +23,6 @@ RTAO::RTAO(Graphics* pGraphics)
     SetupPipelines(pGraphics);
 }
 
-void RTAO::OnSwapchainCreated(int windowWidth, int windowHeight)
-{}
-
 void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera)
 {
     static float g_AoPower = 3;

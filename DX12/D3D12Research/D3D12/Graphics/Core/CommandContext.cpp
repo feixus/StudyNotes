@@ -10,7 +10,6 @@
 #include "GraphicsBuffer.h"
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
-#include "CommandSignature.h"
 #include "RaytracingCommon.h"												
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
@@ -57,7 +56,7 @@ uint64_t CommandContext::Execute(CommandContext** pContexts, uint32_t numContext
 	CommandQueue* pQueue = pContexts[0]->m_pGraphics->GetCommandQueue(pContexts[0]->GetType());
 	for (uint32_t i = 0; i < numContexts; ++i)
 	{
-		check(pContexts[i]->GetType() == pQueue->GetType(), "All contexts must be of the same type");
+		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All contexts must be of the same type");
 		pContexts[i]->FlushResourceBarriers();
 	}
 	uint64_t fenceValue = pQueue->ExecuteCommandList(pContexts, numContexts);
@@ -116,7 +115,7 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32_t subResource)
 {
-	check(IsTransitionAllowed(m_Type, state), "afterState is not valid on this commandlist type");
+	checkf(IsTransitionAllowed(m_Type, state), "afterState is not valid on this commandlist type");
 
 	ResourceState& resourceState = m_ResourceStates[pBuffer];
 	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
@@ -133,7 +132,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	{
 		if (NeedsTransition(beforeState, state))
 		{
-			check(IsTransitionAllowed(m_Type, beforeState), "current resource state is not valid to transition from this commandlist type");
+			checkf(IsTransitionAllowed(m_Type, beforeState), "current resource state is not valid to transition from this commandlist type");
 			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
 			resourceState.Set(state, subResource);	
 		}
@@ -781,4 +780,43 @@ bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandListType
 		return (state & VALID_COPY_QUEUE_RESOURCE_STATES) == state;
 	}
 	return true;
+}
+
+void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
+{
+    D3D12_COMMAND_SIGNATURE_DESC desc = {};
+    desc.ByteStride = m_Stride;
+    desc.NumArgumentDescs = static_cast<uint32_t>(m_ArgumentDescs.size());
+    desc.pArgumentDescs = m_ArgumentDescs.data();
+    desc.NodeMask = 0;
+
+    VERIFY_HR_EX(pDevice->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())), pDevice);
+    D3D_SETNAME(m_pCommandSignature.Get(), pName);
+}
+
+void CommandSignature::AddDispatch()
+{
+    D3D12_INDIRECT_ARGUMENT_DESC desc = {};
+    desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+    m_ArgumentDescs.push_back(desc);
+    constexpr int drawArgumentsCount = 3; // 3 uint32_t for x, y, z dimensions
+    m_Stride += drawArgumentsCount * sizeof(uint32_t); 
+}
+
+void CommandSignature::AddDraw()
+{
+    D3D12_INDIRECT_ARGUMENT_DESC desc = {};
+    desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+    m_ArgumentDescs.push_back(desc);
+    constexpr int drawArgumentsCount = 4;
+    m_Stride += drawArgumentsCount * sizeof(uint32_t);
+}
+
+void CommandSignature::AddDrawIndexed()
+{
+    D3D12_INDIRECT_ARGUMENT_DESC desc;
+    desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+    m_ArgumentDescs.push_back(desc);
+    constexpr int drawArgumentsCount = 4;
+    m_Stride += drawArgumentsCount * sizeof(uint32_t);
 }

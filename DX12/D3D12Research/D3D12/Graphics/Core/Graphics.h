@@ -281,4 +281,6 @@ private:
 	std::unique_ptr<GpuParticles> m_pGpuParticles;
 	// clouds
 	std::unique_ptr<class Clouds> m_pClouds;
+
+	bool m_CapturePix{false};
 };

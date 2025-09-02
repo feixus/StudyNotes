@@ -294,3 +294,24 @@ private:
 	uint32_t m_SubResource;
 	D3D12_RESOURCE_STATES m_BeforeState{D3D12_RESOURCE_STATE_UNKNOWN};
 };
+
+
+class CommandSignature
+{
+public:
+    void Finalize(const char* pName, ID3D12Device* pDevice);
+
+    void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; };
+    void AddDispatch();
+    void AddDraw();
+    void AddDrawIndexed();
+
+    ID3D12CommandSignature* GetCommandSignature() const { return m_pCommandSignature.Get(); }
+
+private:
+    // describes the layout of data used in indirect draw or dispatch commamds(e.g. ExecuteIndirect)
+    ComPtr<ID3D12CommandSignature> m_pCommandSignature;
+    ID3D12RootSignature* m_pRootSignature{nullptr};
+    uint32_t m_Stride{0};
+    std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDescs;
+};

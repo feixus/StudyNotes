@@ -14,8 +14,6 @@ class RTAO
 public:
     RTAO(Graphics* pGraphics);
 
-    void OnSwapchainCreated(int widowWidth, int windowHeight);
-
     void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera);
     void GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context);
 

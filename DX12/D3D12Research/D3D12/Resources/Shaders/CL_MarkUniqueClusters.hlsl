@@ -25,9 +25,6 @@ cbuffer Parameters : register(b1)
 // SV_Target0 implicitly uses u0 internally.
 RWStructuredBuffer<uint> uActiveCluster : register(u1);
 
-Texture2D tDiffuseTexture : register(t0);
-SamplerState sDiffuseSampler : register(s0);
-
 uint GetSliceFromDepth(float depth)
 {
     return floor(log(depth) * cSliceMagicA - cSliceMagicB);
