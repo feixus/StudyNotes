@@ -280,7 +280,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	check(!m_InRenderPass);
 	check(renderPassInfo.DepthStencilTarget.Target || (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::NoAccess && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::NoAccess));
 
-	auto ExtractBeginAccess = [](RenderPassAccess access) -> D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE
+	auto ExtractBeginAccess = [](RenderPassAccess access)
 	{
 		switch (RenderPassInfo::GetBeginAccess(access))
 		{
@@ -292,7 +292,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS;
 	};
 
-	auto ExtractEndingAccess = [](RenderPassAccess access) -> D3D12_RENDER_PASS_ENDING_ACCESS_TYPE
+	auto ExtractEndingAccess = [](RenderPassAccess access)
 	{
 		switch (RenderPassInfo::GetEndingAccess(access))
 		{
@@ -429,6 +429,9 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 
 	m_InRenderPass = true;
 	m_CurrentRenderPassInfo = renderPassInfo;
+
+	GraphicsTexture* pTargetTexture = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target : renderPassInfo.RenderTargets[0].Target;
+	SetViewport(FloatRect(0, 0, (float)pTargetTexture->GetWidth(), (float)pTargetTexture->GetHeight()), 0, 1);
 }
 
 void CommandContext::EndRenderPass()
@@ -472,7 +475,6 @@ void CommandContext::EndRenderPass()
 				{
 					FlushResourceBarriers();
 					CopyTexture(data.Target, data.ResolveTarget);
-					FlushResourceBarriers();
 				}
 			}
 		}

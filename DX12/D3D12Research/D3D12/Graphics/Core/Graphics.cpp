@@ -29,9 +29,6 @@
 #include "Core/TaskQueue.h"
 #include "Content/image.h"
 
-#define STB_RECT_PACK_IMPLEMENTATION
-#include "External/imgui/imstb_rectpack.h"
-
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
 #endif
@@ -56,6 +53,7 @@ bool g_DrawHistogram = false;
 
 bool g_ShowSDSM = false;
 bool g_StabilizeCascases = true;
+int g_ShadowCascades = 4;
 float g_PSSMFactor = 1.0f;
 
 bool g_ShowRaytraced = false;
@@ -64,6 +62,8 @@ bool g_VisualizeLights = false;
 float g_SunInclination = 0.2f;
 float g_SunOrientation = -3.055f;
 float g_SunTemperature = 5000.0f;
+
+int g_ShadowMapIndex = 0;
 
 bool g_EnableUI = true;
 
@@ -93,7 +93,7 @@ void Graphics::Initialize(HWND hWnd)
 
 	g_ShowRaytraced = SupportsRaytracing();
 
-	m_DesiredLightCount = 3;
+	m_DesiredLightCount = 6;
 	RandomizeLights(m_DesiredLightCount);
 
 	m_pDynamicAllocationManager->FlushAll();
@@ -128,6 +128,8 @@ void Graphics::Update()
 		return aDist < bDist;
 		});
 
+	m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
+
 	if (g_VisualizeLights)
 	{
 		for (const auto& light : m_Lights)
@@ -141,8 +143,6 @@ void Graphics::Update()
 		g_EnableUI = !g_EnableUI;
 	}
 
-	m_Lights[1].Position.x = 50 * sin(Time::GameTime());
-
 	// shadow map partitioning
 	//////////////////////////////////
 
@@ -150,14 +150,16 @@ void Graphics::Update()
 	float minPoint = 0;
 	float maxPoint = 1;
 	constexpr uint32_t MAX_CASCADES = 4;
-	std::array<float, MAX_CASCADES> cascadeSplits;
+	std::array<float, MAX_CASCADES> cascadeSplits{};
+
+	shadowData.NumCascades = g_ShadowCascades;
 
 	if (g_ShowSDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
-		float* pData = (float*)pSourceBuffer->Map();
-		minPoint = pData[0];
-		maxPoint = pData[1];
+		Vector2* pData = (Vector2*)pSourceBuffer->Map();
+		minPoint = pData->x;
+		maxPoint = pData->y;
 		pSourceBuffer->UnMap();
 	}
 
@@ -168,19 +170,14 @@ void Graphics::Update()
 	float minZ = nearPlane + minPoint * clipPlaneRange;
 	float maxZ = nearPlane + maxPoint * clipPlaneRange;
 
-	for (uint32_t i = 0; i < MAX_CASCADES; i++)
+	for (int i = 0; i < g_ShadowCascades; i++)
 	{
-		float p = (i + 1) / (float)MAX_CASCADES;
+		float p = (i + 1) / (float)g_ShadowCascades;
 		float log = minZ * std::pow(maxZ / minZ, p);
 		float uniform = minZ + (maxZ - minZ) * p;
 		float d = g_PSSMFactor * (log - uniform) + uniform;
 		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 	}
-
-	stbrp_context context;
-	stbrp_node nodes[64];
-	stbrp_init_target(&context, m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight(), nodes, 64);
-	std::vector<stbrp_rect> rects;
 
 	int shadowIndex = 0;
 	for (size_t i = 0; i < m_Lights.size(); ++i)
@@ -193,7 +190,7 @@ void Graphics::Update()
 		light.ShadowIndex = shadowIndex;
 		if (light.LightType == Light::Type::Directional)
 		{
-			for (uint32_t i = 0; i < MAX_CASCADES; ++i)
+			for (uint32_t i = 0; i < g_ShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
 				float currentCascadeSplit = cascadeSplits[i];
@@ -270,7 +267,7 @@ void Graphics::Update()
 				// snap projection to shadowmap texels to avoid flickering edges
 				if (g_StabilizeCascases)
 				{
-					float shadowMapSize = m_pShadowMap->GetHeight() * 0.5f;
+					float shadowMapSize = 2048;
 					Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
 					shadowOrigin *= shadowMapSize * 0.5f;
 					Vector4 rounded = XMVectorRound(shadowOrigin);
@@ -282,12 +279,6 @@ void Graphics::Update()
 					projectionMatrix *= Matrix::CreateTranslation(Vector3(roundedOffset));
 					lightViewProjection = shadowView * projectionMatrix;
 				}
-
-				stbrp_rect rect;
-				rect.w = 1024;
-				rect.h = 1024;
-				rect.id = shadowIndex;
-				rects.push_back(rect);
 			
 				shadowData.CascadeDepths[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
 				shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
@@ -295,18 +286,12 @@ void Graphics::Update()
 		}
 		else if (light.LightType == Light::Type::Spot)
 		{
-			stbrp_rect rect;
-			rect.w = 1024;
-			rect.h = 1024;
-			rect.id = shadowIndex;
-			rects.push_back(rect);
-
-			Matrix projection = DirectX::XMMatrixPerspectiveFovLH(2 * acos(light.SpotlightAngles.y), 1.0f, light.Range, 5.0f);
+			Matrix projection = DirectX::XMMatrixPerspectiveFovLH(2 * acos(light.SpotlightAngles.y), 1.0f, light.Range, 1.0f);
 			shadowData.LightViewProjections[shadowIndex++] = (Matrix)(XMMatrixLookToLH(light.Position, light.Direction, Vector3::Up)) * projection;
 		}
 		else if (light.LightType == Light::Type::Point)
 		{
-			Matrix projection = Math::CreatePerspectiveMatrix(Math::PIDIV2, 1, light.Range, 5.0f);
+			Matrix projection = Math::CreatePerspectiveMatrix(Math::PIDIV2, 1, light.Range, 1.0f);
 
 			constexpr Vector3 cubemapDirections[] = {
 				Vector3(-1, 0, 0),
@@ -327,26 +312,31 @@ void Graphics::Update()
 
 			for (int j = 0; j < 6; ++j)
 			{
-				stbrp_rect rect;
-				rect.w = 1024;
-				rect.h = 1024;
-				rect.id = j + shadowIndex;
-				rects.push_back(rect);
-
-				shadowData.LightViewProjections[shadowIndex + j] = Matrix::CreateLookAt(light.Position, light.Position + cubemapDirections[j], cubemapDirections[j]) * projection;
+				shadowData.LightViewProjections[shadowIndex] = Matrix::CreateLookAt(light.Position, light.Position + cubemapDirections[j], cubemapDirections[j]) * projection;
+				++shadowIndex;
 			}
-			shadowIndex += 6;
 		}
 	}
 
-	stbrp_pack_rects(&context, rects.data(), rects.size());
-
-	for (const stbrp_rect& r : rects)
+	if (shadowIndex > m_ShadowMaps.size())
 	{
-		shadowData.ShadowMapOffsets[r.id].x = (float)r.x / m_pShadowMap->GetWidth();
-		shadowData.ShadowMapOffsets[r.id].y = (float)r.y / m_pShadowMap->GetHeight();
-		shadowData.ShadowMapOffsets[r.id].z = (float)r.w / m_pShadowMap->GetWidth();
-		shadowData.ShadowMapOffsets[r.id].w = (float)r.h / m_pShadowMap->GetHeight();
+		m_ShadowMaps.resize(shadowIndex);
+		int i = 0;
+		for (auto& pShadowMap : m_ShadowMaps)
+		{
+			int size = (i < 4) ? 2048 : 512;
+			pShadowMap = std::make_unique<GraphicsTexture>(this, "Shadow Map");
+			pShadowMap->Create(TextureDesc::CreateDepth(size, size, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
+			++i;
+		}
+	}
+
+	for (Light& light : m_Lights)
+	{
+		if (light.ShadowIndex >= 0)
+		{
+			light.InvShadowSize = 1.0f / m_ShadowMaps[light.ShadowIndex]->GetWidth();
+		}
 	}
 	
 	PROFILE_END();
@@ -446,14 +436,12 @@ void Graphics::Update()
 	prepass.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
 		{
 			GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
-			const TextureDesc& desc = pDepthStencil->GetDesc();
 
 			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
 			RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
 			renderContext.BeginRenderPass(info);
 			renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
 
 			renderContext.SetPipelineState(m_pDepthPrepassPSO.get());
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
@@ -569,23 +557,21 @@ void Graphics::Update()
 		RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
 		shadows.Bind([=](CommandContext& context, const RGPassResource& resources)
 			{
-				context.InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				for (auto& pShadowMap : m_ShadowMaps)
+				{
+					context.InsertResourceBarrier(pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				}
 
-				context.BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
-
+				
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pShadowRS.get());
-
+				
 				for (int i = 0; i < shadowIndex; ++i)
 				{
 					GPU_PROFILE_SCOPE("Light View", &context);
-					const Vector4& shadowOffset = shadowData.ShadowMapOffsets[i];
-					FloatRect viewport;
-					viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
-					viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
-					viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
-					viewport.Bottom = viewport.Top + shadowOffset.w * (float)m_pShadowMap->GetHeight();
-					context.SetViewport(viewport);
+
+					GraphicsTexture* pShadowMap = m_ShadowMaps[i].get();
+					context.BeginRenderPass(RenderPassInfo(pShadowMap, RenderPassAccess::Clear_Store));
 
 					struct PerObjectData
 					{
@@ -619,8 +605,8 @@ void Graphics::Update()
 							b.pMesh->Draw(&context);
 						}
 					}
+					context.EndRenderPass();
 				}
-				context.EndRenderPass();
 		});
 	}
 
@@ -634,7 +620,7 @@ void Graphics::Update()
 		resources.pRenderTarget = GetCurrentRenderTarget();
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
-		resources.pShadowMap = m_pShadowMap.get();
+		resources.pShadowMaps = &m_ShadowMaps;
 		resources.pShadowData = &shadowData;
 		resources.pAO = m_pAmbientOcclusion.get();
 		m_pTiledForward->Execute(graph, resources);
@@ -648,7 +634,7 @@ void Graphics::Update()
 		resources.pRenderTarget = GetCurrentRenderTarget();
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
-		resources.pShadowMap = m_pShadowMap.get();
+		resources.pShadowMaps = &m_ShadowMaps;
 		resources.pShadowData = &shadowData;
 		resources.pAO = m_pAmbientOcclusion.get();
 		m_pClusteredForward->Execute(graph, resources);
@@ -662,7 +648,7 @@ void Graphics::Update()
 	sky.Bind([=](CommandContext& renderContext, const RGPassResource& inputResources)
 		{
 			GraphicsTexture* pDepthStencil = inputResources.GetTexture(sceneData.DepthStencil);
-			const TextureDesc& desc = pDepthStencil->GetDesc();
+
 			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
 			renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -670,7 +656,6 @@ void Graphics::Update()
 			
 			renderContext.BeginRenderPass(info);
 			renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
 
 			renderContext.SetPipelineState(m_pSkyboxPSO.get());
 			renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
@@ -974,10 +959,10 @@ void Graphics::InitD3D()
 	ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
 	{
-		E_LOG(Info, "DRED Enabled");
 		// turn on auto-breadcrumbs and page fault reporting
 		pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 		pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+		E_LOG(Info, "DRED Enabled");
 	}
 
 	// factory
@@ -1317,9 +1302,6 @@ void Graphics::InitializePipelines()
 		m_pShadowAlphaPSO = std::make_unique<PipelineState>(*m_pShadowPSO);
 		m_pShadowAlphaPSO->SetPixelShader(alphaPixelShader);
 		m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
-
-		m_pShadowMap = std::make_unique<GraphicsTexture>(this, "Shadow Map");
-		m_pShadowMap->Create(TextureDesc(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 	}
 
 	// depth prepass
@@ -1660,8 +1642,11 @@ void Graphics::UpdateImGui()
 	break;
 	case 1:
 	{
-		m_pVisualizeTexture = m_pShadowMap.get();
-		title = "ShadowMap";
+		if (m_ShadowMaps.size() > 0)
+		{
+			m_pVisualizeTexture = m_ShadowMaps[g_ShadowMapIndex].get();
+		}
+		title = "ShadowMap_" + std::to_string(g_ShadowMapIndex);
 	}
 	break;
 	default:
@@ -1672,6 +1657,13 @@ void Graphics::UpdateImGui()
 	{
 		ImGui::SetNextWindowPos(ImVec2(300, 0), 0, ImVec2(0, 0));
 		ImGui::Begin(title.c_str());
+
+		if (items[currentItemIndex] == "ShadowMap")
+		{
+			ImGui::SliderInt("Shadow Map", &g_ShadowMapIndex, 0, (int)m_ShadowMaps.size() - 1);
+			ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
+		}
+
 		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
 		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 		float width = windowSize.x;
@@ -1696,6 +1688,7 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Sun Temperature", &g_SunTemperature, 1000, 15000);
 
 	ImGui::Text("Shadows");
+	ImGui::SliderInt("Shadow Cascades", &g_ShadowCascades, 1, 4);
 	ImGui::Checkbox("SDSM", &g_ShowSDSM);
 	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascases);
 	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
@@ -1766,6 +1759,15 @@ void Graphics::RandomizeLights(int count)
 
 	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
 	m_Lights[2].ShadowIndex = 0;
+
+	m_Lights[3] = Light::Spot(Vector3(-80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 0, 1, 1.0f));
+	m_Lights[3].ShadowIndex = 0;
+
+	m_Lights[4] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 1, 0), 90, 70, 5000, Color(1, 0, 1, 1.0f));
+	m_Lights[4].ShadowIndex = 0;
+
+	m_Lights[5] = Light::Spot(Vector3(80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 1, 0, 1.0f));
+	m_Lights[5].ShadowIndex = 0;
 
 	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{

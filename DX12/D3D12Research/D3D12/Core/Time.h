@@ -6,7 +6,7 @@ public:
 	Time();
 	~Time();
 
-	static float GameTime();
+	static float TotalTime();
 	static float DeltaTime();
 
 	static void Reset();

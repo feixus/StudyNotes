@@ -20,7 +20,7 @@ struct TiledForwardInputResource
     RGResourceHandle ResolvedDepthBuffer;
     RGResourceHandle DepthBuffer;
     GraphicsTexture* pRenderTarget{nullptr};
-    GraphicsTexture* pShadowMap{nullptr};
+    std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps{nullptr};
 	GraphicsTexture* pAO{nullptr};
     const std::vector<Batch>* pOpaqueBatches{};
     const std::vector<Batch>* pTransparentBatches{};

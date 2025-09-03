@@ -19,12 +19,21 @@ const int gMsaaSampleCount = 1;
 class ViewWrapper
 {
 public:
-	void Run(HINSTANCE hInstance)
+	int Run(HINSTANCE hInstance, const char* lpCmdLine)
 	{
-		m_DisplayWidth = gWindowWidth;
-		m_DisplayHeight = gWindowHeight;
+		Thread::SetMainThread();
+
+		CommandLine::Parse(lpCmdLine);
+		
+		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+
+		Console::Initialize();
+		E_LOG(Info, "Startup hello dx12");
 
 		TaskQueue::Initialize(std::thread::hardware_concurrency());
+
+		m_DisplayWidth = gWindowWidth;
+		m_DisplayHeight = gWindowHeight;
 
 		HWND window = MakeWindow(hInstance);
 		Input::Instance().SetWindow(window);
@@ -59,6 +68,7 @@ public:
 		delete m_pGraphics;
 
 		TaskQueue::Shutdown();
+		return 0;
 	}
 
 private:
@@ -294,12 +304,6 @@ static std::wstring GetLatestWinPixGpuCapturerPath()
 //int main()
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-	Thread::SetMainThread();
-
-	CommandLine::Parse(lpCmdLine);
-	
-	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-
 	// Check to see if a copy of WinPixGpuCapturer.dll has already been injected into the application.
 	// This may happen if the application is launched through the PIX UI. 
 	/*if (GetModuleHandle("WinPixGpuCapturer.dll") == 0)
@@ -310,11 +314,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		LoadLibrary(name);
 	}*/
 
-	Console::Initialize();
-	E_LOG(Info, "Startup hello dx12");
-
 	ViewWrapper vw;
-	vw.Run(hInstance);
-
-	return 0;
+	return vw.Run(hInstance, lpCmdLine);
 }

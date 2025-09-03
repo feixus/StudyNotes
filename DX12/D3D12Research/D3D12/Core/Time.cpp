@@ -9,7 +9,7 @@ Time::~Time()
 {
 }
 
-float Time::GameTime()
+float Time::TotalTime()
 {
 	if (m_IsStopped)
 	{

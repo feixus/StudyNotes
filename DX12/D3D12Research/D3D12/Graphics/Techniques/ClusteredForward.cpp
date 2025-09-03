@@ -110,7 +110,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
             context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
             context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
-            context.SetViewport(FloatRect(0.0f, 0.0f, screenDimensions.x, screenDimensions.y));
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			struct PerFrameParameters
@@ -273,14 +272,12 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			frameData.SliceMagicA = sliceMagicA;
 			frameData.SliceMagicB = sliceMagicB;
 
-            context.InsertResourceBarrier(inputResource.pShadowMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
             context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
             context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(inputResource.DepthBuffer), RenderPassAccess::Load_DontCare));
-            context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
@@ -304,11 +301,16 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
                 context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
                 context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
-                context.SetDynamicDescriptor(4, 0, inputResource.pShadowMap->GetSRV());
-                context.SetDynamicDescriptor(4, 1, m_pLightGrid->GetSRV());
-                context.SetDynamicDescriptor(4, 2, m_pLightIndexGrid->GetSRV());
-                context.SetDynamicDescriptor(4, 3, inputResource.pLightBuffer->GetSRV());
-                context.SetDynamicDescriptor(4, 4, inputResource.pAO->GetSRV());
+                context.SetDynamicDescriptor(4, 0, m_pLightGrid->GetSRV());
+                context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
+                context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
+                context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
+
+                int idx = 0;
+                for (auto& pShadowMap : *inputResource.pShadowMaps)
+                {
+                    context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
+                }
 
                 for (const Batch& b : *inputResource.pOpaqueBatches)
                 {
@@ -357,10 +359,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                 context.SetPipelineState(m_pDebugClusterPSO.get());
                 context.SetGraphicsRootSignature(m_pDebugClusterRS.get());
 
-                context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-
                 Matrix p = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
-
                 context.SetDynamicConstantBufferView(0, &p, sizeof(Matrix));
                 context.SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetSRV());
                 context.SetDynamicDescriptor(1, 1, m_pDebugCompactedClusterBuffer->GetSRV());

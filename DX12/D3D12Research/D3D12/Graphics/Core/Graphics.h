@@ -38,6 +38,7 @@ struct ShadowData
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
 	Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 	float CascadeDepths[4]{};
+	uint32_t NumCascades{0};
 };
 
 enum class RenderPath
@@ -190,6 +191,7 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
+	std::vector<std::unique_ptr<GraphicsTexture>> m_ShadowMaps;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
@@ -225,7 +227,6 @@ private:
 	std::vector<Batch> m_TransparentBatches;
 
 	// shadow mapping
-	std::unique_ptr<GraphicsTexture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowRS;
 	std::unique_ptr<PipelineState> m_pShadowPSO;
 	std::unique_ptr<PipelineState> m_pShadowAlphaPSO;

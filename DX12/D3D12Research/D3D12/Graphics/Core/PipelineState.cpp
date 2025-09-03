@@ -52,6 +52,10 @@ void PipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32_t cou
     DXGI_SAMPLE_DESC* pSampleDesc = &m_Desc.PS.SampleDesc;
     pSampleDesc->Count = msaa;
     pSampleDesc->Quality = 0;
+
+    CD3DX12_RASTERIZER_DESC* pRsDesc = &m_Desc.PS.RasterizerState;
+    pRsDesc->MultisampleEnable = msaa > 1;
+
     m_Desc.PS.DSVFormat = dsvFormat;
 }
 

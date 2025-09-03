@@ -120,13 +120,10 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
 
             GraphicsTexture* pDepthTexture = passResources.GetTexture(inputResource.DepthBuffer);
 
-            context.SetViewport(FloatRect(0, 0, (float)pDepthTexture->GetWidth(), (float)pDepthTexture->GetHeight()));
-
             context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            context.InsertResourceBarrier(inputResource.pShadowMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
             context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_READ);
             context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -139,9 +136,14 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
             context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
             context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
 
-            context.SetDynamicDescriptor(4, 0, inputResource.pShadowMap->GetSRV());
-            context.SetDynamicDescriptor(4, 3, inputResource.pLightBuffer->GetSRV());
-            context.SetDynamicDescriptor(4, 4, inputResource.pAO->GetSRV());
+            context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
+            context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
+
+            int idx = 0;
+            for (auto& pShadowMap : *inputResource.pShadowMaps)
+            {
+                context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
+            }
 
             auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
             {
@@ -157,8 +159,8 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                 GPU_PROFILE_SCOPE("Opaque", &context);
                 context.SetPipelineState(g_VisualizeLightDensity ? m_pVisualizeDensityPSO.get() : m_pDiffusePSO.get());
                         
-                context.SetDynamicDescriptor(4, 1, m_pLightGridOpaque->GetSRV());
-                context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
+                context.SetDynamicDescriptor(4, 0, m_pLightGridOpaque->GetSRV());
+                context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
 
                 for (const Batch& b : *inputResource.pOpaqueBatches)
                 {
@@ -176,8 +178,8 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
                 GPU_PROFILE_SCOPE("Transparent", &context);
                 context.SetPipelineState(g_VisualizeLightDensity ? m_pVisualizeDensityPSO.get() : m_pDiffuseAlphaPSO.get());
                         
-                context.SetDynamicDescriptor(4, 1, m_pLightGridTransparent->GetSRV());
-                context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferTransparent->GetSRV());
+                context.SetDynamicDescriptor(4, 0, m_pLightGridTransparent->GetSRV());
+                context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferTransparent->GetSRV());
 
                 for (const Batch& b : *inputResource.pTransparentBatches)
                 {

@@ -294,10 +294,6 @@ void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsText
 			context.SetPipelineState(m_pParticleRenderPSO.get());
 			context.SetGraphicsRootSignature(m_pParticleRenderRS.get());
 
-			Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
-			context.SetViewport(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
-			context.SetScissorRect(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
-
 			struct FrameData
 			{
 				Matrix ViewInverse;
