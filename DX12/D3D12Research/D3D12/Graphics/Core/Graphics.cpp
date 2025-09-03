@@ -184,12 +184,12 @@ void Graphics::Update()
 	for (size_t i = 0; i < m_Lights.size(); ++i)
 	{
 		Light& light = m_Lights[i];
-		if (light.ShadowIndex == -1)
+		if (!light.CastShadows)
 		{
 			continue;
 		}
 		light.ShadowIndex = shadowIndex;
-		if (light.LightType == Light::Type::Directional)
+		if (light.Type == LightType::Directional)
 		{
 			for (uint32_t i = 0; i < g_ShadowCascades; ++i)
 			{
@@ -285,12 +285,12 @@ void Graphics::Update()
 				shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
 			}
 		}
-		else if (light.LightType == Light::Type::Spot)
+		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = DirectX::XMMatrixPerspectiveFovLH(2 * acos(light.SpotlightAngles.y), 1.0f, light.Range, 1.0f);
+			Matrix projection = DirectX::XMMatrixPerspectiveFovLH(2 * acos(light.UmbraAngle * Math::ToRadians), 1.0f, light.Range, 1.0f);
 			shadowData.LightViewProjections[shadowIndex++] = (Matrix)(XMMatrixLookToLH(light.Position, light.Direction, Vector3::Up)) * projection;
 		}
-		else if (light.LightType == Light::Type::Point)
+		else if (light.Type == LightType::Point)
 		{
 			Matrix projection = Math::CreatePerspectiveMatrix(Math::PIDIV2, 1, light.Range, 1.0f);
 
@@ -336,7 +336,7 @@ void Graphics::Update()
 	{
 		if (light.ShadowIndex >= 0)
 		{
-			light.InvShadowSize = 1.0f / m_ShadowMaps[light.ShadowIndex]->GetWidth();
+			light.ShadowMapSize = m_ShadowMaps[light.ShadowIndex]->GetWidth();
 		}
 	}
 	
@@ -423,8 +423,13 @@ void Graphics::Update()
 	sceneData.DepthStencil = setupLights.Write(sceneData.DepthStencil);
 	setupLights.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
 		{
-			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light));
-			memcpy(allocation.pMappedMemory, m_Lights.data(), m_Lights.size() * sizeof(Light));
+			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light::RenderData));
+			Light::RenderData* pTarget = (Light::RenderData*)allocation.pMappedMemory;
+			for (const Light& light : m_Lights)
+			{
+				*pTarget = light.GetData();
+				++pTarget;
+			}
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
 		});
 
@@ -1787,22 +1792,22 @@ void Graphics::RandomizeLights(int count)
 	position.Normalize(direction);
 
 	m_Lights[0] = Light::Directional(position, -direction, 5.0f);
-	m_Lights[0].ShadowIndex = 0;
+	m_Lights[0].CastShadows = true;
 	
 	m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
-	m_Lights[1].ShadowIndex = 0;
+	m_Lights[1].CastShadows = true;
 
 	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
-	m_Lights[2].ShadowIndex = 0;
+	m_Lights[2].CastShadows = true;
 
 	m_Lights[3] = Light::Spot(Vector3(-80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 0, 1, 1.0f));
-	m_Lights[3].ShadowIndex = 0;
+	m_Lights[3].CastShadows = true;
 
 	m_Lights[4] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 1, 0), 90, 70, 5000, Color(1, 0, 1, 1.0f));
-	m_Lights[4].ShadowIndex = 0;
+	m_Lights[4].CastShadows = true;
 
 	m_Lights[5] = Light::Spot(Vector3(80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 1, 0, 1.0f));
-	m_Lights[5].ShadowIndex = 0;
+	m_Lights[5].CastShadows = true;
 
 	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{
