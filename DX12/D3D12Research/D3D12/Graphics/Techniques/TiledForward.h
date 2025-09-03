@@ -36,10 +36,13 @@ public:
 
     void OnSwapchainCreated(int windowWidth, int windowHeight);
     void Execute(RGGraph& graph, const TiledForwardInputResource& inputResource);
+	void VisualizeLightDensity(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
 
 private:
 	void SetupResources(Graphics* pGraphics);
     void SetupPipelines(Graphics* pGraphics);
+
+	Graphics* m_pGraphics;
 
 	// light culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
@@ -55,6 +58,9 @@ private:
 	std::unique_ptr<RootSignature> m_pDiffuseRS;
 	std::unique_ptr<PipelineState> m_pDiffusePSO;
 	std::unique_ptr<PipelineState> m_pDiffuseAlphaPSO;
-	std::unique_ptr<PipelineState> m_pVisualizeDensityPSO;
 
+	// visualize light count
+	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
+	std::unique_ptr<PipelineState> m_pVisualizeLightsPSO;
+	std::unique_ptr<GraphicsTexture> m_pVisualizeIntermediateTexture;
 };

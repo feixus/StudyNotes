@@ -37,7 +37,8 @@ public:
     void OnSwapchainCreated(int windowWidth, int windowHeight);
 
     void Execute(RGGraph& graph, const ClusteredForwardInputResource& inputResource);
-
+    void VisualizeLightDensity(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
+    
 private:
     void SetupResources(Graphics* pGraphics);
     void SetupPipelines(Graphics* pGraphics);
@@ -97,6 +98,11 @@ private:
     std::unique_ptr<Buffer> m_pDebugLightGrid;
     Matrix m_DebugClusterViewMatrix;
     bool m_DidCopyDebugClusterData{false};
+
+    // visualize light count
+	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
+	std::unique_ptr<PipelineState> m_pVisualizeLightsPSO;
+	std::unique_ptr<GraphicsTexture> m_pVisualizeIntermediateTexture;
 
     bool m_ViewportDirty{true};
 };

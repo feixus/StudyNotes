@@ -16,9 +16,7 @@
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
 
-bool g_VisualizeLightDensity = false;
-
-TiledForward::TiledForward(Graphics* pGraphics)
+TiledForward::TiledForward(Graphics* pGraphics) : m_pGraphics(pGraphics)
 {
     SetupResources(pGraphics);
     SetupPipelines(pGraphics);
@@ -157,7 +155,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
 
             {
                 GPU_PROFILE_SCOPE("Opaque", &context);
-                context.SetPipelineState(g_VisualizeLightDensity ? m_pVisualizeDensityPSO.get() : m_pDiffusePSO.get());
+                context.SetPipelineState(m_pDiffusePSO.get());
                         
                 context.SetDynamicDescriptor(4, 0, m_pLightGridOpaque->GetSRV());
                 context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
@@ -176,7 +174,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
 
             {
                 GPU_PROFILE_SCOPE("Transparent", &context);
-                context.SetPipelineState(g_VisualizeLightDensity ? m_pVisualizeDensityPSO.get() : m_pDiffuseAlphaPSO.get());
+                context.SetPipelineState(m_pDiffuseAlphaPSO.get());
                         
                 context.SetDynamicDescriptor(4, 0, m_pLightGridTransparent->GetSRV());
                 context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferTransparent->GetSRV());
@@ -194,6 +192,63 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResource& inpu
             }
 
             context.EndRenderPass();
+        });
+}
+
+void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth)
+{
+    if (!m_pVisualizeIntermediateTexture)
+    {
+        m_pVisualizeIntermediateTexture = std::make_unique<GraphicsTexture>(m_pGraphics, "LightDensity Debug Texture");
+    }
+
+    if (m_pVisualizeIntermediateTexture->GetDesc() != pTarget->GetDesc())
+    {
+        m_pVisualizeIntermediateTexture->Create(pTarget->GetDesc());
+    }
+
+    float nearZ = camera.GetNear();
+    float farZ = camera.GetFar();
+
+    RGPassBuilder visualizePass = graph.AddPass("Visualize Light Density");
+    visualizePass.Bind([=](CommandContext& context, const RGPassResource& passResources)
+        {
+            struct Data
+            {
+				Matrix ProjectionInverse;
+				IntVector3 ClusterDimensions;
+				float padding;
+				IntVector2 ClusterSize;
+				float SliceMagicA;
+				float SliceMagicB;
+				float Near;
+				float Far;
+            } constantData{};
+
+            constantData.ProjectionInverse = camera.GetProjectionInverse();
+            constantData.Near = nearZ;
+            constantData.Far = farZ;
+
+            context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pVisualizeIntermediateTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+            context.SetPipelineState(m_pVisualizeLightsPSO.get());
+            context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
+
+            context.SetComputeDynamicConstantBufferView(0, &constantData, sizeof(Data));
+
+            context.SetDynamicDescriptor(1, 0, pTarget->GetSRV());
+            context.SetDynamicDescriptor(1, 1, pDepth->GetSRV());
+            context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetSRV());
+            
+            context.SetDynamicDescriptor(2, 0, m_pVisualizeIntermediateTexture->GetUAV());
+
+            context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 16), Math::DivideAndRoundUp(pTarget->GetHeight(), 16));
+            context.InsertUavBarrier();
+
+            context.CopyTexture(m_pVisualizeIntermediateTexture.get(), pTarget);
         });
 }
 
@@ -236,7 +291,6 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 		// shaders
 		Shader vertexShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
 		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
-		Shader debugPixelShader("Diffuse.hlsl", ShaderType::Pixel, "DebugLightDensityPS", { "TILED_FORWARD" });
 
 		// root signature
 		m_pDiffuseRS = std::make_unique<RootSignature>();
@@ -258,11 +312,18 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 			m_pDiffuseAlphaPSO = std::make_unique<PipelineState>(*m_pDiffusePSO.get());
             m_pDiffuseAlphaPSO->SetBlendMode(BlendMode::Alpha, false);
             m_pDiffuseAlphaPSO->Finalize("Diffuse PBR (Alpha) Pipeline", pGraphics->GetDevice());
-
-            // debug light density
-            m_pVisualizeDensityPSO = std::make_unique<PipelineState>(*m_pDiffusePSO.get());
-            m_pVisualizeDensityPSO->SetPixelShader(debugPixelShader);
-            m_pVisualizeDensityPSO->Finalize("Debug Light Density PSO", pGraphics->GetDevice());
 		}
 	}
+
+    {
+        Shader computeShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
+
+        m_pVisualizeLightsRS = std::make_unique<RootSignature>();
+        m_pVisualizeLightsRS->FinalizeFromShader("Visualize Light Density RS", computeShader, pGraphics->GetDevice());
+
+        m_pVisualizeLightsPSO = std::make_unique<PipelineState>();
+        m_pVisualizeLightsPSO->SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
+        m_pVisualizeLightsPSO->SetComputeShader(computeShader);
+        m_pVisualizeLightsPSO->Finalize("Visualize Light Density PSO", pGraphics->GetDevice());
+    }
 }
