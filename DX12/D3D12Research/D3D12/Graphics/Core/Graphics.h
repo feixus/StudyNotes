@@ -32,7 +32,7 @@ struct Batch
 	BoundingBox Bounds;
 };
 
-constexpr const int MAX_SHADOW_CASTERS = 8;
+constexpr const int MAX_SHADOW_CASTERS = 32;
 struct ShadowData
 {
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
@@ -271,7 +271,6 @@ private:
 	std::unique_ptr<PipelineState> m_pSkyboxPSO;
 
 	// light data
-	int m_ShadowCasters{0};
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
 

@@ -131,7 +131,7 @@ public:
     template<typename ExecuteCallback>
     void SetCallback(ExecuteCallback&& callback)
     {
-        RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 2048, "the execute callback exceeds the maximum size");
+        RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 4096, "the execute callback exceeds the maximum size");
         m_ExecuteCallback.BindLambda(std::move(callback));
     }
 
