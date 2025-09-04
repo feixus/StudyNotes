@@ -877,7 +877,7 @@ void Graphics::Update()
 
 		// render color legend
 		ImGui::SetNextWindowSize(ImVec2(60, 255));
-		ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - 65, m_WindowHeight - 280));
+		ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth - 65, (float)m_WindowHeight - 280));
 		ImGui::Begin("Visualize Light Density", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
 		ImGui::SetWindowFontScale(1.2f);
 		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
@@ -1822,7 +1822,6 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
 	int typeIndex = type;
-	bool isNew = false;
 	CommandContext* pCommandContext = nullptr;
 
 	{
@@ -1836,20 +1835,17 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		else
 		{
 			ComPtr<ID3D12CommandList> pCommandList;
-			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
-			m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
+			ComPtr<ID3D12Device4> pDevice4;
+			VERIFY_HR(m_pDevice.As(&pDevice4));
+			pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf()));
+			pCommandList->SetName(L"Pooled CommandList");
 			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type));
 			pCommandContext = m_CommandListPool[typeIndex].back().get();
-			isNew = true;
 		}
 	}
 
-	if (!isNew)
-	{
-		pCommandContext->Reset();
-	}
-
+	pCommandContext->Reset();
 	return pCommandContext;
 }
 
