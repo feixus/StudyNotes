@@ -92,8 +92,6 @@ void Graphics::Initialize(HWND hWnd)
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
-	g_ShowRaytraced = SupportsRaytracing();
-
 	m_DesiredLightCount = 6;
 	RandomizeLights(m_DesiredLightCount);
 
@@ -706,7 +704,7 @@ void Graphics::Update()
 
 	// tonemap
 	{
-		bool downscaleTonemap = false;
+		bool downscaleTonemap = true;
 		GraphicsTexture* pTonemapInput = downscaleTonemap ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
 		RGResourceHandle toneMappingInput = graph.ImportTexture("Tonemap Input", pTonemapInput);
 

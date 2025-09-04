@@ -1,6 +1,6 @@
 #pragma once
 
-enum class LightType : uint8_t
+enum class LightType
 {
 	Directional,
 	Point,
