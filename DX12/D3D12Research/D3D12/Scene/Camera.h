@@ -34,6 +34,7 @@ public:
     const Matrix& GetViewInverse() const;
     const Matrix& GetProjectionInverse() const;
     const BoundingFrustum& GetFrustum() const;
+    Ray GetMouseRay(uint32_t windowWidth, uint32_t windowHeight) const;
 
 protected:
     void OnDirty();

@@ -10,6 +10,7 @@
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/OfflineDescriptorAllocator.h"
 #include "Graphics/Core/GraphicsTexture.h"
+#include "External/ImGuizmo/ImGuizmo.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 {
@@ -36,6 +37,7 @@ void ImGuiRenderer::NewFrame(uint32_t width, uint32_t height)
 	io.MousePos.y = mousePos.y;
 
 	ImGui::NewFrame();
+	ImGuizmo::BeginFrame();
 }
 
 void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)

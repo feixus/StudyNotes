@@ -53,6 +53,7 @@ bool g_DrawHistogram = false;
 
 bool g_ShowSDSM = false;
 bool g_StabilizeCascases = true;
+bool g_VisualizeShadowCascades = false;
 int g_ShadowCascades = 4;
 float g_PSSMFactor = 1.0f;
 
@@ -189,7 +190,7 @@ void Graphics::Update()
 		light.ShadowIndex = shadowIndex;
 		if (light.Type == LightType::Directional)
 		{
-			for (uint32_t i = 0; i < g_ShadowCascades; ++i)
+			for (int i = 0; i < g_ShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
 				float currentCascadeSplit = cascadeSplits[i];
@@ -250,7 +251,7 @@ void Graphics::Update()
 				}
 				else
 				{
-					Matrix lightView = XMMatrixLookToLH(center, m_Lights[0].Direction, Vector3::Up);
+					Matrix lightView = Math::CreateLookToMatrix(center, m_Lights[0].Direction, Vector3::Up);
 					for (const Vector3& corner : frustumCorners)
 					{
 						Vector3 transformedCorner = Vector3::Transform(corner, lightView);
@@ -259,7 +260,7 @@ void Graphics::Update()
 					}
 				}
 
-				Matrix shadowView = XMMatrixLookToLH(center + light.Direction * -400, light.Direction, Vector3::Up);
+				Matrix shadowView = Math::CreateLookToMatrix(center + light.Direction * -400, light.Direction, Vector3::Up);
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
 				Matrix lightViewProjection = shadowView * projectionMatrix;
 
@@ -285,8 +286,8 @@ void Graphics::Update()
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = DirectX::XMMatrixPerspectiveFovLH(2 * acos(light.UmbraAngle * Math::ToRadians), 1.0f, light.Range, 1.0f);
-			shadowData.LightViewProjections[shadowIndex++] = (Matrix)(XMMatrixLookToLH(light.Position, light.Direction, Vector3::Up)) * projection;
+			Matrix projection = Math::CreatePerspectiveMatrix(2 * acos(light.UmbraAngle * Math::ToRadians), 1.0f, light.Range, 1.0f);
+			shadowData.LightViewProjections[shadowIndex++] = Math::CreateLookToMatrix(light.Position, light.Direction, Vector3::Up) * projection;
 		}
 		else if (light.Type == LightType::Point)
 		{
@@ -897,7 +898,7 @@ void Graphics::Update()
 		for (size_t i = 0; i < std::size(DEBUG_COLORS); ++i)
 		{
 			char number[16];
-			sprintf_s(number, "%d", i);
+			sprintf_s(number, "%d", (int)i);
 			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
 			ImGui::Button(number, ImVec2(40, 20));
 			ImGui::PopStyleColor();
@@ -1256,7 +1257,7 @@ void Graphics::OnResize(int width, int height)
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
-	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess | TextureFlag::RenderTarget));
+	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pCamera->SetAspectRatio((float)width / height);
 	m_pCamera->SetDirty();
@@ -1517,8 +1518,6 @@ void Graphics::UpdateImGui()
 	ImGui::Text("%dx MSAA", m_SampleCount);
 	ImGui::PlotLines("##", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
 
-	static int currentItemIndex = 0;
-	const char* items[] = { "AO", "ShadowMap" };
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
@@ -1556,22 +1555,6 @@ void Graphics::UpdateImGui()
 		if (ImGui::Button("Pix Capture"))
 		{
 			m_CapturePix = true;
-		}
-	
-		if (ImGui::BeginCombo("DebugTexture", items[currentItemIndex]))
-		{
-			for (int n = 0; n < IM_ARRAYSIZE(items); n++)
-			{
-				bool isSelected = (currentItemIndex == n);
-				if (ImGui::Selectable(items[n], isSelected))
-				{
-					currentItemIndex = n;
-				}
-
-				if (isSelected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
 		}
 
 		ImGui::TreePop();
@@ -1665,40 +1648,11 @@ void Graphics::UpdateImGui()
 	}
 	ImGui::PopStyleVar();
 
-	m_pVisualizeTexture = nullptr;
-	std::string title = "";
-	switch (currentItemIndex)
-	{
-	case 0:
-	{
-		m_pVisualizeTexture = m_pAmbientOcclusion.get();
-		title = "Ambient Occlusion: " + std::string(g_ShowRaytraced ? "RTAO" : "SSAO");
-	}
-	break;
-	case 1:
-	{
-		if (m_ShadowMaps.size() > 0)
-		{
-			m_pVisualizeTexture = m_ShadowMaps[g_ShadowMapIndex].get();
-		}
-		title = "ShadowMap_" + std::to_string(g_ShadowMapIndex);
-	}
-	break;
-	default:
-		break;
-	}
-
+	m_pVisualizeTexture = m_pAmbientOcclusion.get();
 	if (m_pVisualizeTexture)
 	{
-		ImGui::SetNextWindowPos(ImVec2(300, 0), 0, ImVec2(0, 0));
-		ImGui::Begin(title.c_str());
-
-		if (items[currentItemIndex] == "ShadowMap")
-		{
-			ImGui::SliderInt("Shadow Map", &g_ShadowMapIndex, 0, (int)m_ShadowMaps.size() - 1);
-			ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
-		}
-
+		ImGui::Begin("Visualize Texture");
+		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
 		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
 		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 		float width = windowSize.x;
@@ -1708,12 +1662,26 @@ void Graphics::UpdateImGui()
 			width = image.x / image.y * windowSize.y;
 			height = windowSize.y;
 		}
-
 		ImTextureID user_texture_id = m_pVisualizeTexture->GetSRV().ptr;
 		ImGui::Image(user_texture_id, ImVec2(width, height));
 		ImGui::End();
 	}
-	
+
+	if (g_VisualizeShadowCascades && m_ShadowMaps.size() >= 4)
+	{
+		float imageSize = 230;
+		ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
+		ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
+		ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
+		const Light& sunLight = m_Lights[0];
+		for (int i = 0; i < 4; ++i)
+		{
+			ImTextureID user_texture_id = m_ShadowMaps[sunLight.ShadowIndex + i]->GetSRV().ptr;
+			ImGui::Image(user_texture_id, ImVec2(imageSize, imageSize));
+		}
+		ImGui::End();
+	}
+
 	ImGui::SetNextWindowPos(ImVec2(300, 20), 0, ImVec2(0, 0));
 	ImGui::Begin("Parameters");
 
@@ -1727,7 +1695,8 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("SDSM", &g_ShowSDSM);
 	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascases);
 	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
-	
+	ImGui::Checkbox("Visualize Cascades", &g_VisualizeShadowCascades);
+
 	ImGui::Text("Expose/Tonemapping");
 	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
 	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);

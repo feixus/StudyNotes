@@ -21,6 +21,8 @@ void Input::Update()
 	m_LastMousePosition = m_CurrentMousePosition;
 	m_MouseWheel = 0;
 	UpdateMousePosition();
+
+	std::cout << "Mouse Position: (%.1f, %.1f)" << m_CurrentMousePosition.x << m_CurrentMousePosition.y << std::endl;
 }
 
 void Input::UpdateKey(uint32_t keyCode, bool isDown)

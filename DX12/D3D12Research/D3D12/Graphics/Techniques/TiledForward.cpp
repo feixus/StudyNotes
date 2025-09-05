@@ -223,11 +223,13 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Graphic
 				float SliceMagicB;
 				float Near;
 				float Far;
+                float FoV;
             } constantData{};
 
             constantData.ProjectionInverse = camera.GetProjectionInverse();
             constantData.Near = nearZ;
             constantData.Far = farZ;
+            constantData.FoV = camera.GetFoV();
 
             context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

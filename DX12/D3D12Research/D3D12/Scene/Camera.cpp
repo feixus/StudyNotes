@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include "Core/input.h"
+#include "External/ImGuizmo/ImGuizmo.h"
 
 void Camera::SetPosition(const Vector3& position)
 {
@@ -91,6 +92,28 @@ const BoundingFrustum& Camera::GetFrustum() const
     return m_Frustum;
 }
 
+Ray Camera::GetMouseRay(uint32_t windowWidth, uint32_t windowHeight) const
+{
+    Ray ray;
+    Vector2 mousePos = Input::Instance().GetMousePosition();
+    Vector2 ndc;
+    float hw = (float)windowWidth * 0.5f;
+    float hh = (float)windowHeight * 0.5f;
+    ndc.x = (mousePos.x - hw) / hw;
+    ndc.y = (hh - mousePos.y) / hh;
+    
+    Vector3 nearPoint, farPoint;
+    Matrix viewProjInverse;
+    m_ViewProjection.Invert(viewProjInverse);
+    nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
+    farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
+    ray.position = Vector3(nearPoint.x, nearPoint.y, nearPoint.z);
+
+    ray.direction = farPoint - nearPoint;
+    ray.direction.Normalize();
+    return ray;
+}
+
 void Camera::OnDirty()
 {
     m_Dirty = true;
@@ -130,23 +153,26 @@ void Camera::UpdateMatrices() const
 void FreeCamera::Update()
 {
     // camera movement
-	if (Input::Instance().IsMouseDown(VK_LBUTTON) && ImGui::IsAnyItemActive() == false)
+    Vector3 movement;
+	if (Input::Instance().IsMouseDown(VK_LBUTTON))
 	{
-		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
-		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);
-		Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * Time::DeltaTime() * 0.1f, 0, 0);
-		// yaw first, then pitch
-        m_Rotation = yr * m_Rotation * pr;
-	}
+        if (ImGui::IsAnyItemActive() == false && !ImGuizmo::IsUsing())
+        {
+            Vector2 mouseDelta = Input::Instance().GetMouseDelta();
+            Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);
+            Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * Time::DeltaTime() * 0.1f, 0, 0);
+            // yaw first, then pitch
+            m_Rotation = yr * m_Rotation * pr;
+        }
 
-	Vector3 movement;
-	movement.x -= (int)Input::Instance().IsKeyDown('A');
-	movement.x += (int)Input::Instance().IsKeyDown('D');
-	movement.z -= (int)Input::Instance().IsKeyDown('S');
-	movement.z += (int)Input::Instance().IsKeyDown('W');
-	movement.y -= (int)Input::Instance().IsKeyDown('Q');
-	movement.y += (int)Input::Instance().IsKeyDown('E');
-	movement = Vector3::Transform(movement, m_Rotation);
+        movement.x -= (int)Input::Instance().IsKeyDown('A');
+        movement.x += (int)Input::Instance().IsKeyDown('D');
+        movement.z -= (int)Input::Instance().IsKeyDown('S');
+        movement.z += (int)Input::Instance().IsKeyDown('W');
+        movement.y -= (int)Input::Instance().IsKeyDown('Q');
+        movement.y += (int)Input::Instance().IsKeyDown('E');
+        movement = Vector3::Transform(movement, m_Rotation);
+	}
 
     m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.1f);
 	m_Position += m_Velocity * Time::DeltaTime() * 40.0f;
