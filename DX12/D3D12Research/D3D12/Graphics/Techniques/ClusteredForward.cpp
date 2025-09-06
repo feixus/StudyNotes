@@ -432,7 +432,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
             constantData.SliceMagicB = sliceMagicB;
             constantData.Near = nearZ;
             constantData.Far = farZ;
-            constantData.FoV = camera.GetFov();
+            constantData.FoV = camera.GetFoV();
 
             context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
