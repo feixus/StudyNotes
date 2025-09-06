@@ -24,7 +24,7 @@ DescriptorHandle OnlineDescriptorAllocator::AllocateTransientDescriptor(int coun
 
 void OnlineDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
 {
-    check(m_RootDescriptorMask.GetBit(rootIndex));
+    checkf(m_RootDescriptorMask.GetBit(rootIndex), "RootSignature does not have a DescriptorTable at root index %d", rootIndex);
     check(numHandles + offset <= m_RootDescriptorTable[rootIndex].TableSize);
 
     RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
@@ -168,7 +168,7 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
         entry.TableSize = tableSize;
         entry.TableStart = &m_HandleCache[offset];
         offset += entry.TableSize;
-        check(offset < DESCRIPTORS_PER_HEAP);
+        checkf(offset <= DESCRIPTORS_PER_HEAP, "Out of DescriptorTable handles!");
     }
 }
 
@@ -217,7 +217,7 @@ ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR
     desc.NodeMask = 0;
     desc.Type = type;
     VERIFY_HR_EX(m_pGraphics->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap.GetAddressOf())), m_pGraphics->GetDevice());
-    pHeap->SetName(L"Online Pooled Descriptor Heap");
+    D3D::SetD3DObjectName(pHeap.Get(), "Online Pooled Descriptor Heap");
     m_DescriptorHeaps.push_back(std::move(pHeap));
     return m_DescriptorHeaps.back().Get();
 }

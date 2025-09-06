@@ -93,7 +93,7 @@ void Graphics::Initialize(HWND hWnd)
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
-	m_DesiredLightCount = 6;
+	m_DesiredLightCount = 3;
 	RandomizeLights(m_DesiredLightCount);
 
 	m_pDynamicAllocationManager->FlushAll();
@@ -1054,7 +1054,7 @@ void Graphics::InitD3D()
 	pAdapter.Reset();
 
 	m_pDevice.As(&m_pRaytracingDevice);
-	m_pDevice->SetName(L"Main Device");
+	D3D::SetD3DObjectName(m_pDevice.Get(), "Main Device");
 
 	if (debugD3D)
 	{
@@ -1767,15 +1767,6 @@ void Graphics::RandomizeLights(int count)
 	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
 	m_Lights[2].CastShadows = true;
 
-	m_Lights[3] = Light::Spot(Vector3(-80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 0, 1, 1.0f));
-	m_Lights[3].CastShadows = true;
-
-	m_Lights[4] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 1, 0), 90, 70, 5000, Color(1, 0, 1, 1.0f));
-	m_Lights[4].CastShadows = true;
-
-	m_Lights[5] = Light::Spot(Vector3(80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 1, 0, 1.0f));
-	m_Lights[5].CastShadows = true;
-
 	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{
 		IdleGPU();
@@ -1807,7 +1798,7 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 			ComPtr<ID3D12Device4> pDevice4;
 			VERIFY_HR(m_pDevice.As(&pDevice4));
 			pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf()));
-			pCommandList->SetName(L"Pooled CommandList");
+			D3D::SetD3DObjectName(pCommandList.Get(), "Pooled CommandList");
 			m_CommandLists.push_back(std::move(pCommandList));
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type));
 			pCommandContext = m_CommandListPool[typeIndex].back().get();

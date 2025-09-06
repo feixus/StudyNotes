@@ -182,7 +182,7 @@ void RGGraph::Compile()
         RGPass* pWriter = pNode->m_pWriter;
         if (pWriter)
         {
-            RG_ASSERT(pWriter->m_References >= 1, "Pass is expected to have references");
+            RG_ASSERT(pWriter->m_References >= 1, "Pass (%s) is expected to have references", pWriter->GetName());
             --pWriter->m_References;
             if (pWriter->m_References == 0)
             {

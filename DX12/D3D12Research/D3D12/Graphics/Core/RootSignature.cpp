@@ -163,7 +163,7 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
             for (uint32_t j = 0; j < rootParameter.DescriptorTable.NumDescriptorRanges; j++)
             {
                 m_DescriptorTableSizes[i] += rootParameter.DescriptorTable.pDescriptorRanges[j].NumDescriptors;
-                checkf(m_DescriptorTableSizes[i] != (uint32_t)~0, "Unbounded descriptors not supported. just use a large number");
+                checkf(m_DescriptorTableSizes[i] != (uint32_t)~0, "Unbounded descriptors not supported in RootSignature (%s).  use a large number", pName);
             }
 		}
     }
