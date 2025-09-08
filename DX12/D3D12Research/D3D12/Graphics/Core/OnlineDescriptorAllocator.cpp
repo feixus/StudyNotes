@@ -93,7 +93,6 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
         entry.AssignedHandlesBitMap.MostSignificantBit(&rangeSize);
         rangeSize += 1;
 
-		// copy the descriptors one by one because they aren't necessarily contiguous
         for (uint32_t i = 0; i < rangeSize; i++)
         {
             sourceRangeSizes[sourceRangeCount] = 1;

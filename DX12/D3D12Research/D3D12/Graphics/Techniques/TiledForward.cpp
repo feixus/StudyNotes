@@ -219,8 +219,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Graphic
 				IntVector3 ClusterDimensions;
 				float padding;
 				IntVector2 ClusterSize;
-				float SliceMagicA;
-				float SliceMagicB;
+				Vector2 LightGridParams;
 				float Near;
 				float Far;
                 float FoV;

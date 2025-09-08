@@ -74,9 +74,9 @@ namespace std
 	template <>
 	struct hash<StringHash>
 	{
-		uint32_t operator()(const StringHash& hash) const
+		size_t operator()(const StringHash& hash) const
 		{
-			return hash.m_Hash;
+			return (size_t)hash.m_Hash;
 		}
 	};
 }

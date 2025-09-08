@@ -17,17 +17,17 @@ cbuffer Parameters : register(b1)
 {
     int4 cClusterDimensions;
     int2 cClusterSize;
-    float cSliceMagicA;
-    float cSliceMagicB;
+    float2 cLightGridParams;
 }
 
 // UAV(register u#) and render target outputs(SV_Target#) share the same register namespace.
 // SV_Target0 implicitly uses u0 internally.
 RWStructuredBuffer<uint> uActiveCluster : register(u1);
 
+// clusterCountZ * (log(depth) - log(n)) / log(f / n)
 uint GetSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cSliceMagicA - cSliceMagicB);
+    return floor(log(depth) * cLightGridParams.x - cLightGridParams.y);
 }
 
 struct VS_Input

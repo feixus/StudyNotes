@@ -163,8 +163,11 @@ void Graphics::Update()
 		pSourceBuffer->UnMap();
 	}
 
-	float nearPlane = m_pCamera->GetFar();
-	float farPlane = m_pCamera->GetNear();
+	float n = m_pCamera->GetNear();
+	float f = m_pCamera->GetFar();
+	float nearPlane = Math::Min(n, f);
+	float farPlane = Math::Max(n, f);
+
 	float clipPlaneRange = farPlane - nearPlane;
 
 	float minZ = nearPlane + minPoint * clipPlaneRange;
@@ -318,9 +321,9 @@ void Graphics::Update()
 		}
 	}
 
-	if (shadowIndex > m_ShadowMaps.size())
+	if (shadowIndex >= m_ShadowMaps.size())
 	{
-		m_ShadowMaps.resize(shadowIndex);
+		m_ShadowMaps.resize(shadowIndex + 1);
 		int i = 0;
 		for (auto& pShadowMap : m_ShadowMaps)
 		{
@@ -1770,7 +1773,7 @@ void Graphics::RandomizeLights(int count)
 	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{
 		IdleGPU();
-		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));
+		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
 	}
 }
 

@@ -81,6 +81,7 @@ bool Image::SetData(const void* pData, uint32_t offsetInBytes, uint32_t sizeInBy
 
 bool Image::SetPixel(int x, int y, const Color& color)
 {
+	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "cant set pixel data from block compressed textured");
 	if (x + y * m_Width >= m_Pixels.size())
 	{
 		return false;
@@ -96,6 +97,7 @@ bool Image::SetPixel(int x, int y, const Color& color)
 
 bool Image::SetPixelInt(int x, int y, const unsigned int color)
 {
+	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "cant set pixel data from block compressed textured");
 	if (x + y * m_Width >= m_Pixels.size())
 	{
 		return false;
@@ -111,6 +113,7 @@ bool Image::SetPixelInt(int x, int y, const unsigned int color)
 
 Color Image::GetPixel(int x, int y) const
 {
+	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "cant set pixel data from block compressed textured");
 	if (x + y * m_Width >= m_Pixels.size())
 	{
 		return Color();
@@ -127,6 +130,7 @@ Color Image::GetPixel(int x, int y) const
 
 unsigned int Image::GetPixelInt(int x, int y) const
 {
+	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "cant set pixel data from block compressed textured");
 	unsigned int color = 0;
 	if (x + y * m_Width >= m_Pixels.size())
 	{

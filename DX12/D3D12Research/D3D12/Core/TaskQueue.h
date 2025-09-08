@@ -17,6 +17,7 @@ using TaskContext = std::atomic<uint32_t>;
 class TaskQueue
 {
 public:
+    TaskQueue() = delete;
     ~TaskQueue();
 
     static void Initialize(uint32_t threads);

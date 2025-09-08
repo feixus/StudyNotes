@@ -72,8 +72,6 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
     m_pLinesPSO->Finalize("Lines DebugRenderer PSO", pGraphics->GetDevice());
 }
 
-constexpr uint32_t VertexStride = sizeof(DebugLine) / 2;
-
 void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, GraphicsTexture* pTarget, GraphicsTexture* pDepth)
 {
     int linePrimitives = (int)m_Lines.size() * 2;
@@ -95,6 +93,7 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Graphic
 
 			context.SetDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));
 
+            constexpr uint32_t VertexStride = sizeof(DebugLine) * 0.5f;
 			if (linePrimitives != 0)
 			{
 				context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());

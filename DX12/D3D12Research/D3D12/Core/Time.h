@@ -3,8 +3,8 @@
 class Time
 {
 public:
-	Time();
-	~Time();
+	Time() = default;
+	~Time() = default;
 
 	static float TotalTime();
 	static float DeltaTime();

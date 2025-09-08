@@ -22,6 +22,8 @@ struct Light
     int ShadowIndex;
 	float InvShadowSize;
 
+	float padding;
+
 	float4 GetColor()
 	{
 		return UIntToColor(Color);

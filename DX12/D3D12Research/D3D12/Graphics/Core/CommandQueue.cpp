@@ -81,6 +81,7 @@ uint64_t CommandQueue::ExecuteCommandList(CommandContext** pCommandContexts, uin
 	for (uint32_t i = 0; i < numContexts; i++)
 	{
 		CommandContext* pNextContext = pCommandContexts[i];
+		check(pNextContext);
 
 		ResourceBarrierBatcher barriers;
 		for (const CommandContext::PendingBarrier& pending : pNextContext->GetPendingBarriers())

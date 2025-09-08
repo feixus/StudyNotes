@@ -278,8 +278,9 @@ void CommandContext::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLA
 
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
-	check(!m_InRenderPass);
-	check(renderPassInfo.DepthStencilTarget.Target || (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::NoAccess && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::NoAccess));
+	checkf(!m_InRenderPass, "already in RenderPass");
+	checkf(renderPassInfo.DepthStencilTarget.Target || (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::NoAccess && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::NoAccess),
+			"either a depth texture must be assigned or the access should be 'NoAccess'");
 
 	auto ExtractBeginAccess = [](RenderPassAccess access)
 	{
@@ -357,7 +358,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			uint32_t subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
 			if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
-				check(data.ResolveTarget);
+				checkf(data.ResolveTarget, "expected ResolveTarget because ending access is 'Resolve'");
 				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				renderTargetDescs[i].EndingAccess.Resolve.Format = data.Target->GetFormat();
 				renderTargetDescs[i].EndingAccess.Resolve.pDstResource = data.ResolveTarget->GetResource();
@@ -542,8 +543,9 @@ void CommandContext::SetVertexBuffer(BufferView vertexBuffer)
 
 void CommandContext::SetVertexBuffers(BufferView* pVertexBuffers, int bufferCount)
 {
-	check(bufferCount <= 4);
-	std::array<D3D12_VERTEX_BUFFER_VIEW, 4> views{};
+	constexpr int MAX_VERTEX_BUFFERS = 4;
+	checkf(bufferCount <= MAX_VERTEX_BUFFERS, "vertexBuffers count (%d) exceeds the maximum (%d)", bufferCount, MAX_VERTEX_BUFFERS);
+	std::array<D3D12_VERTEX_BUFFER_VIEW, MAX_VERTEX_BUFFERS> views{};
 	for (int i = 0; i < bufferCount; ++i)
 	{
 		views[i].BufferLocation = pVertexBuffers[i].pBuffer->GetGpuHandle();

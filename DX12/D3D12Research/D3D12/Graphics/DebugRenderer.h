@@ -7,35 +7,36 @@ class RGGraph;
 struct Light;
 class GraphicsTexture;
 
-struct DebugLine
-{
-    DebugLine(const Vector3& start, const Vector3& end, const uint32_t colorStart, const uint32_t colorEnd)
-        : Start(start), ColorStart(colorStart), End(end), ColorEnd(colorEnd)
-    {}
-
-    Vector3 Start;
-    uint32_t ColorStart;
-    Vector3 End;
-    uint32_t ColorEnd;
-};
-
-struct DebugTriangle
-{
-    DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32_t colorA, const uint32_t colorB, const uint32_t colorC)
-        : A(a), ColorA(colorA), B(b), ColorB(colorB), C(c), ColorC(colorC)
-    {}
-
-    Vector3 A;
-    uint32_t ColorA;
-    Vector3 B;
-    uint32_t ColorB;
-    Vector3 C;
-    uint32_t ColorC;
-};
-
-
 class DebugRenderer
 {
+private:
+
+	struct DebugLine
+	{
+		DebugLine(const Vector3& start, const Vector3& end, const uint32_t colorStart, const uint32_t colorEnd)
+			: Start(start), ColorStart(colorStart), End(end), ColorEnd(colorEnd)
+		{}
+
+		Vector3 Start;
+		uint32_t ColorStart;
+		Vector3 End;
+		uint32_t ColorEnd;
+	};
+
+	struct DebugTriangle
+	{
+		DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32_t colorA, const uint32_t colorB, const uint32_t colorC)
+			: A(a), ColorA(colorA), B(b), ColorB(colorB), C(c), ColorC(colorC)
+		{}
+
+		Vector3 A;
+		uint32_t ColorA;
+		Vector3 B;
+		uint32_t ColorB;
+		Vector3 C;
+		uint32_t ColorC;
+	};
+
 public:
     static DebugRenderer* Get();
 

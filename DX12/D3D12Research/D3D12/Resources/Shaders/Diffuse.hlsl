@@ -30,8 +30,7 @@ cbuffer PerFrameData : register(b1)
 #if CLUSTERED_FORWARD
     int4 cClusterDimensions;
     int2 cClusterSize;
-    float cSliceMagicA;
-    float cSliceMagicB;
+    float2 cLightGridParams;
 #endif
 }
 
@@ -66,7 +65,7 @@ StructuredBuffer<uint> tLightIndexList : register(t4);
 #if CLUSTERED_FORWARD
 uint GetSliceFromDepth(float depth)
 {
-    return floor(cSliceMagicA * log(depth) - cSliceMagicB);
+    return floor(log(depth) * cLightGridParams.x - cLightGridParams.y);
 }
 #endif
 
