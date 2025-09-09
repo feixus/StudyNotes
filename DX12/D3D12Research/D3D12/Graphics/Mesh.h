@@ -17,19 +17,19 @@ public:
     int GetMaterialId() const { return m_MaterialId; }
     const BoundingBox& GetBounds() const { return m_Bounds; }
 
-    uint32_t GetVertexByteOffset() const { return m_VertexByteOffset; }
-    uint32_t GetIndexByteOffset() const { return m_IndexByteOffset; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetVerticesLocation() const { return m_VerticesLocation; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetIndicesLocation() const { return m_IndicesLocation; }
     uint32_t GetVertexCount() const { return m_VertexCount; }
     uint32_t GetIndexCount() const { return m_IndexCount; }
+    int GetStride() const { return m_Stride; }
 
 private:
+    int m_Stride{0};
     int m_MaterialId{};
     uint32_t m_IndexCount{};
     uint32_t m_VertexCount{};
-    uint32_t m_IndexOffset{};
-    uint32_t m_VertexOffset{};
-    uint32_t m_VertexByteOffset{};
-    uint32_t m_IndexByteOffset{};
+    D3D12_GPU_VIRTUAL_ADDRESS m_VerticesLocation;
+    D3D12_GPU_VIRTUAL_ADDRESS m_IndicesLocation;
     BoundingBox m_Bounds;
     Mesh* m_pParent;
 };
@@ -51,12 +51,10 @@ public:
 	SubMesh* GetMesh(int index) const { return m_Meshes[index].get(); }
     const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
-	Buffer* GetVertexBuffer() const { return m_pVertexBuffer.get(); }
-	Buffer* GetIndexBuffer() const { return m_pIndexBuffer.get(); }
+    Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
     std::vector<std::unique_ptr<SubMesh>> m_Meshes;
     std::vector<Material> m_Materials;
-    std::unique_ptr<Buffer> m_pVertexBuffer;
-    std::unique_ptr<Buffer> m_pIndexBuffer;
+    std::unique_ptr<Buffer> m_pGeometryData;
 };

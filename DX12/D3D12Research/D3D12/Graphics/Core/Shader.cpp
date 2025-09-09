@@ -8,7 +8,7 @@
 #endif
 
 #define SM_MAJ 6
-#define SM_MIN 0
+#define SM_MIN 5
 
 namespace ShaderCompiler
 {
@@ -116,7 +116,7 @@ namespace ShaderCompiler
 		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
 		if (pErrors && pErrors->GetStringLength() > 0)
 		{
-			E_LOG(Warning, (char*)pErrors->GetBufferPointer());
+			E_LOG(Warning, "%s", (char*)pErrors->GetBufferPointer());
 			return false;
 		}
 

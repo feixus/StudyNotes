@@ -23,7 +23,7 @@ RTAO::RTAO(Graphics* pGraphics)
     SetupPipelines(pGraphics);
 }
 
-void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera)
+void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Buffer* pTLAS, Camera& camera)
 {
     static float g_AoPower = 3;
     static float g_AoRadius = 0.5f;
@@ -87,133 +87,11 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 
             context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.SetDynamicDescriptor(1, 0, pColor->GetUAV());
-			context.SetDynamicDescriptor(2, 0, m_pTLAS->GetSRV());
+			context.SetDynamicDescriptor(2, 0, pTLAS->GetSRV());
             context.SetDynamicDescriptor(2, 1, pDepth->GetSRV());
                 
             context.DispatchRays(bindingTable, pColor->GetWidth(), pColor->GetHeight());
         });
-}
-
-void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context)
-{
-    if (pGraphics->SupportsRaytracing() == false)
-    {
-        return;
-    }
-
-    ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
-
-    // bottom level acceleration structure
-    {
-        std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
-        for (size_t i = 0; i < pMesh->GetMeshCount(); i++)
-        {
-            const SubMesh* pSubMesh = pMesh->GetMesh((int)i);
-            if (pMesh->GetMaterial(pSubMesh->GetMaterialId()).IsTransparent)
-            {
-                continue; // skip transparent meshes
-            }
-
-            D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
-            geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-            geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-            geometryDesc.Triangles.IndexBuffer = pMesh->GetIndexBuffer()->GetGpuHandle() + pSubMesh->GetIndexByteOffset();
-            geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexCount();
-            geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-            geometryDesc.Triangles.Transform3x4 = 0;
-            geometryDesc.Triangles.VertexBuffer.StartAddress = pMesh->GetVertexBuffer()->GetGpuHandle() + pSubMesh->GetVertexByteOffset();
-            geometryDesc.Triangles.VertexBuffer.StrideInBytes = pMesh->GetVertexBuffer()->GetDesc().ElementSize;
-            geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexCount();
-            geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-            geometries.push_back(geometryDesc);
-        }
-
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
-			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
-			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-                    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
-			.NumDescs = (uint32_t)geometries.size(),
-			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-			.pGeometryDescs = geometries.data(),
-        };
-        
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-        pGraphics->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-        m_pBLASScratch = std::make_unique<Buffer>(pGraphics, "BLAS Scratch Buffer");
-        m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-        m_pBLAS = std::make_unique<Buffer>(pGraphics, "BLAS");
-        m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
-            .DestAccelerationStructureData = m_pBLAS->GetGpuHandle(),
-            .Inputs = prebuildInfo,
-            .SourceAccelerationStructureData = 0,
-            .ScratchAccelerationStructureData = m_pBLASScratch->GetGpuHandle(),
-        };
-
-        pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-        context.InsertUavBarrier(m_pBLAS.get());
-        context.FlushResourceBarriers();
-    }
-
-    // top level acceleration structure
-    {
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
-            .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
-			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
-            .NumDescs = 1,
-            .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-        };
-
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-        pGraphics->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-        m_pTLASScratch = std::make_unique<Buffer>(pGraphics, "TLAS Scratch");
-        m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-        m_pTLAS = std::make_unique<Buffer>(pGraphics, "TLAS");
-        m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-
-        m_pDescriptorsBuffer = std::make_unique<Buffer>(pGraphics, "Descriptors Buffer");
-        m_pDescriptorsBuffer->Create(BufferDesc::CreateVertexBuffer(4, (int)Math::AlignUp<uint64_t>(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::Upload));
-
-        D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(m_pDescriptorsBuffer->Map());
-        pInstanceDesc->AccelerationStructure = m_pBLAS->GetGpuHandle();
-        pInstanceDesc->Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-        pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
-        pInstanceDesc->InstanceID = 0;
-        pInstanceDesc->InstanceMask = 0xFF;
-
-        // the layout of Transform is a transpose of how affine matrices are typically stored in memory. 
-        // Instead of four 3-vectors. Transform is laid out as three 4-vectors.
-        auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
-        {
-            desc.Transform[0][0] = m.m[0][0]; desc.Transform[0][1] = m.m[1][0]; desc.Transform[0][2] = m.m[2][0]; desc.Transform[0][3] = m.m[3][0];
-            desc.Transform[1][0] = m.m[0][1]; desc.Transform[1][1] = m.m[1][1]; desc.Transform[1][2] = m.m[2][1]; desc.Transform[1][3] = m.m[3][1];
-            desc.Transform[2][0] = m.m[0][2]; desc.Transform[2][1] = m.m[1][2]; desc.Transform[2][2] = m.m[2][2]; desc.Transform[2][3] = m.m[3][2];
-        };
-        ApplyTransform(Matrix::Identity, *pInstanceDesc);
-
-        m_pDescriptorsBuffer->UnMap();
-
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
-            .DestAccelerationStructureData = m_pTLAS->GetGpuHandle(),
-            .Inputs = {
-                .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
-                .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
-                .NumDescs = 1,
-                .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-                .InstanceDescs = m_pDescriptorsBuffer->GetGpuHandle(),
-            },
-            .SourceAccelerationStructureData = 0,
-            .ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle(),
-        };
-
-        pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-        context.InsertUavBarrier(m_pTLAS.get());
-        context.FlushResourceBarriers();
-    }
 }
 
 void RTAO::SetupResources(Graphics* pGraphics)

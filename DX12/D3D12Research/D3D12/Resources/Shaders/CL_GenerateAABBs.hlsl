@@ -30,15 +30,20 @@ RWStructuredBuffer<AABB> uOutAABBs : register(u0);
 
 struct CS_Input
 {
-    uint3 GroupID : SV_GroupID; // 3D index of the group in the dispatch
+    uint3 ThreadID : SV_DispatchThreadID;
 };
 
 [RootSignature(RootSig)]
-[numthreads(1, 1, 1)]
+[numthreads(1, 1, 32)]
 void GenerateAABBs(CS_Input input)
 {
-    uint3 clusterIndex3D = input.GroupID;
-    uint clusterIndex1D = input.GroupID.x + input.GroupID.y * cClusterDimensions.x + input.GroupID.z * cClusterDimensions.x * cClusterDimensions.y;
+    uint3 clusterIndex3D = input.ThreadID;
+    if (clusterIndex3D.z >= cClusterDimensions.z)
+    {
+        return;
+    }
+
+    uint clusterIndex1D = clusterIndex3D.x + clusterIndex3D.y * cClusterDimensions.x + clusterIndex3D.z * cClusterDimensions.x * cClusterDimensions.y;
 
     float2 minPoint_SS = float2(cClusterSize.x * clusterIndex3D.x, cClusterSize.y * clusterIndex3D.y);
     float2 maxPoint_SS = float2(cClusterSize.x * (clusterIndex3D.x + 1), cClusterSize.y * (clusterIndex3D.y + 1));

@@ -29,10 +29,6 @@
 #include "Core/TaskQueue.h"
 #include "Content/image.h"
 
-#ifdef _DEBUG
-#define D3D_VALIDATION 1
-#endif
-
 #ifndef D3D_VALIDATION
 #define D3D_VALIDATION 0
 #endif
@@ -504,7 +500,7 @@ void Graphics::Update()
 
 	if (g_ShowRaytraced)
 	{
-		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), *m_pCamera);
+		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), m_pTLAS.get(), *m_pCamera);
 	}
 	else
 	{
@@ -618,34 +614,29 @@ void Graphics::Update()
 		});
 	}
 
+	SceneData sceneResourcesData = {
+		.pDepthBuffer = GetDepthStencil(),
+		.pResolvedDepth = GetResolveDepthStencil(),
+		.pShadowMaps = &m_ShadowMaps,
+		.pRenderTarget = GetCurrentRenderTarget(),
+		.pPreviousColor = m_pPreviousColor.get(),
+		.pAO = m_pAmbientOcclusion.get(),
+		.pOpaqueBatches = &m_OpaqueBatches,
+		.pTransparentBatches = &m_TransparentBatches,
+		.pLightBuffer = m_pLightBuffer.get(),
+		.pCamera = m_pCamera.get(),
+		.pShadowData = &shadowData,
+		.FrameIndex = m_Frame,
+		.pTLAS = m_pTLAS.get(),
+	};
+
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		TiledForwardInputResource resources;
-		resources.DepthBuffer = sceneData.DepthStencil;
-		resources.ResolvedDepthBuffer = sceneData.DepthStencilResolved;
-		resources.pOpaqueBatches = &m_OpaqueBatches;
-		resources.pTransparentBatches = &m_TransparentBatches;
-		resources.pRenderTarget = GetCurrentRenderTarget();
-		resources.pLightBuffer = m_pLightBuffer.get();
-		resources.pCamera = m_pCamera.get();
-		resources.pShadowMaps = &m_ShadowMaps;
-		resources.pShadowData = &shadowData;
-		resources.pAO = m_pAmbientOcclusion.get();
-		m_pTiledForward->Execute(graph, resources);
+		m_pTiledForward->Execute(graph, sceneResourcesData);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
-		ClusteredForwardInputResource resources;
-		resources.DepthBuffer = sceneData.DepthStencil;
-		resources.pOpaqueBatches = &m_OpaqueBatches;
-		resources.pTransparentBatches = &m_TransparentBatches;
-		resources.pRenderTarget = GetCurrentRenderTarget();
-		resources.pLightBuffer = m_pLightBuffer.get();
-		resources.pCamera = m_pCamera.get();
-		resources.pShadowMaps = &m_ShadowMaps;
-		resources.pShadowData = &shadowData;
-		resources.pAO = m_pAmbientOcclusion.get();
-		m_pClusteredForward->Execute(graph, resources);
+		m_pClusteredForward->Execute(graph, sceneResourcesData);
 	}
 
 	m_pGpuParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
@@ -703,6 +694,7 @@ void Graphics::Update()
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pHDRRenderTarget.get(), 0, RENDER_TARGET_FORMAT);
+				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			});
 	}
 
@@ -739,7 +731,7 @@ void Graphics::Update()
 					context.SetDynamicDescriptor(1, 0, pTonemapInput->GetUAV());
 					context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
-					context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 16), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 16));
+					context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 8), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 8));
 				});
 		}
 
@@ -983,7 +975,7 @@ void Graphics::InitD3D()
 	E_LOG(Info, "Graphics::InitD3D");
 	UINT dxgiFactoryFlags = 0;
 
-	bool debugD3D = CommandLine::GetBool("d3dvalidation") || D3D_VALIDATION;
+	bool debugD3D = CommandLine::GetBool("d3ddebug") || D3D_VALIDATION;
 	bool gpuValidation = CommandLine::GetBool("gpuvalidation") || GPU_VALIDATION;
 	if (debugD3D)
 	{
@@ -1006,13 +998,16 @@ void Graphics::InitD3D()
 		dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
 
-	ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+	if (CommandLine::GetBool("dred"))
 	{
-		// turn on auto-breadcrumbs and page fault reporting
-		pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-		pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-		E_LOG(Info, "DRED Enabled");
+		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+		{
+			// turn on auto-breadcrumbs and page fault reporting
+			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			E_LOG(Info, "DRED Enabled");
+		}
 	}
 
 	// factory
@@ -1121,6 +1116,7 @@ void Graphics::InitD3D()
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
 		{
 			m_MeshShaderSupport = caps7.MeshShaderTier;
+			m_SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
 		}
 	}
 
@@ -1161,6 +1157,7 @@ void Graphics::InitD3D()
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 
 	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
+	m_pPreviousColor = std::make_unique<GraphicsTexture>(this, "Previous Color");
 	m_pTonemapTarget = std::make_unique<GraphicsTexture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<GraphicsTexture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<GraphicsTexture>(this, "SSAO Target");
@@ -1257,6 +1254,7 @@ void Graphics::OnResize(int width, int height)
 	}
 
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
+	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
@@ -1289,6 +1287,124 @@ void Graphics::OnResize(int width, int height)
 	}
 }
 
+void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& context)
+{
+    if (!SupportsRaytracing())
+    {
+        return;
+    }
+
+    ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
+
+    // bottom level acceleration structure
+    {
+        std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
+        for (size_t i = 0; i < pMesh->GetMeshCount(); i++)
+        {
+            const SubMesh* pSubMesh = pMesh->GetMesh((int)i);
+            if (pMesh->GetMaterial(pSubMesh->GetMaterialId()).IsTransparent)
+            {
+                continue; // skip transparent meshes
+            }
+
+            D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
+            geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+            geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+            geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndicesLocation();
+            geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexCount();
+            geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+            geometryDesc.Triangles.Transform3x4 = 0;
+            geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVerticesLocation();
+            geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetStride();
+            geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexCount();
+            geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+            geometries.push_back(geometryDesc);
+        }
+
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
+			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
+			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+                    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
+			.NumDescs = (uint32_t)geometries.size(),
+			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+			.pGeometryDescs = geometries.data(),
+        };
+        
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+        GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+        m_pBLASScratch = std::make_unique<Buffer>(this, "BLAS Scratch Buffer");
+        m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
+        m_pBLAS = std::make_unique<Buffer>(this, "BLAS");
+        m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
+            .DestAccelerationStructureData = m_pBLAS->GetGpuHandle(),
+            .Inputs = prebuildInfo,
+            .SourceAccelerationStructureData = 0,
+            .ScratchAccelerationStructureData = m_pBLASScratch->GetGpuHandle(),
+        };
+
+        pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+        context.InsertUavBarrier(m_pBLAS.get());
+        context.FlushResourceBarriers();
+    }
+
+    // top level acceleration structure
+    {
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
+            .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
+			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
+            .NumDescs = 1,
+            .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+        };
+
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+        GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+        m_pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
+        m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
+        m_pTLAS = std::make_unique<Buffer>(this, "TLAS");
+        m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+
+        DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+        D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(allocation.pMappedMemory);
+        pInstanceDesc->AccelerationStructure = m_pBLAS->GetGpuHandle();
+        pInstanceDesc->Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+        pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
+        pInstanceDesc->InstanceID = 0;
+        pInstanceDesc->InstanceMask = 0xFF;
+
+        // the layout of Transform is a transpose of how affine matrices are typically stored in memory. 
+        // Instead of four 3-vectors. Transform is laid out as three 4-vectors.
+        auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
+        {
+            desc.Transform[0][0] = m.m[0][0]; desc.Transform[0][1] = m.m[1][0]; desc.Transform[0][2] = m.m[2][0]; desc.Transform[0][3] = m.m[3][0];
+            desc.Transform[1][0] = m.m[0][1]; desc.Transform[1][1] = m.m[1][1]; desc.Transform[1][2] = m.m[2][1]; desc.Transform[1][3] = m.m[3][1];
+            desc.Transform[2][0] = m.m[0][2]; desc.Transform[2][1] = m.m[1][2]; desc.Transform[2][2] = m.m[2][2]; desc.Transform[2][3] = m.m[3][2];
+        };
+        ApplyTransform(Matrix::Identity, *pInstanceDesc);
+
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
+            .DestAccelerationStructureData = m_pTLAS->GetGpuHandle(),
+            .Inputs = {
+                .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
+                .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
+                .NumDescs = 1,
+                .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+                .InstanceDescs = allocation.GpuHandle,
+            },
+            .SourceAccelerationStructureData = 0,
+            .ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle(),
+        };
+
+        pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+        context.InsertUavBarrier(m_pTLAS.get());
+        context.FlushResourceBarriers();
+    }
+}
+
 void Graphics::InitializeAssets(CommandContext& context)
 {
 	m_pMesh = std::make_unique<Mesh>();
@@ -1311,7 +1427,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		}
 	}
 
-	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), context);
+	GenerateAccelerationStructure(m_pMesh.get(), context);
 }
 
 void Graphics::InitializePipelines()

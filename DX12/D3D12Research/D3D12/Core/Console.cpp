@@ -55,28 +55,6 @@ void Console::Initialize()
 #endif
 }
 
-bool Console::LogHRESULT(const char* source, HRESULT hr)
-{
-    if (FAILED(hr))
-    {
-        if (FACILITY_WINDOWS == HRESULT_FACILITY(hr))
-        {
-            hr = HRESULT_CODE(hr);
-        }
-
-        char* errorMsg;
-        FormatMessageA(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-            nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            (LPSTR)&errorMsg, 0, nullptr);
-
-        LogFormat(LogType::Error, "Source: %s\n Message: %s", source, errorMsg);
-        return true;
-    }
-
-    return false;
-}
-
 void Console::Log(const char* message, LogType type)
 {
     if ((int)type < (int)sVerbosity)
@@ -87,13 +65,11 @@ void Console::Log(const char* message, LogType type)
     std::stringstream stream;
     switch(type)
     {
-        case LogType::VeryVerbose:
-            stream << "[VeryVerbose] ";
-            break;
-        case LogType::Verbose:
-            stream << "[Verbose] ";
-            break;
         case LogType::Info:
+            if (sConsoleHandle)
+            {
+                SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+            }
             stream << "[Info] ";
             break;
         case LogType::Warning:
@@ -115,11 +91,10 @@ void Console::Log(const char* message, LogType type)
             break;
     }
 
-    stream << message;
+    stream << message << "\n";
     const std::string output = stream.str();
-    std::cout << output << std::endl;
+    printf(output.c_str());
     OutputDebugStringA(output.c_str());
-    OutputDebugStringA("\n");
 
     if (sConsoleHandle)
     {
@@ -162,10 +137,10 @@ void Console::Log(const char* message, LogType type)
 
 void Console::LogFormat(LogType type, const char* format, ...)
 {
-    static char sConvertBuffer[4096];
+    static char sConvertBuffer[8196 * 2];
     va_list args;
     va_start(args, format);
-    _vsnprintf_s(sConvertBuffer, 4096, 4096, format, args);
+    vsnprintf_s(sConvertBuffer, 8196 * 2, format, args);
     va_end(args);
     Log(sConvertBuffer, type);
 }

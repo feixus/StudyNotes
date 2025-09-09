@@ -350,8 +350,13 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			if (renderTargetDescs[i].BeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 			{
 				check(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				memcpy(renderTargetDescs[i].BeginningAccess.Clear.ClearValue.Color, &data.Target->GetClearBinding().Color, sizeof(Color));
-				renderTargetDescs[i].BeginningAccess.Clear.ClearValue.Format = data.Target->GetFormat();
+				const Color& color = data.Target->GetClearBinding().Color;
+				D3D12_CLEAR_VALUE& clearValue = renderTargetDescs[i].BeginningAccess.Clear.ClearValue;
+				clearValue.Color[0] = color.x;
+				clearValue.Color[1] = color.y;
+				clearValue.Color[2] = color.z;
+				clearValue.Color[3] = color.w;
+				clearValue.Format = data.Target->GetFormat();
 			}
 			renderTargetDescs[i].EndingAccess.Type = ExtractEndingAccess(data.Access);
 
@@ -536,31 +541,31 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffer(BufferView vertexBuffer)
+void CommandContext::SetVertexBuffer(const VertexBufferView& buffer)
 {
-	SetVertexBuffers(&vertexBuffer, 1);
+	SetVertexBuffers(&buffer, 1);
 }
 
-void CommandContext::SetVertexBuffers(BufferView* pVertexBuffers, int bufferCount)
+void CommandContext::SetVertexBuffers(const VertexBufferView* pBuffer, int bufferCount)
 {
 	constexpr int MAX_VERTEX_BUFFERS = 4;
 	checkf(bufferCount <= MAX_VERTEX_BUFFERS, "vertexBuffers count (%d) exceeds the maximum (%d)", bufferCount, MAX_VERTEX_BUFFERS);
 	std::array<D3D12_VERTEX_BUFFER_VIEW, MAX_VERTEX_BUFFERS> views{};
 	for (int i = 0; i < bufferCount; ++i)
 	{
-		views[i].BufferLocation = pVertexBuffers[i].pBuffer->GetGpuHandle();
-		views[i].SizeInBytes = (uint32_t)pVertexBuffers[i].pBuffer->GetSize();
-		views[i].StrideInBytes = pVertexBuffers[i].pBuffer->GetDesc().ElementSize;
+		views[i].BufferLocation = pBuffer[i].Location;
+		views[i].SizeInBytes = (uint32_t)pBuffer[i].Elements * pBuffer[i].Stride;
+		views[i].StrideInBytes = pBuffer[i].Stride;
 	}
 	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
 }
 
-void CommandContext::SetIndexBuffer(BufferView indexBuffer)
+void CommandContext::SetIndexBuffer(const IndexBufferView& indexBuffer)
 {
 	D3D12_INDEX_BUFFER_VIEW view;
-	view.BufferLocation = indexBuffer.pBuffer->GetGpuHandle();
-	view.SizeInBytes = (uint32_t)indexBuffer.pBuffer->GetSize();
-	view.Format = indexBuffer.pBuffer->GetDesc().ElementSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+	view.BufferLocation = indexBuffer.Location;
+	view.SizeInBytes = (uint32_t)indexBuffer.Elements * (indexBuffer.SmallIndices ? 2 : 4);
+	view.Format = indexBuffer.SmallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
@@ -691,6 +696,12 @@ void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRI
 		m_CurrentDescriptorHeaps[(int)type] = pHeap;
 		BindDescriptorHeaps();
 	}
+}
+
+void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate)
+{
+	check(m_pMeshShadingCommandList);
+	m_pMeshShadingCommandList->RSSetShadingRate(shadingRate, nullptr);
 }
 
 DynamicAllocation CommandContext::AllocateTransientMemory(uint64_t size)

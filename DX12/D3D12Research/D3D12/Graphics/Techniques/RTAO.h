@@ -14,18 +14,11 @@ class RTAO
 public:
     RTAO(Graphics* pGraphics);
 
-    void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera);
-    void GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context);
+    void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Buffer* pTLAS, Camera& camera);
 
 private:
     void SetupResources(Graphics* pGraphics);
     void SetupPipelines(Graphics* pGraphics);
-
-    std::unique_ptr<Buffer> m_pBLAS;
-    std::unique_ptr<Buffer> m_pTLAS;
-    std::unique_ptr<Buffer> m_pBLASScratch;
-    std::unique_ptr<Buffer> m_pTLASScratch;
-    std::unique_ptr<Buffer> m_pDescriptorsBuffer;
 
     std::unique_ptr<RootSignature> m_pRayGenSignature;
     std::unique_ptr<RootSignature> m_pHitSignature;

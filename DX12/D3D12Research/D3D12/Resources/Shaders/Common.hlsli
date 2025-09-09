@@ -131,8 +131,7 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 
 float LinearizeDepth(float z, float near, float far)
 {
-	float z_n = 2.0 * z - 1.0;
-	return 2.0 * far * near / (near + far - z_n * (near - far));
+	return 1.0 / (((near - far) / far) * z + 1.0);
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
@@ -267,6 +266,13 @@ float3 LinearToSrgbFast(float3 rgb)
 //http://advances.realtimerendering.com/s2014/index.html
 float InterleavedGradientNoise(float2 uv)
 {
+	const float3 magic = float3(0.06711056f, 0.00583715f, 52.9829189f);
+	return frac(magic.z * frac(dot(uv, magic.xy)));
+}
+
+float InterleavedGradientNoise(float2 uv, float offset)
+{
+	uv += offset * (float2(47, 17) * 0.695f);
 	const float3 magic = float3(0.06711056f, 0.00583715f, 52.9829189f);
 	return frac(magic.z * frac(dot(uv, magic.xy)));
 }

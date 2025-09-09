@@ -26,7 +26,6 @@ public:
     };
 
     static void Initialize();
-    static bool LogHRESULT(const char* source, HRESULT hr);
     static void Log(const char* message, LogType type = LogType::Info);
     static void LogFormat(LogType type, const char* format, ...);
     static void SetVerbosity(LogType type);

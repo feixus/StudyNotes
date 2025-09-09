@@ -93,7 +93,7 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Graphic
 
 			context.SetDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));
 
-            constexpr uint32_t VertexStride = sizeof(DebugLine) * 0.5f;
+            constexpr uint32_t VertexStride = (uint32_t)(sizeof(DebugLine) * 0.5f);
 			if (linePrimitives != 0)
 			{
 				context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
@@ -391,7 +391,7 @@ void DebugRenderer::AddLight(const Light& light)
         }
         case LightType::Spot:
         {
-            AddWireCone(light.Position, light.Direction, light.Range, Math::ToDegrees * acos(light.UmbraAngle * Math::ToRadians), 10, Color(1, 1, 0, 1));
+            AddWireCone(light.Position, light.Direction, light.Range, light.UmbraAngle, 10, Color(1, 1, 0, 1));
             break;
         }
     }

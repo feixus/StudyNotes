@@ -58,13 +58,13 @@ Vector2 ComputeLightGridParams(float nearZ, float farZ)
     return lightGridParams;
 }
 
-void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResource& inputResource)
+void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 {
     RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
     Vector2 screenDimensions((float)inputResource.pRenderTarget->GetWidth(), (float)inputResource.pRenderTarget->GetHeight());
-    float nearZ = m_pGraphics->GetCamera()->GetNear();
-    float farZ = m_pGraphics->GetCamera()->GetFar();
+    float nearZ = inputResource.pCamera->GetNear();
+    float farZ = inputResource.pCamera->GetFar();
     Vector2 lightGridParams = ComputeLightGridParams(nearZ, farZ);
 
     if (m_ViewportDirty)
@@ -88,33 +88,32 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                 } constantBuffer;
 
                 constantBuffer.ScreenDimensionsInv = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
-                constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
-                constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
-                constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
+                constantBuffer.NearZ = inputResource.pCamera->GetFar();
+                constantBuffer.FarZ = inputResource.pCamera->GetNear();
+                constantBuffer.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
                 constantBuffer.ClusterSize = IntVector2(cClusterSize, cClusterSize);
                 constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 
                 context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(constantBuffer));
                 context.SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetUAV());
 
-                context.Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+                // Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
+                context.Dispatch(m_ClusterCountX, m_ClusterCountY, Math::DivideAndRoundUp(cClusterCountZ, 32));
             });
 
         m_ViewportDirty = false;
     }
 
     RGPassBuilder markClusters = graph.AddPass("Mark Clusters");
-    markClusters.Read(inputResource.DepthBuffer);
     markClusters.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
-            GraphicsTexture* depthBuffer = passResources.GetTexture(inputResource.DepthBuffer);
 			context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(m_pUniqueClusterBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            context.InsertResourceBarrier(depthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
+            context.InsertResourceBarrier(inputResource.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
 
             context.ClearUavUInt(m_pUniqueClusterBuffer.get(), m_pUniqueClusterBufferRawUAV);
 
-            context.BeginRenderPass(RenderPassInfo(depthBuffer, RenderPassAccess::Load_DontCare, true));
+            context.BeginRenderPass(RenderPassInfo(inputResource.pDepthBuffer, RenderPassAccess::Load_DontCare, true));
 
             context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
             context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
@@ -243,7 +242,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
     });
     
     RGPassBuilder basePass = graph.AddPass("Base Pass");
-    basePass.Read(inputResource.DepthBuffer);
     basePass.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
 			struct PerObjectData
@@ -257,11 +255,12 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				Matrix View;
 				Matrix ViewInverse;
 				Matrix Projection;
-				Vector2 ScreenDimensions;
+                Matrix ProjectionInverse;
+				Vector2 InvScreenDimensions;
 				float NearZ;
 				float FarZ;
+                int FrameIndex;
 				IntVector3 ClusterDimensions;
-                int padding0;
 				IntVector2 ClusterSize;
 				Vector2 LightGridParams;
 			} frameData{};
@@ -269,19 +268,23 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			frameData.View = inputResource.pCamera->GetView();
 			frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
 			frameData.Projection = inputResource.pCamera->GetProjection();
+            frameData.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
 			frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-			frameData.ScreenDimensions = screenDimensions;
+			frameData.InvScreenDimensions = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
 			frameData.NearZ = nearZ;
 			frameData.FarZ = farZ;
 			frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 			frameData.LightGridParams = lightGridParams;
+            frameData.FrameIndex = inputResource.FrameIndex;
 
             context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-            context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(inputResource.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(inputResource.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-            context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(inputResource.DepthBuffer), RenderPassAccess::Load_DontCare));
+            context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, inputResource.pDepthBuffer, RenderPassAccess::Load_DontCare));
 
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
@@ -298,6 +301,11 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				context.SetDynamicDescriptors(3, 0, srvs, std::size(srvs));
 			};
 
+            if (inputResource.pTLAS)
+            {
+                context.GetCommandList()->SetGraphicsRootShaderResourceView(6, inputResource.pTLAS->GetGpuHandle());
+            }
+
             {
                 GPU_PROFILE_SCOPE("Opaque", &context);
 
@@ -308,7 +316,9 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                 context.SetDynamicDescriptor(4, 0, m_pLightGrid->GetSRV());
                 context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
                 context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
-                context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
+				context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
+				context.SetDynamicDescriptor(4, 3, inputResource.pResolvedDepth->GetSRV());
+				context.SetDynamicDescriptor(4, 3, inputResource.pPreviousColor->GetSRV());
 
                 int idx = 0;
                 for (auto& pShadowMap : *inputResource.pShadowMaps)
@@ -346,7 +356,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
     if (g_VisualizeClusters)
     {
         RGPassBuilder visualize = graph.AddPass("Visualize Clusters");
-        visualize.Read(inputResource.DepthBuffer);
         visualize.Bind([=](CommandContext& context, const RGPassResource& passResources)
             {
 				if (m_DidCopyDebugClusterData == false)
@@ -358,7 +367,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
                     m_DidCopyDebugClusterData = true;
                 }
 
-                context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Load_Store, passResources.GetTexture(inputResource.DepthBuffer), RenderPassAccess::Load_DontCare));
+                context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Load_Store, inputResource.pDepthBuffer, RenderPassAccess::Load_DontCare));
 
                 context.SetPipelineState(m_pDebugClusterPSO.get());
                 context.SetGraphicsRootSignature(m_pDebugClusterRS.get());

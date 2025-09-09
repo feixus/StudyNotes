@@ -18,6 +18,14 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		aiProcess_GenUVCoords |
 		aiProcess_CalcTangentSpace);
 
+	uint32_t vertexCount = 0;
+	uint32_t indexCount = 0;
+	for (uint32_t i = 0; i < pScene->mNumMeshes; ++i)
+	{
+		vertexCount += pScene->mMeshes[i]->mNumVertices;
+		indexCount += pScene->mMeshes[i]->mNumFaces * 3;
+	}
+
 	struct Vertex
 	{
 		Vector3 Position;
@@ -27,21 +35,10 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		Vector3 Bitangent;
 	};
 
-	uint32_t vertexCount = 0;
-	uint32_t indexCount = 0;
-	for (uint32_t i = 0; i < pScene->mNumMeshes; ++i)
-	{
-		vertexCount += pScene->mMeshes[i]->mNumVertices;
-		indexCount += pScene->mMeshes[i]->mNumFaces * 3;
-	}
+	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
+	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32_t)));
 
-	m_pVertexBuffer = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
-	m_pVertexBuffer->Create(BufferDesc::CreateVertexBuffer(vertexCount, sizeof(Vertex)));
-	m_pIndexBuffer = std::make_unique<Buffer>(pGraphics, "Mesh IndexBuffer");
-	m_pIndexBuffer->Create(BufferDesc::CreateIndexBuffer(indexCount, false));
-
-	uint32_t vertexOffset = 0;
-	uint32_t indexOffset = 0;
+	uint32_t dataOffset = 0;
 	for (uint32_t i = 0; i < pScene->mNumMeshes; i++)
 	{
 		const aiMesh* pMesh = pScene->mMeshes[i];
@@ -77,18 +74,21 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 		BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (Vector3*)&vertices[0], sizeof(Vertex));
 		pSubMesh->m_MaterialId = pMesh->mMaterialIndex;
+		
 		pSubMesh->m_VertexCount = (uint32_t)vertices.size();
-		pSubMesh->m_IndexCount = (uint32_t)indices.size();
-		pSubMesh->m_VertexOffset = vertexOffset;
-		pSubMesh->m_IndexOffset = indexOffset;
-		pSubMesh->m_VertexByteOffset = vertexOffset * sizeof(Vertex);
-		pSubMesh->m_IndexByteOffset = indexOffset * sizeof(uint32_t);
-		pSubMesh->m_pParent = this;
+		pSubMesh->m_VerticesLocation = m_pGeometryData->GetGpuHandle() + dataOffset;
+		m_pGeometryData->SetData(pContext, vertices.data(), sizeof(Vertex) * vertices.size(), dataOffset);
+		dataOffset += (uint32_t)vertices.size() * sizeof(Vertex);
 
-		m_pVertexBuffer->SetData(pContext, vertices.data(), sizeof(Vertex) * vertices.size(), vertexOffset * sizeof(Vertex));
-		m_pIndexBuffer->SetData(pContext, indices.data(), sizeof(uint32_t) * indices.size(), indexOffset * sizeof(uint32_t));
-		vertexOffset += (uint32_t)vertices.size();
-		indexOffset += (uint32_t)indices.size();
+		pSubMesh->m_IndexCount = (uint32_t)indices.size();
+		pSubMesh->m_IndicesLocation = m_pGeometryData->GetGpuHandle() + dataOffset;
+		m_pGeometryData->SetData(pContext, indices.data(), sizeof(uint32_t) * indices.size(), dataOffset);
+		dataOffset += (uint32_t)indices.size() * sizeof(uint32_t);
+		
+		pContext->FlushResourceBarriers();
+
+		pSubMesh->m_Stride = sizeof(Vertex);
+		pSubMesh->m_pParent = this;
 
 		m_Meshes.push_back(std::move(pSubMesh));
 	}
@@ -153,8 +153,8 @@ SubMesh::~SubMesh()
 
 void SubMesh::Draw(CommandContext* pContext) const
 {
-	pContext->SetVertexBuffer(m_pParent->GetVertexBuffer());
-	pContext->SetIndexBuffer(m_pParent->GetIndexBuffer());
-	pContext->DrawIndexed(m_IndexCount, m_IndexOffset, m_VertexOffset);
+	pContext->SetVertexBuffer(VertexBufferView(m_VerticesLocation, m_VertexCount, m_Stride));
+	pContext->SetIndexBuffer(IndexBufferView(m_IndicesLocation, m_IndexCount, false));
+	pContext->DrawIndexed(m_IndexCount, 0, 0);
 }
 

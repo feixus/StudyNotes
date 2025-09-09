@@ -27,18 +27,24 @@
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
-#include <iostream>
-#include <vector>
-#include <string>
-#include <queue>
-#include <array>
-#include <mutex>
-#include <map>
-#include <fstream>
-#include <algorithm>
+// STL
 #include <assert.h>
-#include <filesystem>
+// Containers
+#include <string>
+#include <array>
+#include <vector>
+#include <queue>
+#include <map>
 #include <unordered_map>
+#include <memory>
+// IO
+#include <sstream>
+#include <fstream>
+#include <iostream>
+#include <filesystem>
+// Misc
+#include <algorithm>
+#include <mutex>
 
 #include "Math/MathTypes.h"
 #include "Math/Math.h"

@@ -40,6 +40,23 @@ struct ShadowData
 	uint32_t NumCascades{0};
 };
 
+struct SceneData
+{
+	GraphicsTexture* pDepthBuffer{nullptr};
+	GraphicsTexture* pResolvedDepth{nullptr};
+	std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps;
+	GraphicsTexture* pRenderTarget{nullptr};
+	GraphicsTexture* pPreviousColor{nullptr};
+	GraphicsTexture* pAO{nullptr};
+	const std::vector<Batch>* pOpaqueBatches{nullptr};
+	const std::vector<Batch>* pTransparentBatches{nullptr};
+	Buffer* pLightBuffer{nullptr};
+	Camera* pCamera{nullptr};
+	ShadowData* pShadowData{nullptr};
+	int FrameIndex{0};
+	Buffer* pTLAS{nullptr};
+};
+
 enum class RenderPath
 {
 	Tiled,
@@ -161,6 +178,8 @@ private:
 
 	void RandomizeLights(int count);
 
+	void GenerateAccelerationStructure(Mesh* pMesh, CommandContext& context);
+
 	int m_Frame{0};
 	std::array<float, 180> m_FrameTimes{};
 
@@ -180,12 +199,14 @@ private:
 	int m_ShaderModelMajor{-1};
 	int m_ShaderModelMinor{-1};
 	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{D3D12_MESH_SHADER_TIER_NOT_SUPPORTED};
+	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED};
 
 	int m_SampleCount{1};
 
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pHDRRenderTarget;
+	std::unique_ptr<GraphicsTexture> m_pPreviousColor;
 	std::unique_ptr<GraphicsTexture> m_pTonemapTarget;
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
@@ -222,6 +243,11 @@ private:
 	ShowGraph m_ShowGraph = ShowGraph::AO;
 
 	std::unique_ptr<Mesh> m_pMesh;
+	std::unique_ptr<Buffer> m_pBLAS;
+    std::unique_ptr<Buffer> m_pTLAS;
+    std::unique_ptr<Buffer> m_pBLASScratch;
+    std::unique_ptr<Buffer> m_pTLASScratch;
+
 	std::vector<Batch> m_OpaqueBatches;
 	std::vector<Batch> m_TransparentBatches;
 
