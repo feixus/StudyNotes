@@ -16,6 +16,8 @@
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
 
+extern int g_SsrSamples;
+
 TiledForward::TiledForward(Graphics* pGraphics) : m_pGraphics(pGraphics)
 {
     SetupResources(pGraphics);
@@ -100,6 +102,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 float NearZ;
                 float FarZ;
                 int FrameIndex;
+				int SsrSamples;
+				IntVector2 padd;
             } frameData{};
 
             struct PerObjectData
@@ -116,6 +120,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             frameData.NearZ = inputResource.pCamera->GetNear();
             frameData.FarZ = inputResource.pCamera->GetFar();
             frameData.FrameIndex = inputResource.FrameIndex;
+            frameData.SsrSamples = g_SsrSamples;
 
             context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -124,6 +129,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
             context.InsertResourceBarrier(inputResource.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
             context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(inputResource.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(inputResource.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
             context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, inputResource.pDepthBuffer, RenderPassAccess::Load_DontCare));
 
@@ -135,6 +142,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
 
             context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
             context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
+			context.SetDynamicDescriptor(4, 4, inputResource.pResolvedDepth->GetSRV());
+			context.SetDynamicDescriptor(4, 5, inputResource.pPreviousColor->GetSRV());
 
             int idx = 0;
             for (auto& pShadowMap : *inputResource.pShadowMaps)

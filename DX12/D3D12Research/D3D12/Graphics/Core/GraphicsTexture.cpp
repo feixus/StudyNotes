@@ -293,6 +293,11 @@ bool GraphicsTexture::Create(CommandContext* pContext, const Image& img, bool sr
 	desc.Mips = img.GetMipLevels();
 	desc.Usage = TextureFlag::ShaderResource;
 	desc.Dimension = img.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
+	if (D3D::IsBlockCompressFormat(desc.Format))
+	{
+		desc.Width = Math::Max(desc.Width, 4);
+		desc.Height = Math::Max(desc.Height, 4);
+	}
 
 	const Image* pImg = &img;
 	std::vector<D3D12_SUBRESOURCE_DATA> subresourceData;
@@ -348,7 +353,7 @@ void GraphicsTexture::CreateSRV(ShaderResourceView** pView, const TextureSRVDesc
 void GraphicsTexture::CreateForSwapChain(ID3D12Resource* pTexture)
 {
 	Release();
-
+	D3D::SetObjectName(pTexture, "Backbuffer");
 	m_pResource = pTexture;
 	SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 

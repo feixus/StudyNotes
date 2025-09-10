@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_RNG__
+#define __INCLUDE_RNG__
+
 //Pseudo-Random Number Generator
 
 #include "Constants.hlsli"
@@ -60,3 +63,5 @@ float3 HemisphereSampleUniform(float u, float v)
     float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
     return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
+
+#endif

@@ -61,6 +61,8 @@ float g_SunInclination = 0.2f;
 float g_SunOrientation = -3.055f;
 float g_SunTemperature = 5000.0f;
 
+int g_SsrSamples = 16;
+
 int g_ShadowMapIndex = 0;
 
 bool g_EnableUI = true;
@@ -1052,7 +1054,7 @@ void Graphics::InitD3D()
 	pAdapter.Reset();
 
 	m_pDevice.As(&m_pRaytracingDevice);
-	D3D::SetD3DObjectName(m_pDevice.Get(), "Main Device");
+	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	if (debugD3D)
 	{
@@ -1853,6 +1855,7 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("Visualize Light Density", &g_VisualizeLightDensity);
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
+	ImGui::SliderInt("SSR Samples", &g_SsrSamples, 0, 32);
 
 	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
 	{
@@ -1917,7 +1920,7 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 			ComPtr<ID3D12Device4> pDevice4;
 			VERIFY_HR(m_pDevice.As(&pDevice4));
 			pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf()));
-			D3D::SetD3DObjectName(pCommandList.Get(), "Pooled CommandList");
+			D3D::SetObjectName(pCommandList.Get(), "Pooled CommandList");
 			m_CommandLists.push_back(std::move(pCommandList));
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type));
 			pCommandContext = m_CommandListPool[typeIndex].back().get();

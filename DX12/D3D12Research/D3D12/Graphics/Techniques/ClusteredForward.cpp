@@ -15,6 +15,8 @@
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
+extern int g_SsrSamples;
+
 bool g_VisualizeClusters = false;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
@@ -260,7 +262,10 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 				float NearZ;
 				float FarZ;
                 int FrameIndex;
+                int SsrSamples;
+                IntVector2 padd;
 				IntVector3 ClusterDimensions;
+                int pad;
 				IntVector2 ClusterSize;
 				Vector2 LightGridParams;
 			} frameData{};
@@ -276,6 +281,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 			frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 			frameData.LightGridParams = lightGridParams;
             frameData.FrameIndex = inputResource.FrameIndex;
+            frameData.SsrSamples = g_SsrSamples;
 
             context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -317,8 +323,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
                 context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
 				context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
-				context.SetDynamicDescriptor(4, 3, inputResource.pResolvedDepth->GetSRV());
-				context.SetDynamicDescriptor(4, 3, inputResource.pPreviousColor->GetSRV());
+				context.SetDynamicDescriptor(4, 4, inputResource.pResolvedDepth->GetSRV());
+				context.SetDynamicDescriptor(4, 5, inputResource.pPreviousColor->GetSRV());
 
                 int idx = 0;
                 for (auto& pShadowMap : *inputResource.pShadowMaps)

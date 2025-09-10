@@ -4,7 +4,7 @@
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
 
 #ifdef _DEBUG
-#define D3D_SETNAME(obj, name) D3D::SetD3DObjectName(obj, name)
+#define D3D_SETNAME(obj, name) D3D::SetObjectName(obj, name)
 #else
 #define D3D_SETNAME(obj, name)
 #endif
@@ -295,7 +295,7 @@ namespace D3D
 		return false;
 	}
 
-	inline void SetD3DObjectName(ID3D12Object* pObject, const char* pName)
+	inline void SetObjectName(ID3D12Object* pObject, const char* pName)
 	{
 		if (pObject)
 		{

@@ -26,7 +26,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64_t fenceValue)
 
 	ComPtr<ID3D12CommandAllocator> pAllocator;
 	m_pGraphics->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
-	D3D::SetD3DObjectName(pAllocator.Get(), "Pooled Allocator");
+	D3D::SetObjectName(pAllocator.Get(), "Pooled Allocator");
 	m_CommandAllocators.push_back(std::move(pAllocator));
 
 	return m_CommandAllocators.back().Get();
@@ -53,9 +53,9 @@ CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	desc.Type = type;
 
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), m_pGraphics->GetDevice());
-	D3D::SetD3DObjectName(m_pCommandQueue.Get(), "Main CommandQueue");
+	D3D::SetObjectName(m_pCommandQueue.Get(), "Main CommandQueue");
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), m_pGraphics->GetDevice());
-	D3D::SetD3DObjectName(m_pFence.Get(), "CommandQueue Fence");
+	D3D::SetObjectName(m_pFence.Get(), "CommandQueue Fence");
 	m_pFenceEventHandle = CreateEventExA(nullptr, "CommandQueue Fence", 0, EVENT_ALL_ACCESS);
 }
 

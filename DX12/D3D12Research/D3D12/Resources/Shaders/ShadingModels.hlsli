@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_SHADING_MODELS__
+#define __INCLUDE_SHADING_MODELS__
+
 #include "Common.hlsli"
 
 float DielectricSpecularToF0(float specular)
@@ -107,3 +110,5 @@ LightResult DefaultLitBxDF(float3 SpecularColor, float Roughness, float3 Diffuse
 
     return lighting;
 }
+
+#endif

@@ -216,7 +216,7 @@ ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR
     desc.NodeMask = 0;
     desc.Type = type;
     VERIFY_HR_EX(m_pGraphics->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap.GetAddressOf())), m_pGraphics->GetDevice());
-    D3D::SetD3DObjectName(pHeap.Get(), "Online Pooled Descriptor Heap");
+    D3D::SetObjectName(pHeap.Get(), "Online Pooled Descriptor Heap");
     m_DescriptorHeaps.push_back(std::move(pHeap));
     return m_DescriptorHeaps.back().Get();
 }

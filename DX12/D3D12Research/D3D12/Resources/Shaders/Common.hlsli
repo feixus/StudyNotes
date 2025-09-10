@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_COMMON__
+#define __INCLUDE_COMMON__
+
 #include "Constants.hlsli"
 
 float4 UIntToColor(uint c)
@@ -140,6 +143,7 @@ void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 	aabb.Extents = float4(maximum, 0) - aabb.Center;
 }
 
+// clip space(-1, 1) coordinates to view space
 float4 ClipToView(float4 clip, float4x4 projectionInverse)
 {
     float4 view = mul(clip, projectionInverse);
@@ -148,6 +152,7 @@ float4 ClipToView(float4 clip, float4x4 projectionInverse)
 	return view;
 }
 
+// screen space coordinates(0, width/height) to view space
 float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
 {
 	// convert to normalized device coordinates
@@ -155,6 +160,16 @@ float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
 	// convert to clip space
 	float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
 	return ClipToView(clip, projectionInverse);
+}
+
+// view space position to screen UVs(0, 1). Non-linear Z
+float3 ViewToWindow(float3 view, float4x4 projection)
+{
+	float4 proj = mul(float4(view, 1), projection);
+	proj.xyz /= proj.w;
+	proj.x = (proj.x + 1) * 0.5f;
+	proj.y = (1 - proj.y) * 0.5f;
+	return proj.xyz;
 }
 
 // emulates sampling a textureCube
@@ -316,3 +331,5 @@ void SwizzleThreadID(uint2 dispatchDimensions, uint2 numThreads, int2 groupId, i
     swizzledvThreadID.x = (CTA_Dim.x)*swizzledvThreadGroupID.x + groupThreadIndex.x; 
     swizzledvThreadID.y = (CTA_Dim.y)*swizzledvThreadGroupID.y + groupThreadIndex.y;
 }
+
+#endif

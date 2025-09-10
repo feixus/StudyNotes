@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_COLORS__
+#define __INCLUDE_COLORS__
+
 // https://web.archive.org/web/20191027010220/http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
 float3 sRGB_to_XYZ(float3 rgb)
 {
@@ -44,3 +47,5 @@ float3 xyY_to_sRGB(float3 xyY)
 {
     return XYZ_to_sRGB(xyY_to_XYZ(xyY));
 }
+
+#endif
