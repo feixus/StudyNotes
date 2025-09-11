@@ -1,17 +1,29 @@
 #include "Common.hlsli"
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-                "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
+                "CBV(b0, visibility = SHADER_VISIBILITY_PIXEL), " \
+                "CBV(b1, visibility = SHADER_VISIBILITY_VERTEX), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 1, space = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL)"
 
-cbuffer Data : register(b0)
+cbuffer PerBatchData : register(b0)
+{
+    uint cVisibleChannels;
+    int cUniqueChannel;
+    int cMipLevel;
+    float cSliceIndex;
+    int cTextureType;
+}
+
+cbuffer Data : register(b1)
 {
     float4x4 cViewProj;
 }
 
 SamplerState mySampler : register(s0);
-Texture2D diffuse : register(t0);
+Texture2D tDiffuse2D : register(t0, space0);
+Texture3D tDiffuse3D : register(t0, space1);
 
 struct VS_INPUT
 {
@@ -41,5 +53,34 @@ PS_INPUT VSMain(VS_INPUT input)
 
 float4 PSMain(PS_INPUT input) : SV_TARGET
 {
-    return input.color * diffuse.Sample(mySampler, input.texCoord);
+    float4 color = 0;
+    if (cTextureType == TEXTURE_2D)
+    {
+        color = input.color * tDiffuse2D.SampleLevel(mySampler, input.texCoord, cMipLevel);
+    }
+    else if (cTextureType == TEXTURE_3D)
+    {
+        color = input.color * tDiffuse3D.SampleLevel(mySampler, float3(input.texCoord, cSliceIndex), cMipLevel);
+    }
+
+    float4 outColor = 0;
+    if (cUniqueChannel < 0)
+    {
+        outColor.r = color.r * ((cVisibleChannels & (1 << 0)) > 0);
+        outColor.g = color.g * ((cVisibleChannels & (1 << 1)) > 0);
+        outColor.b = color.b * ((cVisibleChannels & (1 << 2)) > 0);
+        outColor.a = color.a;
+    }
+    else
+    {
+        outColor.r = color[cUniqueChannel];
+        outColor.g = color[cUniqueChannel];
+        outColor.b = color[cUniqueChannel];
+        outColor.a = 1;
+    }
+    return outColor;
 }
+
+//Swizzle R G B
+//Visibility RGBA
+//0001 0001 0010 1111

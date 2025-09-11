@@ -1,6 +1,6 @@
 cbuffer Constants : register(b0)
 {
-    float4 cPoints[256];    // feature points
+    float4 cPoints[2048];    // feature points
     uint4 cPointsPerRow;    // x/y/z: number of points per row in each axis
     uint Resolution;
 };
@@ -41,6 +41,6 @@ void WorleyNoiseCS(uint3 threadId : SV_DispatchThreadID)
     float r = WorleyNoise(uvw, cPointsPerRow.x);
     float g = WorleyNoise(uvw, cPointsPerRow.y);
     float b = WorleyNoise(uvw, cPointsPerRow.z);
-    float combined = r * 0.625f + g * 0.225f + b * 0.150f;
-    uOutputTexture[threadId.xyz] = float4(combined, 0, 0, 0);
+    float a = WorleyNoise(uvw, cPointsPerRow.a);
+    uOutputTexture[threadId.xyz] = float4(r, g, b, a);
 }

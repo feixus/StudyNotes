@@ -139,3 +139,49 @@ namespace ImGui
     void MyFunction(const char* name, MyMatrix44* mtx);
 }
 */
+
+#define ImTextureID ImTextureData
+class GraphicsTexture;
+
+#ifdef _WIN64
+using ImIntPtr = __int64;
+#else
+using ImIntPtr = int;
+#endif
+
+struct ImTextureData
+{
+    ImTextureData(GraphicsTexture* pTexture, bool redChannelVisible = true,
+        bool greenChannelVisible = true, bool blueChannelVisible = true,
+        bool alphaChannelVisible = true, unsigned int mipLevel = 0, unsigned int sliceIndex = 0)
+        : pTexture(pTexture), VisibleChannels(0), MipLevel(mipLevel), SliceIndex(sliceIndex)
+    {
+        VisibleChannels |= redChannelVisible * (1 << 0);
+        VisibleChannels |= greenChannelVisible * (1 << 1);
+        VisibleChannels |= blueChannelVisible * (1 << 2);
+        VisibleChannels |= alphaChannelVisible * (1 << 3);
+    }
+
+    ImTextureData() : pTexture(nullptr), VisibleChannels(0), MipLevel(0), SliceIndex(0)
+    {}
+
+    bool operator==(const ImTextureData& rhs) const
+    {
+        return pTexture == rhs.pTexture;
+    }
+
+    bool operator!=(const ImTextureData& rhs) const
+    {
+        return pTexture != rhs.pTexture;
+    }
+
+    operator ImIntPtr() const
+    {
+        return (ImIntPtr)(pTexture);
+    }
+
+	GraphicsTexture* pTexture{ nullptr };
+	unsigned int VisibleChannels;
+	unsigned int MipLevel;
+	unsigned int SliceIndex;
+};

@@ -12,31 +12,36 @@
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 
-static const int Resolution = 256;
-static const int MaxPoints = 256;
+static const int Resolution = 128;
+static const int MaxPoints = 2048;
+static Vector4 NoiseWeights = Vector4(0.625f, 0.225f, 0.15f, 0.05f);
 
 struct CloudParameters
 {
+	Vector4 NoiseWeights;
 	Vector4 FrustumCorners[4];
 	Matrix ViewInverse;
 	float NearPlane{0};
 	float FarPlane{0};
 	
-	float CloudScale{0.02f};
+	float CloudScale{0.004f};
 	float CloudThreshold{0.4f};
 	Vector3 CloudOffset;
-	float CloudDensity{0.7f};
+	float CloudDensity{0.3f};
 
 	Vector4 MinExtents;
 	Vector4 MaxExtents;
+
+	Vector4 SunDirection;
+	Vector4 SunColor;
 };
 
 static CloudParameters sCloudParameters;
 
 Clouds::Clouds(Graphics* pGraphics)
 {
-	m_CloudBounds.Center = Vector3(0, 150, 0);
-	m_CloudBounds.Extents = Vector3(50, 20, 50);
+	m_CloudBounds.Center = Vector3(0, 200, 0);
+	m_CloudBounds.Extents = Vector3(300, 20, 300);
 
 	Initialize(pGraphics);
 }
@@ -51,6 +56,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 		ImGui::SliderFloat("Scale", &sCloudParameters.CloudScale, 0, 0.02f);
 		ImGui::SliderFloat("Cloud Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
 		ImGui::SliderFloat("Density", &sCloudParameters.CloudDensity, 0, 1.0f);
+		ImGui::SliderFloat4("Noise Weights", &NoiseWeights.x, 0, 1);
 		if (ImGui::Button("Generate Noise"))
 		{
 			m_UpdateNoise = true;
@@ -124,7 +130,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 	pContext->Execute(true);
 }
 
-void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera)
+void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera, const Light& sunLight)
 {
 	if (pSceneTexture->GetWidth() != m_pIntermediateColor->GetWidth() || pSceneTexture->GetHeight() != m_pIntermediateColor->GetHeight())
 	{
@@ -150,6 +156,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 					uint32_t Resolution{0};
 				} Constants;
 
+				srand(0);
 				for (int i = 0; i < MaxPoints; i++)
 				{
 					Constants.WorleyNoisePosition[i].x = Math::RandomRange(0.f, 1.f);
@@ -206,6 +213,9 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				sCloudParameters.FarPlane = pCamera->GetFar();
 				sCloudParameters.MinExtents = Vector4(Vector3(m_CloudBounds.Center) - Vector3(m_CloudBounds.Extents));
 				sCloudParameters.MaxExtents = Vector4(Vector3(m_CloudBounds.Center) + Vector3(m_CloudBounds.Extents));
+				sCloudParameters.NoiseWeights = NoiseWeights;
+				sCloudParameters.SunDirection = Vector4(sunLight.Direction);
+				sCloudParameters.SunColor = sunLight.Colour;
 
 				context.SetDynamicConstantBufferView(0, &sCloudParameters, sizeof(sCloudParameters));
 

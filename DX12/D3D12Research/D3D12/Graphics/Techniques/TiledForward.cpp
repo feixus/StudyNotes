@@ -95,9 +95,9 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             struct PerFrameData
             {
                 Matrix View;
-                Matrix ViewInverse;
                 Matrix Projection;
-                Matrix ProjectionInverse;
+                Matrix ViewProjection;
+                Vector4 ViewPosition;
                 Vector2 InvScreenDimensions;
                 float NearZ;
                 float FarZ;
@@ -109,13 +109,12 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             struct PerObjectData
             {
                 Matrix World;
-                Matrix WorldViewProjection;
             } objectData{};
 
             frameData.View = inputResource.pCamera->GetView();
-            frameData.ViewInverse = inputResource.pCamera->GetViewInverse();
             frameData.Projection = inputResource.pCamera->GetProjection();
-            frameData.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
+            frameData.ViewProjection = inputResource.pCamera->GetViewProjection();
+            frameData.ViewPosition = Vector4(inputResource.pCamera->GetPosition());
             frameData.InvScreenDimensions = Vector2(1.0f / inputResource.pRenderTarget->GetWidth(), 1.0f / inputResource.pRenderTarget->GetHeight());
             frameData.NearZ = inputResource.pCamera->GetNear();
             frameData.FarZ = inputResource.pCamera->GetFar();
@@ -171,10 +170,9 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 for (const Batch& b : *inputResource.pOpaqueBatches)
                 {
                     objectData.World = b.WorldMatrix;
-                    objectData.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
+                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
                     setMaterialDescriptors(context, b);
-                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
                     b.pMesh->Draw(&context);
                 }
@@ -190,10 +188,9 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 for (const Batch& b : *inputResource.pTransparentBatches)
                 {
                     objectData.World = b.WorldMatrix;
-                    objectData.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
+                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
                     setMaterialDescriptors(context, b);
-                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
                     b.pMesh->Draw(&context);
                 }

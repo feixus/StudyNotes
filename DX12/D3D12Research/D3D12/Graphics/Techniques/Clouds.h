@@ -8,13 +8,15 @@ class Graphics;
 class Camera;
 class CommandContext;
 class RGGraph;
+struct Light;
 
 class Clouds
 {
 public:
 	Clouds(Graphics* pGraphics);
 	void Initialize(Graphics* pGraphics);
-	void Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera);
+	void Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera, const Light& sunLight);
+	GraphicsTexture* GetNoiseTexture() const { return m_pWorleyNoiseTexture.get(); }
 
 private:
 	std::unique_ptr<PipelineState> m_pWorleyNoisePS;

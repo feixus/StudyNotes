@@ -18,15 +18,14 @@
 struct PerObjectData
 {
     float4x4 World;
-    float4x4 WorldViewProjection;
 };
 
 struct PerViewData
 {
     float4x4 View;
-    float4x4 ViewInverse;
     float4x4 Projection;
-    float4x4 ProjectionInverse;
+    float4x4 ViewProjection;
+    float4 ViewPosition;
     float2 InvScreenDimensions;
     float NearZ;
     float FarZ;
@@ -110,13 +109,13 @@ LightResult DoLight(float4 pos, float3 wPos, float3 vPos, float3 N, float3 V, fl
 PSInput VSMain(VSInput input)
 {
     PSInput result;   
-    result.position = mul(float4(input.position, 1.0f), cObjectData.WorldViewProjection);
+    result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
+    result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
+    result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
     result.texCoord = input.texCoord;
     result.normal = normalize(mul(input.normal, (float3x3)cObjectData.World));
     result.tangent = normalize(mul(input.tangent, (float3x3)cObjectData.World));
     result.bitangent = normalize(mul(input.bitangent, (float3x3)cObjectData.World));
-    result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
-    result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
     return result;
 }
 
@@ -265,7 +264,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
     float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
-    float3 V = normalize(cViewData.ViewInverse[3].xyz - input.positionWS);
+    float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
     
     float3 ssr = 0;
     if (cViewData.SsrSamples > 0)
@@ -285,7 +284,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     float ao = tAO.Sample(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r; 
     float3 color = lightResults.Diffuse + lightResults.Specular + ssr * ao;
     color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-    color += ApplyVolumetricLighting(cViewData.ViewInverse[3].xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
+    color += ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
 
     return float4(color, baseColor.a);
 }

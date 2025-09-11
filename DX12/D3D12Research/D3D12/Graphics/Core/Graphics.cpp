@@ -452,15 +452,22 @@ void Graphics::Update()
 			renderContext.SetPipelineState(m_pDepthPrepassPSO.get());
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 
-			struct Parameters
+			struct ViewData
 			{
-				Matrix WorldViewProj;
-			} constBuffer{};
+				Matrix ViewProjection;
+			} viewData{};
+			viewData.ViewProjection = m_pCamera->GetViewProjection();
+			renderContext.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
 
 			for (const Batch& b : m_OpaqueBatches)
 			{
-				constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
-				renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+				struct ObjectData
+				{
+					Matrix World;
+				} objectData;
+				objectData.World = b.WorldMatrix;
+				renderContext.SetDynamicConstantBufferView(0, &objectData, sizeof(ObjectData));
+
 				b.pMesh->Draw(&renderContext);
 			}
 
@@ -568,10 +575,14 @@ void Graphics::Update()
 					context.InsertResourceBarrier(pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 				}
 
-				
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pShadowRS.get());
 				
+				struct ViewData
+				{
+					Matrix ViewProjection;
+				}viewData;
+
 				for (int i = 0; i < shadowIndex; ++i)
 				{
 					GPU_PROFILE_SCOPE("Light View", &context);
@@ -579,10 +590,13 @@ void Graphics::Update()
 					GraphicsTexture* pShadowMap = m_ShadowMaps[i].get();
 					context.BeginRenderPass(RenderPassInfo(pShadowMap, RenderPassAccess::Clear_Store));
 
+					viewData.ViewProjection = shadowData.LightViewProjections[i];
+					context.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
+
 					struct PerObjectData
 					{
-						Matrix WorldViewProjection;
-					} ObjectData{};
+						Matrix World;
+					} objectData;
 
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
@@ -590,9 +604,9 @@ void Graphics::Update()
 
 						for (const Batch& b : m_OpaqueBatches)
 						{
-							ObjectData.WorldViewProjection = b.WorldMatrix * shadowData.LightViewProjections[i];
+							objectData.World = b.WorldMatrix;
+							context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
-							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 							b.pMesh->Draw(&context);
 						}
 					}
@@ -601,13 +615,12 @@ void Graphics::Update()
 						GPU_PROFILE_SCOPE("Transparent", &context);
 						context.SetPipelineState(m_pShadowAlphaPSO.get());
 
-						context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
 						for (const Batch& b : m_TransparentBatches)
 						{
-							ObjectData.WorldViewProjection = b.WorldMatrix * shadowData.LightViewProjections[i];
+							objectData.World = b.WorldMatrix;
+							context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
-							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(ObjectData));
-							context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+							context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 							b.pMesh->Draw(&context);
 						}
 					}
@@ -642,7 +655,7 @@ void Graphics::Update()
 	}
 
 	m_pGpuParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
-	m_pClouds->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera());
+	m_pClouds->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera(), m_Lights[0]);
 
 	RGPassBuilder sky = graph.AddPass("Sky");
 	sceneData.DepthStencil = sky.Read(sceneData.DepthStencil);
@@ -1769,11 +1782,24 @@ void Graphics::UpdateImGui()
 	}
 	ImGui::PopStyleVar();
 
-	m_pVisualizeTexture = m_pAmbientOcclusion.get();
+	m_pVisualizeTexture = m_pClouds->GetNoiseTexture();
 	if (m_pVisualizeTexture)
 	{
 		ImGui::Begin("Visualize Texture");
+
+		static bool visibleChannels[4] = { true, true, true, true };
+		static int mipLevel = 0;
+		static int sliceIndex = 0;
+		ImGui::Checkbox("R", &visibleChannels[0]);
+		ImGui::SameLine();
+		ImGui::Checkbox("G", &visibleChannels[1]);
+		ImGui::SameLine();
+		ImGui::Checkbox("B", &visibleChannels[2]);
+		ImGui::SameLine();
+		ImGui::Checkbox("A", &visibleChannels[3]);
+		ImGui::SameLine();
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
+
 		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
 		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 		float width = windowSize.x;
@@ -1783,8 +1809,23 @@ void Graphics::UpdateImGui()
 			width = image.x / image.y * windowSize.y;
 			height = windowSize.y;
 		}
-		ImTextureID user_texture_id = m_pVisualizeTexture->GetSRV().ptr;
-		ImGui::Image(user_texture_id, ImVec2(width, height));
+
+		ImGui::SameLine();
+		height -= ImGui::GetFontSize();
+		ImGui::Text("View Resolution: %dx%d", (int)width, (int)height);
+		if (m_pVisualizeTexture->GetMipLevels() > 1)
+		{
+			ImGui::SliderInt("Mip Level", &mipLevel, 0, m_pVisualizeTexture->GetMipLevels() - 1);
+		}
+		if (m_pVisualizeTexture->GetDepth() > 1)
+		{
+			ImGui::SliderInt("Slice Index", &sliceIndex, 0, m_pVisualizeTexture->GetDepth() - 1);
+		}
+
+		mipLevel = Math::Clamp(mipLevel, 0, (int)m_pVisualizeTexture->GetMipLevels() - 1);
+		sliceIndex = Math::Clamp(sliceIndex, 0, (int)m_pVisualizeTexture->GetDepth() - 1);
+
+		ImGui::Image(ImTextureData(m_pVisualizeTexture, visibleChannels[0], visibleChannels[1], visibleChannels[2], visibleChannels[3], mipLevel, sliceIndex), ImVec2(width, height));
 		ImGui::End();
 	}
 
@@ -1797,8 +1838,7 @@ void Graphics::UpdateImGui()
 		const Light& sunLight = m_Lights[0];
 		for (int i = 0; i < 4; ++i)
 		{
-			ImTextureID user_texture_id = m_ShadowMaps[sunLight.ShadowIndex + i]->GetSRV().ptr;
-			ImGui::Image(user_texture_id, ImVec2(imageSize, imageSize));
+			ImGui::Image(ImTextureData(m_ShadowMaps[sunLight.ShadowIndex + i].get()), ImVec2(imageSize, imageSize));
 		}
 		ImGui::End();
 	}

@@ -60,7 +60,7 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels);
 	
-	io.Fonts->SetTexID(m_pFontTexture->GetSRV().ptr);
+	io.Fonts->TexID = m_pFontTexture.get();
 
 	pContext->Execute(true);
 
@@ -167,7 +167,7 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 			context.SetGraphicsRootSignature(m_pRootSignature.get());
 
 			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0, 0.0f, 1.0f);
-			context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
+			context.SetDynamicConstantBufferView(1, &projectionMatrix, sizeof(Matrix));
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetViewport(FloatRect(0, 0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
@@ -177,6 +177,7 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 			for (int n = 0; n < pDrawData->CmdListsCount; n++)
 			{
 				const ImDrawList* pCmdList = pDrawData->CmdLists[n];
+
 				context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
 				context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
 
@@ -184,24 +185,45 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 				for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
 				{
 					const ImDrawCmd* pCmd = &pCmdList->CmdBuffer[i];
-					if (pCmd->UserCallback)
-					{
-						pCmd->UserCallback(pCmdList, pCmd);
-					}
-					else
-					{
-						context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
-						if (pCmd->TextureId > 0)
-						{
-							/*ID3D12Resource* pResource = reinterpret_cast<ID3D12Resource*>(pCmd->TextureId);
-							context.InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);*/
 
-							D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle{};
-							cpuHandle.ptr = pCmd->TextureId;
-							context.SetDynamicDescriptor(1, 0, cpuHandle);
+					struct ColorData
+					{
+						uint32_t VisibleChannels;
+						int UniqueChannel;
+						int MipIndex;
+						float SliceIndex;
+						int TextureType;
+					} batchData;
+
+					context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
+					ImTextureID textureData = pCmd->TextureId;
+					batchData.VisibleChannels = textureData.VisibleChannels;
+					batchData.MipIndex = textureData.MipLevel;
+					uint32_t minBit = 0, maxBit = 0;
+					BitOperations::LeastSignificantBit(textureData.VisibleChannels, &minBit);
+					BitOperations::MostSignificantBit(textureData.VisibleChannels, &maxBit);
+					batchData.UniqueChannel = (minBit == maxBit) ? minBit : -1;
+
+					if (textureData.pTexture)
+					{
+						context.InsertResourceBarrier(textureData.pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+						batchData.SliceIndex = (float)textureData.SliceIndex / textureData.pTexture->GetDepth();
+						switch (textureData.pTexture->GetDesc().Dimension)
+						{
+						case TextureDimension::Texture2D:
+							batchData.TextureType = 1;
+							context.SetDynamicDescriptor(2, 0, textureData.pTexture->GetSRV());
+							break;
+						case TextureDimension::Texture3D:
+							batchData.TextureType = 2;
+							context.SetDynamicDescriptor(3, 0, textureData.pTexture->GetSRV());
+							break;
 						}
-						context.DrawIndexed(pCmd->ElemCount, indexOffset, 0);
 					}
+
+					context.SetDynamicConstantBufferView(0, &batchData, sizeof(batchData));
+					context.DrawIndexed(pCmd->ElemCount, indexOffset, 0);
+					
 					indexOffset += pCmd->ElemCount;
 				}
 			}
