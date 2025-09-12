@@ -12,13 +12,17 @@ workspace (ENGINE_NAME)
     language "C++"
 	cppdialect "C++20"
     defines { "x64" }
-    architecture ("x64")
-    symbols ("On")
-	--kind ("ConsoleApp")
-	kind ("WindowedApp")
-    characterset ("MBCS")
-	flags { "MultiProcessorCompile", "ShadowedVariables" }
+    architecture "x64"
+    symbols "On"
+	kind "WindowedApp"
+    characterset "MBCS"
+	flags { "MultiProcessorCompile", "ShadowedVariables"}
+    --fatalwarnings {"all"}
 	rtti "Off"
+    conformancemode "On"
+    warnings "Extra"
+
+    disablewarnings { "4100" }
 
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
@@ -63,6 +67,8 @@ project (ENGINE_NAME)
 
     filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
+            fatalwarnings { }
+            warnings "Default"
 	filter {}
 
     postbuildcommands { "{COPY} \"$(ProjectDir)Resources\" \"$(OutDir)Resources\"" }

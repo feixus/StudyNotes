@@ -266,24 +266,26 @@ void TiledForward::SetupResources(Graphics* pGraphics)
 
 void TiledForward::SetupPipelines(Graphics* pGraphics)
 {
-    Shader computeShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
+    {
+        Shader computeShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
 
-    m_pComputeLightCullRS = std::make_unique<RootSignature>();
-    m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", computeShader, pGraphics->GetDevice());
+        m_pComputeLightCullRS = std::make_unique<RootSignature>();
+        m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", computeShader, pGraphics->GetDevice());
 
-    m_pComputeLightCullPipeline = std::make_unique<PipelineState>();
-    m_pComputeLightCullPipeline->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
-    m_pComputeLightCullPipeline->SetComputeShader(computeShader);
-    m_pComputeLightCullPipeline->Finalize("Tiled Light Culling PSO", pGraphics->GetDevice());
+        m_pComputeLightCullPipeline = std::make_unique<PipelineState>();
+        m_pComputeLightCullPipeline->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
+        m_pComputeLightCullPipeline->SetComputeShader(computeShader);
+        m_pComputeLightCullPipeline->Finalize("Tiled Light Culling PSO", pGraphics->GetDevice());
 
-    m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
-    m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32_t)));
-    m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
-    m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(pGraphics, "Light List Opaque");
-    m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
-    m_pLightIndexListBufferTransparent = std::make_unique<Buffer>(pGraphics, "Light List Transparent");
-    m_pLightIndexListBufferTransparent->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
-
+        m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
+        m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32_t)));
+        m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
+        m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(pGraphics, "Light List Opaque");
+        m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
+        m_pLightIndexListBufferTransparent = std::make_unique<Buffer>(pGraphics, "Light List Transparent");
+        m_pLightIndexListBufferTransparent->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
+    }
+    
     CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
             CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
             CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32_FLOAT },

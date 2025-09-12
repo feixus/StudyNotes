@@ -33,4 +33,6 @@ private:
 
 	bool m_UpdateNoise{true};
 	BoundingBox m_CloudBounds;
+
+	std::unique_ptr<GraphicsTexture> m_pVerticalDensityTexture;
 };

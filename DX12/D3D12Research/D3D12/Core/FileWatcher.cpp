@@ -1,9 +1,6 @@
-#include "FileWatcher.h"
 #include "stdafx.h"
 #include "FileWatcher.h"
-
-FileWatcher::FileWatcher()
-{}
+#include "cstdlib"
 
 FileWatcher::~FileWatcher()
 {
@@ -94,7 +91,8 @@ int FileWatcher::ThreadFunction()
                     const wchar_t* src = record->FileName;
                     const wchar_t* end = src + record->FileNameLength / sizeof(wchar_t);
                     char fn[256];
-                    std::wcstombs(fn, src, 256);
+                    size_t required_size = 0;
+                    wcstombs_s(&required_size, fn, src, 256);
                     fn[end - src] = '\0';
                     std::string fileName(fn);
                     std::replace(fileName.begin(), fileName.end(), '\\', '/');

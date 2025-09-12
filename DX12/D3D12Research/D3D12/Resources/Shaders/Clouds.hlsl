@@ -1,6 +1,8 @@
+#include "Common.hlsli"
+
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
                 "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 3), visibility = SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 4), visibility = SHADER_VISIBILITY_ALL), " \
                 "StaticSampler(s0, filter = FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
                 "StaticSampler(s1, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL)"
                 
@@ -20,6 +22,7 @@ struct PSInput
 Texture2D tSceneTexture : register(t0);
 Texture2D tDepthTexture : register(t1);
 Texture3D tCloudsTexture : register(t2);
+Texture2D tVerticalDensity : register(t3);
 
 SamplerState sSceneSampler : register(s0);
 SamplerState sCloudsSampler : register(s1);
@@ -85,6 +88,24 @@ float SampleDensity(float3 position)
     return max(0, cCloudThreshold - s) * cCloudDensity;
 }
 
+float3 LightMarch(float3 position)
+{
+    float3 lightDirection = -cSunDirection;
+    float boxDistance = RayBoxDistance(cMinExtents, cMaxExtents, position, lightDirection).y;
+    float stepSize = boxDistance / 6;
+    float totalDensity = 0;
+    float offset = InterleavedGradientNoise(position.xy);
+    position -= lightDirection * offset;
+    for (int i= 0; i < 6; i++)
+    {
+        position += lightDirection * stepSize;
+        totalDensity += max(0, SampleDensity(position) * stepSize);
+    }
+
+    float transmittance = exp(-totalDensity * 8.0f);
+    return 0.01f + transmittance * (1 - 0.01f);
+}
+
 float4 PSMain(PSInput input) : SV_TARGET
 {
     float3 ro = cViewInverse[3].xyz;
@@ -97,20 +118,32 @@ float4 PSMain(PSInput input) : SV_TARGET
     float maxDepth = depth * length(input.ray.xyz);
 
     float distanceTravelled = 0;
-    float stepSize = boxResult.y / 100;
+    float stepSize = boxResult.y / 150;
     float dstLimit = min(maxDepth - boxResult.x, boxResult.y);
 
     float totalDensity = 0;
+    float3 totalLight = 0;
+    float transmittance = 1;
+
+    float offset = InterleavedGradientNoise(input.texCoord);
+    ro += offset - 1;
+
     while (distanceTravelled < dstLimit)
     {
         float3 rayPos = ro + rd * (boxResult.x + distanceTravelled);
-        // approximation of the integral of density along the ray, a simple Riemann sum
-        // this could be improved with a more sophisticated numerical integration method
-        totalDensity += SampleDensity(rayPos) * stepSize;
+        float height = (cMaxExtents.y - rayPos.y) / (cMaxExtents.y - cMinExtents.y);
+        float densityMultiplier = tVerticalDensity.Sample(sCloudsSampler, float2(0, height)).r;
+        float density = SampleDensity(rayPos) * stepSize * densityMultiplier;
+        if (density > 0)
+        {
+            totalLight += LightMarch(rayPos) * stepSize * densityMultiplier * density * 3;
+            transmittance *= exp(-density * stepSize * 0.03f);
+            if (transmittance < 0.01f)
+            {
+                break;
+            }
+        }
         distanceTravelled += stepSize;
     }
-    // Beer-Lambert law for transmittance
-    // T = e^(-k * d), where k is the extinction coefficient (density) and d is the distance travelled
-    float transmittance = saturate(1 - exp(-totalDensity));
-    return float4(color.xyz + 5 * transmittance, 1);
+    return float4(color.xyz * transmittance + totalLight * cSunColor.rgb, 1);
 }

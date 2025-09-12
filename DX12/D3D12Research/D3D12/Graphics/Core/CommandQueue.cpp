@@ -172,7 +172,7 @@ void CommandQueue::WaitForFence(uint64_t fenceValue)
 	m_pFence->SetEventOnCompletion(fenceValue, m_pFenceEventHandle);
 	DWORD result = WaitForSingleObject(m_pFenceEventHandle, INFINITE);
 
-	if(WAIT_OBJECT_0)
+	if(result == WAIT_OBJECT_0)
 	{
 		PIXNotifyWakeFromFenceSignal(m_pFenceEventHandle); // the event was successfully signaled, so notify PIX
 	}

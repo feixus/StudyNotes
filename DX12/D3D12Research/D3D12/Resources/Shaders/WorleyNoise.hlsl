@@ -1,7 +1,7 @@
 cbuffer Constants : register(b0)
 {
-    float4 cPoints[2048];    // feature points
-    uint4 cPointsPerRow;    // x/y/z: number of points per row in each axis
+    float4 cPoints[1024];    // feature points
+    uint4 cPointsPerRow[16];    // x/y/z: number of points per row in each axis
     uint Resolution;
 };
 
@@ -25,7 +25,8 @@ float WorleyNoise(float3 uvw, uint pointsPerRow)
             {
                 int3 offset = int3(offsetX, offsetY, offsetZ);
                 int3 neighborCell = int3(cell + offset + pointsPerRow) % pointsPerRow;
-                float3 p = cPoints[neighborCell.x + pointsPerRow * (neighborCell.y + neighborCell.z * pointsPerRow)].xyz + offset;
+                int pointIndex = neighborCell.x + pointsPerRow * (neighborCell.y + neighborCell.z * pointsPerRow);
+                float3 p = cPoints[pointIndex % 1024].xyz + offset;
                 minDistSq = min(minDistSq, dot(frc - p, frc - p));
             }
         }
@@ -37,10 +38,21 @@ float WorleyNoise(float3 uvw, uint pointsPerRow)
 [numthreads(8, 8, 8)]
 void WorleyNoiseCS(uint3 threadId : SV_DispatchThreadID)
 {
+    float4 output = 0;
     float3 uvw = threadId.xyz / (float)Resolution;
-    float r = WorleyNoise(uvw, cPointsPerRow.x);
-    float g = WorleyNoise(uvw, cPointsPerRow.y);
-    float b = WorleyNoise(uvw, cPointsPerRow.z);
-    float a = WorleyNoise(uvw, cPointsPerRow.a);
-    uOutputTexture[threadId.xyz] = float4(r, g, b, a);
+    for (int i = 0; i < 4; ++i)
+    {
+        float r = WorleyNoise(uvw, cPointsPerRow[i].x);
+        float g = WorleyNoise(uvw, cPointsPerRow[i].y);
+        float b = WorleyNoise(uvw, cPointsPerRow[i].z);
+        float a = WorleyNoise(uvw, cPointsPerRow[i].a);
+        float4 total = float4(r, g, b, a);
+        float persistence = 0.5f;
+        for (int j = 0; j < i; ++j)
+        {
+            output[i] += total[i] * persistence;
+            persistence *= 0.5f;
+        }
+    }
+    uOutputTexture[threadId.xyz] = output;
 }

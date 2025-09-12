@@ -74,27 +74,6 @@ public:
     int m_Reads{0};
 };
 
-class RGPassBuilder
-{
-public:
-    RGPassBuilder(RGGraph& renderGraph, RGPass& pass)
-        : m_RenderGraph(renderGraph), m_Pass(pass) {}
-
-    template<typename ExecuteCallback>
-    void Bind(ExecuteCallback&& callback);
-
-    RGResourceHandle Read(const RGResourceHandle& resource);
-    [[nodiscard]]RGResourceHandle& Write(RGResourceHandle& resource);
-    RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
-    RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
-
-    void NeverCull();
-
-private:
-    RGPass& m_Pass;
-    RGGraph& m_RenderGraph;
-};
-
 class RGPassResource
 {
 public:
@@ -159,6 +138,26 @@ private:
 
     // render graph compile-time values
     int m_References{0};
+};
+
+class RGPassBuilder
+{
+public:
+    RGPassBuilder(RGGraph& renderGraph, RGPass& pass)
+        : m_RenderGraph(renderGraph), m_Pass(pass) {}
+
+    template<typename ExecuteCallback>
+    void Bind(ExecuteCallback&& callback);
+
+    RGResourceHandle Read(const RGResourceHandle& resource);
+    [[nodiscard]]RGResourceHandle& Write(RGResourceHandle& resource);
+    RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
+    RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
+    void NeverCull();
+
+private:
+    RGPass& m_Pass;
+    RGGraph& m_RenderGraph;
 };
 
 class RGGraph

@@ -13,7 +13,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 
 static const int Resolution = 128;
-static const int MaxPoints = 2048;
+static const int MaxPoints = 1024;
 static Vector4 NoiseWeights = Vector4(0.625f, 0.225f, 0.15f, 0.05f);
 
 struct CloudParameters
@@ -127,6 +127,10 @@ void Clouds::Initialize(Graphics *pGraphics)
 
 		m_pIntermediateColor = std::make_unique<GraphicsTexture>(pGraphics, "Cloud Intermediate Color");
 	}
+
+	m_pVerticalDensityTexture = std::make_unique<GraphicsTexture>(pGraphics, "Vertical Density Texture");
+	m_pVerticalDensityTexture->Create(pContext, "Resources/Textures/CloudVerticalDensity.png");
+
 	pContext->Execute(true);
 }
 
@@ -152,7 +156,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				struct
 				{
 					Vector4 WorleyNoisePosition[MaxPoints];
-					uint32_t PointsPerRow[4]{};
+					uint32_t PointsPerRow[16]{};
 					uint32_t Resolution{0};
 				} Constants;
 
@@ -168,7 +172,22 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				Constants.PointsPerRow[0] = 4;
 				Constants.PointsPerRow[1] = 8;
 				Constants.PointsPerRow[2] = 10;
-				Constants.PointsPerRow[3] = 12;
+				Constants.PointsPerRow[3] = 18;
+
+				Constants.PointsPerRow[0+4] = 8;
+				Constants.PointsPerRow[1+4] = 10;
+				Constants.PointsPerRow[2+4] = 12;
+				Constants.PointsPerRow[3+4] = 18;
+
+				Constants.PointsPerRow[0+8] = 12;
+				Constants.PointsPerRow[1+8] = 14;
+				Constants.PointsPerRow[2+8] = 16;
+				Constants.PointsPerRow[3+8] = 20;
+
+				Constants.PointsPerRow[0 + 12] = 14;
+				Constants.PointsPerRow[1 + 12] = 15;
+				Constants.PointsPerRow[2 + 12] = 19;
+				Constants.PointsPerRow[3 + 12] = 26;
 
 				context.InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.FlushResourceBarriers();
@@ -222,6 +241,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				context.SetDynamicDescriptor(1, 0, pSceneTexture->GetSRV());
 				context.SetDynamicDescriptor(1, 1, pDepthTexture->GetSRV());
 				context.SetDynamicDescriptor(1, 2, m_pWorleyNoiseTexture->GetSRV());
+				context.SetDynamicDescriptor(1, 3, m_pVerticalDensityTexture->GetSRV());
 
 				context.SetVertexBuffer(m_pQuadVertexBuffer.get());
 				context.Draw(0, 6);

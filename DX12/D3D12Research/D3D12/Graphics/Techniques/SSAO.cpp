@@ -47,7 +47,6 @@ void SSAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 			renderContext.SetComputeRootSignature(m_pSSAORS.get());
 			renderContext.SetPipelineState(m_pSSAOPSO.get());
 
-			constexpr int ssaoRandomVectors = 64;
 			struct ShaderParameters
 			{
 				Matrix ProjectionInverse;

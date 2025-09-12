@@ -235,9 +235,9 @@ namespace ShaderCompiler
 		size_t i = strlen(pTarget);
 		memcpy(target, pTarget, i);
 		target[i++] = '_';
-		target[i++] = '0' + shaderModelMajor;
+		target[i++] = '0' + (char)shaderModelMajor;
 		target[i++] = '_';
-		target[i++] = '0' + shaderModelMinor;
+		target[i++] = '0' + (char)shaderModelMinor;
 		target[i++] = 0;
 
 		std::vector<std::string> definesActual(defines);
@@ -286,8 +286,8 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 
 	while (std::getline(fileStream, line))
 	{
-		size_t start = line.find("#include");
-		if (start != std::string::npos)
+		size_t includeStart = line.find("#include");
+		if (includeStart != std::string::npos)
 		{
 			size_t start = line.find('"') + 1;
 			size_t end = line.rfind('"');
@@ -303,9 +303,9 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 			{
 				processedIncludes.push_back(includeHash);
 				std::string basePath = Paths::GetDirectoryPath(filePath);
-				std::string filePath = basePath + includeFilePath;
+				std::string fullIncludePath = basePath + includeFilePath;
 
-				if (!ProcessSource(sourcePath, filePath, output, processedIncludes, dependencies))
+				if (!ProcessSource(sourcePath, fullIncludePath, output, processedIncludes, dependencies))
 				{
 					return false;
 				}
@@ -361,8 +361,8 @@ bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* p
 
 	if (shaderType == ShaderType::Mesh || shaderType == ShaderType::Amplification)
 	{
-		shaderModelMajor = Math::Max<uint32_t>(shaderModelMajor, 6);
-		shaderModelMinor = Math::Max<uint32_t>(shaderModelMinor, 5);
+		shaderModelMajor = Math::Max<char>(shaderModelMajor, 6);
+		shaderModelMinor = Math::Max<char>(shaderModelMinor, 5);
 	}
 
 	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
@@ -385,8 +385,8 @@ bool ShaderLibrary::Compile(const char* pFilePath, char shaderModelMajor, char s
 	}
 
 	std::string source = shaderSource.str();
-	shaderModelMajor = Math::Max<uint32_t>(shaderModelMajor, 6);
-	shaderModelMinor = Math::Max<uint32_t>(shaderModelMinor, 3);
+	shaderModelMajor = Math::Max<char>(shaderModelMajor, 6);
+	shaderModelMinor = Math::Max<char>(shaderModelMinor, 3);
 	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
 	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32_t)source.size(), "lib", pBlob, "", shaderModelMajor, shaderModelMinor, defines);
 }

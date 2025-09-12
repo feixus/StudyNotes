@@ -191,10 +191,10 @@ void Graphics::Update()
 		light.ShadowIndex = shadowIndex;
 		if (light.Type == LightType::Directional)
 		{
-			for (int i = 0; i < g_ShadowCascades; ++i)
+			for (int cascadeIdx = 0; cascadeIdx < g_ShadowCascades; ++cascadeIdx)
 			{
-				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
-				float currentCascadeSplit = cascadeSplits[i];
+				float previousCascadeSplit = cascadeIdx == 0 ? minPoint : cascadeSplits[cascadeIdx - 1];
+				float currentCascadeSplit = cascadeSplits[cascadeIdx];
 
 				Vector3 frustumCorners[] = {
 					// near
@@ -1036,7 +1036,7 @@ void Graphics::InitD3D()
 		DXGI_ADAPTER_DESC3 desc;
 		pAdapter->GetDesc3(&desc);
 
-		if (!(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE))
+		if (!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
 		{
 			char name[256];
 			ToMultibyte(desc.Description, name, 256);

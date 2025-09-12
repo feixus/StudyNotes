@@ -4,7 +4,7 @@
 class FileWatcher
 {
 public:
-    FileWatcher();
+    FileWatcher() = default;
     virtual ~FileWatcher();
 
     bool StartWatching(const std::string& directory, const bool recursiveWatch = true);
