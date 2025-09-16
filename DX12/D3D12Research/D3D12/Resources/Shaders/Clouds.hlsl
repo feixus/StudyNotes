@@ -2,9 +2,9 @@
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
                 "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 4), visibility = SHADER_VISIBILITY_ALL), " \
-                "StaticSampler(s0, filter = FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
-                "StaticSampler(s1, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL)"
+                "DescriptorTable(SRV(t0, numDescriptors = 4), visibility = SHADER_VISIBILITY_PIXEL), " \
+                "StaticSampler(s0, filter = FILTER_COMPARISON_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL), " \
+                "StaticSampler(s1, filter = FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
                 
 struct VSInput
 {
@@ -132,7 +132,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     {
         float3 rayPos = ro + rd * (boxResult.x + distanceTravelled);
         float height = (cMaxExtents.y - rayPos.y) / (cMaxExtents.y - cMinExtents.y);
-        float densityMultiplier = tVerticalDensity.Sample(sCloudsSampler, float2(0, height)).r;
+        float densityMultiplier = tVerticalDensity.Sample(sSceneSampler, float2(0, height)).r;
         float density = SampleDensity(rayPos) * stepSize * densityMultiplier;
         if (density > 0)
         {

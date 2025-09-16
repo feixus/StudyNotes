@@ -45,7 +45,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
     RGPassBuilder lightCulling = graph.AddPass("Tiled Light Culling");
     lightCulling.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
-            context.InsertResourceBarrier(inputResource.pDepthBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(inputResource.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             context.InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -68,10 +68,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             } Data{};
 
             Data.CameraView = inputResource.pCamera->GetView();
-            Data.NumThreadGroups.x = Math::DivideAndRoundUp(inputResource.pDepthBuffer->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
-            Data.NumThreadGroups.y = Math::DivideAndRoundUp(inputResource.pDepthBuffer->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
+            Data.NumThreadGroups.x = Math::DivideAndRoundUp(inputResource.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
+            Data.NumThreadGroups.y = Math::DivideAndRoundUp(inputResource.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
             Data.NumThreadGroups.z = 1;
-            Data.ScreenDimensionsInv = Vector2(1.0f / inputResource.pDepthBuffer->GetWidth(), 1.0f / inputResource.pDepthBuffer->GetHeight());
+            Data.ScreenDimensionsInv = Vector2(1.0f / inputResource.pResolvedDepth->GetWidth(), 1.0f / inputResource.pResolvedDepth->GetHeight());
             Data.LightCount = (uint32_t)inputResource.pLightBuffer->GetDesc().ElementCount;
             Data.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
 
@@ -81,7 +81,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetUAV());
             context.SetDynamicDescriptor(1, 3, m_pLightIndexListBufferTransparent->GetUAV());
             context.SetDynamicDescriptor(1, 4, m_pLightGridTransparent->GetUAV());
-            context.SetDynamicDescriptor(2, 0, inputResource.pDepthBuffer->GetSRV());
+            context.SetDynamicDescriptor(2, 0, inputResource.pResolvedDepth->GetSRV());
             context.SetDynamicDescriptor(2, 1, inputResource.pLightBuffer->GetSRV());
 
             context.Dispatch(Data.NumThreadGroups);
@@ -109,6 +109,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             struct PerObjectData
             {
                 Matrix World;
+                MaterialData Material;
             } objectData{};
 
             frameData.View = inputResource.pCamera->GetView();
@@ -139,6 +140,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
             context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
 
+            context.SetDynamicDescriptors(3, 0, inputResource.MaterialTextures.data(), (int)inputResource.MaterialTextures.size());
             context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
             context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
 			context.SetDynamicDescriptor(4, 4, inputResource.pResolvedDepth->GetSRV());
@@ -150,14 +152,20 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
             }
 
-            auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
+            if (inputResource.pTLAS)
             {
-                D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-                    b.pMaterial->pDiffuseTexture->GetSRV(),
-                    b.pMaterial->pNormalTexture->GetSRV(),
-                    b.pMaterial->pSpecularTexture->GetSRV()
-                };
-                context.SetDynamicDescriptors(3, 0, srvs, std::size(srvs));
+                context.GetCommandList()->SetGraphicsRootShaderResourceView(6, inputResource.pTLAS->GetGpuHandle());
+            }
+
+            auto DrawBatches = [&](CommandContext& context, const std::vector<Batch>& batches)
+            {
+                for (const Batch& b : inputResource.OpaqueBatches)
+                {
+                    objectData.World = b.WorldMatrix;
+                    objectData.Material = b.Material;
+                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+                    b.pMesh->Draw(&context);
+                }
             };
 
             {
@@ -167,15 +175,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.SetDynamicDescriptor(4, 0, m_pLightGridOpaque->GetSRV());
                 context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
 
-                for (const Batch& b : *inputResource.pOpaqueBatches)
-                {
-                    objectData.World = b.WorldMatrix;
-                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-
-                    setMaterialDescriptors(context, b);
-
-                    b.pMesh->Draw(&context);
-                }
+                DrawBatches(context, inputResource.OpaqueBatches);
             }
 
             {
@@ -185,15 +185,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.SetDynamicDescriptor(4, 0, m_pLightGridTransparent->GetSRV());
                 context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferTransparent->GetSRV());
 
-                for (const Batch& b : *inputResource.pTransparentBatches)
-                {
-                    objectData.World = b.WorldMatrix;
-                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-
-                    setMaterialDescriptors(context, b);
-
-                    b.pMesh->Draw(&context);
-                }
+                DrawBatches(context, inputResource.TransparentBatches);
             }
 
             context.EndRenderPass();

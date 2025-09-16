@@ -63,7 +63,14 @@ project (ENGINE_NAME)
         SOURCE_DIR .. "**.inl",
         SOURCE_DIR .. "**.c",
         SOURCE_DIR .. "**.natvis",
+		--SOURCE_DIR .. "**.hlsl*",
     }
+	
+	vpaths
+	{
+		--{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
+		--{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
+	}
 
     filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
@@ -79,3 +86,16 @@ project (ENGINE_NAME)
 		AddD3D12()
 		AddPix()
 		AddDxc()
+		
+newaction {
+	trigger     = "clean",
+	description = "Remove all binaries and generated files",
+
+	execute = function()
+		os.rmdir("../Build")
+		os.rmdir("../ipch")
+		os.rmdir("../.vs")
+		os.remove("../*.sln")
+		os.remove(SOURCE_DIR .. "*.vcxproj.*")
+	end
+}

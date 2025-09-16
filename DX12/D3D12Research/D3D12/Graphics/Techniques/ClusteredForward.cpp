@@ -144,7 +144,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 
-				for (const Batch& b : *inputResource.pOpaqueBatches)
+				for (const Batch& b : inputResource.OpaqueBatches)
 				{
                     perObjectParameters.WorldView = b.WorldMatrix * inputResource.pCamera->GetView();
                     perObjectParameters.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
@@ -158,13 +158,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 				GPU_PROFILE_SCOPE("Transparent", &context);
 
                 context.SetPipelineState(m_pMarkUniqueClustersTransparentPSO.get());
-                for (const Batch& b : *inputResource.pTransparentBatches)
+                for (const Batch& b : inputResource.TransparentBatches)
                 {
                     perObjectParameters.WorldView = b.WorldMatrix * inputResource.pCamera->GetView();
                     perObjectParameters.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
                     context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
 
-                    context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 					b.pMesh->Draw(&context);
 				}
 			}
@@ -249,6 +248,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 			struct PerObjectData
 			{
 				Matrix World;
+                MaterialData Material;
 			} objectData;
 
 			struct PerFrameData
@@ -294,63 +294,47 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-            auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
-			{
-                D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
-                {
-                    b.pMaterial->pDiffuseTexture->GetSRV(),
-                    b.pMaterial->pNormalTexture->GetSRV(),
-                    b.pMaterial->pSpecularTexture->GetSRV()
-                };
-
-				context.SetDynamicDescriptors(3, 0, srvs, std::size(srvs));
-			};
+            context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+            context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
+            context.SetDynamicDescriptors(3, 0, inputResource.MaterialTextures.data(), (int)inputResource.MaterialTextures.size());
+            context.SetDynamicDescriptor(4, 0, m_pLightGrid->GetSRV());
+            context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
+            context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
+            context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
+            context.SetDynamicDescriptor(4, 4, inputResource.pResolvedDepth->GetSRV());
+            context.SetDynamicDescriptor(4, 5, inputResource.pPreviousColor->GetSRV());
+            int idx = 0;
+            for (auto& pShadowMap : *inputResource.pShadowMaps)
+            {
+                context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
+            }
 
             if (inputResource.pTLAS)
             {
                 context.GetCommandList()->SetGraphicsRootShaderResourceView(6, inputResource.pTLAS->GetGpuHandle());
             }
 
-            {
-                GPU_PROFILE_SCOPE("Opaque", &context);
-
-                context.SetPipelineState(m_pDiffusePSO.get());
-
-                context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-                context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
-                context.SetDynamicDescriptor(4, 0, m_pLightGrid->GetSRV());
-                context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
-                context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
-				context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
-				context.SetDynamicDescriptor(4, 4, inputResource.pResolvedDepth->GetSRV());
-				context.SetDynamicDescriptor(4, 5, inputResource.pPreviousColor->GetSRV());
-
-                int idx = 0;
-                for (auto& pShadowMap : *inputResource.pShadowMaps)
+            auto DrawBatches = [&](CommandContext& context, const std::vector<Batch>& batches)
+			{
+                for (const Batch& b : batches)
                 {
-                    context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
-                }
-
-                for (const Batch& b : *inputResource.pOpaqueBatches)
-                {
-                    objectData.World = b.WorldMatrix;
+                    objectData.World = Matrix::Identity;
+                    objectData.Material = b.Material;
                     context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-                    setMaterialDescriptors(context, b);
                     b.pMesh->Draw(&context);
                 }
+			};
+
+            {
+                GPU_PROFILE_SCOPE("Opaque", &context);
+                context.SetPipelineState(m_pDiffusePSO.get());
+                DrawBatches(context, inputResource.OpaqueBatches);
             }
 
             {
                 GPU_PROFILE_SCOPE("Transparent", &context);
                 context.SetPipelineState(m_pDiffuseTransparencyPSO.get());
-
-                for (const Batch& b : *inputResource.pTransparentBatches)
-                {
-                    objectData.World = Matrix::Identity;
-                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-                    setMaterialDescriptors(context, b);
-                    b.pMesh->Draw(&context);
-                }
+                DrawBatches(context, inputResource.TransparentBatches);
             }
 
             context.EndRenderPass();
@@ -492,7 +476,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 {
     // AABB
     {
-        Shader computeShader = Shader("CL_GenerateAABBs.hlsl", ShaderType::Compute, "GenerateAABBs");
+        Shader computeShader = Shader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs");
 
         m_pCreateAabbRS = std::make_unique<RootSignature>();
         m_pCreateAabbRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
@@ -513,8 +497,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
             CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
         };
 
-        Shader vertexShader = Shader("CL_MarkUniqueClusters.hlsl", ShaderType::Vertex, "MarkClusters_VS");
-		Shader pixelShaderOpaque = Shader("CL_MarkUniqueClusters.hlsl", ShaderType::Pixel, "MarkClusters_PS");
+        Shader vertexShader = Shader("ClusterMarking.hlsl", ShaderType::Vertex, "MarkClusters_VS");
+		Shader pixelShaderOpaque = Shader("ClusterMarking.hlsl", ShaderType::Pixel, "MarkClusters_PS");
 
         m_pMarkUniqueClustersRS = std::make_unique<RootSignature>();
         m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", vertexShader, pGraphics->GetDevice());
@@ -536,7 +520,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // compact cluster list
     {
-        Shader computeShader = Shader("CL_CompactClusters.hlsl", ShaderType::Compute, "CompactClusters");
+        Shader computeShader = Shader("ClusterCompaction.hlsl", ShaderType::Compute, "CompactClusters");
 
         m_pCompactClusterListRS = std::make_unique<RootSignature>();
         m_pCompactClusterListRS->FinalizeFromShader("Compact Cluster List", computeShader, pGraphics->GetDevice());
@@ -549,7 +533,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // prepare indirect dispatch buffer
     {
-        Shader computeShader = Shader("CL_UpdateIndirectArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
+        Shader computeShader = Shader("ClusterLightCullingArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
 
         m_pUpdateIndirectArgumentsRS = std::make_unique<RootSignature>();
         m_pUpdateIndirectArgumentsRS->FinalizeFromShader("Update Indirect Dispatch Buffer", computeShader, pGraphics->GetDevice());
@@ -562,7 +546,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // light culling
     {
-        Shader computeShader = Shader("CL_LightCulling.hlsl", ShaderType::Compute, "LightCulling");
+        Shader computeShader = Shader("ClusterLightCulling.hlsl", ShaderType::Compute, "LightCulling");
 
         m_pLightCullingRS = std::make_unique<RootSignature>();
         m_pLightCullingRS->FinalizeFromShader("Light Culling", computeShader, pGraphics->GetDevice());
@@ -615,7 +599,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // cluster debug rendering
     {
-        Shader pixelShader = Shader("CL_DebugDrawClusters.hlsl", ShaderType::Pixel, "PSMain");
+        Shader pixelShader = Shader("ClusterDebugDrawing.hlsl", ShaderType::Pixel, "PSMain");
 
         m_pDebugClusterRS = std::make_unique<RootSignature>();
         m_pDebugClusterPSO = std::make_unique<PipelineState>();
@@ -628,7 +612,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
         if (m_pGraphics->SupportMeshShaders())
         {
-		    Shader meshShader = Shader("CL_DebugDrawClusters.hlsl", ShaderType::Mesh, "MSMain");
+		    Shader meshShader = Shader("ClusterDebugDrawing.hlsl", ShaderType::Mesh, "MSMain");
 
 		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", meshShader, pGraphics->GetDevice());
             
@@ -638,8 +622,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         }
         else
         {
-		    Shader vertexShader = Shader("CL_DebugDrawClusters.hlsl", ShaderType::Vertex, "VSMain");
-            Shader geometryShader = Shader("CL_DebugDrawClusters.hlsl", ShaderType::Geometry, "GSMain");
+		    Shader vertexShader = Shader("ClusterDebugDrawing.hlsl", ShaderType::Vertex, "VSMain");
+            Shader geometryShader = Shader("ClusterDebugDrawing.hlsl", ShaderType::Geometry, "GSMain");
 
 		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", vertexShader, pGraphics->GetDevice());
 

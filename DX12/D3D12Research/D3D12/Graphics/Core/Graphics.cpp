@@ -114,13 +114,13 @@ void Graphics::Update()
 	m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
 	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
 
-	std::sort(m_TransparentBatches.begin(), m_TransparentBatches.end(), [this](const Batch& a, const Batch& b) {
+	std::sort(m_SceneData.TransparentBatches.begin(), m_SceneData.TransparentBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist > bDist;
 		});
 
-	std::sort(m_OpaqueBatches.begin(), m_OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
+	std::sort(m_SceneData.OpaqueBatches.begin(), m_SceneData.OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist < bDist;
@@ -459,7 +459,7 @@ void Graphics::Update()
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
 			renderContext.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
 
-			for (const Batch& b : m_OpaqueBatches)
+			for (const Batch& b : m_SceneData.OpaqueBatches)
 			{
 				struct ObjectData
 				{
@@ -596,66 +596,61 @@ void Graphics::Update()
 					struct PerObjectData
 					{
 						Matrix World;
+						MaterialData Material;
 					} objectData;
 
-					{
-						GPU_PROFILE_SCOPE("Opaque", &context);
-						context.SetPipelineState(m_pShadowPSO.get());
+					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), m_SceneData.MaterialTextures.size());
 
-						for (const Batch& b : m_OpaqueBatches)
+					auto DrawBatches = [&](CommandContext& contet, const std::vector<Batch>& batches)
+					{
+						for (const Batch& b : batches)
 						{
 							objectData.World = b.WorldMatrix;
+							objectData.Material = b.Material;
 							context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 
 							b.pMesh->Draw(&context);
 						}
+					};
+
+					{
+						GPU_PROFILE_SCOPE("Opaque", &context);
+						context.SetPipelineState(m_pShadowPSO.get());
+						DrawBatches(context, m_SceneData.OpaqueBatches);
 					}
 
 					{
 						GPU_PROFILE_SCOPE("Transparent", &context);
 						context.SetPipelineState(m_pShadowAlphaPSO.get());
-
-						for (const Batch& b : m_TransparentBatches)
-						{
-							objectData.World = b.WorldMatrix;
-							context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-
-							context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-							b.pMesh->Draw(&context);
-						}
+						DrawBatches(context, m_SceneData.TransparentBatches);
 					}
 					context.EndRenderPass();
 				}
 		});
 	}
 
-	SceneData sceneResourcesData = {
-		.pDepthBuffer = GetDepthStencil(),
-		.pResolvedDepth = GetResolveDepthStencil(),
-		.pShadowMaps = &m_ShadowMaps,
-		.pRenderTarget = GetCurrentRenderTarget(),
-		.pPreviousColor = m_pPreviousColor.get(),
-		.pAO = m_pAmbientOcclusion.get(),
-		.pOpaqueBatches = &m_OpaqueBatches,
-		.pTransparentBatches = &m_TransparentBatches,
-		.pLightBuffer = m_pLightBuffer.get(),
-		.pCamera = m_pCamera.get(),
-		.pShadowData = &shadowData,
-		.FrameIndex = m_Frame,
-		.pTLAS = m_pTLAS.get(),
-	};
+	m_SceneData.pDepthBuffer = GetDepthStencil();
+	m_SceneData.pResolvedDepth = GetResolveDepthStencil();
+	m_SceneData.pShadowMaps = &m_ShadowMaps;
+	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
+	m_SceneData.pPreviousColor = m_pPreviousColor.get();
+	m_SceneData.pAO = m_pAmbientOcclusion.get();
+	m_SceneData.pLightBuffer = m_pLightBuffer.get();
+	m_SceneData.pCamera = m_pCamera.get();
+	m_SceneData.pShadowData = &shadowData;
+	m_SceneData.FrameIndex = m_Frame;
+	m_SceneData.pTLAS = m_pTLAS.get();
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		m_pTiledForward->Execute(graph, sceneResourcesData);
+		m_pTiledForward->Execute(graph, m_SceneData);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
-		m_pClusteredForward->Execute(graph, sceneResourcesData);
+		m_pClusteredForward->Execute(graph, m_SceneData);
 	}
 
 	m_pGpuParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
-	m_pClouds->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera(), m_Lights[0]);
 
 	RGPassBuilder sky = graph.AddPass("Sky");
 	sceneData.DepthStencil = sky.Read(sceneData.DepthStencil);
@@ -712,6 +707,8 @@ void Graphics::Update()
 				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			});
 	}
+
+	m_pClouds->Render(graph, m_pHDRRenderTarget.get(), GetResolveDepthStencil(), GetCamera(), m_Lights[0]);
 
 	// tonemap
 	{
@@ -1028,6 +1025,10 @@ void Graphics::InitD3D()
 	// factory
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
+	bool allowTearing;
+	HRESULT hr = m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+	allowTearing &= SUCCEEDED(hr);
+
 	// look for an adapter
 	ComPtr<IDXGIAdapter4> pAdapter;
 	uint32_t adapter = 0;
@@ -1200,12 +1201,13 @@ void Graphics::CreateSwapchain()
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapchainDesc.BufferCount = FRAME_COUNT;
 	swapchainDesc.Scaling = DXGI_SCALING_NONE;
-	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	swapchainDesc.Flags = 0;
 	swapchainDesc.SampleDesc.Count = 1;  // must set for msaa >= 1, not 0
 	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapchainDesc.Stereo = false;
+	swapchainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
 	ComPtr<IDXGISwapChain1> pSwapChain = nullptr;
 
@@ -1242,12 +1244,14 @@ void Graphics::OnResize(int width, int height)
 	m_pDepthStencil->Release();
 
 	// resize the buffers
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	m_pSwapchain->GetDesc1(&desc);
 	VERIFY_HR_EX(m_pSwapchain->ResizeBuffers(
 		FRAME_COUNT,
 		m_WindowWidth,
 		m_WindowHeight,
-		SWAPCHAIN_FORMAT,
-		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH), GetDevice());
+		desc.Format,
+		desc.Flags), GetDevice());
 
 	m_CurrentBackBufferIndex = 0;
 
@@ -1427,18 +1431,24 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 	for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 	{
+		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
 		Batch b;
+		b.WorldMatrix = Matrix::Identity;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
-		b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
-		b.WorldMatrix = Matrix::Identity;
-		if (b.pMaterial->IsTransparent)
+		b.Material.Diffuse = m_SceneData.MaterialTextures.size();
+		m_SceneData.MaterialTextures.push_back(material.pDiffuseTexture->GetSRV());
+		b.Material.Normal = m_SceneData.MaterialTextures.size();
+		m_SceneData.MaterialTextures.push_back(material.pNormalTexture->GetSRV());
+		b.Material.Roughness = m_SceneData.MaterialTextures.size();
+		m_SceneData.MaterialTextures.push_back(material.pSpecularTexture->GetSRV());
+		if (material.IsTransparent)
 		{
-			m_TransparentBatches.push_back(b);
+			m_SceneData.TransparentBatches.push_back(b);
 		}
 		else
 		{
-			m_OpaqueBatches.push_back(b);
+			m_SceneData.OpaqueBatches.push_back(b);
 		}
 	}
 

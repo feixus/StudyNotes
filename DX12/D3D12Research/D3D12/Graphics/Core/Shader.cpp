@@ -53,7 +53,6 @@ namespace ShaderCompiler
 		ToWidechar(pEntryPoint, entryPoint, 256);
 		ToWidechar(pIdentifier, fileName, 256);
 
-		
 		bool debugShaders = CommandLine::GetBool("DebugShaders");
 	#ifdef _DEBUG
 		debugShaders = true;
@@ -249,8 +248,12 @@ namespace ShaderCompiler
 			}
 		}
 
-		definesActual.push_back("_SM_MAJ=" + shaderModelMajor);
-		definesActual.push_back("_SM_MIN=" + shaderModelMinor);
+		std::stringstream str;
+		str << "_SM_MAJ=" << shaderModelMajor;
+		definesActual.push_back(str.str());
+		str = std::stringstream();
+		str << "_SM_MIN=" << shaderModelMinor;
+		definesActual.push_back(str.str());
 
 		if (shaderModelMajor < 6)
 		{

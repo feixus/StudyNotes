@@ -129,7 +129,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 	}
 
 	m_pVerticalDensityTexture = std::make_unique<GraphicsTexture>(pGraphics, "Vertical Density Texture");
-	m_pVerticalDensityTexture->Create(pContext, "Resources/Textures/CloudVerticalDensity.png");
+	m_pVerticalDensityTexture->Create(pContext, "Resources/textures/CloudVerticalDensity.png");
 
 	pContext->Execute(true);
 }

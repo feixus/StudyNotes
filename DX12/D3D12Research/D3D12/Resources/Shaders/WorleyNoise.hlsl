@@ -1,7 +1,10 @@
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL)"
+
 cbuffer Constants : register(b0)
 {
     float4 cPoints[1024];    // feature points
-    uint4 cPointsPerRow[16];    // x/y/z: number of points per row in each axis
+    uint4 cPointsPerRow[4];    // x/y/z: number of points per row in each axis
     uint Resolution;
 };
 
@@ -35,6 +38,7 @@ float WorleyNoise(float3 uvw, uint pointsPerRow)
     return sqrt(minDistSq);
 }
 
+[RootSignature(RootSig)]
 [numthreads(8, 8, 8)]
 void WorleyNoiseCS(uint3 threadId : SV_DispatchThreadID)
 {
@@ -48,10 +52,10 @@ void WorleyNoiseCS(uint3 threadId : SV_DispatchThreadID)
         float a = WorleyNoise(uvw, cPointsPerRow[i].a);
         float4 total = float4(r, g, b, a);
         float persistence = 0.5f;
-        for (int j = 0; j < i; ++j)
+        for (int j = 0; j < 4; ++j)
         {
             output[i] += total[i] * persistence;
-            persistence *= 0.5f;
+            persistence *= persistence;
         }
     }
     uOutputTexture[threadId.xyz] = output;

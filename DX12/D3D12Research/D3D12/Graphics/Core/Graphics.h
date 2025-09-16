@@ -24,10 +24,18 @@ class RTAO;
 class SSAO;
 class GpuParticles;
 
+struct MaterialData
+{
+	int Diffuse;
+	int Normal;
+	int Roughness;
+	int Metallic;
+};
+
 struct Batch
 {
 	const SubMesh* pMesh{};
-	const Material* pMaterial{};
+	MaterialData Material;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 };
@@ -48,13 +56,14 @@ struct SceneData
 	GraphicsTexture* pRenderTarget{nullptr};
 	GraphicsTexture* pPreviousColor{nullptr};
 	GraphicsTexture* pAO{nullptr};
-	const std::vector<Batch>* pOpaqueBatches{nullptr};
-	const std::vector<Batch>* pTransparentBatches{nullptr};
+	std::vector<Batch> OpaqueBatches;
+	std::vector<Batch> TransparentBatches;
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
 	Buffer* pLightBuffer{nullptr};
 	Camera* pCamera{nullptr};
 	ShadowData* pShadowData{nullptr};
-	int FrameIndex{0};
 	Buffer* pTLAS{nullptr};
+	int FrameIndex{0};
 };
 
 enum class RenderPath
@@ -158,7 +167,7 @@ public:
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 
 	// constants
-	static const uint32_t FRAME_COUNT = 3;
+	static const uint32_t FRAME_COUNT = 2;
 	static const uint32_t SHADOW_MAP_SIZE = 4096;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -247,10 +256,7 @@ private:
     std::unique_ptr<Buffer> m_pTLAS;
     std::unique_ptr<Buffer> m_pBLASScratch;
     std::unique_ptr<Buffer> m_pTLASScratch;
-
-	std::vector<Batch> m_OpaqueBatches;
-	std::vector<Batch> m_TransparentBatches;
-
+	
 	// shadow mapping
 	std::unique_ptr<RootSignature> m_pShadowRS;
 	std::unique_ptr<PipelineState> m_pShadowPSO;
@@ -306,6 +312,8 @@ private:
 	std::unique_ptr<GpuParticles> m_pGpuParticles;
 	// clouds
 	std::unique_ptr<class Clouds> m_pClouds;
+
+	SceneData m_SceneData;
 
 	bool m_CapturePix{false};
 };
