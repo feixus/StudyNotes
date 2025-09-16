@@ -1429,19 +1429,52 @@ void Graphics::InitializeAssets(CommandContext& context)
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
 
+	std::map<GraphicsTexture*, int> textureToIndex;
+	int textureIndex = 0;
+	for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
+	{
+		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
+
+		auto it = textureToIndex.find(material.pDiffuseTexture);
+		if (it == textureToIndex.end())
+		{
+			textureToIndex[material.pDiffuseTexture] = textureIndex++;
+		}
+		it = textureToIndex.find(material.pNormalTexture);
+		if (it == textureToIndex.end())
+		{
+			textureToIndex[material.pNormalTexture] = textureIndex++;
+		}
+		it = textureToIndex.find(material.pRoughnessTexture);
+		if (it == textureToIndex.end())
+		{
+			textureToIndex[material.pRoughnessTexture] = textureIndex++;
+		}
+		it = textureToIndex.find(material.pMetallicTexture);
+		if (it == textureToIndex.end())
+		{
+			textureToIndex[material.pMetallicTexture] = textureIndex++;
+		}
+	}
+
+	m_SceneData.MaterialTextures.resize(textureToIndex.size());
+	for (auto& pair : textureToIndex)
+	{
+		m_SceneData.MaterialTextures[pair.second] = pair.first->GetSRV();
+	}
+
 	for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 	{
 		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
 		Batch b;
-		b.WorldMatrix = Matrix::Identity;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
-		b.Material.Diffuse = m_SceneData.MaterialTextures.size();
-		m_SceneData.MaterialTextures.push_back(material.pDiffuseTexture->GetSRV());
-		b.Material.Normal = m_SceneData.MaterialTextures.size();
-		m_SceneData.MaterialTextures.push_back(material.pNormalTexture->GetSRV());
-		b.Material.Roughness = m_SceneData.MaterialTextures.size();
-		m_SceneData.MaterialTextures.push_back(material.pSpecularTexture->GetSRV());
+
+		b.Material.Diffuse = textureToIndex[material.pDiffuseTexture];
+		b.Material.Normal = textureToIndex[material.pNormalTexture];
+		b.Material.Roughness = textureToIndex[material.pRoughnessTexture];
+		b.Material.Metallic = textureToIndex[material.pMetallicTexture];
+		
 		if (material.IsTransparent)
 		{
 			m_SceneData.TransparentBatches.push_back(b);

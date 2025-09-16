@@ -127,17 +127,20 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 int padding0;
 				IntVector2 ClusterSize;
                 Vector2 LightGridParams;
+                Matrix View;
+                Matrix ViewProjection;
 			} perFrameParameters{};
 
             struct PerObjectParameters
             {
-                Matrix WorldView;
-                Matrix WorldViewProjection;
+                Matrix World;
             } perObjectParameters{};
 
 			perFrameParameters.LightGridParams = lightGridParams;
 			perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 			perFrameParameters.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+            perFrameParameters.View = inputResource.pCamera->GetView();
+            perFrameParameters.ViewProjection = inputResource.pCamera->GetViewProjection();
 
             context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(perFrameParameters));
             context.SetDynamicDescriptor(2, 0, m_pUniqueClusterBuffer->GetUAV());
@@ -146,9 +149,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 
 				for (const Batch& b : inputResource.OpaqueBatches)
 				{
-                    perObjectParameters.WorldView = b.WorldMatrix * inputResource.pCamera->GetView();
-                    perObjectParameters.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
-
+                    perObjectParameters.World = b.WorldMatrix;
                     context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
 					b.pMesh->Draw(&context);
 				}
@@ -160,8 +161,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.SetPipelineState(m_pMarkUniqueClustersTransparentPSO.get());
                 for (const Batch& b : inputResource.TransparentBatches)
                 {
-                    perObjectParameters.WorldView = b.WorldMatrix * inputResource.pCamera->GetView();
-                    perObjectParameters.WorldViewProjection = b.WorldMatrix * inputResource.pCamera->GetViewProjection();
+                    perObjectParameters.World = b.WorldMatrix;
                     context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
 
 					b.pMesh->Draw(&context);

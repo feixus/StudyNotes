@@ -14,10 +14,16 @@ cbuffer LightData : register(b2)
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
 {
     sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+
+#ifdef NORMAL_BC5
+    sampledNormal.z = sqrt(saturate(1.0f - dot(sampledNormal.xy, sampledNormal.xy)));
+#endif
+
     if (invertY)
     {
         sampledNormal.y = -sampledNormal.y;
     }
+
     sampledNormal = normalize(sampledNormal);
     return mul(sampledNormal, TBN);
 }

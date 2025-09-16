@@ -167,7 +167,7 @@ public:
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 
 	// constants
-	static const uint32_t FRAME_COUNT = 2;
+	static const uint32_t FRAME_COUNT = 3;
 	static const uint32_t SHADOW_MAP_SIZE = 4096;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;

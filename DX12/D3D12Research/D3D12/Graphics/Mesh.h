@@ -36,10 +36,10 @@ private:
 
 struct Material
 {
-	std::unique_ptr<GraphicsTexture> pDiffuseTexture;
-	std::unique_ptr<GraphicsTexture> pNormalTexture;
-	std::unique_ptr<GraphicsTexture> pSpecularTexture;
-	std::unique_ptr<GraphicsTexture> pAlphaTexture;
+	GraphicsTexture* pDiffuseTexture{nullptr};
+	GraphicsTexture* pNormalTexture{nullptr};
+	GraphicsTexture* pRoughnessTexture{nullptr};
+	GraphicsTexture* pMetallicTexture{nullptr};
     bool IsTransparent{false};
 };
 
@@ -57,4 +57,6 @@ private:
     std::vector<std::unique_ptr<SubMesh>> m_Meshes;
     std::vector<Material> m_Materials;
     std::unique_ptr<Buffer> m_pGeometryData;
+    std::vector<std::unique_ptr<GraphicsTexture>> m_Textures;
+    std::map<StringHash, GraphicsTexture*> m_ExistingTextures;
 };
