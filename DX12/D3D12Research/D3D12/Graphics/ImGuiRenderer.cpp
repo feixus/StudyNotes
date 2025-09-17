@@ -142,7 +142,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineStateObject->SetDepthEnable(false);
 	m_pPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 	m_pPipelineStateObject->SetInputLayout(elementDesc, (uint32_t)std::size(elementDesc));
-	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);
+	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader);
 	m_pPipelineStateObject->SetPixelShader(pixelShader);

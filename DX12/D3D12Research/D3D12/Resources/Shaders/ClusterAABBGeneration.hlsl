@@ -48,8 +48,8 @@ void GenerateAABBs(CS_Input input)
     float2 minPoint_SS = float2(cClusterSize.x * clusterIndex3D.x, cClusterSize.y * clusterIndex3D.y);
     float2 maxPoint_SS = float2(cClusterSize.x * (clusterIndex3D.x + 1), cClusterSize.y * (clusterIndex3D.y + 1));
 
-    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse).xyz;
-    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse).xyz;
+    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse);
+    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse);
 
     float farZ = GetDepthFromSlice(clusterIndex3D.z);
     float nearZ = GetDepthFromSlice(clusterIndex3D.z + 1);

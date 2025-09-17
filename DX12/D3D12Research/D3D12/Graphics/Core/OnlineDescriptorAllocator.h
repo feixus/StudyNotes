@@ -29,12 +29,9 @@ public:
     void ReleaseUsedHeaps(uint64_t fenceValue);
 
 private:
-    // maximum amount of descriptors pe copyDescriptors call
-    static const int MAX_DESCRIPTORS_PER_COPY = 256;
-    // the amount of descriptors in each heap
     static const int DESCRIPTORS_PER_HEAP = 1024;
-	// the max amount of root parameters
     static const int MAX_NUM_ROOT_PARAMETERS = 10;
+    static const int MAX_DESCRIPTORS_PER_TABLE = 128;
 
     inline static std::vector<ComPtr<ID3D12DescriptorHeap>> m_DescriptorHeaps;
     inline static std::array<std::queue<std::pair<uint64_t, ID3D12DescriptorHeap*>>, 2> m_FreeDescriptors;
@@ -54,7 +51,7 @@ private:
 
     struct RootDescriptorEntry
     {
-        BitField<128> AssignedHandlesBitMap{};
+        BitField<MAX_DESCRIPTORS_PER_TABLE> AssignedHandlesBitMap{};
         D3D12_CPU_DESCRIPTOR_HANDLE* TableStart{};
         uint32_t TableSize{};
     };

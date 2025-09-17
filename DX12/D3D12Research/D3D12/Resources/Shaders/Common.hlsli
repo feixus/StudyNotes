@@ -125,6 +125,23 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 	return plane;
 }
 
+// clip space(-1, 1) coordinates to view space
+float3 ClipToView(float4 clip, float4x4 projectionInverse)
+{
+	// view space position
+    float4 view = mul(clip, projectionInverse);
+	// homegeneous coordinate to cartesion coordinate by perspective projection
+	view /= view.w;
+	return view.xyz;
+}
+
+float3 ViewFromDepth(float2 uv, float depth, float4x4 projectionInverse)
+{
+	// convert to clip space
+	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);
+	return ClipToView(clip, projectionInverse);
+}
+
 float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 {
 	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);
@@ -134,7 +151,13 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 
 float LinearizeDepth(float z, float near, float far)
 {
-	return 1.0 / (((near - far) / far) * z + 1.0);
+	return (near * far) / (far + z * (near - far));
+}
+
+// view space depth [0, 1]
+float LinearizeDepth01(float z, float near, float far)
+{
+	return far / (far + z * (near - far));
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
@@ -143,23 +166,12 @@ void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 	aabb.Extents = float4(maximum, 0) - aabb.Center;
 }
 
-// clip space(-1, 1) coordinates to view space
-float4 ClipToView(float4 clip, float4x4 projectionInverse)
-{
-    float4 view = mul(clip, projectionInverse);
-	// homegeneous coordinate to cartesion coordinate by perspective projection
-	view /= view.w;
-	return view;
-}
-
 // screen space coordinates(0, width/height) to view space
-float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
+float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
 {
 	// convert to normalized device coordinates
-	float2 texCoord = screen.xy * screenDimensionsInv;
-	// convert to clip space
-	float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
-	return ClipToView(clip, projectionInverse);
+	float2 screenNormalized = screen.xy * screenDimensionsInv;
+	return ViewFromDepth(screenNormalized, screen.z, projectionInverse);
 }
 
 // view space position to screen UVs(0, 1). Non-linear Z

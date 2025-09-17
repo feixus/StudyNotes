@@ -7,7 +7,6 @@
 
 class Graphics;
 class CommandContext;
-class RGResourceAllocator;
 class RGGraph;
 class RGPass;
 
@@ -301,7 +300,6 @@ private:
 
     Graphics* m_pGraphics;
     Allocator m_Allocator;
-    std::unique_ptr<RGResourceAllocator> m_pAllocator;
     uint64_t m_LastFenceValue{0};
     bool m_ImmediateMode{false};
 

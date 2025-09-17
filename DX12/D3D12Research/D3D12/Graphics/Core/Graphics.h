@@ -17,7 +17,6 @@ class GraphicsProfiler;
 class ClusteredForward;
 struct Material;
 class Camera;
-class RGResourceAllocator;
 class UnorderedAccessView;
 class TiledForward;
 class RTAO;
@@ -26,10 +25,10 @@ class GpuParticles;
 
 struct MaterialData
 {
-	int Diffuse;
-	int Normal;
-	int Roughness;
-	int Metallic;
+	int Diffuse{0};
+	int Normal{0};
+	int Roughness{0};
+	int Metallic{0};
 };
 
 struct Batch
@@ -52,10 +51,10 @@ struct SceneData
 {
 	GraphicsTexture* pDepthBuffer{nullptr};
 	GraphicsTexture* pResolvedDepth{nullptr};
-	std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps;
 	GraphicsTexture* pRenderTarget{nullptr};
 	GraphicsTexture* pPreviousColor{nullptr};
 	GraphicsTexture* pAO{nullptr};
+	std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps{nullptr};
 	std::vector<Batch> OpaqueBatches;
 	std::vector<Batch> TransparentBatches;
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
@@ -88,13 +87,13 @@ public:
 	void Update();
 	void Shutdown();
 
-	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
-	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	void OnResize(int width, int height);
-
+	
 	void WaitForFence(uint64_t fenceValue);
 	void IdleGPU();
-
+	
+	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
+	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -159,8 +158,6 @@ public:
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
-	Camera* GetCamera() const { return m_pCamera.get(); }
-
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 	uint32_t GetMaxMSAAQuality(uint32_t msaa, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 
@@ -185,32 +182,15 @@ private:
 
 	void UpdateImGui();
 
-	void RandomizeLights(int count);
-
 	void GenerateAccelerationStructure(Mesh* pMesh, CommandContext& context);
-
-	int m_Frame{0};
-	std::array<float, 180> m_FrameTimes{};
-
-	int m_DesiredLightCount = 10;
-
-	std::unique_ptr<Camera> m_pCamera;
-
-	HWND m_pWindow{};
 
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
-	D3D12_RENDER_PASS_TIER m_RenderPassTier{D3D12_RENDER_PASS_TIER_0};
-	D3D12_RAYTRACING_TIER m_RayTracingTier{D3D12_RAYTRACING_TIER_NOT_SUPPORTED};
-	int m_ShaderModelMajor{-1};
-	int m_ShaderModelMinor{-1};
-	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{D3D12_MESH_SHADER_TIER_NOT_SUPPORTED};
-	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED};
-
-	int m_SampleCount{1};
+	int m_Frame{0};
+	std::array<float, 180> m_FrameTimes{};
 
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
@@ -231,12 +211,23 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
-	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
-	std::unique_ptr<RGResourceAllocator> m_pResourceAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
+	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<SSAO> m_pSSAO;
+
+	std::unique_ptr<Camera> m_pCamera;
+	HWND m_pWindow{};
+
+	D3D12_RENDER_PASS_TIER m_RenderPassTier{D3D12_RENDER_PASS_TIER_0};
+	D3D12_RAYTRACING_TIER m_RayTracingTier{D3D12_RAYTRACING_TIER_NOT_SUPPORTED};
+	int m_ShaderModelMajor{-1};
+	int m_ShaderModelMinor{-1};
+	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{D3D12_MESH_SHADER_TIER_NOT_SUPPORTED};
+	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED};
+
+	int m_SampleCount{1};
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
@@ -244,7 +235,6 @@ private:
 	int32_t m_ScreenshotDelay{-1};
 	int32_t m_ScreenshotRowPitch{0};
 
-	// synchronization objects
 	uint32_t m_CurrentBackBufferIndex{0};
 	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 

@@ -24,7 +24,6 @@
 #include "Graphics/Techniques/SSAO.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RenderGraph/Blackboard.h"
-#include "Graphics/RenderGraph/ResourceAllocator.h"
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
 #include "Content/image.h"
@@ -37,35 +36,39 @@
 #define GPU_VALIDATION 0
 #endif
 
-bool g_DumpRenderGraph = false;
-bool g_Screenshot = false;
+namespace Tweakables
+{
+	bool g_DumpRenderGraph = false;
+	bool g_Screenshot = false;
+	
+	float g_WhitePoint = 1;
+	float g_MinLogLuminance = -10.0f;
+	float g_MaxLogLuminance = 20.0f;
+	float g_Tau = 2;
 
-float g_WhitePoint = 1;
-float g_MinLogLuminance = -10.0f;
-float g_MaxLogLuminance = 20.0f;
-float g_Tau = 2;
-uint32_t g_ToneMapper = 2;
-bool g_DrawHistogram = false;
-
-bool g_ShowSDSM = false;
-bool g_StabilizeCascases = true;
-bool g_VisualizeShadowCascades = false;
-int g_ShadowCascades = 4;
-float g_PSSMFactor = 1.0f;
-
-bool g_ShowRaytraced = false;
-bool g_VisualizeLights = false;
-bool g_VisualizeLightDensity = false;
-
-float g_SunInclination = 0.2f;
-float g_SunOrientation = -3.055f;
-float g_SunTemperature = 5000.0f;
-
-int g_SsrSamples = 16;
-
-int g_ShadowMapIndex = 0;
-
-bool g_EnableUI = true;
+	bool g_DrawHistogram = false;
+	uint32_t g_ToneMapper = 2;
+	
+	bool g_ShowSDSM = false;
+	bool g_StabilizeCascases = true;
+	bool g_VisualizeShadowCascades = false;
+	int g_ShadowCascades = 4;
+	float g_PSSMFactor = 1.0f;
+	
+	bool g_ShowRaytraced = false;
+	bool g_VisualizeLights = false;
+	bool g_VisualizeLightDensity = false;
+	
+	float g_SunInclination = 0.2f;
+	float g_SunOrientation = -3.055f;
+	float g_SunTemperature = 5000.0f;
+	
+	int g_SsrSamples = 16;
+	
+	int g_ShadowMapIndex = 0;
+	
+	bool g_EnableUI = true;
+}
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount) :
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -90,11 +93,8 @@ void Graphics::Initialize(HWND hWnd)
 	CommandContext* pContext = AllocateCommandContext();
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
-
-	m_DesiredLightCount = 3;
-	RandomizeLights(m_DesiredLightCount);
-
-	m_pDynamicAllocationManager->FlushAll();
+	
+	m_pDynamicAllocationManager->CollectGrabage();
 }
 
 void Graphics::Update()
@@ -107,12 +107,12 @@ void Graphics::Update()
 
 	m_pCamera->Update();
 
-	float costheta = cosf(g_SunOrientation);
-	float sintheta = sinf(g_SunOrientation);
-	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+	float costheta = cosf(Tweakables::g_SunOrientation);
+	float sintheta = sinf(Tweakables::g_SunOrientation);
+	float cosphi = cosf(Tweakables::g_SunInclination * Math::PIDIV2);
+	float sinphi = sinf(Tweakables::g_SunInclination * Math::PIDIV2);
 	m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
-	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
+	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
 
 	std::sort(m_SceneData.TransparentBatches.begin(), m_SceneData.TransparentBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
@@ -128,7 +128,7 @@ void Graphics::Update()
 
 	m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
 
-	if (g_VisualizeLights)
+	if (Tweakables::g_VisualizeLights)
 	{
 		for (const auto& light : m_Lights)
 		{
@@ -138,7 +138,7 @@ void Graphics::Update()
 
 	if (Input::Instance().IsKeyPressed('U'))
 	{
-		g_EnableUI = !g_EnableUI;
+		Tweakables::g_EnableUI = !Tweakables::g_EnableUI;
 	}
 
 	// shadow map partitioning
@@ -150,9 +150,9 @@ void Graphics::Update()
 	constexpr uint32_t MAX_CASCADES = 4;
 	std::array<float, MAX_CASCADES> cascadeSplits{};
 
-	shadowData.NumCascades = g_ShadowCascades;
+	shadowData.NumCascades = Tweakables::g_ShadowCascades;
 
-	if (g_ShowSDSM)
+	if (Tweakables::g_ShowSDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
 		Vector2* pData = (Vector2*)pSourceBuffer->Map();
@@ -171,12 +171,12 @@ void Graphics::Update()
 	float minZ = nearPlane + minPoint * clipPlaneRange;
 	float maxZ = nearPlane + maxPoint * clipPlaneRange;
 
-	for (int i = 0; i < g_ShadowCascades; i++)
+	for (int i = 0; i < Tweakables::g_ShadowCascades; i++)
 	{
-		float p = (i + 1) / (float)g_ShadowCascades;
+		float p = (i + 1) / (float)Tweakables::g_ShadowCascades;
 		float log = minZ * std::pow(maxZ / minZ, p);
 		float uniform = minZ + (maxZ - minZ) * p;
-		float d = g_PSSMFactor * (log - uniform) + uniform;
+		float d = Tweakables::g_PSSMFactor * (log - uniform) + uniform;
 		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 	}
 
@@ -191,7 +191,7 @@ void Graphics::Update()
 		light.ShadowIndex = shadowIndex;
 		if (light.Type == LightType::Directional)
 		{
-			for (int cascadeIdx = 0; cascadeIdx < g_ShadowCascades; ++cascadeIdx)
+			for (int cascadeIdx = 0; cascadeIdx < Tweakables::g_ShadowCascades; ++cascadeIdx)
 			{
 				float previousCascadeSplit = cascadeIdx == 0 ? minPoint : cascadeSplits[cascadeIdx - 1];
 				float currentCascadeSplit = cascadeSplits[cascadeIdx];
@@ -238,7 +238,7 @@ void Graphics::Update()
 				Vector3 maxExtents(-FLT_MAX);
 
 				// create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
-				if (g_StabilizeCascases)
+				if (Tweakables::g_StabilizeCascases)
 				{
 					float radius = 0;
 					for (const Vector3& corner : frustumCorners)
@@ -266,7 +266,7 @@ void Graphics::Update()
 				Matrix lightViewProjection = shadowView * projectionMatrix;
 
 				// snap projection to shadowmap texels to avoid flickering edges
-				if (g_StabilizeCascases)
+				if (Tweakables::g_StabilizeCascases)
 				{
 					float shadowMapSize = 2048;
 					Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
@@ -364,7 +364,7 @@ void Graphics::Update()
 
 	uint64_t nextFenceValue = 0;
 
-	if (g_Screenshot && m_ScreenshotDelay < 0)
+	if (Tweakables::g_Screenshot && m_ScreenshotDelay < 0)
 	{
 		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
 		screenshot.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
@@ -380,7 +380,7 @@ void Graphics::Update()
 				m_ScreenshotRowPitch = textureFootprint.Footprint.RowPitch;
 			});
 		m_ScreenshotDelay = 4;
-		g_Screenshot = false;
+		Tweakables::g_Screenshot = false;
 	}
 
 	if (m_pScreenshotBuffer)
@@ -406,9 +406,11 @@ void Graphics::Update()
 				GetSystemTime(&time);
 				char stringTarget[128];
 				GetTimeFormat(LOCALE_INVARIANT, TIME_FORCE24HOURFORMAT, &time, "hh_mm_ss", stringTarget, 128);
-				std::stringstream filePath;
-				filePath << "Screenshot_" << stringTarget << ".jpg";
-				img.Save(filePath.str().c_str());
+				
+				char filePath[256];
+				sprintf_s(filePath, "Screenshot_%1s.jpg", stringTarget);
+				img.Save(filePath);
+
 				m_pScreenshotBuffer.reset();
 			}, taskContext);
 			m_ScreenshotDelay = -1;
@@ -430,6 +432,8 @@ void Graphics::Update()
 				*pTarget = light.GetData();
 				++pTarget;
 			}
+			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
 		});
 
@@ -507,7 +511,7 @@ void Graphics::Update()
 
 	m_pGpuParticles->Simulate(graph, GetResolveDepthStencil(), *m_pCamera);
 
-	if (g_ShowRaytraced)
+	if (Tweakables::g_ShowRaytraced)
 	{
 		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), m_pTLAS.get(), *m_pCamera);
 	}
@@ -520,7 +524,7 @@ void Graphics::Update()
 	//  - renders the scene depth onto a separate depth buffer from the light's view
 	if (shadowIndex > 0)
 	{
-		if (g_ShowSDSM)
+		if (Tweakables::g_ShowSDSM)
 		{
 			RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
 			sceneData.DepthStencil = depthReduce.Write(sceneData.DepthStencil);
@@ -599,7 +603,7 @@ void Graphics::Update()
 						MaterialData Material;
 					} objectData;
 
-					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), m_SceneData.MaterialTextures.size());
+					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
 
 					auto DrawBatches = [&](CommandContext& contet, const std::vector<Batch>& batches)
 					{
@@ -708,7 +712,7 @@ void Graphics::Update()
 			});
 	}
 
-	m_pClouds->Render(graph, m_pHDRRenderTarget.get(), GetResolveDepthStencil(), GetCamera(), m_Lights[0]);
+	m_pClouds->Render(graph, m_pHDRRenderTarget.get(), GetResolveDepthStencil(), m_pCamera.get(), m_Lights[0]);
 
 	// tonemap
 	{
@@ -773,8 +777,8 @@ void Graphics::Update()
 
 				Parameters.Width = pTonemapInput->GetWidth();
 				Parameters.Height = pTonemapInput->GetHeight();
-				Parameters.MinLogLuminance = g_MinLogLuminance;
-				Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
 				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
 				context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
@@ -803,10 +807,10 @@ void Graphics::Update()
 				} AverageParameters;
 
 				AverageParameters.PixelCount = pTonemapInput->GetWidth() * pTonemapInput->GetHeight();
-				AverageParameters.MinLogLuminance = g_MinLogLuminance;
-				AverageParameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
+				AverageParameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+				AverageParameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance;
 				AverageParameters.TimeDelta = Time::DeltaTime();
-				AverageParameters.Tau = g_Tau;
+				AverageParameters.Tau = Tweakables::g_Tau;
 
 				context.SetComputeDynamicConstantBufferView(0, &AverageParameters, sizeof(AverageLuminanceParameters));
 				context.SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
@@ -823,8 +827,8 @@ void Graphics::Update()
 					float WhitePoint;
 					uint32_t ToneMapper;
 				} constBuffer;
-				constBuffer.WhitePoint = g_WhitePoint;
-				constBuffer.ToneMapper = g_ToneMapper;
+				constBuffer.WhitePoint = Tweakables::g_WhitePoint;
+				constBuffer.ToneMapper = Tweakables::g_ToneMapper;
 
 				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -841,7 +845,7 @@ void Graphics::Update()
 				context.Dispatch(Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16), Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16));
 			});
 
-		if (g_EnableUI && g_DrawHistogram)
+		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram)
 		{
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResource& resources)
@@ -859,8 +863,8 @@ void Graphics::Update()
 						float InverseLogLuminanceRange{0};
 					} Parameters;
 
-					Parameters.MinLogLuminance = g_MinLogLuminance;
-					Parameters.InverseLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+					Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+					Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
 					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
 					context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
@@ -872,7 +876,7 @@ void Graphics::Update()
 		}
 	}
 
-	if (g_VisualizeLightDensity)
+	if (Tweakables::g_VisualizeLightDensity)
 	{
 		if (m_RenderPath == RenderPath::Tiled)
 		{
@@ -916,7 +920,7 @@ void Graphics::Update()
 
 	// UI
 	//  - ImGui render, pretty straight forward
-	if (g_EnableUI)
+	if (Tweakables::g_EnableUI)
 	{
 		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
 	}
@@ -934,10 +938,10 @@ void Graphics::Update()
 		});
 
 	graph.Compile();
-	if (g_DumpRenderGraph)
+	if (Tweakables::g_DumpRenderGraph)
 	{
 		graph.DumpGraphMermaid("graph.html");
-		g_DumpRenderGraph = false;
+		Tweakables::g_DumpRenderGraph = false;
 	}
 	nextFenceValue = graph.Execute();
 
@@ -1025,7 +1029,7 @@ void Graphics::InitD3D()
 	// factory
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
-	bool allowTearing;
+	bool allowTearing = false;
 	HRESULT hr = m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
 	allowTearing &= SUCCEEDED(hr);
 
@@ -1101,6 +1105,7 @@ void Graphics::InitD3D()
 			if (CommandLine::GetBool("d3dbreakvalidation"))
 			{
 				VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+				E_LOG(Warning, "D3D Validation Break on Serverity Enabled");
 			}
 
 			pInfoQueue->PushStorageFilter(&NewFilter);
@@ -1167,7 +1172,6 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	m_pResourceAllocator = std::make_unique<RGResourceAllocator>(this);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
@@ -1408,7 +1412,7 @@ void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& contex
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
             .DestAccelerationStructureData = m_pTLAS->GetGpuHandle(),
             .Inputs = {
-                .Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
+				.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
                 .Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
                 .NumDescs = 1,
                 .DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
@@ -1474,7 +1478,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		b.Material.Normal = textureToIndex[material.pNormalTexture];
 		b.Material.Roughness = textureToIndex[material.pRoughnessTexture];
 		b.Material.Metallic = textureToIndex[material.pMetallicTexture];
-		
+
 		if (material.IsTransparent)
 		{
 			m_SceneData.TransparentBatches.push_back(b);
@@ -1486,12 +1490,31 @@ void Graphics::InitializeAssets(CommandContext& context)
 	}
 
 	GenerateAccelerationStructure(m_pMesh.get(), context);
+
+	{
+		int lightCount = 3;
+		m_Lights.resize(lightCount);
+
+		Vector3 position(-150, 160, -10);
+		Vector3 direction;
+		position.Normalize(direction);
+
+		m_Lights[0] = Light::Directional(position, -direction, 10.0f);
+		m_Lights[0].CastShadows = true;
+		
+		m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
+		m_Lights[1].CastShadows = true;
+
+		m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
+		m_Lights[2].CastShadows = true;
+
+		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
+		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
+	}
 }
 
 void Graphics::InitializePipelines()
 {
-	m_pLightBuffer = std::make_unique<Buffer>(this, "Light Buffer");
-
 	// input layout
 	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
 			CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
@@ -1501,9 +1524,8 @@ void Graphics::InitializePipelines()
 	// shadow mapping
 	// vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
-
-		// opaque
 		Shader vertexShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
+		Shader alphaClipPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 		// root signature
 		m_pShadowRS = std::make_unique<RootSignature>();
@@ -1518,14 +1540,12 @@ void Graphics::InitializePipelines()
 		m_pShadowPSO->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pShadowPSO->SetDepthBias(-1, -5.f, -4.f);
 		m_pShadowPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pShadowPSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
+		m_pShadowPSO->Finalize("Shadow Mapping (Opaque)", m_pDevice.Get());
 
-		// transparent
-		Shader alphaPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pShadowAlphaPSO = std::make_unique<PipelineState>(*m_pShadowPSO);
-		m_pShadowAlphaPSO->SetPixelShader(alphaPixelShader);
-		m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
+		m_pShadowAlphaPSO->SetPixelShader(alphaClipPixelShader);
+		m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha)", m_pDevice.Get());
 	}
 
 	// depth prepass
@@ -1544,7 +1564,7 @@ void Graphics::InitializePipelines()
 		m_pDepthPrepassPSO->SetVertexShader(vertexShader);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount);
-		m_pDepthPrepassPSO->Finalize("Depth Prepass PSO", m_pDevice.Get());
+		m_pDepthPrepassPSO->Finalize("Depth Prepass", m_pDevice.Get());
 	}
 
 	// luminance histogram
@@ -1715,19 +1735,14 @@ void Graphics::UpdateImGui()
 			}, nullptr, 2);
 
 		ImGui::Separator();
-		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 10000);
-		if (ImGui::Button("Generate Lights"))
-		{
-			RandomizeLights(m_DesiredLightCount);
-		}
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{
-			g_DumpRenderGraph = true;
+			Tweakables::g_DumpRenderGraph = true;
 		}
 		if (ImGui::Button("Screenshot"))
 		{
-			g_Screenshot = true;
+			Tweakables::g_Screenshot = true;
 		}
 		if (ImGui::Button("Pix Capture"))
 		{
@@ -1872,7 +1887,7 @@ void Graphics::UpdateImGui()
 		ImGui::End();
 	}
 
-	if (g_VisualizeShadowCascades && m_ShadowMaps.size() >= 4)
+	if (Tweakables::g_VisualizeShadowCascades && m_ShadowMaps.size() >= 4)
 	{
 		float imageSize = 230;
 		ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
@@ -1890,23 +1905,23 @@ void Graphics::UpdateImGui()
 	ImGui::Begin("Parameters");
 
 	ImGui::Text("Sky");
-	ImGui::SliderFloat("Sun Orientation", &g_SunOrientation, -Math::PI, Math::PI);
-	ImGui::SliderFloat("Sun Inclination", &g_SunInclination, 0.001f, 1);
-	ImGui::SliderFloat("Sun Temperature", &g_SunTemperature, 1000, 15000);
+	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
+	ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0.001f, 1);
+	ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
 
 	ImGui::Text("Shadows");
-	ImGui::SliderInt("Shadow Cascades", &g_ShadowCascades, 1, 4);
-	ImGui::Checkbox("SDSM", &g_ShowSDSM);
-	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascases);
-	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
-	ImGui::Checkbox("Visualize Cascades", &g_VisualizeShadowCascades);
+	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
+	ImGui::Checkbox("SDSM", &Tweakables::g_ShowSDSM);
+	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascases);
+	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor, 0, 1);
+	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades);
 
 	ImGui::Text("Expose/Tonemapping");
-	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
-	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
-	ImGui::Checkbox("Draw Exposure Histogram", &g_DrawHistogram);
-	ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
-	ImGui::Combo("Tonemapper", (int*)&g_ToneMapper, [](void* data, int index, const char** outText)
+	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance, -100, 20);
+	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance, -50, 50);
+	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram);
+	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint, 0, 20);
+	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper, [](void* data, int index, const char** outText)
 		{
 			switch (index)
 			{
@@ -1931,52 +1946,24 @@ void Graphics::UpdateImGui()
 			}
 			return true;
 		}, nullptr, 5);
-	ImGui::SliderFloat("Tau", &g_Tau, 0, 5);
+	ImGui::SliderFloat("Tau", &Tweakables::g_Tau, 0, 5);
 
 	ImGui::Text("Misc");
-	ImGui::Checkbox("Debug Render Light", &g_VisualizeLights);
-	ImGui::Checkbox("Visualize Light Density", &g_VisualizeLightDensity);
+	ImGui::Checkbox("Debug Render Light", &Tweakables::g_VisualizeLights);
+	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity);
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-	ImGui::SliderInt("SSR Samples", &g_SsrSamples, 0, 32);
+	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
 
-	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
+	if (ImGui::Checkbox("Raytracing", &Tweakables::g_ShowRaytraced))
 	{
 		if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
 		{
-			g_ShowRaytraced = false;
+			Tweakables::g_ShowRaytraced = false;
 		}
 	}
 
 	ImGui::End();
-}
-
-void Graphics::RandomizeLights(int count)
-{
-	m_Lights.resize(count);
-
-	BoundingBox sceneBounds;
-	sceneBounds.Center = Vector3(0, 50, 0);
-	sceneBounds.Extents = Vector3(140, 70, 60);
-
-	Vector3 position(-150, 160, -10);
-	Vector3 direction;
-	position.Normalize(direction);
-
-	m_Lights[0] = Light::Directional(position, -direction, 5.0f);
-	m_Lights[0].CastShadows = true;
-	
-	m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
-	m_Lights[1].CastShadows = true;
-
-	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
-	m_Lights[2].CastShadows = true;
-
-	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
-	{
-		IdleGPU();
-		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
-	}
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
@@ -1996,21 +1983,20 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		{
 			pCommandContext = m_FreeCommandContexts[typeIndex].front();
 			m_FreeCommandContexts[typeIndex].pop();
+			pCommandContext->Reset();
 		}
 		else
 		{
 			ComPtr<ID3D12CommandList> pCommandList;
-			ComPtr<ID3D12Device4> pDevice4;
-			VERIFY_HR(m_pDevice.As(&pDevice4));
-			pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf()));
+			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
+			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), "Pooled CommandList");
 			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
 			pCommandContext = m_CommandListPool[typeIndex].back().get();
 		}
 	}
 
-	pCommandContext->Reset();
 	return pCommandContext;
 }
 

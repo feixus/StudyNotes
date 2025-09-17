@@ -66,10 +66,10 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
     int sourceRangeCount = 0;
     int destinationRangeCount = 0;
 
-    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, MAX_DESCRIPTORS_PER_COPY> sourceRanges{};
-    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, MAX_DESCRIPTORS_PER_COPY> destinationRanges{};
-    std::array<uint32_t, MAX_DESCRIPTORS_PER_COPY> sourceRangeSizes{};
-    std::array<uint32_t, MAX_DESCRIPTORS_PER_COPY> destinationRangeSizes{};
+    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, MAX_DESCRIPTORS_PER_TABLE> sourceRanges{};
+    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, MAX_DESCRIPTORS_PER_TABLE> destinationRanges{};
+    std::array<uint32_t, MAX_DESCRIPTORS_PER_TABLE> sourceRangeSizes{};
+    std::array<uint32_t, MAX_DESCRIPTORS_PER_TABLE> destinationRangeSizes{};
 
     int tableCount = 0;
     std::array<D3D12_GPU_DESCRIPTOR_HANDLE, MAX_NUM_ROOT_PARAMETERS> newDescriptorTables{};
@@ -77,7 +77,7 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
     for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
     {
         // if the range count exceeds the max amount of descriptors per copy, flush
-		if (sourceRangeCount >= MAX_DESCRIPTORS_PER_COPY)
+		if (sourceRangeCount >= MAX_DESCRIPTORS_PER_TABLE)
 		{
 			m_pGraphics->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(),
 				sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
@@ -163,6 +163,7 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
         RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
         entry.AssignedHandlesBitMap.ClearAll();
         uint32_t tableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
+        checkf(tableSize <= MAX_DESCRIPTORS_PER_TABLE, "the descriptor table at root index %d is too large. size is %d, maximum is %d", rootIndex, tableSize, MAX_DESCRIPTORS_PER_TABLE);
         check(tableSize > 0);
         entry.TableSize = tableSize;
         entry.TableStart = &m_HandleCache[offset];

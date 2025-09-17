@@ -128,14 +128,14 @@ void CSMain(CS_INPUT input)
     if (input.GroupIndex == 0)
     {
         float3 viewSpace[8];
-        viewSpace[0] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse).xyz;
-        viewSpace[1] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse).xyz;
-        viewSpace[2] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse).xyz;
-        viewSpace[3] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse).xyz;
-        viewSpace[4] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse).xyz;
-        viewSpace[5] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse).xyz;
-        viewSpace[6] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse).xyz;
-        viewSpace[7] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse).xyz;
+        viewSpace[0] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
+        viewSpace[1] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
+        viewSpace[2] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
+        viewSpace[3] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
+        viewSpace[4] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
+        viewSpace[5] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
+        viewSpace[6] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
+        viewSpace[7] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
 
         GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
         GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);

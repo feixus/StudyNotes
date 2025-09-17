@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
-#include "ResourceAllocator.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
@@ -53,8 +52,6 @@ RGGraph::RGGraph(Graphics* pGraphics, uint64_t allocatorSize)
     : m_pGraphics(pGraphics), m_Allocator(allocatorSize)
 {
     m_ImmediateMode = CommandLine::GetBool("rgimmediate");
-
-    m_pAllocator = std::make_unique<RGResourceAllocator>(pGraphics);
 }
 
 RGGraph::~RGGraph()
@@ -315,10 +312,8 @@ void RGGraph::ConditionallyCreateResource(RGResource* pResource)
         switch (pResource->m_Type)
         {
         case RGResourceType::Texture:
-            pResource->m_pPhysicalResource = m_pAllocator->CreateTexture(static_cast<RGTexture*>(pResource)->GetDesc());
             break;
         case RGResourceType::Buffer:
-            // pResource->m_pPhysicalResource = m_pAllocator->CreateBuffer(static_cast<BufferResource*>(pResource)->GetDesc());
             break;
         default:
             RG_ASSERT(false, "Invalid resource type");
@@ -333,10 +328,8 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource)
         switch (pResource->m_Type)
         {
         case RGResourceType::Texture:
-            m_pAllocator->ReleaseTexture(static_cast<GraphicsTexture*>(pResource->m_pPhysicalResource));
             break;
         case RGResourceType::Buffer:
-            // m_pAllocator->ReleaseBuffer(static_cast<GraphicsBuffer*>(pResource->m_pPhysicalResource));
             break;
         default:
             RG_ASSERT(false, "Invalid resource type");

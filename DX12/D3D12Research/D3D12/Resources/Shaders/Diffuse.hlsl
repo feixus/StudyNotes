@@ -81,14 +81,14 @@ uint GetSliceFromDepth(float depth)
 }
 #endif
 
-LightResult DoLight(float4 pos, float3 wPos, float3 vPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
+LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
 #if TILED_FORWARD
     uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
     uint startOffset = tLightGrid[tileIndex].x;
     uint lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
-    uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(vPos.z));
+    uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(pos.w));
     uint clusterIndex1D = clusterIndex3D.x + cViewData.ClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cViewData.ClusterDimensions.y);
     uint startOffset = tLightGrid[clusterIndex1D].x;
     uint lightCount = tLightGrid[clusterIndex1D].y; // lightCount = 0 means no light in this cluster
@@ -101,7 +101,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 vPos, float3 N, float3 V, fl
         uint lightIndex = tLightIndexList[startOffset + i];
         Light light = tLights[lightIndex];
 
-        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, vPos, N, V);
+        LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, N, V);
         totalResult.Diffuse += result.Diffuse;
         totalResult.Specular += result.Specular;
     }
@@ -109,21 +109,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 vPos, float3 N, float3 V, fl
     return totalResult;
 }
 
-[RootSignature(RootSig)]
-PSInput VSMain(VSInput input)
-{
-    PSInput result;   
-    result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
-    result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
-    result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
-    result.texCoord = input.texCoord;
-    result.normal = normalize(mul(input.normal, (float3x3)cObjectData.World));
-    result.tangent = normalize(mul(input.tangent, (float3x3)cObjectData.World));
-    result.bitangent = normalize(mul(input.bitangent, (float3x3)cObjectData.World));
-    return result;
-}
-
-float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, float3 V, float R)
+float3 ScreenSpaceReflectionsRT(float3 positionWS, float4 position, float3 N, float3 V, float R)
 {
     float3 ssr = 0;
 #if _INLINE_RT
@@ -139,7 +125,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
             ray.Origin = positionWS;
             ray.Direction = reflectionWS;
             ray.TMin = 0.001f;
-            ray.TMax = positionVS.z;
+            ray.TMax = position.w;
 
             RayQuery<RAY_FLAG_NONE> q;
             q.TraceRayInline(
@@ -161,7 +147,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
                 {
                     ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
                     float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
-                    float edgeAttenuation = (1.0f - q.CommittedRayT() / positionVS.z) * 4.0f;
+                    float edgeAttenuation = (1.0f - q.CommittedRayT() / position.w) * 4.0f;
                     edgeAttenuation = saturate(edgeAttenuation);
                     edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0f - dot(dist, dist)));
                     ssr *= edgeAttenuation;
@@ -256,6 +242,20 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
     return ssr;
 }
 
+[RootSignature(RootSig)]
+PSInput VSMain(VSInput input)
+{
+    PSInput result;   
+    result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
+    result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
+    result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
+    result.texCoord = input.texCoord;
+    result.normal = normalize(mul(input.normal, (float3x3)cObjectData.World));
+    result.tangent = normalize(mul(input.tangent, (float3x3)cObjectData.World));
+    result.bitangent = normalize(mul(input.bitangent, (float3x3)cObjectData.World));
+    return result;
+}
+
 float4 PSMain(PSInput input) : SV_TARGET
 {
     float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
@@ -280,16 +280,16 @@ float4 PSMain(PSInput input) : SV_TARGET
         }
         else
         {
-            ssr = ScreenSpaceReflectionsRT(input.positionWS, input.positionVS, N, V, r);
+            ssr = ScreenSpaceReflectionsRT(input.positionWS, input.position, N, V, r);
         }
     }
 
-    LightResult lightResults = DoLight(input.position, input.positionWS, input.positionVS, N, V, diffuseColor, specularColor, r);
+    LightResult lightResults = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);
 
     float ao = tAO.Sample(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r; 
     float3 color = lightResults.Diffuse + lightResults.Specular + ssr * ao;
     color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-    color += 0.1f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
+    color += 0.1f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS, input.position, cViewData.View, tLights[0], 10);
 
     return float4(color, baseColor.a);
 }

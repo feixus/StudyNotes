@@ -139,8 +139,8 @@ private:
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type);
-	virtual ~CommandContext();
+	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator);
+	virtual ~CommandContext() = default;
 
 	virtual void Reset();
 	virtual uint64_t Execute(bool wait);
@@ -168,7 +168,7 @@ public:
 	void Dispatch(const IntVector3& groupCounts);
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
 	void DispatchMesh(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
-	void ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, DescriptorTableType type = DescriptorTableType::Compute);
+	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32_t argumentsOffset = 0, uint32_t countOffset = 0);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
@@ -307,13 +307,21 @@ public:
     void AddDispatch();
     void AddDraw();
     void AddDrawIndexed();
+	void AddConstants(uint32_t numConstants, uint32_t rootIndex, uint32_t offset);
+	void AddConstantBufferView(uint32_t rootIndex);
+	void AddShaderResourceView(uint32_t rootIndex);
+	void AddUnorderedAccessView(uint32_t rootIndex);
+	void AddVertexBuffer(uint32_t slot);
+	void AddIndexBuffer();
 
     ID3D12CommandSignature* GetCommandSignature() const { return m_pCommandSignature.Get(); }
+	bool IsCompute() const { return m_IsCompute; }
 
 private:
     // describes the layout of data used in indirect draw or dispatch commamds(e.g. ExecuteIndirect)
     ComPtr<ID3D12CommandSignature> m_pCommandSignature;
     ID3D12RootSignature* m_pRootSignature{nullptr};
     uint32_t m_Stride{0};
+	bool m_IsCompute{true};
     std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDescs;
 };

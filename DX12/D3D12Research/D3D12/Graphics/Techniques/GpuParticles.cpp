@@ -151,14 +151,6 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
         return;
     }
 
-    static float time = 0;
-    time += Time::DeltaTime();
-    if (time > g_LifeTime)
-    {
-        time = 0;
-        m_ParticlesToSpawn = 1000000;
-    }
-
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 		m_pCounterBuffer->GetUAV()->GetDescriptor(),
 		m_pEmitArguments->GetUAV()->GetDescriptor(),
@@ -179,7 +171,9 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 
     RGPassBuilder prepareArguments = graph.AddPass("Prepare Arguments");
     prepareArguments.Bind([=](CommandContext& context, const RGPassResource& passResources)
-        {
+    {
+            m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
+
 	        context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	        context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	        context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -199,7 +193,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 				uint32_t EmitCount;
 			} parameters;
 			parameters.EmitCount = (uint32_t)floor(m_ParticlesToSpawn);
-			m_ParticlesToSpawn -= parameters.EmitCount;
+            m_ParticlesToSpawn -= parameters.EmitCount;
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
@@ -236,7 +230,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
             parameters.Origin = Vector3(150, 3, 0);
 
 		    context.SetComputeDynamicConstantBufferView(0, &parameters, (uint32_t)(sizeof(Parameters)));
-		    context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pEmitArguments.get());
+		    context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), 1, m_pEmitArguments.get(), nullptr);
 		    context.InsertUavBarrier();
         });
 
@@ -269,7 +263,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 		    parameters.Far = camera.GetFar();
 
 		    context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-		    context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pSimulateArguments.get());
+		    context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), 1, m_pSimulateArguments.get(), nullptr);
 		    context.InsertUavBarrier();
         });
 
@@ -296,8 +290,8 @@ void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsText
     renderParticles.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
 			context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-			context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pAliveList1.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pAliveList1.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_DontCare));
@@ -321,7 +315,7 @@ void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsText
 			context.SetDynamicDescriptor(1, 0, m_pParticleBuffer->GetSRV());
 			context.SetDynamicDescriptor(1, 1, m_pAliveList1->GetSRV());
 
-			context.ExecuteIndirect(m_pSimpleDrawCommandSignature.get(), m_pDrawArguments.get(), DescriptorTableType::Graphics);
+			context.ExecuteIndirect(m_pSimpleDrawCommandSignature.get(), 1, m_pDrawArguments.get(), nullptr);
 			context.EndRenderPass();
         });
 }
