@@ -298,10 +298,11 @@ private:
 };
 
 
-class CommandSignature
+class CommandSignature : public GraphicsObject
 {
 public:
-    void Finalize(const char* pName, ID3D12Device* pDevice);
+	CommandSignature(Graphics* pParent) : GraphicsObject(pParent) {}
+    void Finalize(const char* pName);
 
     void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; };
     void AddDispatch();

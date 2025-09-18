@@ -116,7 +116,7 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc)
 	}
 
 	D3D12_RESOURCE_DESC desc = GetResourceDesc(textureDesc);
-	m_pResource = m_pGraphics->CreateResource(desc, GetResourceState(), D3D12_HEAP_TYPE_DEFAULT, pClearValue);
+	m_pResource = GetGraphics()->CreateResource(desc, GetResourceState(), D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 
 	if (Any(textureDesc.Usage, TextureFlag::ShaderResource))
 	{
@@ -130,7 +130,7 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc)
 	{
 		if (m_Rtv.ptr == 0)
 		{
-			m_Rtv = m_pGraphics->AllocateDescriptor<D3D12_RENDER_TARGET_VIEW_DESC>();
+			m_Rtv = GetGraphics()->AllocateDescriptor<D3D12_RENDER_TARGET_VIEW_DESC>();
 		}
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
@@ -185,18 +185,18 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc)
 			break;
 		}
 		
-		m_pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, &rtvDesc, m_Rtv);
+		GetGraphics()->GetDevice()->CreateRenderTargetView(m_pResource, &rtvDesc, m_Rtv);
 	}
 	else if (Any(textureDesc.Usage, TextureFlag::DepthStencil))
 	{
 		if (m_Rtv.ptr == 0)
 		{
-			m_Rtv = m_pGraphics->AllocateDescriptor<D3D12_DEPTH_STENCIL_VIEW_DESC>();
+			m_Rtv = GetGraphics()->AllocateDescriptor<D3D12_DEPTH_STENCIL_VIEW_DESC>();
 		}
 
 		if (m_ReadOnlyDsv.ptr == 0)
 		{
-			m_ReadOnlyDsv = m_pGraphics->AllocateDescriptor<D3D12_DEPTH_STENCIL_VIEW_DESC>();
+			m_ReadOnlyDsv = GetGraphics()->AllocateDescriptor<D3D12_DEPTH_STENCIL_VIEW_DESC>();
 		}
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
@@ -230,10 +230,10 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc)
 			break;
 		}
 
-		m_pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_Rtv);
+		GetGraphics()->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_Rtv);
 
 		dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
-		m_pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_ReadOnlyDsv);
+		GetGraphics()->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_ReadOnlyDsv);
 
 		SetName(m_Name.c_str());
 	}
@@ -334,7 +334,7 @@ void GraphicsTexture::CreateUAV(UnorderedAccessView** pView, const TextureUAVDes
 {
 	if (*pView == nullptr)
 	{
-		m_Descriptors.push_back(std::make_unique<UnorderedAccessView>(m_pGraphics));
+		m_Descriptors.push_back(std::make_unique<UnorderedAccessView>());
 		*pView = static_cast<UnorderedAccessView*>(m_Descriptors.back().get());
 	}
 	(*pView)->Create(this, desc);
@@ -344,7 +344,7 @@ void GraphicsTexture::CreateSRV(ShaderResourceView** pView, const TextureSRVDesc
 {
 	if (*pView == nullptr)
 	{
-		m_Descriptors.push_back(std::make_unique<ShaderResourceView>(m_pGraphics));
+		m_Descriptors.push_back(std::make_unique<ShaderResourceView>());
 		*pView = static_cast<ShaderResourceView*>(m_Descriptors.back().get());
 	}
 	(*pView)->Create(this, desc);
@@ -365,9 +365,9 @@ void GraphicsTexture::CreateForSwapChain(ID3D12Resource* pTexture)
 	
 	if (m_Rtv.ptr == 0)
 	{
-		m_Rtv = m_pGraphics->AllocateDescriptor<D3D12_RENDER_TARGET_VIEW_DESC>();
+		m_Rtv = GetGraphics()->AllocateDescriptor<D3D12_RENDER_TARGET_VIEW_DESC>();
 	}
-	m_pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
+	GetGraphics()->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
 
 	CreateSRV(&m_pSrv, TextureSRVDesc(0));
 }

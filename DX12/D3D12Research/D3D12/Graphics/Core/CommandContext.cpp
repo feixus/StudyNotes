@@ -30,7 +30,7 @@ void CommandContext::Reset()
 	check(m_pCommandList);
 	if (m_pAllocator == nullptr)
 	{
-		m_pAllocator = m_pGraphics->GetCommandQueue(m_Type)->RequestAllocator();
+		m_pAllocator = GetGraphics()->GetCommandQueue(m_Type)->RequestAllocator();
 		m_pCommandList->Reset(m_pAllocator, nullptr);
 	}
 
@@ -50,7 +50,7 @@ uint64_t CommandContext::Execute(bool wait)
 uint64_t CommandContext::Execute(CommandContext** pContexts, uint32_t numContexts, bool wait)
 {
 	check(numContexts > 0);
-	CommandQueue* pQueue = pContexts[0]->m_pGraphics->GetCommandQueue(pContexts[0]->GetType());
+	CommandQueue* pQueue = pContexts[0]->GetGraphics()->GetCommandQueue(pContexts[0]->GetType());
 	for (uint32_t i = 0; i < numContexts; ++i)
 	{
 		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All contexts must be of the same type. Expected %s, got %s", 
@@ -74,9 +74,9 @@ uint64_t CommandContext::Execute(CommandContext** pContexts, uint32_t numContext
 void CommandContext::Free(uint64_t fenceValue)
 {
 	m_DynamicAllocator->Free(fenceValue);
-	m_pGraphics->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
+	GetGraphics()->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
 	m_pAllocator = nullptr;
-	m_pGraphics->FreeCommandList(this);
+	GetGraphics()->FreeCommandList(this);
 
 	if (m_pShaderResourceDescriptorAllocator)
 	{
@@ -161,7 +161,7 @@ void CommandContext::CopyTexture(GraphicsTexture* pSource, Buffer* pDestination,
 {
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 	D3D12_RESOURCE_DESC desc = pSource->GetResource()->GetDesc();
-	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+	GetGraphics()->GetDevice()->GetCopyableFootprints(&desc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
@@ -194,7 +194,7 @@ void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESO
 {
 	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
 	uint64_t requiredSize = 0;
-	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, firstSubresource, subresourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
+	GetGraphics()->GetDevice()->GetCopyableFootprints(&desc, firstSubresource, subresourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
 	/* D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT(512 bytes): can for the start address of each subresource's data
 	*  D3D12_TEXTURE_DATA_PITCH_ALIGNMENT(256 bytes): can used to ensure each row's pitch is properly padded
 	*  D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT(64 KB): can used to with CreatePlacedResource, for GPU page size
@@ -304,7 +304,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	};
 
 #if D3D12_USE_RENDERPASSES
-	if (m_pGraphics->UseRenderPasses() && m_pRaytracingCommandList)
+	if (GetGraphics()->UseRenderPasses() && m_pRaytracingCommandList)
 	{
 		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{};
 		renderPassDepthStencilDesc.DepthBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access);
@@ -456,7 +456,7 @@ void CommandContext::EndRenderPass()
 	};
 
 #if D3D12_USE_RENDERPASSES
-	if (m_pGraphics->UseRenderPasses() && m_pRaytracingCommandList)
+	if (GetGraphics()->UseRenderPasses() && m_pRaytracingCommandList)
 	{
 		m_pRaytracingCommandList->EndRenderPass();
 	}
@@ -597,7 +597,7 @@ void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uav = pUav->GetDescriptor();
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	GetGraphics()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	uint32_t zeros[4] = {0, 0, 0, 0};
 	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
@@ -608,7 +608,7 @@ void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessVie
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
 	
 	D3D12_CPU_DESCRIPTOR_HANDLE uav = pUav->GetDescriptor();
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	GetGraphics()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	float zeros[4] = {0, 0, 0, 0};
 	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
@@ -795,7 +795,7 @@ bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandListType
 	return true;
 }
 
-void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
+void CommandSignature::Finalize(const char* pName)
 {
     D3D12_COMMAND_SIGNATURE_DESC desc = {};
     desc.ByteStride = m_Stride;
@@ -803,7 +803,7 @@ void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
     desc.pArgumentDescs = m_ArgumentDescs.data();
     desc.NodeMask = 0;
 
-    VERIFY_HR_EX(pDevice->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())), pDevice);
+    VERIFY_HR_EX(GetGraphics()->GetDevice()->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())), GetGraphics()->GetDevice());
     D3D_SETNAME(m_pCommandSignature.Get(), pName);
 }
 

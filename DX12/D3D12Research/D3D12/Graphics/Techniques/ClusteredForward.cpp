@@ -29,9 +29,6 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
     SetupPipelines(pGraphics);
 }
 
-ClusteredForward::~ClusteredForward()
-{}
-
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
 	m_ClusterCountX = Math::RoundUp((float)windowWidth / cClusterSize);
@@ -348,7 +345,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 static std::unique_ptr<CommandSignature> pSignature;
                 if (!pSignature)
                 {
-                    pSignature = std::make_unique<CommandSignature>();
+                    pSignature = std::make_unique<CommandSignature>(m_pGraphics);
 
                     pSignature->AddConstantBufferView(0);
                     pSignature->AddVertexBuffer(0);
@@ -356,7 +353,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                     pSignature->AddDrawIndexed();
 
                     pSignature->SetRootSignature(m_pDiffuseRS->GetRootSignature());
-                    pSignature->Finalize("Test", m_pGraphics->GetDevice());
+                    pSignature->Finalize("Test");
                 }
 
                 int numBatches = (int)inputResource.OpaqueBatches.size() + (int)inputResource.TransparentBatches.size();
@@ -546,15 +543,15 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
     {
         Shader computeShader = Shader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs");
 
-        m_pCreateAabbRS = std::make_unique<RootSignature>();
+        m_pCreateAabbRS = std::make_unique<RootSignature>(pGraphics);
         m_pCreateAabbRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
         m_pCreateAabbRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-        m_pCreateAabbRS->Finalize("Create AABBs", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+        m_pCreateAabbRS->Finalize("Create AABBs", D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-        m_pCreateAabbPSO = std::make_unique<PipelineState>();
+        m_pCreateAabbPSO = std::make_unique<PipelineState>(pGraphics);
         m_pCreateAabbPSO->SetComputeShader(computeShader);
         m_pCreateAabbPSO->SetRootSignature(m_pCreateAabbRS->GetRootSignature());
-        m_pCreateAabbPSO->Finalize("Create AABBs", pGraphics->GetDevice());
+        m_pCreateAabbPSO->Finalize("Create AABBs");
     }
 
     // mark unique clusters
@@ -568,10 +565,10 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         Shader vertexShader = Shader("ClusterMarking.hlsl", ShaderType::Vertex, "MarkClusters_VS");
 		Shader pixelShaderOpaque = Shader("ClusterMarking.hlsl", ShaderType::Pixel, "MarkClusters_PS");
 
-        m_pMarkUniqueClustersRS = std::make_unique<RootSignature>();
-        m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", vertexShader, pGraphics->GetDevice());
+        m_pMarkUniqueClustersRS = std::make_unique<RootSignature>(pGraphics);
+        m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", vertexShader);
 
-        m_pMarkUniqueClustersOpaquePSO = std::make_unique<PipelineState>();
+        m_pMarkUniqueClustersOpaquePSO = std::make_unique<PipelineState>(pGraphics);
         m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElementDescs, ARRAYSIZE(inputElementDescs));
         m_pMarkUniqueClustersOpaquePSO->SetVertexShader(vertexShader);
         m_pMarkUniqueClustersOpaquePSO->SetPixelShader(pixelShaderOpaque);
@@ -580,53 +577,53 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pMarkUniqueClustersOpaquePSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
         m_pMarkUniqueClustersOpaquePSO->SetDepthWrite(false);
         m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-        m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters", pGraphics->GetDevice());
+        m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters");
 
 		m_pMarkUniqueClustersTransparentPSO = std::make_unique<PipelineState>(*m_pMarkUniqueClustersOpaquePSO);
-		m_pMarkUniqueClustersTransparentPSO->Finalize("Mark Unique Clusters", pGraphics->GetDevice());
+		m_pMarkUniqueClustersTransparentPSO->Finalize("Mark Unique Clusters");
     }
 
     // compact cluster list
     {
         Shader computeShader = Shader("ClusterCompaction.hlsl", ShaderType::Compute, "CompactClusters");
 
-        m_pCompactClusterListRS = std::make_unique<RootSignature>();
-        m_pCompactClusterListRS->FinalizeFromShader("Compact Cluster List", computeShader, pGraphics->GetDevice());
+        m_pCompactClusterListRS = std::make_unique<RootSignature>(pGraphics);
+        m_pCompactClusterListRS->FinalizeFromShader("Compact Cluster List", computeShader);
 
-        m_pCompactClusterListPSO = std::make_unique<PipelineState>();
+        m_pCompactClusterListPSO = std::make_unique<PipelineState>(pGraphics);
         m_pCompactClusterListPSO->SetComputeShader(computeShader);
         m_pCompactClusterListPSO->SetRootSignature(m_pCompactClusterListRS->GetRootSignature());
-        m_pCompactClusterListPSO->Finalize("Compact Cluster List", pGraphics->GetDevice());
+        m_pCompactClusterListPSO->Finalize("Compact Cluster List");
     }
 
     // prepare indirect dispatch buffer
     {
         Shader computeShader = Shader("ClusterLightCullingArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
 
-        m_pUpdateIndirectArgumentsRS = std::make_unique<RootSignature>();
-        m_pUpdateIndirectArgumentsRS->FinalizeFromShader("Update Indirect Dispatch Buffer", computeShader, pGraphics->GetDevice());
+        m_pUpdateIndirectArgumentsRS = std::make_unique<RootSignature>(pGraphics);
+        m_pUpdateIndirectArgumentsRS->FinalizeFromShader("Update Indirect Dispatch Buffer", computeShader);
 
-        m_pUpdateIndirectArgumentsPSO = std::make_unique<PipelineState>();
+        m_pUpdateIndirectArgumentsPSO = std::make_unique<PipelineState>(pGraphics);
         m_pUpdateIndirectArgumentsPSO->SetComputeShader(computeShader);
         m_pUpdateIndirectArgumentsPSO->SetRootSignature(m_pUpdateIndirectArgumentsRS->GetRootSignature());
-        m_pUpdateIndirectArgumentsPSO->Finalize("Update Indirect Dispatch Buffer", pGraphics->GetDevice());
+        m_pUpdateIndirectArgumentsPSO->Finalize("Update Indirect Dispatch Buffer");
     }
 
     // light culling
     {
         Shader computeShader = Shader("ClusterLightCulling.hlsl", ShaderType::Compute, "LightCulling");
 
-        m_pLightCullingRS = std::make_unique<RootSignature>();
-        m_pLightCullingRS->FinalizeFromShader("Light Culling", computeShader, pGraphics->GetDevice());
+        m_pLightCullingRS = std::make_unique<RootSignature>(pGraphics);
+        m_pLightCullingRS->FinalizeFromShader("Light Culling", computeShader);
 
-        m_pLightCullingPSO = std::make_unique<PipelineState>();
+        m_pLightCullingPSO = std::make_unique<PipelineState>(pGraphics);
         m_pLightCullingPSO->SetComputeShader(computeShader);
         m_pLightCullingPSO->SetRootSignature(m_pLightCullingRS->GetRootSignature());
-        m_pLightCullingPSO->Finalize("Light Culling", pGraphics->GetDevice());
+        m_pLightCullingPSO->Finalize("Light Culling");
 
-        m_pLightCullingCommandSignature = std::make_unique<CommandSignature>();
+        m_pLightCullingCommandSignature = std::make_unique<CommandSignature>(m_pGraphics);
         m_pLightCullingCommandSignature->AddDispatch();
-        m_pLightCullingCommandSignature->Finalize("Light Culling Command Signature", pGraphics->GetDevice());
+        m_pLightCullingCommandSignature->Finalize("Light Culling Command Signature");
     }
 
     // diffuse
@@ -643,11 +640,11 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         Shader vertexShader = Shader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
         Shader pixelShader = Shader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
 
-        m_pDiffuseRS = std::make_unique<RootSignature>();
-        m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
+        m_pDiffuseRS = std::make_unique<RootSignature>(pGraphics);
+        m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader);
 
         // opaque
-        m_pDiffusePSO = std::make_unique<PipelineState>();
+        m_pDiffusePSO = std::make_unique<PipelineState>(pGraphics);
         m_pDiffusePSO->SetInputLayout(inputElementDescs, ARRAYSIZE(inputElementDescs));
         m_pDiffusePSO->SetVertexShader(vertexShader);
         m_pDiffusePSO->SetPixelShader(pixelShader);
@@ -656,21 +653,21 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
         m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
         m_pDiffusePSO->SetDepthWrite(false);
-        m_pDiffusePSO->Finalize("Diffuse (Opaque)", pGraphics->GetDevice());
+        m_pDiffusePSO->Finalize("Diffuse (Opaque)");
 
         // transparent
 		m_pDiffuseTransparencyPSO = std::make_unique<PipelineState>(*m_pDiffusePSO.get());
 		m_pDiffuseTransparencyPSO->SetBlendMode(BlendMode::Alpha, false);
 		m_pDiffuseTransparencyPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-		m_pDiffuseTransparencyPSO->Finalize("Diffuse (Transparent)", pGraphics->GetDevice());
+		m_pDiffuseTransparencyPSO->Finalize("Diffuse (Transparent)");
     }
 
     // cluster debug rendering
     {
         Shader pixelShader = Shader("ClusterDebugDrawing.hlsl", ShaderType::Pixel, "PSMain");
 
-        m_pDebugClusterRS = std::make_unique<RootSignature>();
-        m_pDebugClusterPSO = std::make_unique<PipelineState>();
+        m_pDebugClusterRS = std::make_unique<RootSignature>(pGraphics);
+        m_pDebugClusterPSO = std::make_unique<PipelineState>(pGraphics);
 
         m_pDebugClusterPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
         m_pDebugClusterPSO->SetDepthWrite(false);
@@ -682,38 +679,38 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         {
 		    Shader meshShader = Shader("ClusterDebugDrawing.hlsl", ShaderType::Mesh, "MSMain");
 
-		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", meshShader, pGraphics->GetDevice());
+		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", meshShader);
             
             m_pDebugClusterPSO->SetRootSignature(m_pDebugClusterRS->GetRootSignature());
             m_pDebugClusterPSO->SetMeshShader(meshShader);
-			m_pDebugClusterPSO->Finalize("Debug Cluster PSO", pGraphics->GetDevice());
+			m_pDebugClusterPSO->Finalize("Debug Cluster PSO");
         }
         else
         {
 		    Shader vertexShader = Shader("ClusterDebugDrawing.hlsl", ShaderType::Vertex, "VSMain");
             Shader geometryShader = Shader("ClusterDebugDrawing.hlsl", ShaderType::Geometry, "GSMain");
 
-		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", vertexShader, pGraphics->GetDevice());
+		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", vertexShader);
 
             m_pDebugClusterPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
             m_pDebugClusterPSO->SetVertexShader(vertexShader);
             m_pDebugClusterPSO->SetGeometryShader(geometryShader);
             m_pDebugClusterPSO->SetRootSignature(m_pDebugClusterRS->GetRootSignature());
             m_pDebugClusterPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-            m_pDebugClusterPSO->Finalize("Debug Cluster PSO", pGraphics->GetDevice());
+            m_pDebugClusterPSO->Finalize("Debug Cluster PSO");
         }
     }
 
     {
         Shader computeShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
 
-        m_pVisualizeLightsRS = std::make_unique<RootSignature>();
-        m_pVisualizeLightsRS->FinalizeFromShader("Visualize Light Density RS", computeShader, pGraphics->GetDevice());
+        m_pVisualizeLightsRS = std::make_unique<RootSignature>(pGraphics);
+        m_pVisualizeLightsRS->FinalizeFromShader("Visualize Light Density RS", computeShader);
 
-        m_pVisualizeLightsPSO = std::make_unique<PipelineState>();
+        m_pVisualizeLightsPSO = std::make_unique<PipelineState>(pGraphics);
         m_pVisualizeLightsPSO->SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
         m_pVisualizeLightsPSO->SetComputeShader(computeShader);
-        m_pVisualizeLightsPSO->Finalize("Visualize Light Density PSO", pGraphics->GetDevice());
+        m_pVisualizeLightsPSO->Finalize("Visualize Light Density PSO");
     }
 }
 

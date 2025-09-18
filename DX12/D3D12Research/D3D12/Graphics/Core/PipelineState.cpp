@@ -1,8 +1,9 @@
 #include "stdafx.h"
 #include "PipelineState.h"
 #include "Shader.h"
+#include "Graphics.h"
 
-PipelineState::PipelineState()
+PipelineState::PipelineState(Graphics* pParent) : GraphicsObject(pParent)
 {
 	m_Desc.PS.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	m_Desc.PS.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT);
@@ -14,13 +15,13 @@ PipelineState::PipelineState()
     m_Desc.PS.NodeMask = 0;
 }
 
-PipelineState::PipelineState(const PipelineState& other) : m_Desc(other.m_Desc)
+PipelineState::PipelineState(const PipelineState& other) : GraphicsObject(other.m_pGraphics), m_Desc(other.m_Desc), m_Type(other.m_Type)
 {}
 
-void PipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
+void PipelineState::Finalize(const char* pName)
 {
     ComPtr<ID3D12Device2> pDevice2;
-    VERIFY_HR_EX(pDevice->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), pDevice);
+    VERIFY_HR_EX(GetGraphics()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetGraphics()->GetDevice());
 
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {
         .SizeInBytes = sizeof(CD3DX12_PIPELINE_STATE_STREAM1),
@@ -31,7 +32,7 @@ void PipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
         streamDesc.SizeInBytes = sizeof(PipelineDesc);
     }
 
-    VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())), pDevice);
+    VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())), GetGraphics()->GetDevice());
 
     D3D_SETNAME(m_pPipelineState.Get(), pName);
 }

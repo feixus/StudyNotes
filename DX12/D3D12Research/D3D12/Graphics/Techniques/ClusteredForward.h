@@ -20,7 +20,7 @@ class ClusteredForward
 {
 public:
     ClusteredForward(Graphics* pGraphics);
-    ~ClusteredForward();
+    ~ClusteredForward() = default;
 
     void OnSwapchainCreated(int windowWidth, int windowHeight);
 

@@ -67,15 +67,15 @@ void Clouds::Initialize(Graphics *pGraphics)
 	{
 		Shader shader("WorleyNoise.hlsl", ShaderType::Compute, "WorleyNoiseCS");
 		
-		m_pWorleyNoiseRS = std::make_unique<RootSignature>();
+		m_pWorleyNoiseRS = std::make_unique<RootSignature>(pGraphics);
 		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pWorleyNoiseRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pWorleyNoiseRS->Finalize("Worley Noise RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pWorleyNoiseRS->Finalize("Worley Noise RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-		m_pWorleyNoisePS = std::make_unique<PipelineState>();
+		m_pWorleyNoisePS = std::make_unique<PipelineState>(pGraphics);
 		m_pWorleyNoisePS->SetComputeShader(shader);
 		m_pWorleyNoisePS->SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
-		m_pWorleyNoisePS->Finalize("Worley Noise PS", pGraphics->GetDevice());
+		m_pWorleyNoisePS->Finalize("Worley Noise PS");
 
 		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>(pGraphics, "Worley Noise");
 		m_pWorleyNoiseTexture->Create(TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource, TextureDimension::Texture3D));
@@ -84,15 +84,15 @@ void Clouds::Initialize(Graphics *pGraphics)
 	{
 		Shader vertexShader("Clouds.hlsl", ShaderType::Vertex, "VSMain");
 		Shader pixelShader("Clouds.hlsl", ShaderType::Pixel, "PSMain");
-		m_pCloudsRS = std::make_unique<RootSignature>();
-		m_pCloudsRS->FinalizeFromShader("Clouds RS", vertexShader, pGraphics->GetDevice());
+		m_pCloudsRS = std::make_unique<RootSignature>(pGraphics);
+		m_pCloudsRS->FinalizeFromShader("Clouds RS", vertexShader);
 
 		D3D12_INPUT_ELEMENT_DESC quadIL[] = {
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		m_pCloudsPS = std::make_unique<PipelineState>();
+		m_pCloudsPS = std::make_unique<PipelineState>(pGraphics);
 		m_pCloudsPS->SetVertexShader(vertexShader);
 		m_pCloudsPS->SetPixelShader(pixelShader);
 		m_pCloudsPS->SetInputLayout(quadIL, std::size(quadIL));
@@ -101,7 +101,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pCloudsPS->SetDepthWrite(false);
 		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 		m_pCloudsPS->SetRootSignature(m_pCloudsRS->GetRootSignature());
-		m_pCloudsPS->Finalize("Clouds PS", pGraphics->GetDevice());
+		m_pCloudsPS->Finalize("Clouds PS");
 	}
 
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);

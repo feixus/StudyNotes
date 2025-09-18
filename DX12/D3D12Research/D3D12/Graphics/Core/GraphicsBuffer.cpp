@@ -66,7 +66,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 		initialState = D3D12_RESOURCE_STATE_COMMON;
 	}
 	
-	m_pResource = m_pGraphics->CreateResource(desc, initialState, heapType);
+	m_pResource = GetGraphics()->CreateResource(desc, initialState, heapType);
 	SetResourceState(initialState);
 
 	SetName(m_Name.c_str());
@@ -135,7 +135,7 @@ void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
 {
 	if (*pView == nullptr)
 	{
-		m_Descriptors.push_back(std::make_unique<UnorderedAccessView>(m_pGraphics));
+		m_Descriptors.push_back(std::make_unique<UnorderedAccessView>());
 		*pView = static_cast<UnorderedAccessView*>(m_Descriptors.back().get());
 	}
 
@@ -146,7 +146,7 @@ void Buffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
 {
 	if (*pView == nullptr)
 	{
-		m_Descriptors.push_back(std::make_unique<ShaderResourceView>(m_pGraphics));
+		m_Descriptors.push_back(std::make_unique<ShaderResourceView>());
 		*pView = static_cast<ShaderResourceView*>(m_Descriptors.back().get());
 	}
 

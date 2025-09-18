@@ -125,8 +125,8 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	Shader pixelShader("imgui.hlsl", ShaderType::Pixel, "PSMain");
 
 	// root signature
-	m_pRootSignature = std::make_unique<RootSignature>();
-	m_pRootSignature->FinalizeFromShader("imgui", vertexShader, pGraphics->GetDevice());
+	m_pRootSignature = std::make_unique<RootSignature>(pGraphics);
+	m_pRootSignature->FinalizeFromShader("imgui", vertexShader);
 
 	// input layout
 	CD3DX12_INPUT_ELEMENT_DESC elementDesc[] = {
@@ -136,7 +136,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	};
 
 	// pipeline state
-	m_pPipelineStateObject = std::make_unique<PipelineState>();
+	m_pPipelineStateObject = std::make_unique<PipelineState>(pGraphics);
 	m_pPipelineStateObject->SetBlendMode(BlendMode::Alpha, false);
 	m_pPipelineStateObject->SetDepthWrite(false);
 	m_pPipelineStateObject->SetDepthEnable(false);
@@ -146,7 +146,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineStateObject->SetVertexShader(vertexShader);
 	m_pPipelineStateObject->SetPixelShader(pixelShader);
-	m_pPipelineStateObject->Finalize("ImGui Pipeline", pGraphics->GetDevice());
+	m_pPipelineStateObject->Finalize("ImGui Pipeline");
 }
 
 void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)

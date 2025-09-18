@@ -236,7 +236,7 @@ private:
 	int32_t m_ScreenshotRowPitch{0};
 
 	uint32_t m_CurrentBackBufferIndex{0};
-	std::array<UINT64, FRAME_COUNT> m_FenceValues{};
+	//std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
 	ShowGraph m_ShowGraph = ShowGraph::AO;

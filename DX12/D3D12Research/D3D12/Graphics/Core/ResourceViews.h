@@ -59,10 +59,9 @@ struct TextureUAVDesc
     }
 };
 
-class ResourceView : GraphicsObject
+class ResourceView
 {
 public:
-	ResourceView(Graphics* pGraphics);
     virtual ~ResourceView() = default;
 
 	GraphicsResource* GetParent() const { return m_pParent; }
@@ -76,7 +75,6 @@ protected:
 class ShaderResourceView : public ResourceView
 {
 public:
-	ShaderResourceView(Graphics* pGraphics);
 	~ShaderResourceView();
 
 	void Create(Buffer* pBuffer, const BufferSRVDesc& desc);
@@ -87,7 +85,6 @@ public:
 class UnorderedAccessView : public ResourceView
 {
 public:
-	UnorderedAccessView(Graphics* pGraphics);
 	~UnorderedAccessView();
 
 	void Create(Buffer* pBuffer, const BufferUAVDesc& desc);

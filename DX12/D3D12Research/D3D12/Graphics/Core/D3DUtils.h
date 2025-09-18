@@ -303,6 +303,19 @@ namespace D3D
 		}
 	}
 
+	inline std::string GetObjectName(ID3D12Object* pObject)
+	{
+		std::string name;
+		if (pObject)
+		{
+			UINT size = 0;
+			VERIFY_HR(pObject->GetPrivateData(WKPDID_D3DDebugObjectName, &size, nullptr));
+			name.resize(size);
+			VERIFY_HR(pObject->GetPrivateData(WKPDID_D3DDebugObjectName, &size, &name[0]));
+		}
+		return name;
+	}
+
 	inline bool IsBlockCompressFormat(DXGI_FORMAT format)
 	{
 		switch (format)

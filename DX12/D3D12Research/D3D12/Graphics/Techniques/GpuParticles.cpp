@@ -67,60 +67,60 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 
     pContext->Execute(true);
 
-    m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>();
+    m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>(pGraphics);
     m_pSimpleDispatchCommandSignature->AddDispatch();
-    m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch", pGraphics->GetDevice());
+    m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch");
 
-    m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>();
+    m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>(pGraphics);
     m_pSimpleDrawCommandSignature->AddDraw();
-    m_pSimpleDrawCommandSignature->Finalize("Simple Draw", pGraphics->GetDevice());
+    m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
     {
         Shader computerShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
-        m_pSimulateRS = std::make_unique<RootSignature>();
-        m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computerShader, pGraphics->GetDevice());
+        m_pSimulateRS = std::make_unique<RootSignature>(pGraphics);
+        m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computerShader);
     }
 
     {
         Shader computerShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
-        m_pPrepareArgumentsPSO = std::make_unique<PipelineState>();
+        m_pPrepareArgumentsPSO = std::make_unique<PipelineState>(pGraphics);
         m_pPrepareArgumentsPSO->SetComputeShader(computerShader);
         m_pPrepareArgumentsPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
-        m_pPrepareArgumentsPSO->Finalize("Prepare Particle Arguments PSO", pGraphics->GetDevice());
+        m_pPrepareArgumentsPSO->Finalize("Prepare Particle Arguments PSO");
     }
 
     {
         Shader computerShader("ParticleSimulate.hlsl", ShaderType::Compute, "Emit");
-        m_pEmitPSO = std::make_unique<PipelineState>();
+        m_pEmitPSO = std::make_unique<PipelineState>(pGraphics);
         m_pEmitPSO->SetComputeShader(computerShader);
         m_pEmitPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
-        m_pEmitPSO->Finalize("Particles Emit PSO", pGraphics->GetDevice());
+        m_pEmitPSO->Finalize("Particles Emit PSO");
     }
 
     {
         Shader simulateShader("ParticleSimulate.hlsl", ShaderType::Compute, "Simulate");
-        m_pSimulatePSO = std::make_unique<PipelineState>();
+        m_pSimulatePSO = std::make_unique<PipelineState>(pGraphics);
         m_pSimulatePSO->SetComputeShader(simulateShader);
         m_pSimulatePSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
-        m_pSimulatePSO->Finalize("Particles Simulate PSO", pGraphics->GetDevice());        
+        m_pSimulatePSO->Finalize("Particles Simulate PSO");        
     }
 
     {
         Shader simulateShader("ParticleSimulate.hlsl", ShaderType::Compute, "SimulateEnd");
-        m_pSimulateEndPSO = std::make_unique<PipelineState>();
+        m_pSimulateEndPSO = std::make_unique<PipelineState>(pGraphics);
         m_pSimulateEndPSO->SetComputeShader(simulateShader);
         m_pSimulateEndPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
-        m_pSimulateEndPSO->Finalize("Particles Simulate End PSO", pGraphics->GetDevice());
+        m_pSimulateEndPSO->Finalize("Particles Simulate End PSO");
     }
 
     {
 		Shader vertexShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
 		Shader pixelShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
-		m_pParticleRenderRS = std::make_unique<RootSignature>();
-        m_pParticleRenderRS->FinalizeFromShader("Particles Render RS", vertexShader, pGraphics->GetDevice());
+		m_pParticleRenderRS = std::make_unique<RootSignature>(pGraphics);
+        m_pParticleRenderRS->FinalizeFromShader("Particles Render RS", vertexShader);
         
-		m_pParticleRenderPSO = std::make_unique<PipelineState>();
+		m_pParticleRenderPSO = std::make_unique<PipelineState>(pGraphics);
 		m_pParticleRenderPSO->SetVertexShader(vertexShader);
 		m_pParticleRenderPSO->SetPixelShader(pixelShader);
 		m_pParticleRenderPSO->SetRootSignature(m_pParticleRenderRS->GetRootSignature());
@@ -131,7 +131,7 @@ void GpuParticles::Initialize(Graphics* pGraphics)
         m_pParticleRenderPSO->SetDepthWrite(false);
         m_pParticleRenderPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
         m_pParticleRenderPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
-        m_pParticleRenderPSO->Finalize("Particles Render PSO", pGraphics->GetDevice());		
+        m_pParticleRenderPSO->Finalize("Particles Render PSO");		
     }
 
     pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
