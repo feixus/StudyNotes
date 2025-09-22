@@ -22,7 +22,52 @@ RTReflections::RTReflections(Graphics* pGraphics)
 
 void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 {
+    RGPassBuilder rt = graph.AddPass("Raytracing Reflections");
+    rt.Bind([=](CommandContext& context, const RGPassResource& passResource)
+        {
+            context.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(m_pTestOutput.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
+            context.SetComputeRootSignature(m_pGlobalRS.get());
+            context.SetPipelineState(m_pRtSO.Get());
+
+            constexpr const int numRandomVectors = 64;
+            struct Parameters
+            {
+                Matrix ViewInverse;
+                Matrix ViewProjectionInverse;
+            } parameters;
+
+            parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
+            parameters.ViewProjectionInverse = sceneData.pCamera->GetProjectionInverse() * sceneData.pCamera->GetViewInverse();
+
+            ShaderBindingTable bindingTable(m_pRtSO.Get());
+            bindingTable.AddRayGenEntry("RayGen", {});
+            bindingTable.AddMissEntry("Miss", {});
+
+            for (int i = 0; i < sceneData.pMesh->GetMeshCount(); ++i)
+            {
+                SubMesh* pMesh = sceneData.pMesh->GetMesh(i);
+                if (sceneData.pMesh->GetMaterial(pMesh->GetMaterialId()).IsTransparent)
+                {
+                    continue;
+                }
+
+                auto it = std::find_if(sceneData.OpaqueBatches.begin(), sceneData.OpaqueBatches.end(), [pMesh](const Batch& batch) { return batch.pMesh == pMesh; });
+                const MaterialData& material = it->Material;
+                DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(MaterialData));
+                memcpy(allocation.pMappedMemory, &material, sizeof(MaterialData));
+                bindingTable.AddHitGroupEntry("HitGroup", { allocation.GpuHandle, pMesh->GetVertexBuffer().Location, pMesh->GetIndexBuffer().Location});
+            }
+
+            context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+            context.SetDynamicDescriptor(1, 0, m_pTestOutput->GetUAV());
+            context.SetDynamicDescriptor(2, 0, sceneData.pTLAS->GetSRV());
+            context.SetDynamicDescriptor(2, 1, sceneData.pResolvedDepth->GetSRV());
+            context.SetDynamicDescriptors(3, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
+
+            context.DispatchRays(bindingTable, (uint32_t)m_pTestOutput->GetWidth(), (uint32_t)m_pTestOutput->GetHeight());
+        });
 }
 
 void RTReflections::SetupResources(Graphics* pGraphics)
@@ -67,6 +112,6 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
         stateObjectDesc.SetRaytracingPipelineConfig(1);
         stateObjectDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
         D3D12_STATE_OBJECT_DESC desc = stateObjectDesc.Desc();
-        pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pStateObject.GetAddressOf()));
+        VERIFY_HR_EX(pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pRtSO.GetAddressOf())), pGraphics->GetRaytracingDevice());
     }
 }

@@ -41,6 +41,7 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 
         if (desc.Raw)
 	    {
+            srvDesc.Buffer.NumElements = bufferDesc.ElementCount * bufferDesc.ElementSize / 4;
 		    srvDesc.Buffer.Flags |= D3D12_BUFFER_SRV_FLAG_RAW;
             srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
 	    }

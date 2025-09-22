@@ -22,6 +22,7 @@ class TiledForward;
 class RTAO;
 class SSAO;
 class GpuParticles;
+class RTReflections;
 
 struct MaterialData
 {
@@ -62,6 +63,7 @@ struct SceneData
 	Camera* pCamera{nullptr};
 	ShadowData* pShadowData{nullptr};
 	Buffer* pTLAS{nullptr};
+	Mesh* pMesh{nullptr};
 	int FrameIndex{0};
 };
 
@@ -216,6 +218,7 @@ private:
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<SSAO> m_pSSAO;
+	std::unique_ptr<RTReflections> m_pRTReflections;
 
 	std::unique_ptr<Camera> m_pCamera;
 	HWND m_pWindow{};

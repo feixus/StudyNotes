@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/GraphicsBuffer.h"
 
 class Graphics;
 class GraphicsBuffer;
@@ -17,11 +18,8 @@ public:
     int GetMaterialId() const { return m_MaterialId; }
     const BoundingBox& GetBounds() const { return m_Bounds; }
 
-    D3D12_GPU_VIRTUAL_ADDRESS GetVerticesLocation() const { return m_VerticesLocation; }
-    D3D12_GPU_VIRTUAL_ADDRESS GetIndicesLocation() const { return m_IndicesLocation; }
-    uint32_t GetVertexCount() const { return m_VertexCount; }
-    uint32_t GetIndexCount() const { return m_IndexCount; }
-    int GetStride() const { return m_Stride; }
+    VertexBufferView GetVertexBuffer() const;
+    IndexBufferView GetIndexBuffer() const;
 
 private:
     int m_Stride{0};

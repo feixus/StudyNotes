@@ -22,6 +22,7 @@
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"
 #include "Graphics/Techniques/SSAO.h"
+#include "Graphics/Techniques/RTReflections.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RenderGraph/Blackboard.h"
 #include "Core/CommandLine.h"
@@ -339,6 +340,19 @@ void Graphics::Update()
 			light.ShadowMapSize = m_ShadowMaps[light.ShadowIndex]->GetWidth();
 		}
 	}
+
+	m_SceneData.pDepthBuffer = GetDepthStencil();
+	m_SceneData.pResolvedDepth = GetResolveDepthStencil();
+	m_SceneData.pShadowMaps = &m_ShadowMaps;
+	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
+	m_SceneData.pPreviousColor = m_pPreviousColor.get();
+	m_SceneData.pAO = m_pAmbientOcclusion.get();
+	m_SceneData.pLightBuffer = m_pLightBuffer.get();
+	m_SceneData.pCamera = m_pCamera.get();
+	m_SceneData.pShadowData = &shadowData;
+	m_SceneData.FrameIndex = m_Frame;
+	m_SceneData.pTLAS = m_pTLAS.get();
+	m_SceneData.pMesh = m_pMesh.get();
 	
 	PROFILE_END();
 
@@ -520,6 +534,11 @@ void Graphics::Update()
 		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), *m_pCamera);
 	}
 
+	if (SupportsRaytracing())
+	{
+		m_pRTReflections->Execute(graph, m_SceneData);
+	}
+
 	// shadow mapping
 	//  - renders the scene depth onto a separate depth buffer from the light's view
 	if (shadowIndex > 0)
@@ -632,18 +651,6 @@ void Graphics::Update()
 				}
 		});
 	}
-
-	m_SceneData.pDepthBuffer = GetDepthStencil();
-	m_SceneData.pResolvedDepth = GetResolveDepthStencil();
-	m_SceneData.pShadowMaps = &m_ShadowMaps;
-	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
-	m_SceneData.pPreviousColor = m_pPreviousColor.get();
-	m_SceneData.pAO = m_pAmbientOcclusion.get();
-	m_SceneData.pLightBuffer = m_pLightBuffer.get();
-	m_SceneData.pCamera = m_pCamera.get();
-	m_SceneData.pShadowData = &shadowData;
-	m_SceneData.FrameIndex = m_Frame;
-	m_SceneData.pTLAS = m_pTLAS.get();
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
@@ -1187,6 +1194,7 @@ void Graphics::InitD3D()
 
 	m_pRTAO = std::make_unique<RTAO>(this);
 	m_pSSAO = std::make_unique<SSAO>(this);
+	m_pRTReflections = std::make_unique<RTReflections>(this);
 	m_pClouds = std::make_unique<Clouds>(this);
 	m_pGpuParticles = std::make_unique<GpuParticles>(this);
 
@@ -1333,13 +1341,13 @@ void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& contex
             D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
             geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
             geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-            geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndicesLocation();
-            geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexCount();
+            geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndexBuffer().Location;
+            geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexBuffer().Elements;
             geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
             geometryDesc.Triangles.Transform3x4 = 0;
-            geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVerticesLocation();
-            geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetStride();
-            geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexCount();
+            geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVertexBuffer().Location;
+            geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetVertexBuffer().Stride;
+            geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexBuffer().Elements;
             geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
             geometries.push_back(geometryDesc);
         }
