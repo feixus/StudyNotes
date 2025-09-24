@@ -20,18 +20,17 @@ RTReflections::RTReflections(Graphics* pGraphics)
     }
 }
 
-void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
+GraphicsTexture* RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 {
     RGPassBuilder rt = graph.AddPass("Raytracing Reflections");
     rt.Bind([=](CommandContext& context, const RGPassResource& passResource)
         {
             context.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            context.InsertResourceBarrier(m_pTestOutput.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            context.InsertResourceBarrier(m_pReflections.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
             context.SetComputeRootSignature(m_pGlobalRS.get());
             context.SetPipelineState(m_pRtSO.Get());
 
-            constexpr const int numRandomVectors = 64;
             struct Parameters
             {
                 Matrix ViewInverse;
@@ -61,19 +60,21 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
             }
 
             context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-            context.SetDynamicDescriptor(1, 0, m_pTestOutput->GetUAV());
+            context.SetDynamicDescriptor(1, 0, m_pReflections->GetUAV());
             context.SetDynamicDescriptor(2, 0, sceneData.pTLAS->GetSRV());
             context.SetDynamicDescriptor(2, 1, sceneData.pResolvedDepth->GetSRV());
             context.SetDynamicDescriptors(3, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
 
-            context.DispatchRays(bindingTable, (uint32_t)m_pTestOutput->GetWidth(), (uint32_t)m_pTestOutput->GetHeight());
+            context.DispatchRays(bindingTable, (uint32_t)m_pReflections->GetWidth(), (uint32_t)m_pReflections->GetHeight());
         });
+
+    return m_pReflections.get();
 }
 
 void RTReflections::SetupResources(Graphics* pGraphics)
 {
-    m_pTestOutput = std::make_unique<GraphicsTexture>(pGraphics, "RTReflections Test Output");
-    m_pTestOutput->Create(TextureDesc::Create2D(512, 512, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+    m_pReflections = std::make_unique<GraphicsTexture>(pGraphics, "RTReflections Test Output");
+    m_pReflections->Create(TextureDesc::Create2D(1920, 1080, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 }
 
 void RTReflections::SetupPipelines(Graphics* pGraphics)
@@ -95,7 +96,7 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
         m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
         m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
         m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-        m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
+        m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
         m_pGlobalRS->SetDescriptorTableSimple(3, 200, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 128, D3D12_SHADER_VISIBILITY_ALL);
         m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT), D3D12_SHADER_VISIBILITY_ALL);
         m_pGlobalRS->Finalize("Dummy Global RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);

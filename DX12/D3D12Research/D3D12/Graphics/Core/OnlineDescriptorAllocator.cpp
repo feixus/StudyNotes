@@ -47,7 +47,7 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offs
 
 void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType)
 {
-    if (m_StaleRootParameters.AnyBitSet() == false)
+    if (m_StaleRootParameters.HasAnyBitSet() == false)
     {
         return;
     }
@@ -157,9 +157,8 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
     memset(m_HandleCache.data(), 0, m_HandleCache.size() * sizeof(D3D12_CPU_DESCRIPTOR_HANDLE));
 
     uint32_t offset = 0;
-    for (auto it = m_RootDescriptorMask.GetSetBitsIterator(); it.Valid(); ++it)
+    for (uint32_t rootIndex : m_RootDescriptorMask)
     {
-        int rootIndex = it.Value();
         RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
         entry.AssignedHandlesBitMap.ClearAll();
         uint32_t tableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
@@ -242,7 +241,7 @@ void OnlineDescriptorAllocator::UnbindAll()
     for (auto it = m_RootDescriptorMask.GetSetBitsIterator(); it.Valid(); ++it)
     {
         uint32_t rootIndex = it.Value();
-        if (m_RootDescriptorTable[rootIndex].AssignedHandlesBitMap.AnyBitSet())
+        if (m_RootDescriptorTable[rootIndex].AssignedHandlesBitMap.HasAnyBitSet())
         {
             m_StaleRootParameters.SetBit(rootIndex);
         }

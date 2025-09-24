@@ -47,7 +47,7 @@ void RootSignature::SetShaderResourceView(uint32_t rootIndex, uint32_t shaderReg
 {
     SetSize(rootIndex + 1);
     D3D12_ROOT_PARAMETER& rootParameter = m_RootParameters[rootIndex];
-    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     //rootParameter.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
     rootParameter.Descriptor.ShaderRegister = shaderRegister;
     rootParameter.Descriptor.RegisterSpace = 0;

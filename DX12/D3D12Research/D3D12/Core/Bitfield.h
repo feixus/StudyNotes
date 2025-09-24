@@ -5,41 +5,36 @@ namespace BitOperations
     template<typename T>
     bool LeastSignificantBit(T mask, uint32_t* pIndex)
     {
-        if (mask == 0)
+        *pIndex = ~0u;
+        while(mask)
         {
-            return false;
-        }
-        *pIndex = 0;
-        while (!(mask & 1))
-        {
+            *pIndex += 1;
+            if ((mask & 1) == 1)
+            {
+                return true;
+            }
             mask >>= 1;
-            ++(*pIndex);
         }
-        return true;
+
+        return false;
     }
 
     template<typename T>
     bool MostSignificantBit(T mask, uint32_t* pIndex)
     {
-        if (mask == 0)
-        {
-            return false;
-        }
-        *pIndex = 0;
+        *pIndex = ~0u;
         while (mask)
         {
             mask >>= 1;
             ++(*pIndex);
         }
-        --(*pIndex);
-        return true;
+        return *pIndex != ~0u;
     }
 }
 
 template<uint32_t Bits, typename Storage = uint32_t>
 class BitField;
 
-using BitField16 = BitField<16, uint16_t>;
 using BitField32 = BitField<32, uint32_t>;
 using BitField64 = BitField<64, uint32_t>;
 
@@ -50,25 +45,30 @@ public:
     class SetBitsIterator
     {
     public:
-        explicit SetBitsIterator(const BitField* pBitField)
-            : m_CurrentIndex(0), m_pBitField(pBitField)
+        explicit SetBitsIterator(const BitField* pBitField, bool end = false)
+            : m_CurrentIndex(INVALID), m_pBitField(pBitField)
         {
-            if (m_pBitField->LeastSignificantBit(&m_CurrentIndex) == false)
+            if (!end)
             {
-                m_CurrentIndex = Bits;
+                m_pBitField->LeastSignificantBit(&m_CurrentIndex);
             }
         }
 
         void operator++()
         {
-            while (m_CurrentIndex < Bits)
+            while (++m_CurrentIndex < Bits)
             {
-                ++m_CurrentIndex;
                 if (m_pBitField->GetBit(m_CurrentIndex))
                 {
-                    break;
+                    return;
                 }
             }
+            m_CurrentIndex = INVALID;
+        }
+
+        bool operator !=(const SetBitsIterator& other)
+        {
+            return m_CurrentIndex != other.m_CurrentIndex;
         }
 
         bool Valid() const
@@ -80,6 +80,14 @@ public:
         {
             return m_CurrentIndex;
         }
+
+        uint32_t operator*() const
+        {
+            return m_CurrentIndex;
+        }
+
+        static constexpr uint32_t INVALID = ~0u;
+    
     private:
         uint32_t m_CurrentIndex;
         const BitField* m_pBitField;
@@ -90,7 +98,7 @@ public:
         ClearAll();
     }
 
-    explicit BitField(const bool set)
+    explicit BitField(bool set)
     {
         if (set)
         {
@@ -102,60 +110,99 @@ public:
         }
     }
 
-    inline void SetBit(const uint32_t bit)
+    template<uint32_t, typename> friend class BitField;
+
+    template<typename T>
+    explicit BitField(T value)
     {
+        static_assert(std::is_integral_v<T>, "not an integral type");
+        ClearAll();
+        uint32_t size = sizeof(value) < sizeof(Storage) * Elements() ? sizeof(value) : sizeof(Storage) * Elements();
+        memcpy(Data, &value, size);
+    }
+
+    template<uint32_t otherNumBits, typename otherStorage>
+    BitField(const BitField<otherNumBits, otherStorage>& other)
+    {
+        ClearAll();
+        static_assert(Bits <= otherNumBits, "source cant have more bits");
+        uint32_t size = Bits <= otherNumBits ? Bits : otherNumBits;
+        memcpy(Data, other.Data, size / 8);
+    }
+
+    inline void SetBit(uint32_t bit)
+    {
+        assert(bit < Size());
         Data[StorageIndexOfBit(bit)] |= MakeBitmaskForStorage(bit);
-    }
-
-    void SetBitAndUp(const uint32_t bit)
-    {
-        uint32_t storageIndex = StorageIndexOfBit(bit);
-        for (uint32_t i = storageIndex + 1; i < Elements(); ++i)
-        {
-            Data[i] = ((Storage)~0);
-        }
-        Data[storageIndex] |= ((Storage)~0) << IndexOfBitInStorage(bit);
-    }
-
-    void SetBitAndDown(const uint32_t bit)
-    {
-        uint32_t storageIndex = StorageIndexOfBit(bit + 1);
-        for (int i = storageIndex - 1; i >= 0; --i)
-        {
-            Data[i] = ((Storage)~0);
-        }
-        Data[storageIndex] |= ((Storage)~0) >> (BitsPerStorage() - IndexOfBitInStorage(bit + 1));
     }
 
     inline void ClearBit(const uint32_t bit)
     {
+        assert(bit < Size());
         Data[StorageIndexOfBit(bit)] &= ~MakeBitmaskForStorage(bit);
     }
 
     inline bool GetBit(const uint32_t bit) const
     {
+        assert(bit < Size());
         return (Data[StorageIndexOfBit(bit)] & MakeBitmaskForStorage(bit)) != 0;
     }
 
-    void AssignBit(const uint32_t bit, const bool set)
+    void AssignBit(uint32_t bit, bool set)
     {
         set ? SetBit(bit) : ClearBit(bit);
     }
 
     void ClearAll()
     {
-        for (uint32_t i = 0; i < Elements(); ++i)
-        {
-            Data[i] = Storage();
-        }
+        memset(Data, 0x00000000, sizeof(Storage) * Elements());
     }
 
     void SetAll()
     {
-        for (uint32_t i = 0; i < Elements(); ++i)
+        memset(Data, 0xFFFFFFFF, sizeof(Storage) * Elements());
+    }
+
+    void SetRange(uint32_t from, uint32_t to, bool set = true)
+    {
+        assert(from < Size());
+        assert(to <= Size());
+        assert(from <= to);
+        while (from < to)
         {
-            Data[i] = ((Storage)~0);
+            uint32_t fromInStorage = from % BitsPerStorage();
+            uint32_t storageIndex = StorageIndexOfBit(from);
+            uint32_t maxBitInStorage = (storageIndex + 1) * BitsPerStorage();
+            Storage mask = (Storage)~0 << fromInStorage;
+            if (to < maxBitInStorage)
+            {
+                Storage mask2 = ((Storage)1 << (to % BitsPerStorage())) - (Storage)1;
+                mask &= mask2;
+            }
+            if (set)
+            {
+                Data[storageIndex] |= mask;
+            }
+            else
+            {
+                Data[storageIndex] &= ~mask;
+            }
+            from = maxBitInStorage;
         }
+    }
+
+     void SetBitAndUp(uint32_t bit, uint32_t count = ~0)
+    {
+        assert(bit < Size());
+        count = count < Size() - bit ? count : Size() - bit;
+        SetRange(bit, bit + count);
+    }
+
+    void SetBitAndDown(uint32_t bit, uint32_t count = ~0)
+    {
+        assert(bit < Size());
+        count = bit < count ? bit : count;
+        SetRange(bit - count, bit);
     }
 
     SetBitsIterator GetSetBitsIterator() const
@@ -175,7 +222,7 @@ public:
         return true;
     }
 
-    bool AnyBitSet() const
+    bool HasAnyBitSet() const
     {
         for (uint32_t i = 0; i < Elements(); ++i)
         {
@@ -187,7 +234,7 @@ public:
         return false;
     }
 
-    bool NoBitSet() const
+    bool HasNoBitSet() const
     {
         for (uint32_t i = 0; i < Elements(); ++i)
         {
@@ -203,7 +250,7 @@ public:
     {
         for (int32_t i = (int)Elements() - 1; i >= 0; --i)
         {
-            if (BitOperations::MostSignificantBit(Data[i], pIndex) == true)
+            if (BitOperations::MostSignificantBit(Data[i], pIndex))
             {
                 *pIndex += i * BitsPerStorage();
                 return true;
@@ -216,13 +263,28 @@ public:
     {
         for (uint32_t i = 0; i < Elements(); ++i)
         {
-            if (BitOperations::LeastSignificantBit(Data[i], pIndex) == true)
+            if (BitOperations::LeastSignificantBit(Data[i], pIndex))
             {
                 *pIndex += i * BitsPerStorage();
                 return true;
             }
         }
         return false;
+    }
+
+    SetBitsIterator begin() const
+    {
+        return SetBitsIterator(this);
+    }
+
+    SetBitsIterator end() const
+    {
+        return SetBitsIterator(this, true);
+    }
+
+    bool operator[](uint32_t index) const
+    {
+        return GetBit(index);
     }
 
     bool operator==(const BitField& other) const
@@ -316,9 +378,14 @@ public:
         return out;
     }
 
+    static constexpr uint32_t Size()
+    {
+        return Bits;
+    }
+
     static constexpr uint32_t Capacity()
     {
-        return Elements() * sizeof(Storage) * 8;
+        return Bits;
     }
 
 private:
@@ -337,9 +404,9 @@ private:
         return sizeof(Storage) * 8;
     }
 
-    static constexpr uint32_t MakeBitmaskForStorage(uint32_t bit)
+    static constexpr Storage MakeBitmaskForStorage(uint32_t bit)
     {
-        return 1 << IndexOfBitInStorage(bit);
+        return (Storage)1 << IndexOfBitInStorage(bit);
     }
 
     static constexpr uint32_t Elements()

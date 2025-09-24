@@ -257,6 +257,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 				Matrix View;
 				Matrix Projection;
                 Matrix ViewProjection;
+                Matrix ReprojectionMatrix;
                 Vector4 ViewPosition;
 				Vector2 InvScreenDimensions;
 				float NearZ;
@@ -282,6 +283,24 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 			frameData.LightGridParams = lightGridParams;
             frameData.FrameIndex = inputResource.FrameIndex;
             frameData.SsrSamples = Tweakables::g_SsrSamples;
+
+            Matrix reprojectionMatrix = inputResource.pCamera->GetViewProjection().Invert() * inputResource.pCamera->GetPreviousViewProjection();
+            // tranform from uv to clip space: texcoord * 2 - 1
+            Matrix premult = {
+                2, 0, 0, 0,
+                0, -2, 0, 0,
+                0, 0, 1, 0,
+                -1, 1, 0, 1
+            };
+
+            // transform from clip space to uv space: texcoord * 0.5 + 0.5
+            Matrix postmult = {
+                0.5f, 0, 0, 0,
+                0, -0.5f, 0, 0,
+                0, 0, 1, 0,
+                0.5f, 0.5f, 0, 1
+            };
+            frameData.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 
             context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

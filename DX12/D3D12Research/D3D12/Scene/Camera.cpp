@@ -150,8 +150,15 @@ void Camera::UpdateMatrices() const
     m_Frustum.Transform(m_Frustum, m_ViewInverse);
 }
 
+void Camera::Update()
+{
+    m_PreviousViewProjection = GetViewProjection();
+}
+
 void FreeCamera::Update()
 {
+    Camera::Update();
+
     // camera movement
     Vector3 movement;
 	if (Input::Instance().IsMouseDown(VK_LBUTTON))
