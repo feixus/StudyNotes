@@ -3,24 +3,13 @@
 #include "D3d12GraphicsManager.hpp"
 #include "WindowsApplication.hpp"
 #include "directx/d3dx12.h"
+#include "utility.hpp"
 
 using namespace My;
 
 namespace My
 {
     extern IApplication* g_pApp;
-
-    template<class T>
-    inline void SafeRelease(T **ppInterfaceToRelease)
-    {
-        if (*ppInterfaceToRelease != nullptr)
-        {
-            (*ppInterfaceToRelease)->Release();
-
-            (*ppInterfaceToRelease) = nullptr;
-        }
-    }
-
     
     static void GetHardwareAdapter(IDXGIFactory7* pFactory, IDXGIAdapter1** ppAdapter)
     {
