@@ -20,7 +20,7 @@ namespace My
         HRESULT CreateGraphicsResources();
         void DiscardGraphicsResources();
 
-    private:
+    protected:
         
         ID2D1Factory             *m_pFactory{};
         ID2D1HwndRenderTarget    *m_pRenderTarget{};

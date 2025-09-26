@@ -4,21 +4,11 @@
 #include <tchar.h>
 #include "D2dGraphicsManager.hpp"
 #include "WindowsApplication.hpp"
+#include "utility.hpp"
 
 namespace My
 {
     extern IApplication* g_pApp;
-
-    template<class T>
-    inline void SafeRelease(T **ppInterfaceToRelease)
-    {
-        if (*ppInterfaceToRelease)
-        {
-            (*ppInterfaceToRelease)->Release();
-
-            (*ppInterfaceToRelease) = nullptr;
-        }
-    }
 
     int D2dGraphicsManager::Initialize()
     {

@@ -11,6 +11,7 @@
 #include <DirectXColors.h>
 
 #include <iostream>
+#include "utility.hpp"
 
 using namespace DirectX;
 using namespace DirectX::PackedVector;
@@ -36,19 +37,6 @@ struct VERTEX {
     XMFLOAT3 Position;
     XMFLOAT4 Color;
 };
-
-
-
-template<class T>
-inline void SafeRelease(T **ppInterfaceToRelease)
-{
-    if (*ppInterfaceToRelease)
-    {
-        (*ppInterfaceToRelease)->Release();
-
-        (*ppInterfaceToRelease) = nullptr;
-    }
-}
 
 void CreateRenderTarget()
 {

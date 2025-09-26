@@ -124,6 +124,8 @@ namespace My
 		Vector4Type() {};
 		Vector4Type(const T& _v) : x(_v), y(_v), z(_v), w(_v) {};
 		Vector4Type(const T& _x, const T& _y, const T& _z, const T& _w) : x(_x), y(_y), z(_z), w(_w) {};
+		Vector4Type<T>(const Vector3Type<T>& v3) : x(v3.x), y(v3.y), z(v3.z), w(1.0f) {};
+		Vector4Type<T>(const Vector3Type<T>& v3, const T& _w) : x(v3.x), y(v3.y), z(v3.z), w(_w) {};
 
 		operator T*() { return data; }
 		operator const T*() const { return static_cast<const T*>(data); }

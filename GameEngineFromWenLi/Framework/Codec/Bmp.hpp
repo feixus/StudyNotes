@@ -30,6 +30,7 @@ namespace My
     
 #pragma pack(pop)
 
+    // 32-bit, BMP rows are bottom-to-top, each row is passed to 4-byte multiples, pixels are BGR(A) order
     class BmpParser : implements ImageParser
     {
     public:
@@ -56,25 +57,25 @@ namespace My
                 img.width = pBmpHeader->Width;
                 img.height = pBmpHeader->Height;
                 img.bitcount = 32;
-                img.pitch = ((img.width * img.bitcount >> 3) + 3) & ~3;
+                img.pitch = ((img.width * img.bitcount >> 3) + 3) & ~3; // padded to a 4-byte boundary
                 img.data_size = img.pitch * img.height;
                 img.data = reinterpret_cast<R8G8B8A8Unorm*>(g_pMemoryManager->Allocate(img.data_size));
 
                 if (img.bitcount < 24) {
                     std::cout << "BMP file is not supported" << std::endl;
                 } else {
-                    uint8_t* pSourceData = buf.m_pData + pFileHeader->BitsOffset;
-                    for (int32_t y = img.height - 1; y >= 0; y--) {
-                        for (int32_t x = 0; x < img.width; x++) {
-                            (img.data + img.width * (img.height - y - 1) + x)->bgra = *reinterpret_cast<R8G8B8A8Unorm*>(pSourceData + img.pitch * y + x * (img.bitcount >> 3));
-                        }
-                    }
+                     uint8_t* pSourceData = buf.m_pData + pFileHeader->BitsOffset;
+                     for (int32_t y = img.height - 1; y >= 0; y--) {
+                         for (int32_t x = 0; x < img.width; x++) {
+                             (img.data + img.width * (img.height - y - 1) + x)->bgra = *reinterpret_cast<R8G8B8A8Unorm*>(pSourceData + img.pitch * y + x * (img.bitcount >> 3));
+                         }
+                     }
                 }
             }
 
             return img;
         }
 
-    }
+    };
 }
 

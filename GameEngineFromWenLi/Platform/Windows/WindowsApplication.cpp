@@ -27,8 +27,8 @@ int My::WindowsApplication::Initialize()
 
     RegisterClassEx(&wc);
 
-    hWnd = CreateWindowExW(0,
-                            L"GameEngine",
+    hWnd = CreateWindowEx(0,
+                            _T("GameEngine"),
                             m_Config.appName,
                             WS_OVERLAPPEDWINDOW,
                             CW_USEDEFAULT, CW_USEDEFAULT,

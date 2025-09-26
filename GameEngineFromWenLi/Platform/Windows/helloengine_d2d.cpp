@@ -3,22 +3,12 @@
 #include <tchar.h>
 
 #include <d2d1.h>
+#include "utility.hpp"
 
 ID2D1Factory             *pFactory = nullptr;
 ID2D1HwndRenderTarget    *pRenderTarget = nullptr;
 ID2D1SolidColorBrush     *pLightSlateGrayBrush = nullptr;
 ID2D1SolidColorBrush     *pCornflowerBlueBrush = nullptr;
-
-template<class T>
-inline void SafeRelease(T **ppInterfaceToRelease)
-{
-    if (*ppInterfaceToRelease)
-    {
-        (*ppInterfaceToRelease)->Release();
-
-        (*ppInterfaceToRelease) = nullptr;
-    }
-}
 
 HRESULT CreateGraphicsResources(HWND hWnd)
 {
