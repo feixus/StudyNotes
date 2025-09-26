@@ -1,5 +1,6 @@
 #pragma once
 #include <iostream>
+#include <fstream>
 #include "ImageParser.hpp"
 
 namespace My
@@ -57,25 +58,57 @@ namespace My
                 img.width = pBmpHeader->Width;
                 img.height = pBmpHeader->Height;
                 img.bitcount = 32;
-                img.pitch = ((img.width * img.bitcount >> 3) + 3) & ~3; // padded to a 4-byte boundary
+                auto byte_count = img.bitcount >> 3;
+                img.pitch = (img.width * byte_count + 3) & ~3; // padded to a 4-byte boundary
                 img.data_size = img.pitch * img.height;
-                img.data = reinterpret_cast<R8G8B8A8Unorm*>(g_pMemoryManager->Allocate(img.data_size));
+                img.data = new uint8_t[img.data_size];
 
                 if (img.bitcount < 24) {
                     std::cout << "BMP file is not supported" << std::endl;
                 } else {
                      uint8_t* pSourceData = buf.m_pData + pFileHeader->BitsOffset;
                      for (int32_t y = img.height - 1; y >= 0; y--) {
-                         for (int32_t x = 0; x < img.width; x++) {
-                             (img.data + img.width * (img.height - y - 1) + x)->bgra = *reinterpret_cast<R8G8B8A8Unorm*>(pSourceData + img.pitch * y + x * (img.bitcount >> 3));
+                         for (uint32_t x = 0; x < img.width; x++) {
+                            auto dst = reinterpret_cast<R8G8B8A8Unorm*>(img.data + img.pitch * (img.height - y - 1) + x * byte_count);
+                            auto src = reinterpret_cast<const R8G8B8A8Unorm*>(pSourceData + img.pitch * y + x * byte_count);
+							dst->data[2] = src->data[0];
+							dst->data[1] = src->data[1];
+							dst->data[0] = src->data[2];
+							dst->data[3] = src->data[3];
                          }
                      }
                 }
             }
 
+            WriteToPPM(img);
+
             return img;
         }
+    private:
+        void WriteToPPM(const Image& img)
+        {
+			std::ofstream file("output.ppm", std::ios::binary);
+			if (!file.is_open()) {
+				std::cerr << "Error: Cannot create PPM file " << std::endl;
+				return;
+			}
 
+			// Write PPM header
+			file << "P6\n";
+			file << img.width << " " << img.height << "\n";
+			file << "255\n";
+
+			for (int32_t y = 0; y < img.height; y++) {
+				for (int32_t x = 0; x < img.width; x++) {
+					auto pixel = reinterpret_cast<R8G8B8A8Unorm*>(img.data + img.pitch * y + x * (img.bitcount >> 3));
+					file.put(pixel->r);
+					file.put(pixel->g);
+					file.put(pixel->b);
+				}
+			}
+
+			file.close();
+        }
     };
 }
 

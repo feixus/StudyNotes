@@ -50,7 +50,7 @@ int My::TestApplication::Initialize()
         BmpParser parser;
         Buffer buf = asset_loader.SyncOpenAndReadText("Textures/icelogo-color.bmp");
         m_Image[0] = parser.Parse(buf);
-        buf = asset_loader.SyncOpenAndReadText("Textures/icelogo-normals.bmp");
+        buf = asset_loader.SyncOpenAndReadText("Textures/icelogo-normal.bmp");
         m_Image[1] = parser.Parse(buf);
     }
 
@@ -100,7 +100,7 @@ void My::TestGraphicsManager::DrawBitmap(const Image image[], int32_t index)
         m_pBitmap,
         dest_rect,
         1.0f,
-        D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
+        D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
         source_rect);
 
    m_pRenderTarget->EndDraw();
