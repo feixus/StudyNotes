@@ -49,48 +49,39 @@ bool My::AssetLoader::FileExists(const char* filePath)
 
 My::AssetLoader::AssetFilePtr My::AssetLoader::OpenFile(const char* name, AssetOpenMode mode)
 {
+    FILE* fp = nullptr;
     std::filesystem::path upPath;
-    std::filesystem::path assetPath;
+    std::filesystem::path fullPath;
 
     for (int32_t i = 0; i < 10; i++) {
-        std::vector<std::string>::iterator src = m_strSeachPaths.begin();
+        auto src = m_strSeachPaths.begin();
         bool looping = true;
 
         while (looping) {
-            assetPath = upPath;
+            fullPath.assign(upPath);
 
             if (src != m_strSeachPaths.end()) {
-                assetPath /= *src;
-                assetPath /= "Asset";
-            } else {
-                assetPath /= "Asset";
+                fullPath /= *src;
+                fullPath /= "Asset";
+            }
+            else {
+                fullPath /= "Asset";
                 looping = false;
             }
 
-            std::filesystem::path fullPath = assetPath / name;
+            fullPath /= name;
 
-            #ifdef DEBUG
-            std::cerr << "Trying to open " << fullPath << std::endl;
-            #endif
+			switch (mode) {
+			    case MY_OPEN_TEXT:
+				    fp = fopen(fullPath.string().c_str(), "r");
+                    break;
+                case MY_OPEN_BINARY:
+                    fp = fopen(fullPath.string().c_str(), "rb");
+				    break;
+			}
 
-			if (std::filesystem::exists(fullPath)) {
-				std::ios_base::openmode openMode = std::ios::in;
-				switch (mode) {
-				case MY_OPEN_TEXT:
-					openMode = std::ios::in;
-					break;
-				case MY_OPEN_BINARY:
-					openMode = std::ios::in | std::ios::binary;
-					break;
-				}
-
-				std::fstream* fileStream = new std::fstream(fullPath, openMode);
-				if (fileStream->is_open()) {
-					return static_cast<AssetFilePtr>(fileStream);
-				}
-				else {
-					delete fileStream;
-				}
+			if (fp) {
+                return (AssetFilePtr)fp;
 			}
         }
 
@@ -103,44 +94,42 @@ My::AssetLoader::AssetFilePtr My::AssetLoader::OpenFile(const char* name, AssetO
 My::Buffer My::AssetLoader::SyncOpenAndReadText(const char* filePath)
 {
     AssetFilePtr fp = OpenFile(filePath, MY_OPEN_TEXT);
-    Buffer* pBuffer = nullptr;
+    Buffer buff;
 
     if (fp) {
         size_t length = GetSize(fp);
 
-        pBuffer = new Buffer(length + 1);
-        auto* fileStream = static_cast<std::ifstream*>(fp);
-        fileStream->read(reinterpret_cast<char*>(pBuffer->m_pData), length);
-        pBuffer->m_pData[length] = '\0';
+        uint8_t* data = new uint8_t[length + 1];
+        length = fread(data, 1, length, static_cast<FILE*>(fp));
+#ifdef DEBUG
+        fprintf(stderr, "Read file '%s', %d bytes\n", filePath, length);
+#endif
+        
+        data[length] = '\0';
+        buff.SetData(data, length + 1);
 
         CloseFile(fp);
     } else {
         fprintf(stderr, "Error opening file %s\n", filePath);
-        pBuffer = new Buffer(0);
     }
 
-#ifdef DEBUG
-    fprintf(stderr, "Read file '%s', %d bytes\n", filePath, length);
-#endif
-
-    return *pBuffer;
+    return buff;
 }
 
 void My::AssetLoader::CloseFile(AssetFilePtr& fp)
 {
-    auto* fileStream = static_cast<std::fstream*>(fp);
-    fileStream->close();
-    delete fileStream;
+    fclose((FILE*)fp);
     fp = nullptr;
 }
 
 size_t My::AssetLoader::GetSize(const AssetFilePtr& fp)
 {
-    auto* fileStream = static_cast<std::ifstream*>(fp);
-    auto currentPos = fileStream->tellg();
-    fileStream->seekg(0, std::ios::end);
-    size_t length = fileStream->tellg();
-    fileStream->seekg(currentPos, std::ios::beg);
+    FILE* _fp = static_cast<FILE*>(fp);
+
+    long pos = ftell(_fp);
+    fseek(_fp, 0, SEEK_END);
+    size_t length = ftell(_fp);
+    fseek(_fp, pos, SEEK_SET);
 
     return length;
 }
@@ -153,7 +142,7 @@ size_t My::AssetLoader::SyncRead(const AssetFilePtr& fp, Buffer& buf)
         return 0;
     }
     auto* fileStream = static_cast<std::ifstream*>(fp);
-    fileStream->read(reinterpret_cast<char*>(buf.m_pData), buf.m_szSize);
+    fileStream->read(reinterpret_cast<char*>(buf.GetData()), buf.GetDataSize());
     size_t sz = fileStream->gcount();
     
     #ifdef DEBUG

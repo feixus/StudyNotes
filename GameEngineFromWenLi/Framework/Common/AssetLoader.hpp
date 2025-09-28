@@ -12,11 +12,11 @@ namespace My
     class AssetLoader : public IRuntimeModule
     {
     public:
+        AssetLoader() = default;
         virtual ~AssetLoader() = default;
 
         virtual int Initialize();
         virtual void Finalize();
-
         virtual void Tick();
 
         using AssetFilePtr = void*;
@@ -51,7 +51,7 @@ namespace My
         {
             std::string result;
             Buffer buffer = SyncOpenAndReadText(fileName);
-            char* content = reinterpret_cast<char*>(buffer.m_pData);
+            char* content = reinterpret_cast<char*>(buffer.GetData());
 
             if (content) {
                 result = std::string(std::move(content));

@@ -70,17 +70,14 @@ void My::TestGraphicsManager::DrawBitmap(const Image image[], int32_t index)
     m_pRenderTarget->BeginDraw();
 
     D2D1_BITMAP_PROPERTIES props;
-    props.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    props.pixelFormat.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     props.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
-    props.dpiX = 72.0f;
-    props.dpiY = 72.0f;
+    props.dpiX = 150.0f;
+    props.dpiY = 150.0f;
     SafeRelease(&m_pBitmap);
-    hr = m_pRenderTarget->CreateBitmap(
-        D2D1::SizeU(image[index].width, image[index].height),
-        image[index].data,
-        image[index].pitch,
-        &props,
-        &m_pBitmap);
+
+	hr = m_pRenderTarget->CreateBitmap(D2D1::SizeU(image[index].width, image[index].height), props, &m_pBitmap);
+    m_pBitmap->CopyFromMemory(nullptr, image[index].data, image[index].pitch);
 
     D2D1_SIZE_F rtSize = m_pRenderTarget->GetSize();
     D2D1_SIZE_F bmpSize = m_pBitmap->GetSize();

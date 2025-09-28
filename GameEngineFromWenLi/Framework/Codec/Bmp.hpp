@@ -39,8 +39,8 @@ namespace My
         {
             Image img;
 
-            BITMAP_FILEHEADER* pFileHeader = reinterpret_cast<BITMAP_FILEHEADER*>(buf.m_pData);
-            BITMAP_HEADER* pBmpHeader = reinterpret_cast<BITMAP_HEADER*>(buf.m_pData + BITMAP_FILEHEADER_SIZE);
+            const BITMAP_FILEHEADER* pFileHeader = reinterpret_cast<const BITMAP_FILEHEADER*>(buf.GetData());
+            const BITMAP_HEADER* pBmpHeader = reinterpret_cast<const BITMAP_HEADER*>(buf.GetData() + BITMAP_FILEHEADER_SIZE);
 
             if (pFileHeader->Signature == 0x4D42 /* 'B''M'*/) {
                 std::cout << "Asset is Windows BMP file" << std::endl;
@@ -66,12 +66,12 @@ namespace My
                 if (img.bitcount < 24) {
                     std::cout << "BMP file is not supported" << std::endl;
                 } else {
-                     uint8_t* pSourceData = buf.m_pData + pFileHeader->BitsOffset;
+                     const uint8_t* pSourceData = buf.GetData() + pFileHeader->BitsOffset;
                      for (int32_t y = img.height - 1; y >= 0; y--) {
                          for (uint32_t x = 0; x < img.width; x++) {
                             auto dst = reinterpret_cast<R8G8B8A8Unorm*>(img.data + img.pitch * (img.height - y - 1) + x * byte_count);
                             auto src = reinterpret_cast<const R8G8B8A8Unorm*>(pSourceData + img.pitch * y + x * byte_count);
-							dst->data[2] = src->data[0];
+                            dst->data[2] = src->data[0];
 							dst->data[1] = src->data[1];
 							dst->data[0] = src->data[2];
 							dst->data[3] = src->data[3];
@@ -99,7 +99,7 @@ namespace My
 			file << "255\n";
 
 			for (int32_t y = 0; y < img.height; y++) {
-				for (int32_t x = 0; x < img.width; x++) {
+				for (uint32_t x = 0; x < img.width; x++) {
 					auto pixel = reinterpret_cast<R8G8B8A8Unorm*>(img.data + img.pitch * y + x * (img.bitcount >> 3));
 					file.put(pixel->r);
 					file.put(pixel->g);
