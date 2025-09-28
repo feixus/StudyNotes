@@ -50,6 +50,7 @@ private:
     float m_FarPlane{500.f};
     float m_OrthographicSize{1};
     float m_AspectRatio{1};
+    int m_JitterIndex{0};
 
     mutable Matrix m_Projection;
     mutable Matrix m_View;

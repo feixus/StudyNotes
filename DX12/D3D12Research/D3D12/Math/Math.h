@@ -153,4 +153,6 @@ namespace Math
 	}
 
     Color MakeFromColorTemperature(float Temp);
+
+    Vector4 GetHalton(int index);
 }

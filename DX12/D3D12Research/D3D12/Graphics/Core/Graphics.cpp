@@ -525,6 +525,48 @@ void Graphics::Update()
 			});
 	}
 
+	// camera velocity
+	RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
+	cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResource& passResources)
+		{
+			renderContext.InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
+			renderContext.SetPipelineState(m_pCameraMotionPSO.get());
+
+			Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
+
+			float inv2Width = 2.0f / m_WindowWidth;
+			float inv2Height = 2.0f / m_WindowHeight;
+
+			// tranform from screen to clip space: texcoord * 2 - 1
+            Matrix premult = {
+                inv2Width, 0, 0, 0,
+                0, -inv2Height, 0, 0,
+                0, 0, 1, 0,
+                -1, 1, 0, 1
+            };
+
+            // transform from clip space to screen space: texcoord * 0.5 + 0.5
+            Matrix postmult = {
+                1 / inv2Width, 0, 0, 0,
+                0, -1 / inv2Height, 0, 0,
+                0, 0, 1, 0,
+                1 / inv2Width, 1 / inv2Height, 0, 1
+            };
+            reprojectionMatrix = premult * reprojectionMatrix * postmult;
+
+			renderContext.SetComputeDynamicConstantBufferView(0, &reprojectionMatrix, sizeof(Matrix));
+
+			renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
+			renderContext.SetDynamicDescriptor(2, 0, GetResolveDepthStencil()->GetSRV());
+
+			int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+			int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+			renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
+		});
+
 	m_pGpuParticles->Simulate(graph, GetResolveDepthStencil(), *m_pCamera);
 
 	if (Tweakables::g_RaytracedAO)
@@ -715,11 +757,41 @@ void Graphics::Update()
 		resolve.Bind([=](CommandContext& context, const RGPassResource& resources)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pHDRRenderTarget.get(), 0, RENDER_TARGET_FORMAT);
-				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+				context.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
+				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pTAASource.get(), 0, RENDER_TARGET_FORMAT);
 			});
 	}
+
+	// temporal resolve
+	RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
+	temporalResolve.Bind([=](CommandContext& context, const RGPassResource& resources)
+		{
+			context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+			context.SetComputeRootSignature(m_pTemporalResolveRS.get());
+			context.SetPipelineState(m_pTemporalResolvePSO.get());
+
+			struct TemporalParameters
+			{
+				Vector2 InvScreenDimensions;
+			} parameters;
+			parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(TemporalParameters));
+
+			context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
+			context.SetDynamicDescriptor(2, 0, m_pVelocity->GetSRV());
+			context.SetDynamicDescriptor(2, 1, m_pPreviousColor->GetSRV());
+			context.SetDynamicDescriptor(2, 2, m_pTAASource->GetSRV());
+
+			int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+			int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+			context.Dispatch(dispatchGroupX, dispatchGroupY);
+
+			context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+		});
 
 	m_pClouds->Render(graph, m_pHDRRenderTarget.get(), GetResolveDepthStencil(), m_pCamera.get(), m_Lights[0]);
 
@@ -1190,6 +1262,8 @@ void Graphics::InitD3D()
 	m_pTonemapTarget = std::make_unique<GraphicsTexture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<GraphicsTexture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<GraphicsTexture>(this, "SSAO Target");
+	m_pVelocity = std::make_unique<GraphicsTexture>(this, "Velocity");
+	m_pTAASource = std::make_unique<GraphicsTexture>(this, "TAA Target");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
@@ -1290,7 +1364,8 @@ void Graphics::OnResize(int width, int height)
 	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
-
+	m_pVelocity->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pTAASource->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pCamera->SetAspectRatio((float)width / height);
@@ -1677,6 +1752,32 @@ void Graphics::InitializePipelines()
 		m_pReduceDepthPSO->Finalize("Reduce Depth PSO");
 	}
 
+	// camera motion
+	{
+		Shader computeShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
+
+		m_pCameraMotionRS = std::make_unique<RootSignature>(this);
+		m_pCameraMotionRS->FinalizeFromShader("Camera Motion RS", computeShader);
+
+		m_pCameraMotionPSO = std::make_unique<PipelineState>(this);
+		m_pCameraMotionPSO->SetComputeShader(computeShader);
+		m_pCameraMotionPSO->SetRootSignature(m_pCameraMotionRS->GetRootSignature());
+		m_pCameraMotionPSO->Finalize("Camera Motion PSO");
+	}
+
+	// temporal resolve
+	{
+		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+
+		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
+		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve RS", computeShader);
+
+		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+		m_pTemporalResolvePSO->SetComputeShader(computeShader);
+		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+		m_pTemporalResolvePSO->Finalize("Temporal Resolve PSO");
+	}
+
 	// mip generation
 	{
 		Shader computeShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
@@ -1850,7 +1951,8 @@ void Graphics::UpdateImGui()
 	}
 	ImGui::PopStyleVar();
 
-	m_pVisualizeTexture = m_pClouds->GetNoiseTexture();
+	// m_pVisualizeTexture = m_pClouds->GetNoiseTexture();
+	m_pVisualizeTexture = m_pVelocity.get();
 	if (m_pVisualizeTexture)
 	{
 		ImGui::Begin("Visualize Texture");

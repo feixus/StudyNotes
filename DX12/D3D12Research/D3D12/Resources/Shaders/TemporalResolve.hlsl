@@ -1,44 +1,36 @@
-struct PSInput
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 3), visibility = SHADER_VISIBILITY_ALL), " \
+                "StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU=TEXTURE_ADDRESS_CLAMP, addressV=TEXTURE_ADDRESS_CLAMP, visibility=SHADER_VISIBILITY_ALL)"
+
+cbuffer Parameters : register(b0)
 {
-    float4 position : SV_Position;
-    float2 texCoord : TEXCOORD0;
+    float2 cInvScreenDimensions;
+}
+
+Texture2D tVelocity : register(t0);
+Texture2D tPreviousColor : register(t1);
+Texture2D tCurrentColor : register(t2);
+RWTexture2D<float4> uInOutColor : register(u0);
+
+SamplerState sDefaultSampler : register(s0);
+
+
+struct CS_INPUT
+{
+    uint3 DispatchThreadId : SV_DispatchThreadID;
 };
 
-Texture2D<float4> tCurrentTexture : register(t0);
-SamplerState sPointSampler : register(s0);
-
-Texture2D tHistoryTexture : register(t1);
-SamplerState sLinearSampler : register(s1);
-
-// vertexID from 0 to 3 in full screen quad
-// | vertexID | position (x, y) | texCoord (x, y) |
-// |----------|-----------------|-----------------|
-// | 0 | (-1, -1) | (0, 1) |
-// | 1 | (-1, 3) | (0, -1) |
-// | 2 | (3, -1) | (2, 1) |
-// | 3 | (3, 3) | (2, -1) |
-PSInput VSMain(uint vertexID : SV_VertexID)
+[RootSignature(RootSig)]
+[numthreads(8, 8, 1)]
+void CSMain(CS_INPUT input)
 {
-    PSInput output;
-    output.position.x = (float)(vertexID / 2) * 4.0f - 1.0f;
-    output.position.y = (float)(vertexID % 2) * 4.0f - 1.0f;
-    output.position.z = 0.0f;
-    output.position.w = 1.0f;
-
-    output.texCoord.x = (float)(vertexID / 2) * 2.0f;
-    output.texCoord.y = 1.0f - (float)(vertexID % 2) * 2.0f;
-
-    return output;
+    float2 texCoord = cInvScreenDimensions * ((float2)input.DispatchThreadId.xy + 0.5f);
+    float4 a = tCurrentColor.SampleLevel(sDefaultSampler, texCoord, 0);
+    float2 v = tVelocity.SampleLevel(sDefaultSampler, texCoord, 0).rg;
+    float4 b = tPreviousColor.SampleLevel(sDefaultSampler, texCoord, 0);
+    uInOutColor[input.DispatchThreadId.xy] = lerp(a, b, 0.95f);
 }
-
-float4 PSMain(PSInput input) : SV_Target
-{
-    float4 currentColor = tCurrentTexture.Sample(sPointSampler, input.texCoord);
-    float4 historyColor = tHistoryTexture.Sample(sLinearSampler, input.texCoord);
-
-    return lerp(historyColor, currentColor, 0.5f);
-}
-
 
 
 

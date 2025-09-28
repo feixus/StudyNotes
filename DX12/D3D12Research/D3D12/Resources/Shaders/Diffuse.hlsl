@@ -163,7 +163,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float4 position, float3 N, fl
 float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
 {
     float3 ssr = 0;
-    const float roughnessThreshold = 0.6f;
+    const float roughnessThreshold = 0.1f;
     bool ssrEnabled = R < roughnessThreshold;
     if (ssrEnabled)
     {
@@ -174,7 +174,7 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
             uint frameIndex = cViewData.FrameIndex;
             float jitter = InterleavedGradientNoise(position.xy, frameIndex) - 1.0f;
 
-            uint maxSteps = cViewData.SsrSamples.x;
+            uint maxSteps = cViewData.SsrSamples;
 
             float3 rayStartVS = positionVS;
             float linearDepth = positionVS.z;
@@ -276,7 +276,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     float3 ssr = 0;
     if (cViewData.SsrSamples > 0)
     {
-        if (cViewData.SsrSamples.x < 32)
+        if (cViewData.SsrSamples < 32)
         {
             ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
         }

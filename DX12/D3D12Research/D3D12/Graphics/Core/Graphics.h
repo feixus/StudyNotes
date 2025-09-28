@@ -202,6 +202,8 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
+	std::unique_ptr<GraphicsTexture> m_pTAASource;
+	std::unique_ptr<GraphicsTexture> m_pVelocity;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ShadowMaps;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
@@ -290,6 +292,14 @@ private:
 	std::unique_ptr<RootSignature> m_pReduceDepthRS;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ReductionTargets;
 	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
+
+	// camera motion
+	std::unique_ptr<PipelineState> m_pCameraMotionPSO;
+	std::unique_ptr<RootSignature> m_pCameraMotionRS;
+
+	// TAA
+	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
+	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
 
 	// sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;
