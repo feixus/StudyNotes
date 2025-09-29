@@ -156,7 +156,7 @@ public:
 	bool IsFenceComplete(uint64_t fenceValue);
 
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
-	GraphicsTexture* GetResolveDepthStencil() const { return m_SampleCount > 1 ? m_pResolveDepthStencil.get() : m_pDepthStencil.get(); }
+	GraphicsTexture* GetResolveDepthStencil() const { return m_pResolveDepthStencil.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
@@ -170,7 +170,7 @@ public:
 	static const uint32_t SHADOW_MAP_SIZE = 4096;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
+	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 private:
@@ -201,7 +201,6 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pTonemapTarget;
 	std::unique_ptr<GraphicsTexture> m_pDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
-	std::unique_ptr<GraphicsTexture> m_pResolvedRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pTAASource;
 	std::unique_ptr<GraphicsTexture> m_pVelocity;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ShadowMaps;
