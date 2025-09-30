@@ -48,4 +48,20 @@ float3 xyY_to_sRGB(float3 xyY)
     return XYZ_to_sRGB(xyY_to_XYZ(xyY));
 }
 
+float3 RGB_to_YCoCg(float3 c)
+{
+    // Y = R/4 + G/2 + B/4
+    // Co = R/2 - B/2
+    // Cg = -R/4 + G/2 - B/4
+    return float3(c.g * 0.5 + (c.r + c.b) * 0.25, (c.r - c.b) * 0.5, c.g * 0.5 - (c.r + c.b) * 0.25);
+}
+
+float3 YCoCg_to_RGB(float3 c)
+{
+    // R = Y + Co - Cg
+    // G = Y + Cg
+    // B = Y - Co - Cg
+    return float3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z);
+}
+
 #endif

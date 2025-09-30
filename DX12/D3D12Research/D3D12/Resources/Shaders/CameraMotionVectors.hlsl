@@ -22,8 +22,10 @@ struct CS_INPUT
 [numthreads(8, 8, 1)]
 void CSMain(CS_INPUT input)
 {
-    float4 uv = float4((input.DispatchThreadID.xy + 0.5f) * cParams.InvScreenSize, 0, 1);
-    uv.z = tDepthTexture.Load(int3(input.DispatchThreadID.xy, 0)).r;
-    float4 prevUv = mul(uv, cParams.ReprojectionMatrix);
-    uVelocity[input.DispatchThreadID.xy] = (uv - prevUv).xy;
+    float2 uv = input.DispatchThreadID.xy + 0.5f;
+    float depth = tDepthTexture[input.DispatchThreadID.xy].r;
+    float4 pos = float4(uv, depth, 1);
+    float4 prevPos = mul(pos, cParams.ReprojectionMatrix);
+    prevPos.xyz /= prevPos.w;
+    uVelocity[input.DispatchThreadID.xy] = (prevPos - pos).xy * cParams.InvScreenSize;
 }

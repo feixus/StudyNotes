@@ -26,10 +26,10 @@ class RTReflections;
 
 struct MaterialData
 {
-	int Diffuse{0};
-	int Normal{0};
-	int Roughness{0};
-	int Metallic{0};
+	int Diffuse{ 0 };
+	int Normal{ 0 };
+	int Roughness{ 0 };
+	int Metallic{ 0 };
 };
 
 struct Batch
@@ -45,26 +45,26 @@ struct ShadowData
 {
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
 	float CascadeDepths[4]{};
-	uint32_t NumCascades{0};
+	uint32_t NumCascades{ 0 };
 };
 
 struct SceneData
 {
-	GraphicsTexture* pDepthBuffer{nullptr};
-	GraphicsTexture* pResolvedDepth{nullptr};
-	GraphicsTexture* pRenderTarget{nullptr};
-	GraphicsTexture* pPreviousColor{nullptr};
-	GraphicsTexture* pAO{nullptr};
-	std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps{nullptr};
+	GraphicsTexture* pDepthBuffer{ nullptr };
+	GraphicsTexture* pResolvedDepth{ nullptr };
+	GraphicsTexture* pRenderTarget{ nullptr };
+	GraphicsTexture* pPreviousColor{ nullptr };
+	GraphicsTexture* pAO{ nullptr };
+	std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps{ nullptr };
 	std::vector<Batch> OpaqueBatches;
 	std::vector<Batch> TransparentBatches;
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
-	Buffer* pLightBuffer{nullptr};
-	Camera* pCamera{nullptr};
-	ShadowData* pShadowData{nullptr};
-	Buffer* pTLAS{nullptr};
-	Mesh* pMesh{nullptr};
-	int FrameIndex{0};
+	Buffer* pLightBuffer{ nullptr };
+	Camera* pCamera{ nullptr };
+	ShadowData* pShadowData{ nullptr };
+	Buffer* pTLAS{ nullptr };
+	Mesh* pMesh{ nullptr };
+	int FrameIndex{ 0 };
 };
 
 enum class RenderPath
@@ -90,10 +90,10 @@ public:
 	void Shutdown();
 
 	void OnResize(int width, int height);
-	
+
 	void WaitForFence(uint64_t fenceValue);
 	void IdleGPU();
-	
+
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
@@ -107,7 +107,7 @@ public:
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
 
-	template<> 
+	template<>
 	struct DescriptorSelector<D3D12_SHADER_RESOURCE_VIEW_DESC>
 	{
 		static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; }
@@ -191,7 +191,7 @@ private:
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
-	int m_Frame{0};
+	int m_Frame{ 0 };
 	std::array<float, 180> m_FrameTimes{};
 
 	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
@@ -224,22 +224,22 @@ private:
 	std::unique_ptr<Camera> m_pCamera;
 	HWND m_pWindow{};
 
-	D3D12_RENDER_PASS_TIER m_RenderPassTier{D3D12_RENDER_PASS_TIER_0};
-	D3D12_RAYTRACING_TIER m_RayTracingTier{D3D12_RAYTRACING_TIER_NOT_SUPPORTED};
-	int m_ShaderModelMajor{-1};
-	int m_ShaderModelMinor{-1};
-	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{D3D12_MESH_SHADER_TIER_NOT_SUPPORTED};
-	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED};
+	D3D12_RENDER_PASS_TIER m_RenderPassTier{ D3D12_RENDER_PASS_TIER_0 };
+	D3D12_RAYTRACING_TIER m_RayTracingTier{ D3D12_RAYTRACING_TIER_NOT_SUPPORTED };
+	int m_ShaderModelMajor{ -1 };
+	int m_ShaderModelMinor{ -1 };
+	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{ D3D12_MESH_SHADER_TIER_NOT_SUPPORTED };
+	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{ D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED };
 
-	int m_SampleCount{1};
+	int m_SampleCount{ 1 };
 
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
 	std::unique_ptr<Buffer> m_pScreenshotBuffer;
-	int32_t m_ScreenshotDelay{-1};
-	int32_t m_ScreenshotRowPitch{0};
+	int32_t m_ScreenshotDelay{ -1 };
+	int32_t m_ScreenshotRowPitch{ 0 };
 
-	uint32_t m_CurrentBackBufferIndex{0};
+	uint32_t m_CurrentBackBufferIndex{ 0 };
 	//std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
@@ -247,10 +247,10 @@ private:
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<Buffer> m_pBLAS;
-    std::unique_ptr<Buffer> m_pTLAS;
-    std::unique_ptr<Buffer> m_pBLASScratch;
-    std::unique_ptr<Buffer> m_pTLASScratch;
-	
+	std::unique_ptr<Buffer> m_pTLAS;
+	std::unique_ptr<Buffer> m_pBLASScratch;
+	std::unique_ptr<Buffer> m_pTLASScratch;
+
 	// shadow mapping
 	std::unique_ptr<RootSignature> m_pShadowRS;
 	std::unique_ptr<PipelineState> m_pShadowPSO;
@@ -292,13 +292,19 @@ private:
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ReductionTargets;
 	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
 
-	// camera motion
-	std::unique_ptr<PipelineState> m_pCameraMotionPSO;
-	std::unique_ptr<RootSignature> m_pCameraMotionRS;
-
 	// TAA
-	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
+	std::map<std::string, std::unique_ptr<PipelineState>> m_pTemporalResolvePSO;
+	std::string m_CurrentTAAPSO;
+	PipelineState* GetTAAPSO()
+	{
+		auto it = m_pTemporalResolvePSO.find(m_CurrentTAAPSO);
+		if (it != m_pTemporalResolvePSO.end())
+		{
+			return it->second.get();
+		}
+		return m_pTemporalResolvePSO.begin()->second.get();
+	}
 
 	// sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;
@@ -317,5 +323,5 @@ private:
 
 	SceneData m_SceneData;
 
-	bool m_CapturePix{false};
+	bool m_CapturePix{ false };
 };

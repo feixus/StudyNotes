@@ -292,7 +292,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     float ao = tAO.Sample(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r; 
     float3 color = lightResults.Diffuse + lightResults.Specular + ssr * ao;
     color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-    color += 0.1f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS, input.position, cViewData.View, tLights[0], 10);
+    color += 0.1f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS, input.position, cViewData.View, tLights[0], 10, cViewData.FrameIndex);
 
     return float4(color, baseColor.a);
 }
