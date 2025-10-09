@@ -555,7 +555,7 @@ void Graphics::Update()
 
 	if (Tweakables::g_RaytracedReflections)
 	{
-		m_pRTReflections->Execute(graph, m_SceneData);
+		m_SceneData.pReflection = m_pRTReflections->Execute(graph, m_SceneData);
 	}
 
 	// shadow mapping

@@ -55,6 +55,7 @@ struct SceneData
 	GraphicsTexture* pRenderTarget{ nullptr };
 	GraphicsTexture* pPreviousColor{ nullptr };
 	GraphicsTexture* pAO{ nullptr };
+	GraphicsTexture* pReflection{ nullptr };
 	std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps{ nullptr };
 	std::vector<Batch> OpaqueBatches;
 	std::vector<Batch> TransparentBatches;

@@ -4,10 +4,11 @@
 RWTexture2D<float4> gOutput : register(u0);
 
 RaytracingAccelerationStructure SceneBVH : register(t0);
-
 Texture2D tDepth : register(t1);
-
 StructuredBuffer<Light> tLights : register(t2);
+ByteAddressBuffer tVertexData : register(t100);
+ByteAddressBuffer tIndexData : register(t101);
+Texture2D tMaterialTextures[] : register(t200);
 
 SamplerState sSceneSampler : register(s0);
 
@@ -20,9 +21,6 @@ struct Vertex
     float3 bitangent;
 };
 
-ByteAddressBuffer tVertexData : register(t100);
-ByteAddressBuffer tIndexData : register(t101);
-
 cbuffer HitData : register(b1)
 {
     int DiffuseIndex;
@@ -31,7 +29,6 @@ cbuffer HitData : register(b1)
     int MetallicIndex;
 }
 
-Texture2D tMaterialTextures[] : register(t200);
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -42,6 +39,11 @@ cbuffer ShaderParameters : register(b0)
 struct RayPayload
 {
     float3 output;
+};
+
+struct ShadowRayPayload
+{
+    uint hit;
 };
 
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
@@ -59,6 +61,11 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex,
 
     sampledNormal = normalize(sampledNormal);
     return mul(sampledNormal, TBN);
+}
+
+float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
+{
+    return ao * diffuse * lightColor;
 }
 
 [shader("closesthit")]
@@ -90,12 +97,47 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
     float roughness = 0.5f;
     float3 specularColor = ComputeF0(0.5f, diffuse, 0);
 
+    ShadowRayPayload payload = (ShadowRayPayload)0;
+
+#if 1
+    RayDesc ray;
+    ray.Origin = wPos - 0.001f * L;
+    ray.Direction = -L;
+    ray.TMin = 0.0f;
+    ray.TMax = 10000;
+
+    // trace the ray
+    TraceRay(
+        SceneBVH,                                                       // Acceleration structure
+        RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE,    // Ray flags
+        0xFF,                                                           // InstanceInclusionMask
+        1,                                                              // RayContributionToHitGroupIndex
+        2,                                                              // MultiplierForGeometryContributionToHitGroupIndex
+        1,                                                              // MissShaderIndex
+        ray,                                                            // Ray
+        payload                                                         // Payload
+    );
+    attenuation *= shadowRay.hit;
+#endif
+
     LightResult result = DefaultLitBxDF(specularColor, roughness, diffuse, N, V, L, attenuation);
     float4 color = light.Color;
     result.Diffuse *= color.rgb * light.Intensity;
     result.Specular *= color.rgb * light.Intensity;
 
-    payload.output = result.Diffuse + result.Specular;
+    payload.output = result.Diffuse + result.Specular + ApplyAmbientLight(diffuse, 1.0f, color.rgb * 0.1f);
+}
+
+[shader("closesthit")]
+void ShadowClosestHit(inout ShadowRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
+{
+    payload.hit = 0;
+}
+
+[shader("miss")]
+void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
+{
+    payload.hit = 1;
 }
 
 [shader("miss")]
@@ -135,7 +177,7 @@ void RayGen()
         RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE,
         0xFF,
         0,
-        1,
+        2,
         0,
         ray,
         payload
