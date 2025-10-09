@@ -757,7 +757,7 @@ void Graphics::Update()
 				context.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				context.SetComputeRootSignature(m_pTemporalResolveRS.get());
-				context.SetPipelineState(GetTAAPSO());
+				context.SetPipelineState(m_pTemporalResolvePSO.get());
 
 				struct TemporalParameters
 				{
@@ -766,26 +766,23 @@ void Graphics::Update()
 					Vector2 Jitter;
 				} parameters;
 
-				float rcpHalfDimX = 2.0f;
-				float rcpHalfDimY = 2.0f;
-
 				Matrix preMult = Matrix(
-					Vector4(rcpHalfDimX, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -rcpHalfDimY, 0.0f, 0.0f),
+					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
 					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
 					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
 				);
 
 				Matrix postMult = Matrix(
-					Vector4(1.0f / rcpHalfDimX, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / rcpHalfDimY, 0.0f, 0.0f),
+					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
 					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / rcpHalfDimX, 1.0f / rcpHalfDimY, 0.0f, 1.0f)
+					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f)
 				);
 				
 				parameters.Reprojection = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
-				parameters.Jitter = m_pCamera->GetJitter();
+				parameters.Jitter = m_pCamera->GetPrevJitter() - m_pCamera->GetJitter();
 				context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(TemporalParameters));
 
 				context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
@@ -1758,27 +1755,18 @@ void Graphics::InitializePipelines()
 		m_pReduceDepthPSO->Finalize("Reduce Depth PSO");
 	}
 
-	// temporal resolve
+	//TAA
 	{
-		const std::vector<std::string> permutations[] = {
-			{"NOTONEMAP", "AABB_ROUNDED", "NEIGHBORHOOD_CLIP", "VELOCITY_CORRECT", "REPROJECT"},
-			{"TONEMAP", "AABB_ROUNDED", "NEIGHBORHOOD_CLIP", "VELOCITY_CORRECT", "REPROJECT"},
-		};
-		
 		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
 		
 		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
 		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve RS", computeShader);
 		
-		for (size_t i = 0; i < std::size(permutations); i++)
-		{
-			Shader permutedShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain", permutations[i]);
-			std::unique_ptr<PipelineState> pTemporalResolvePSO = std::make_unique<PipelineState>(this);
-			pTemporalResolvePSO->SetComputeShader(permutedShader);
-			pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
-			pTemporalResolvePSO->Finalize("Temporal Resolve PSO ");
-			m_pTemporalResolvePSO[permutations[i][0]] = std::move(pTemporalResolvePSO);
-		}
+		
+		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+		m_pTemporalResolvePSO->SetComputeShader(computeShader);
+		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+		m_pTemporalResolvePSO->Finalize("Temporal Resolve PSO ");
 	}
 
 	// mip generation
@@ -2077,38 +2065,6 @@ void Graphics::UpdateImGui()
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
-
-	static int permutation = 0;
-	ImGui::Combo("TAA Permutation", &permutation, [](void* data, int index, const char** outText)
-		{
-			Graphics* pGraphics = (Graphics*)data;
-			int i = 0;
-			for (auto& it : pGraphics->m_pTemporalResolvePSO)
-			{
-				if (i == index)
-				{
-					*outText = it.first.c_str();
-					break;
-				}
-				++i;
-			}
-			return true;
-		}, this, (int)m_pTemporalResolvePSO.size());
-	
-	int i = 0;
-	for (auto& it : m_pTemporalResolvePSO)
-	{
-		if (i++ == permutation)
-		{
-			m_CurrentTAAPSO = it.first.c_str();
-			break;
-		}
-	}
-
-	if (Input::Instance().IsKeyPressed('J'))
-	{
-		permutation = (permutation + 1) % (int)m_pTemporalResolvePSO.size();
-	}
 
 	ImGui::End();
 }

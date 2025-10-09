@@ -294,17 +294,7 @@ private:
 
 	// TAA
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
-	std::map<std::string, std::unique_ptr<PipelineState>> m_pTemporalResolvePSO;
-	std::string m_CurrentTAAPSO;
-	PipelineState* GetTAAPSO()
-	{
-		auto it = m_pTemporalResolvePSO.find(m_CurrentTAAPSO);
-		if (it != m_pTemporalResolvePSO.end())
-		{
-			return it->second.get();
-		}
-		return m_pTemporalResolvePSO.begin()->second.get();
-	}
+	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
 
 	// sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;

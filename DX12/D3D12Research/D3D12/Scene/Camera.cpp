@@ -138,14 +138,14 @@ void Camera::UpdateMatrices() const
         m_Projection = Math::CreateOrthographicMatrix(m_OrthographicSize * m_AspectRatio, m_OrthographicSize, m_NearPlane, m_FarPlane);
     }
 
-#if 0
-	constexpr Math::HaltonSequence<16, 2> x;
-    constexpr Math::HaltonSequence<16, 3> y;
+#if 1
+	constexpr Math::HaltonSequence<8, 2> x;
+    constexpr Math::HaltonSequence<8, 3> y;
 
 	m_Jitter.x = x[m_JitterIndex];
 	m_Jitter.y = y[m_JitterIndex];
-	m_Projection.m[2][0] = (m_Jitter.x * 2 - 1) / 1920;
-	m_Projection.m[2][1] = (m_Jitter.y * 2 - 1) / 1080;
+	m_Projection.m[2][0] += (m_Jitter.x * 2 - 1) / 1920;
+	m_Projection.m[2][1] += (m_Jitter.y * 2 - 1) / 1080;
 #endif
 
     m_Projection.Invert(m_ProjectionInverse);
