@@ -782,7 +782,8 @@ void Graphics::Update()
 				
 				parameters.Reprojection = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
-				parameters.Jitter = m_pCamera->GetPrevJitter() - m_pCamera->GetJitter();
+				parameters.Jitter.x = m_pCamera->GetPrevJitter().x - m_pCamera->GetJitter().x;
+				parameters.Jitter.y = -(m_pCamera->GetPrevJitter().y - m_pCamera->GetJitter().y);
 				context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(TemporalParameters));
 
 				context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());

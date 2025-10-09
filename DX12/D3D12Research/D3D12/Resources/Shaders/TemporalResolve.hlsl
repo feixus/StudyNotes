@@ -73,7 +73,7 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
     float4 pos = float4(texCoord, depth, 1);
     float4 prevPos = mul(pos, cParameters.Reprojection);
     prevPos.xyz /= prevPos.w;
-    velocity = (prevPos - pos).xy;
+    velocity = (prevPos - pos).xy - cParameters.Jitter * cParameters.InvScreenDimensions;
 #endif
     float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, texCoord + velocity);
 

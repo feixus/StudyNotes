@@ -36,7 +36,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	};
 
 	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
-	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32_t), BufferFlag::ShaderResource));
+	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32_t), BufferFlag::ShaderResource | BufferFlag::ByteAddress));
 
 	uint32_t dataOffset = 0;
 	for (uint32_t i = 0; i < pScene->mNumMeshes; i++)
