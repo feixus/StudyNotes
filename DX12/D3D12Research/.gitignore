@@ -10,3 +10,4 @@ Build
 *.pdb
 imgui.ini
 _Temp/
+Screenshot*
