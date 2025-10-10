@@ -63,6 +63,7 @@ project (ENGINE_NAME)
         SOURCE_DIR .. "**.inl",
         SOURCE_DIR .. "**.c",
         SOURCE_DIR .. "**.natvis",
+        SOURCE_DIR .. "**.editorconfig",
 		--SOURCE_DIR .. "**.hlsl*",
     }
 	

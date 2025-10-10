@@ -63,10 +63,12 @@ namespace Tweakables
 	bool g_VisualizeLightDensity = false;
 
 	bool g_TAA = true;
+	bool g_TestTAA = true;
 
 	float g_SunInclination = 0.2f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5000.0f;
+	float g_SunIntensity = 10.0f;
 
 	int g_SsrSamples = 16;
 
@@ -118,6 +120,7 @@ void Graphics::Update()
 	float sinphi = sinf(Tweakables::g_SunInclination * Math::PIDIV2);
 	m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
 	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
+	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
 
 	std::sort(m_SceneData.TransparentBatches.begin(), m_SceneData.TransparentBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
@@ -757,7 +760,7 @@ void Graphics::Update()
 				context.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				context.SetComputeRootSignature(m_pTemporalResolveRS.get());
-				context.SetPipelineState(m_pTemporalResolvePSO.get());
+				context.SetPipelineState(Tweakables::g_TestTAA ? m_pTemporalResolveTestPSO.get() : m_pTemporalResolvePSO.get());
 
 				struct TemporalParameters
 				{
@@ -1758,16 +1761,25 @@ void Graphics::InitializePipelines()
 
 	//TAA
 	{
-		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
-		
-		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
-		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve RS", computeShader);
-		
-		
-		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
-		m_pTemporalResolvePSO->SetComputeShader(computeShader);
-		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
-		m_pTemporalResolvePSO->Finalize("Temporal Resolve PSO ");
+		{
+			Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+			
+			m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
+			m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve RS", computeShader);
+						
+			m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+			m_pTemporalResolvePSO->SetComputeShader(computeShader);
+			m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+			m_pTemporalResolvePSO->Finalize("Temporal Resolve PSO ");
+		}
+
+		{
+			Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain", { "TAA_TEST" });
+			
+			m_pTemporalResolveTestPSO = std::make_unique<PipelineState>(*m_pTemporalResolvePSO);
+			m_pTemporalResolveTestPSO->SetComputeShader(computeShader);
+			m_pTemporalResolveTestPSO->Finalize("Temporal Resolve Test PSO ");
+		}
 	}
 
 	// mip generation
@@ -2012,6 +2024,7 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
 	ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0.001f, 1);
 	ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
+	ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
 
 	ImGui::Text("Shadows");
 	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
@@ -2066,6 +2079,7 @@ void Graphics::UpdateImGui()
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
+	ImGui::Checkbox("Test TAA", &Tweakables::g_TestTAA);
 
 	ImGui::End();
 }

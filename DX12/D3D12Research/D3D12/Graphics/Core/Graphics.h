@@ -296,6 +296,7 @@ private:
 	// TAA
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
 	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
+	std::unique_ptr<PipelineState> m_pTemporalResolveTestPSO;
 
 	// sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;
