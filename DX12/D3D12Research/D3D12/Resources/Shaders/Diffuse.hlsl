@@ -36,7 +36,8 @@ struct PerViewData
     float FarZ;
     int FrameIndex;
     int SsrSamples;
-    int2 padd;
+    int LightCount;
+    int padd;
 #if CLUSTERED_FORWARD
     int4 ClusterDimensions;
     int2 ClusterSize;
@@ -93,13 +94,19 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
     uint clusterIndex1D = clusterIndex3D.x + cViewData.ClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cViewData.ClusterDimensions.y);
     uint startOffset = tLightGrid[clusterIndex1D].x;
     uint lightCount = tLightGrid[clusterIndex1D].y; // lightCount = 0 means no light in this cluster
+#else
+    uint lightCount = cViewData.LightCount;
 #endif
 
     LightResult totalResult = (LightResult)0;
 
     for (uint i = 0; i < lightCount; i++)
     {
+#if TILED_FORWARD || CLUSTERED_FORWARD
         uint lightIndex = tLightIndexList[startOffset + i];
+#else 
+        uint lightIndex = i;
+#endif
         Light light = tLights[lightIndex];
 
         LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, N, V);
@@ -292,7 +299,15 @@ float4 PSMain(PSInput input) : SV_TARGET
     float ao = tAO.Sample(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r; 
     float3 color = lightResults.Diffuse + lightResults.Specular + ssr * ao;
     color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-    color += 0.1f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS, input.position, cViewData.View, tLights[0], 10, cViewData.FrameIndex);
+
+    for (int i = 0; i < cViewData.LightCount; ++i)
+    {
+        Light l = tLights[i];
+        if (l.VolumetricLighting)
+        {
+            color += 0.3f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS, input.position, cViewData.View, l, 16, cViewData.FrameIndex);
+        }
+    }
 
     return float4(color, baseColor.a);
 }

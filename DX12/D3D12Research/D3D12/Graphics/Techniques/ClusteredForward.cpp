@@ -264,7 +264,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 				float FarZ;
                 int FrameIndex;
                 int SsrSamples;
-                IntVector2 padd;
+                int LightCount;
+				int padd;
 				IntVector3 ClusterDimensions;
                 int pad;
 				IntVector2 ClusterSize;
@@ -283,6 +284,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 			frameData.LightGridParams = lightGridParams;
             frameData.FrameIndex = inputResource.FrameIndex;
             frameData.SsrSamples = Tweakables::g_SsrSamples;
+			frameData.LightCount = inputResource.pLightBuffer->GetDesc().ElementCount;
 
             Matrix reprojectionMatrix = inputResource.pCamera->GetViewProjection().Invert() * inputResource.pCamera->GetPreviousViewProjection();
             // tranform from uv to clip space: texcoord * 2 - 1

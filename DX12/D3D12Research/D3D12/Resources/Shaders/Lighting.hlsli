@@ -195,6 +195,11 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
     }
 
     float3 L = normalize(light.Position - wPos);
+    if (light.Type == LIGHT_DIRECTIONAL)
+    {
+        L = -light.Direction;
+    }
+
     result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 
     float4 color = light.GetColor();
@@ -205,39 +210,47 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 }
 
 // volumetric scattering - Henyey-Greenstein phase function
-#define G_SCATTERING 0.0001f
-float ComputeScattering(float LoV)
+// https://pbr-book.org/3ed-2018/Volume_Scattering/Phase_Functions
+float HenyeyGreestein(float LoV)
 {
-    float result = 1.0f - G_SCATTERING * G_SCATTERING;
-    result /= (4.0f * PI * pow(1.0f + G_SCATTERING * G_SCATTERING - (2.0f * G_SCATTERING) * LoV, 1.5f));
+    const float G = 0.1f;   // asymmetry parameter, [-1, 1]
+    float result = 1.0f - G * G;
+    result /= (4.0f * PI * pow(1.0f + G * G - (2.0f * G) * LoV, 1.5f));
     return result;
 }
 
-float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float4 pos, float4x4 view, Light light, int samples, int frame)
+float3 ApplyVolumetricLighting(float3 startPoint, float3 endPoint, float4 pos, float4x4 view, Light light, int samples, int frame)
 {
-    const float fogValue = 0.3f;
-    float3 rayVector = cameraPos - worldPos;
+    float3 rayVector = startPoint - endPoint;
+    float3 ray = normalize(rayVector);
     float3 rayStep = rayVector / samples;
-    float3 accumFog = 0.0f.xxx;
-    float3 currentPosition = worldPos;
+    float3 currentPosition = startPoint;
+    float3 accumFog = 0;
 
     float ditherValue = InterleavedGradientNoise(pos.xy, frame);
     currentPosition += rayStep * ditherValue;
 
     for (int i = 0; i < samples; i++)
     {
-        float visibility = 1.0f;
-        if (light.ShadowIndex >= 0)
+        float attenuation = GetAttenuation(light, currentPosition);
+        if (attenuation > 0)
         {
-            int shadowMapIndex = GetShadowIndex(light, pos, currentPosition);
-            float4x4 lightViewProjection = cLightViewProjection[shadowMapIndex];
-            float4 lightPos = mul(float4(currentPosition, 1.0f), lightViewProjection);
-            lightPos.xyz /= lightPos.w;
-            lightPos.xy = lightPos.xy * float2(0.5f, -0.5f) + 0.5f;
-            visibility = tShadowMapTextures[shadowMapIndex].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+            float visibility = 1.0f;
+            if (light.ShadowIndex >= 0)
+            {
+                int shadowMapIndex = GetShadowIndex(light, pos, currentPosition);
+                float4x4 lightViewProjection = cLightViewProjection[shadowMapIndex];
+                float4 lightPos = mul(float4(currentPosition, 1.0f), lightViewProjection);
+
+                lightPos.xyz /= lightPos.w;
+                lightPos.xy = lightPos.xy * float2(0.5f, -0.5f) + 0.5f;
+                visibility = tShadowMapTextures[shadowMapIndex].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+            }
+
+            float phase = saturate(HenyeyGreestein(dot(ray, light.Direction)));
+            accumFog += attenuation * visibility * phase * light.GetColor().rgb * light.Intensity;
         }
 
-        accumFog += visibility * fogValue * ComputeScattering(dot(rayVector, light.Direction)).xxx * light.GetColor().rgb * light.Intensity;
         currentPosition += rayStep;
     }
     accumFog /= samples;

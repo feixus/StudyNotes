@@ -68,7 +68,7 @@ namespace Tweakables
 	float g_SunInclination = 0.2f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5000.0f;
-	float g_SunIntensity = 10.0f;
+	float g_SunIntensity = 3.0f;
 
 	int g_SsrSamples = 16;
 
@@ -302,7 +302,7 @@ void Graphics::Update()
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = Math::CreatePerspectiveMatrix(2 * acos(light.UmbraAngle * Math::ToRadians), 1.0f, light.Range, 1.0f);
+			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngle * Math::ToRadians, 1.0f, light.Range, 1.0f);
 			shadowData.LightViewProjections[shadowIndex++] = Math::CreateLookToMatrix(light.Position, light.Direction, Vector3::Up) * projection;
 		}
 		else if (light.Type == LightType::Point)
@@ -334,9 +334,9 @@ void Graphics::Update()
 		}
 	}
 
-	if (shadowIndex >= m_ShadowMaps.size())
+	if (shadowIndex > m_ShadowMaps.size())
 	{
-		m_ShadowMaps.resize(shadowIndex + 1);
+		m_ShadowMaps.resize(shadowIndex);
 		int i = 0;
 		for (auto& pShadowMap : m_ShadowMaps)
 		{
@@ -1584,7 +1584,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	GenerateAccelerationStructure(m_pMesh.get(), context);
 
 	{
-		int lightCount = 3;
+		int lightCount = 5;
 		m_Lights.resize(lightCount);
 
 		Vector3 position(-150, 160, -10);
@@ -1593,12 +1593,23 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 		m_Lights[0] = Light::Directional(position, -direction, 10.0f);
 		m_Lights[0].CastShadows = true;
+		m_Lights[0].VolumetricLighting = true;
 
-		m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
+		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 		m_Lights[1].CastShadows = true;
+		m_Lights[1].VolumetricLighting = true;
 
-		m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
+		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 		m_Lights[2].CastShadows = true;
+		m_Lights[2].VolumetricLighting = true;
+
+		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[3].CastShadows = true;
+		m_Lights[3].VolumetricLighting = true;
+
+		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[4].CastShadows = true;
+		m_Lights[4].VolumetricLighting = true;
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
@@ -1829,6 +1840,8 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(180.0f);
 	ImGui::Text("%dx MSAA", m_SampleCount);
 	ImGui::PlotLines("##", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
+
+	ImGui::Text("Camera: [%f, %f, %f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
