@@ -1,6 +1,9 @@
 #include "Tonemap/TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
+#define COLOR_SPACE_RGB 0
+#define COLOR_SPACE_YCOCG 1
+
 #define HISTORY_REJECT_NONE 0
 #define HISTORY_REJECT_CLAMP 1
 #define HISTORY_REJECT_CLIP 2
@@ -11,6 +14,11 @@
 #define MIN_BLEND_FACTOR 0.05f
 #define MAX_BLEND_FACTOR 0.12f
 
+#ifndef TAA_TEST
+#define TAA_TEST 0
+#endif
+
+#define TAA_COLOR_SPACE             COLOR_SPACE_YCOCG
 #define TAA_HISTORY_REJECT_METHOD   HISTORY_REJECT_CLIP             // use neighborhood clipping to reject history samples
 #define TAA_RESOLVE_METHOD          HISTORY_RESOLVE_CATMULL_ROM     // history resolve filter
 #define TAA_REPROJECT               1                               // use per pixel velocity to reproject previous frame
@@ -19,6 +27,7 @@
 #define TAA_VELOCITY_CORRECT        0                               // reduce blend factor when the subpixel motion is high to reduce blur under motion
 #define TAA_DEBUG_RED_HISTORY       0
 #define TAA_LUMINANCE_WEIGHT        0
+#define TAA_DILATE_VELOCITY         0                           
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
@@ -28,7 +37,6 @@
 
 struct ShaderParameters
 {
-    float4x4 Reprojection;
     float2 InvScreenDimensions;
     float2 Jitter;
 };
@@ -44,6 +52,28 @@ RWTexture2D<float4> uInOutColor : register(u0);
 
 SamplerState sPointSampler : register(s0);
 SamplerState sLinearSampler : register(s1);
+
+float3 TransformColor(float3 color)
+{
+#if TAA_COLOR_SPACE == COLOR_SPACE_RGB
+    return color;
+#elif TAA_COLOR_SPACE == COLOR_SPACE_YCOCG
+    return RGB_to_YCoCg(color);
+#else
+    #error No color space defined
+#endif
+}
+
+float3 ResolveColor(float3 color)
+{
+#if TAA_COLOR_SPACE == COLOR_SPACE_RGB
+    return color;
+#elif TAA_COLOR_SPACE == COLOR_SPACE_YCOCG
+    return YCoCg_to_RGB(color);
+#else
+    #error No color space defined
+#endif
+}
 
 // temporal reprojection in inside
 float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
@@ -67,7 +97,7 @@ float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
 
 float3 SampleColor(Texture2D texture, SamplerState textureSampler, float2 uv)
 {
-    return texture.SampleLevel(textureSampler, uv, 0).rgb;
+    return TransformColor(texture.SampleLevel(textureSampler, uv, 0).rgb);
 }
 
 // samples a texture with Catmull-Rom filtering, using 9 texture fetches instead of 16
@@ -115,7 +145,7 @@ float4 SampleTextureCatmullRom(in Texture2D tex, in SamplerState textureSampler,
     result += tex.SampleLevel(textureSampler, float2(texPos12.x, texPos3.y), 0.0f) * w12.x * w3.y;
     result += tex.SampleLevel(textureSampler, float2(texPos3.x, texPos3.y), 0.0f) * w3.x * w3.y;
 
-    return result;
+    return float4(TransformColor(result.rgb), result.a);
 }
 
 [RootSignature(RootSig)]
@@ -157,24 +187,53 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 #endif
 #endif
 
-    float2 historyUV = texCoord;
+    float2 uvReproj = texCoord;
+
 #if TAA_REPROJECT
-    float depth = tDepth.SampleLevel(sPointSampler, texCoord, 0).r;
-    float4 pos = float4(texCoord, depth, 1);
-    float4 prevPos = mul(pos, cParameters.Reprojection);
-    prevPos.xyz /= prevPos.w;
-    historyUV += (prevPos - pos).xy - cParameters.Jitter * dxdy;
+    float depth = tDepth.SampleLevel(sPointSampler, uvReproj, 0).r;
+
+#if TAA_DILATE_VELOCITY
+    const float crossDilation = 2;
+    float4 crossDepths;
+    crossDepths.x = tDepth.SampleLevel(sPointSampler, uvReproj + dxdy * float2(-crossDilation, -crossDilation), 0).r;
+    crossDepths.y = tDepth.SampleLevel(sPointSampler, uvReproj + dxdy * float2( crossDilation, -crossDilation), 0).r;
+    crossDepths.z = tDepth.SampleLevel(sPointSampler, uvReproj + dxdy * float2(-crossDilation,  crossDilation), 0).r;
+    crossDepths.w = tDepth.SampleLevel(sPointSampler, uvReproj + dxdy * float2( crossDilation,  crossDilation), 0).r;
+    if (crossDepths.x > depth)
+    {
+        depth = crossDepths.x;
+        uvReproj = texCoord + dxdy * float2(-crossDilation, -crossDilation);
+    }
+    if (crossDepths.y > depth)
+    {
+        depth = crossDepths.y;
+        uvReproj = texCoord + dxdy * float2(crossDilation, -crossDilation);
+    }
+    if (crossDepths.z > depth)
+    {
+        depth = crossDepths.z;
+        uvReproj = texCoord + dxdy * float2(-crossDilation, crossDilation);
+    }
+    if (crossDepths.w > depth)
+    {
+        depth = crossDepths.w;
+        uvReproj = texCoord + dxdy * float2(crossDilation, crossDilation);
+    }
+#endif
+
+    float2 velocity = tVelocity.SampleLevel(sPointSampler, uvReproj, 0).xy;
+    uvReproj = texCoord + velocity;
 #endif
 
 #if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM    //Karis Siggraph 2014 - Shaped neighborhood clamp by averaging 2 neighborhoods
     // catmull rom filter to avoid blurry result from bilinear filter
-    float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, historyUV, dimensions).rgb;
+    float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, uvReproj, dimensions).rgb;
 #elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
-    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, historyUV);
+    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, uvReproj);
 #endif
 
 #if TAA_DEBUG_RED_HISTORY
-    prevColor = float3(1, 0, 0);
+    prevColor = TransformColor(float3(1, 0, 0));
 #endif
 
 #if TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLAMP
@@ -186,13 +245,19 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
     float blendFactor = MIN_BLEND_FACTOR;
 
 #if defined(TAA_VELOCITY_CORRECT)
-    float subpixelCorrection = frac(max(abs(historyUV.x) * dimensions.x, abs(historyUV.y) * dimensions.y)) * 0.5f;
+    float subpixelCorrection = frac(max(abs(uvReproj.x) * dimensions.x, abs(uvReproj.y) * dimensions.y)) * 0.5f;
     blendFactor = saturate(lerp(blendFactor, 0.8f, subpixelCorrection));
 #endif
 
 #if TAA_LUMINANCE_WEIGHT    // feedback weight from unbiased luminance diff (TLottes)
-    float lum0 = GetLuminance(currColor);
-    float lum1 = GetLuminance(prevColor);
+    #if TAA_COLOR_SPACE == COLOR_SPACE_RGB
+        float lum0 = GetLuminance(currColor);
+        float lum1 = GetLuminance(prevColor);
+    #else
+        float lum0 = currColor.x;
+        float lum1 = prevColor.x;
+    #endif
+
     float unbiased_diff = abs(lum0 - lum1) / max(lum0, max(lum1, 0.2));
     float unbiased_weight = unbiased_diff;
     float unbiased_weight_sqr = unbiased_weight * unbiased_weight;
@@ -209,6 +274,8 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 #if TAA_TONEMAP
     currColor = InverseReinhard(currColor);
 #endif
+
+    currColor = ResolveColor(currColor);
 
     uInOutColor[pixelIndex] = float4(currColor, 1);
 }

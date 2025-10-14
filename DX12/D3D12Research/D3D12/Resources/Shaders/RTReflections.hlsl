@@ -115,7 +115,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
     float2 texCoord = v0.texCoord * b.x + v1.texCoord * b.y + v2.texCoord * b.z;
 
     float3 N = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;
-    float3 T = vo.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z;
+    float3 T = v0.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z;
     float3 B = v0.bitangent * b.x + v1.bitangent * b.y + v2.bitangent * b.z;
     float3x3 TBN = float3x3(T, B, N);
 

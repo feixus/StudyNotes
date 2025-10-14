@@ -74,6 +74,8 @@ public:
 private:
 	HWND MakeWindow(HINSTANCE hInstance)
 	{
+		::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+
 		WNDCLASSEX wc{};
 
 		wc.cbSize = sizeof(WNDCLASSEX);

@@ -112,6 +112,20 @@ void Graphics::Update()
 
 	PROFILE_BEGIN("UpdateGameState");
 
+	/*Vector3 pos = m_pCamera->GetPosition();
+	pos.z = 0;
+	pos.y = 50;
+	pos.x = 60 * sin(Time::TotalTime());
+	m_pCamera->SetPosition(pos);
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV2, 0, 0));*/
+#if 1
+	Vector3 pos = m_pCamera->GetPosition();
+	pos.x = 48;
+	pos.y = sin(5 * Time::TotalTime()) * 4 + 84;
+	pos.x = -2.6f;
+	m_pCamera->SetPosition(pos);
+#endif
+
 	m_pCamera->Update();
 
 	float costheta = cosf(Tweakables::g_SunOrientation);
@@ -148,13 +162,6 @@ void Graphics::Update()
 	{
 		Tweakables::g_EnableUI = !Tweakables::g_EnableUI;
 	}
-
-	/*Vector3 pos = m_pCamera->GetPosition();
-	pos.z = 0;
-	pos.y = 50;
-	pos.x = 60 * sin(Time::TotalTime());
-	m_pCamera->SetPosition(pos);
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV2, 0, 0));*/
 
 	// shadow map partitioning
 	//////////////////////////////////
@@ -545,6 +552,52 @@ void Graphics::Update()
 			});
 	}
 
+	// camera velocity
+	if (Tweakables::g_TAA)
+	{
+		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
+		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+			{
+				renderContext.InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
+				renderContext.SetPipelineState(m_pCameraMotionPSO.get());
+
+				struct Parameters
+				{
+					Matrix ReprojectionMatrix;
+					Vector2 InvScreenDimensions;
+				} parameters;
+
+				Matrix preMult = Matrix(
+					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
+				);
+
+				Matrix postMult = Matrix(
+					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f)
+				);
+
+				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
+				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+
+				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+
+				renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, GetResolveDepthStencil()->GetSRV());
+
+				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+				renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
+			});
+	}
+
 	m_pGpuParticles->Simulate(graph, GetResolveDepthStencil(), *m_pCamera);
 
 	if (Tweakables::g_RaytracedAO)
@@ -764,26 +817,10 @@ void Graphics::Update()
 
 				struct TemporalParameters
 				{
-					Matrix Reprojection;
 					Vector2 InvScreenDimensions;
 					Vector2 Jitter;
 				} parameters;
 
-				Matrix preMult = Matrix(
-					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
-				);
-
-				Matrix postMult = Matrix(
-					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f)
-				);
-				
-				parameters.Reprojection = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 				parameters.Jitter.x = m_pCamera->GetPrevJitter().x - m_pCamera->GetJitter().x;
 				parameters.Jitter.y = -(m_pCamera->GetPrevJitter().y - m_pCamera->GetJitter().y);
@@ -1715,6 +1752,19 @@ void Graphics::InitializePipelines()
 		m_pAverageLuminancePSO->SetComputeShader(computeShader);
 		m_pAverageLuminancePSO->SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
 		m_pAverageLuminancePSO->Finalize("Average Luminance PSO");
+	}
+
+	// camera motion
+	{
+		Shader computeShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
+
+		m_pCameraMotionRS = std::make_unique<RootSignature>(this);
+		m_pCameraMotionRS->FinalizeFromShader("Camera Motion RS", computeShader);
+
+		m_pCameraMotionPSO = std::make_unique<PipelineState>(this);
+		m_pCameraMotionPSO->SetComputeShader(computeShader);
+		m_pCameraMotionPSO->SetRootSignature(m_pCameraMotionRS->GetRootSignature());
+		m_pCameraMotionPSO->Finalize("Camera Motion PSO");
 	}
 
 	// tonemapping
