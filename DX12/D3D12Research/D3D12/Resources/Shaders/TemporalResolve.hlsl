@@ -1,15 +1,16 @@
 #include "Tonemap/TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
-#define COLOR_SPACE_RGB 0
-#define COLOR_SPACE_YCOCG 1
+#define HISTORY_REJECT_NONE             0
+#define HISTORY_REJECT_CLAMP            1
+#define HISTORY_REJECT_CLIP             2   // [Karis14]
+#define HISTORY_REJECT_VARIANCE_CLIP    3   // [Salvi16]
 
-#define HISTORY_REJECT_NONE 0
-#define HISTORY_REJECT_CLAMP 1
-#define HISTORY_REJECT_CLIP 2
+#define HISTORY_RESOLVE_BILINEAR        0
+#define HISTORY_RESOLVE_CATMULL_ROM     1
 
-#define HISTORY_RESOLVE_BILINEAR 0
-#define HISTORY_RESOLVE_CATMULL_ROM 1
+#define COLOR_SPACE_RGB         0
+#define COLOR_SPACE_YCOCG       1   // [Karis14]
 
 #define MIN_BLEND_FACTOR 0.05f
 #define MAX_BLEND_FACTOR 0.12f
@@ -172,18 +173,31 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
     float3 lb = SampleColor(tCurrentColor, sPointSampler, texCoord + dxdy * float2(-1, 1));
     float3 cb = SampleColor(tCurrentColor, sPointSampler, texCoord + dxdy * float2(0, 1));
     float3 rb = SampleColor(tCurrentColor, sPointSampler, texCoord + dxdy * float2(1, 1));
+
+#if TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLAMP || TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLIP
     float3 aabb_min = min(min(min(lt, ct), min(rt, lc)), min(min(cc, rc), min(lb, min(cb, rb))));
     float3 aabb_max = max(max(max(lt, ct), max(rt, lc)), max(max(cc, rc), max(lb, max(cb, rb))));
     float3 aabb_avg = (lt + ct + rt + lc + cc + rc + lb + cb + rb) / 9.0f;
 
-#if TAA_AABB_ROUNDED //Karis Siggraph 2014 - Shaped neighborhood clamp by averaging 2 neighborhoods
-    // average 3x3 neighborhood with 5 sample plus pattern neighborhood to remove 'filtered' look
-    float3 aabb_min2 = min(min(min(min(lc, cc), ct), rc), cb);
-    float3 aabb_max2 = max(max(max(max(lc, cc), ct), rc), cb);
-    float3 aabb_avg2 = (lc + cc + ct + rc + cb) / 5.0f;
-    aabb_min = (aabb_min + aabb_min2) * 0.5f;
-    aabb_max = (aabb_max + aabb_max2) * 0.5f;
-    aabb_avg = (aabb_avg + aabb_avg2) * 0.5f;
+    #if TAA_AABB_ROUNDED
+        // [Karis14] average 3x3 neighborhood with 5 sample plus pattern neighborhood to remove 'filtered' look
+        float3 aabb_min2 = min(min(min(min(lc, cc), ct), rc), cb);
+        float3 aabb_max2 = max(max(max(max(lc, cc), ct), rc), cb);
+        float3 aabb_avg2 = (lc + cc + ct + rc + cb) / 5.0f;
+        aabb_min = (aabb_min + aabb_min2) * 0.5f;
+        aabb_max = (aabb_max + aabb_max2) * 0.5f;
+        aabb_avg = (aabb_avg + aabb_avg2) * 0.5f;
+    #endif
+
+#elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_VARIANCE_CLIP
+    // [Salvi16] - use first and second moment to clip history color
+    float3 mean = (lt + ct + rt + lc + cc + rc + lb + cb + rb) / 9.0f;
+    float3 mean2 = (Square(lt) + Square(ct) + Square(rt) + Square(lc) + Square(cc) + Square(rc) + Square(lb) + Square(cb) + Square(rb)) / 9.0f;
+    float3 sigma = sqrt(mean2 - Square(mean));
+    const float gamma = 1.0f;
+    float3 aabb_min = mean - gamma * sigma;
+    float3 aabb_max = mean + gamma * sigma;
+    float3 aabb_avg = mean;
 #endif
 #endif
 
@@ -193,6 +207,7 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
     float depth = tDepth.SampleLevel(sPointSampler, uvReproj, 0).r;
 
 #if TAA_DILATE_VELOCITY
+    // [Karis14] - use closest pixel to move edge along
     const float crossDilation = 2;
     float4 crossDepths;
     crossDepths.x = tDepth.SampleLevel(sPointSampler, uvReproj + dxdy * float2(-crossDilation, -crossDilation), 0).r;
@@ -225,8 +240,8 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
     uvReproj = texCoord + velocity;
 #endif
 
-#if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM    //Karis Siggraph 2014 - Shaped neighborhood clamp by averaging 2 neighborhoods
-    // catmull rom filter to avoid blurry result from bilinear filter
+#if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM
+    // [Karis14] catmull-rom cubic filter to avoid blurry result from bilinear filter
     float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, uvReproj, dimensions).rgb;
 #elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
     float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, uvReproj);
@@ -240,16 +255,20 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
     prevColor = clamp(prevColor, aabb_min, aabb_max);
 #elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLIP    //Karis Siggraph 2014 - Clip instead of clamp
     prevColor = ClipAABB(aabb_min, aabb_max, float4(aabb_avg, 1), float4(prevColor, 1)).xyz;
+#elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_VARIANCE_CLIP
+    prevColor = ClipAABB(aabb_min, aabb_max, float4(aabb_avg, 1), float4(prevColor, 1)).xyz;
 #endif
 
     float blendFactor = MIN_BLEND_FACTOR;
 
 #if defined(TAA_VELOCITY_CORRECT)
-    float subpixelCorrection = frac(max(abs(uvReproj.x) * dimensions.x, abs(uvReproj.y) * dimensions.y)) * 0.5f;
+    // [Xu16] reduce blend factor when the motion is more subpixel
+    float subpixelCorrection = frac(max(abs(velocity.x) * dimensions.x, abs(velocity.y) * dimensions.y)) * 0.5f;
     blendFactor = saturate(lerp(blendFactor, 0.8f, subpixelCorrection));
 #endif
 
-#if TAA_LUMINANCE_WEIGHT    // feedback weight from unbiased luminance diff (TLottes)
+#if TAA_LUMINANCE_WEIGHT    
+    // [Lottes] feedback weight from unbiased luminance diff
     #if TAA_COLOR_SPACE == COLOR_SPACE_RGB
         float lum0 = GetLuminance(currColor);
         float lum1 = GetLuminance(prevColor);
@@ -261,7 +280,7 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
     float unbiased_diff = abs(lum0 - lum1) / max(lum0, max(lum1, 0.2));
     float unbiased_weight = unbiased_diff;
     float unbiased_weight_sqr = unbiased_weight * unbiased_weight;
-    blendFactor = lerp(MIN_BLEND_FACTOR, MAX_BLEND_FACTOR, blendFactor);
+    blendFactor = lerp(MIN_BLEND_FACTOR, MAX_BLEND_FACTOR, unbiased_weight_sqr);
 #endif
 
 #if TAA_TONEMAP

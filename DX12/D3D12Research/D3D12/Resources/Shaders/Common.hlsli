@@ -256,6 +256,16 @@ float Square(float x)
 	return x * x;
 }
 
+float2 Square(float2 x)
+{
+	return x * x;
+}
+
+float3 Square(float3 x)
+{
+	return x * x;
+}
+
 // follow IEC 61966-2-1 sRGB standard
 float SrgbToLinear(float y)
 {
