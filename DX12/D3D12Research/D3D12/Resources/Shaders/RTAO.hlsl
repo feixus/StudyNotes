@@ -52,12 +52,7 @@ void RayGen()
 
     float depth = tDepth.SampleLevel(sSceneSampler, texCoord, 0).r;
     float3 world = WorldFromDepth(texCoord, depth, mul(cProjectionInverse, cViewInverse));
-
-    float2 texCoord1 = texCoord + float2(dimInv.x, 0);
-    float2 texCoord2 = texCoord + float2(0, -dimInv.y);
-    float3 p1 = WorldFromDepth(texCoord1, tDepth.SampleLevel(sSceneSampler, texCoord1, 0).r, mul(cProjectionInverse, cViewInverse));
-    float3 p2 = WorldFromDepth(texCoord2, tDepth.SampleLevel(sSceneSampler, texCoord2, 0).r, mul(cProjectionInverse, cViewInverse));
-    float3 normal = normalize(cross(p2 - world, p1 - world));
+    float3 normal = NormalFromDepth(tDepth, sSceneSampler, texCoord, dimInv, cProjectionInverse);
 
     uint state = SeedThread(launchIndexId);
     float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;

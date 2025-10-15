@@ -141,6 +141,14 @@ float3 ViewFromDepth(float2 uv, float depth, float4x4 projectionInverse)
 	return ClipToView(clip, projectionInverse);
 }
 
+float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2 uv, float2 invDimensions, float4x4 inverseProjection)
+{
+	float3 vpos0 = ViewFromDepth(uv, depthTexture.SampleLevel(depthSampler, uv, 0).x, inverseProjection);
+	float3 vpos1 = ViewFromDepth(uv + float2(invDimensions.x, 0), depthTexture.SampleLevel(depthSampler, uv + float2(invDimensions.x, 0), 0).x, inverseProjection);
+	float3 vpos2 = ViewFromDepth(uv + float2(0, -invDimensions.y), depthTexture.SampleLevel(depthSampler, uv + float2(0, -invDimensions.y), 0).x, inverseProjection);
+	return normalize(cross(vpos2 - vpos0, vpos1 - vpos0));	
+}
+
 float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 {
 	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);

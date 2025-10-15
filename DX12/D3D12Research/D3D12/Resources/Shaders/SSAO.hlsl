@@ -51,7 +51,7 @@ void CSMain(CS_INPUT input)
     float2 texCoord2 = texCoord + float2(0, -dimInv.y);
     float3 p1 = ViewFromDepth(texCoord1.xy, tDepthTexture.SampleLevel(sSampler, texCoord1, 0).r, cProjectionInverse).xyz;
     float3 p2 = ViewFromDepth(texCoord2.xy, tDepthTexture.SampleLevel(sSampler, texCoord2, 0).r, cProjectionInverse).xyz;
-    float3 normal = normalize(cross(p2 - viewPos, p1 - viewPos));
+    float3 normal = NormalFromDepth(tDepthTexture, sSampler, texCoord, dimInv, cProjectionInverse);
 
     // tangent space to view space 
     int state = SeedThread(input.DispatchThreadId.x + input.DispatchThreadId.y * cDimensions.x);
