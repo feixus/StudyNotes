@@ -101,6 +101,38 @@ float3 SampleColor(Texture2D texture, SamplerState textureSampler, float2 uv)
     return TransformColor(texture.SampleLevel(textureSampler, uv, 0).rgb);
 }
 
+ // Jorge Jimenez in his SIGGRAPH 2016 presentation about Filmic SMAA: http://advances.realtimerendering.com/s2016/Filmic%20SMAA%20v7.pptx
+ // 5 tap cubic texture filter
+float3 FilterHistory(Texture2D tex, SamplerState textureSampler, float2 texCoord, float2 dimensions)
+{
+    float2 position = texCoord * dimensions;
+    float2 centerPosition = floor(position - 0.5f) + 0.5f;
+    float2 frac = position - centerPosition;
+    float2 frac2 = frac * frac;
+    float2 frac3 = frac * frac2;
+
+    const float SHARPNESS = 50.0f;
+    float c = SHARPNESS / 100.0f;
+    float2 w0 = -c * frac3 + 2.0f * c * frac2 - c * frac;
+    float2 w1 = (2.0f - c) * frac3 + (c - 3.0f) * frac2 + 1.0f;
+    float2 w2 = (c - 2.0f) * frac3 + (3.0f - 2.0f * c) * frac2 + c * frac;
+    float2 w3 = c * frac3 - c * frac2;
+
+    float2 w12 = w1 + w2;
+    float2 tc12 = cParameters.InvScreenDimensions * (centerPosition + w2 / w12);
+    float3 centerColor = SampleColor(tex, textureSampler, tc12);
+
+    float2 tc0 = cParameters.InvScreenDimensions * (centerPosition - 1.0f);
+    float2 tc3 = cParameters.InvScreenDimensions * (centerPosition + 2.0f);
+    float3 color = SampleColor(tex, textureSampler, float2(tc12.x, tc0.y)) * w12.x * w0.y +
+                   SampleColor(tex, textureSampler, float2(tc0.x, tc12.y)) * w0.x * w12.y +
+                   centerColor * w12.x * w12.y +
+                   SampleColor(tex, textureSampler, float2(tc3.x, tc12.y)) * w3.x * w12.y +
+                   SampleColor(tex, textureSampler, float2(tc12.x, tc3.y)) * w12.x * w3.y;
+    return color;
+}
+
+// https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1
 // samples a texture with Catmull-Rom filtering, using 9 texture fetches instead of 16
 float4 SampleTextureCatmullRom(in Texture2D tex, in SamplerState textureSampler, in float2 uv, in float2 texSize)
 {
@@ -154,6 +186,20 @@ float4 SampleTextureCatmullRom(in Texture2D tex, in SamplerState textureSampler,
 #define GSM_ROW_SIZE (1 + THREAD_GROUP_ROW_SIZE + 1)
 #define GSM_SIZE (GSM_ROW_SIZE * GSM_ROW_SIZE)
 
+// ┌─────────────────────────────┐
+// │ B  B  B  B  B  B  B  B  B  B │  Border row (row 0)
+// │ B  •  •  •  •  •  •  •  •  B │  Row 1
+// │ B  •  •  •  •  •  •  •  •  B │  Row 2
+// │ B  •  •  •  •  •  •  •  •  B │  ...
+// │ B  •  •  •  •  •  •  •  •  B │  ...
+// │ B  •  •  •  •  •  •  •  •  B │  ...
+// │ B  •  •  •  •  •  •  •  •  B │  ...
+// │ B  •  •  •  •  •  •  •  •  B │  Row 8
+// │ B  •  •  •  •  •  •  •  •  B │  Row 9
+// │ B  B  B  B  B  B  B  B  B  B │  Border row (row 9)
+// └─────────────────────────────┘
+//   B = Border  • = Thread data
+
 groupshared float3 gsColors[GSM_SIZE];
 groupshared float gsDepths[GSM_SIZE];
 
@@ -173,8 +219,8 @@ void CSMain(
     tCurrentColor.GetDimensions(dimensions.x, dimensions.y);
 
     int gsLocation = GroupThreadId.x + GroupThreadId.y * GSM_ROW_SIZE + GSM_ROW_SIZE + 1;
-    int gsPrefetchLocation0 = GroupThreadId.x + GroupThreadId.y * THREAD_GROUP_ROW_SIZE;
-    int gsPrefetchLocation1 = gsPrefetchLocation0 + GSM_SIZE - THREAD_GROUP_SIZE;
+    int gsPrefetchLocation0 = GroupThreadId.x + GroupThreadId.y * THREAD_GROUP_ROW_SIZE; // 0-63
+    int gsPrefetchLocation1 = gsPrefetchLocation0 + GSM_SIZE - THREAD_GROUP_SIZE; // 36-99
     int2 prefetchLocation0 = int2(pixelIndex.x & -8, pixelIndex.y & -8) - 1 + int2(gsPrefetchLocation0 % 10, gsPrefetchLocation0 / 10);
     int2 prefetchLocation1 = int2(pixelIndex.x & -8, pixelIndex.y & -8) - 1 + int2(gsPrefetchLocation1 % 10, gsPrefetchLocation1 / 10);
 
@@ -185,7 +231,7 @@ void CSMain(
 
     GroupMemoryBarrierWithGroupSync();
 
-    float3 cc = SampleColor(tCurrentColor, sPointSampler, texCoord);
+    float3 cc = gsColors[gsLocation];
     float3 currColor = cc;
 
 #if TAA_HISTORY_REJECT_METHOD != HISTORY_REJECT_NONE
@@ -261,6 +307,7 @@ void CSMain(
 #if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM
     // [Karis14] catmull-rom cubic filter to avoid blurry result from bilinear filter
     float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, uvReproj, dimensions).rgb;
+    // float3 prevColor = FilterHistory(tPreviousColor, sLinearSampler, uvReproj, dimensions);
 #elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
     float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, uvReproj);
 #endif
@@ -323,6 +370,11 @@ void CSMain(
 // [Salvi16] Marco Salvi, "An Excursion in Temporal Supersampling", GDC 2016
 // [Lottes] Timothy Lottes, "Temporal Reprojection Anti-Aliasing", NVIDIA
 // [Xu16] Ke Xu, "Temporal Antialiasing in Uncharted 4", GDC 2016
-
+/*
+    Color Space: using YCoCg color space which better separates luminance from chrominance.
+    History Rejection: uses neighborhood clipping to reject bad history samples.
+    Resolve Methos: uses Catmull-Rom filtering for shaprper results than bilinear.
+    Velocity Dilation: uses the closest depth pixel's velocity to move edges along.
+*/
 
 
