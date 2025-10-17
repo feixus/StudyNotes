@@ -234,9 +234,9 @@ void GraphicsTexture::Create(const TextureDesc& textureDesc)
 
 		dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
 		GetGraphics()->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_ReadOnlyDsv);
-
-		SetName(m_Name.c_str());
 	}
+
+	SetName(m_Name.c_str());
 }
 
 DXGI_FORMAT GraphicsTexture::GetSrvFormat(DXGI_FORMAT format)

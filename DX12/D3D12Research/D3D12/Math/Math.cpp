@@ -68,6 +68,7 @@ namespace Math
 	{
         float n, f;
         GetProjectionClipPlanes(projection, n, f);
+		std::swap(n, f);
         projection._33 = f / (f - n);
         projection._43 = -projection._33 * n;
 	}

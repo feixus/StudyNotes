@@ -274,8 +274,24 @@ namespace D3D
 		}
 		if (errorCode == DXGI_ERROR_DEVICE_REMOVED && pDevice)
 		{
+			ComPtr<ID3D12InfoQueue> pInfo;
+			pDevice->QueryInterface(IID_PPV_ARGS(pInfo.GetAddressOf()));
+			if (pInfo)
+			{
+				str << "Validation Layer: \n";
+				for (uint64_t i = 0; i < pInfo->GetNumStoredMessages(); ++i)
+				{
+					size_t messageLength = 0;
+					pInfo->GetMessageA(0, nullptr, &messageLength);
+					D3D12_MESSAGE* pMessage = (D3D12_MESSAGE*)malloc(messageLength);
+					pInfo->GetMessageA(0, pMessage, &messageLength);
+					str << pMessage->pDescription << "\n";
+					free(pMessage);
+				}
+			}
+
 			HRESULT removedReason = pDevice->GetDeviceRemovedReason();
-			str << " - Device Removed Reason: " << GetErrorString(removedReason, nullptr);
+			str << " \n- Device Removed Reason: " << GetErrorString(removedReason, nullptr);
 			
 			DREDHandler(pDevice);
 		}

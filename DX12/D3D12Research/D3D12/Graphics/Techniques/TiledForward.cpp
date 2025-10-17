@@ -181,14 +181,16 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.GetCommandList()->SetGraphicsRootShaderResourceView(6, inputResource.pTLAS->GetGpuHandle());
             }
 
-            auto DrawBatches = [&](CommandContext& context, const std::vector<Batch>& batches)
+            auto DrawBatches = [&](Batch::Blending blendMode)
             {
-                for (const Batch& b : inputResource.OpaqueBatches)
+                for (const Batch& b : inputResource.Batches)
                 {
-                    objectData.World = b.WorldMatrix;
-                    objectData.Material = b.Material;
-                    context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-                    b.pMesh->Draw(&context);
+                    if (Any(b.BlendMode, blendMode) && inputResource.VisibilityMask.GetBit(b.Index))
+                    {
+                        objectData.World = b.WorldMatrix;
+                        context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+					    b.pMesh->Draw(&context);
+                    }
                 }
             };
 
@@ -199,7 +201,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.SetDynamicDescriptor(4, 0, m_pLightGridOpaque->GetSRV());
                 context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
 
-                DrawBatches(context, inputResource.OpaqueBatches);
+                DrawBatches(Batch::Blending::Opaque | Batch::Blending::AlphaMask);
             }
 
             {
@@ -209,7 +211,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.SetDynamicDescriptor(4, 0, m_pLightGridTransparent->GetSRV());
                 context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferTransparent->GetSRV());
 
-                DrawBatches(context, inputResource.TransparentBatches);
+                DrawBatches(Batch::Blending::AlphaBlend);
             }
 
             context.EndRenderPass();

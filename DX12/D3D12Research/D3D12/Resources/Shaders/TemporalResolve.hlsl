@@ -62,6 +62,7 @@ float3 TransformColor(float3 color)
     return RGB_to_YCoCg(color);
 #else
     #error No color space defined
+    return 0;
 #endif
 }
 
@@ -73,6 +74,7 @@ float3 ResolveColor(float3 color)
     return YCoCg_to_RGB(color);
 #else
     #error No color space defined
+    return 0;
 #endif
 }
 
@@ -310,6 +312,9 @@ void CSMain(
     // float3 prevColor = FilterHistory(tPreviousColor, sLinearSampler, uvReproj, dimensions);
 #elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
     float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, uvReproj);
+#else
+    #error No history resolve method defined
+    float3 prevColor = 0;
 #endif
 
 #if TAA_DEBUG_RED_HISTORY

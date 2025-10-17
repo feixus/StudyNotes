@@ -63,7 +63,6 @@ namespace Tweakables
 	bool g_VisualizeLightDensity = false;
 
 	bool g_TAA = true;
-	bool g_TestTAA = true;
 
 	float g_SunInclination = 0.2f;
 	float g_SunOrientation = -3.055f;
@@ -112,20 +111,6 @@ void Graphics::Update()
 
 	PROFILE_BEGIN("UpdateGameState");
 
-	/*Vector3 pos = m_pCamera->GetPosition();
-	pos.z = 0;
-	pos.y = 50;
-	pos.x = 60 * sin(Time::TotalTime());
-	m_pCamera->SetPosition(pos);
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV2, 0, 0));*/
-#if 1
-	Vector3 pos = m_pCamera->GetPosition();
-	pos.x = 48;
-	pos.y = sin(5 * Time::TotalTime()) * 4 + 84;
-	pos.x = -2.6f;
-	m_pCamera->SetPosition(pos);
-#endif
-
 	m_pCamera->Update();
 
 	float costheta = cosf(Tweakables::g_SunOrientation);
@@ -136,19 +121,19 @@ void Graphics::Update()
 	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
 	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
 
-	std::sort(m_SceneData.TransparentBatches.begin(), m_SceneData.TransparentBatches.end(), [this](const Batch& a, const Batch& b) {
-		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
-		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
-		return aDist > bDist;
-		});
-
-	std::sort(m_SceneData.OpaqueBatches.begin(), m_SceneData.OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
-		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
-		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
-		return aDist < bDist;
-		});
-
-	//m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
+	std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), [this](const Batch& a, const Batch& b) {
+		if (a.BlendMode == b.BlendMode)
+		{
+			float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
+			float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
+			if (a.BlendMode == Batch::Blending::AlphaBlend)
+			{
+				return aDist > bDist;
+			}
+			return aDist < bDist;
+		}
+		return a.BlendMode < b.BlendMode;
+	});
 
 	if (Tweakables::g_VisualizeLights)
 	{
@@ -375,6 +360,12 @@ void Graphics::Update()
 	m_SceneData.pTLAS = m_pTLAS.get();
 	m_SceneData.pMesh = m_pMesh.get();
 
+	BoundingFrustum frustum = m_pCamera->GetFrustum();
+	for (const Batch& b : m_SceneData.Batches)
+	{
+		m_SceneData.VisibilityMask.AssignBit(b.Index, frustum.Contains(b.Bounds));
+	}
+
 	PROFILE_END();
 
 	////////////////////////////////
@@ -488,8 +479,9 @@ void Graphics::Update()
 			renderContext.BeginRenderPass(info);
 			renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-			renderContext.SetPipelineState(m_pDepthPrepassPSO.get());
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
+			
+			renderContext.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
 
 			struct ViewData
 			{
@@ -497,18 +489,31 @@ void Graphics::Update()
 			} viewData{};
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
 			renderContext.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
-
-			for (const Batch& b : m_SceneData.OpaqueBatches)
+			
+			auto DrawBatches = [&](Batch::Blending blendMode)
 			{
-				struct ObjectData
+				struct PerObjectData
 				{
 					Matrix World;
+					MaterialData Material;
 				} objectData;
-				objectData.World = b.WorldMatrix;
-				renderContext.SetDynamicConstantBufferView(0, &objectData, sizeof(ObjectData));
 
-				b.pMesh->Draw(&renderContext);
-			}
+				for (const Batch& b : m_SceneData.Batches)
+				{
+					if (Any(b.BlendMode, blendMode) && m_SceneData.VisibilityMask.GetBit(b.Index))
+					{
+						objectData.World = b.WorldMatrix;
+						objectData.Material = b.Material;
+						renderContext.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+						b.pMesh->Draw(&renderContext);
+					}
+				}
+			};
+
+			renderContext.SetPipelineState(m_pDepthPrepassOpaquePSO.get());
+			DrawBatches(Batch::Blending::Opaque);
+			renderContext.SetPipelineState(m_pDepthPrepassAlphaMaskPSO.get());
+			DrawBatches(Batch::Blending::AlphaMask);
 
 			renderContext.EndRenderPass();
 		});
@@ -699,28 +704,27 @@ void Graphics::Update()
 
 					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
 
-					auto DrawBatches = [&](CommandContext& contet, const std::vector<Batch>& batches)
+					auto DrawBatches = [&](const Batch::Blending blendModes)
+					{
+						for (const Batch& b : m_SceneData.Batches)
 						{
-							for (const Batch& b : batches)
+							if (Any(b.BlendMode, blendModes) && m_SceneData.VisibilityMask.GetBit(b.Index))
 							{
 								objectData.World = b.WorldMatrix;
 								objectData.Material = b.Material;
 								context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-
+	
 								b.pMesh->Draw(&context);
 							}
-						};
+						}
+					};
 
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
-						context.SetPipelineState(m_pShadowPSO.get());
-						DrawBatches(context, m_SceneData.OpaqueBatches);
-					}
-
-					{
-						GPU_PROFILE_SCOPE("Transparent", &context);
-						context.SetPipelineState(m_pShadowAlphaPSO.get());
-						DrawBatches(context, m_SceneData.TransparentBatches);
+						context.SetPipelineState(m_pShadowOpaquePSO.get());
+						DrawBatches(Batch::Blending::Opaque);
+						context.SetPipelineState(m_pShadowAlphaMaskPSO.get());
+						DrawBatches(Batch::Blending::AlphaMask);
 					}
 					context.EndRenderPass();
 				}
@@ -813,7 +817,7 @@ void Graphics::Update()
 				context.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				context.SetComputeRootSignature(m_pTemporalResolveRS.get());
-				context.SetPipelineState(Tweakables::g_TestTAA ? m_pTemporalResolveTestPSO.get() : m_pTemporalResolvePSO.get());
+				context.SetPipelineState(m_pTemporalResolvePSO.get());
 
 				struct TemporalParameters
 				{
@@ -1091,6 +1095,8 @@ void Graphics::Shutdown()
 {
 	// wait for all the GPU work to finish
 	IdleGPU();
+	//UnregisterWait(m_DeviceRemovedEvent);
+
 	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
@@ -1196,6 +1202,17 @@ void Graphics::InitD3D()
 	};
 	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)), GetDevice());
 	VERIFY_HR_EX(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())), GetDevice());
+
+	/*auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
+		Graphics* pGraphics = (Graphics*)pContext;
+		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pGraphics->GetDevice());
+		E_LOG(Error, "%s", error.c_str());
+	};
+
+	HANDLE deviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
+	VERIFY_HR(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pDeviceRemovalFence.GetAddressOf())));
+	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
+	RegisterWaitForSingleObject(&deviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);*/
 
 	pAdapter.Reset();
 
@@ -1454,10 +1471,6 @@ void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& contex
 		for (size_t i = 0; i < pMesh->GetMeshCount(); i++)
 		{
 			const SubMesh* pSubMesh = pMesh->GetMesh((int)i);
-			if (pMesh->GetMaterial(pSubMesh->GetMaterialId()).IsTransparent)
-			{
-				continue; // skip transparent meshes
-			}
 
 			D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 			geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -1600,6 +1613,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	{
 		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
 		Batch b;
+		b.Index = i;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
 
@@ -1608,14 +1622,8 @@ void Graphics::InitializeAssets(CommandContext& context)
 		b.Material.Roughness = textureToIndex[material.pRoughnessTexture];
 		b.Material.Metallic = textureToIndex[material.pMetallicTexture];
 
-		if (material.IsTransparent)
-		{
-			m_SceneData.TransparentBatches.push_back(b);
-		}
-		else
-		{
-			m_SceneData.OpaqueBatches.push_back(b);
-		}
+		b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+		m_SceneData.Batches.push_back(b);
 	}
 
 	GenerateAccelerationStructure(m_pMesh.get(), context);
@@ -1672,39 +1680,43 @@ void Graphics::InitializePipelines()
 		m_pShadowRS->FinalizeFromShader("Shadow Mapping RS", vertexShader);
 
 		// pipeline state
-		m_pShadowPSO = std::make_unique<PipelineState>(this);
-		m_pShadowPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
-		m_pShadowPSO->SetRootSignature(m_pShadowRS->GetRootSignature());
-		m_pShadowPSO->SetVertexShader(vertexShader);
-		m_pShadowPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
-		m_pShadowPSO->SetCullMode(D3D12_CULL_MODE_NONE);
-		m_pShadowPSO->SetDepthBias(-1, -5.f, -4.f);
-		m_pShadowPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pShadowPSO->Finalize("Shadow Mapping (Opaque)");
+		m_pShadowOpaquePSO = std::make_unique<PipelineState>(this);
+		m_pShadowOpaquePSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
+		m_pShadowOpaquePSO->SetRootSignature(m_pShadowRS->GetRootSignature());
+		m_pShadowOpaquePSO->SetVertexShader(vertexShader);
+		m_pShadowOpaquePSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
+		m_pShadowOpaquePSO->SetCullMode(D3D12_CULL_MODE_NONE);
+		m_pShadowOpaquePSO->SetDepthBias(-1, -5.f, -4.f);
+		m_pShadowOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		m_pShadowOpaquePSO->Finalize("Shadow Mapping Opaque");
 
-
-		m_pShadowAlphaPSO = std::make_unique<PipelineState>(*m_pShadowPSO);
-		m_pShadowAlphaPSO->SetPixelShader(alphaClipPixelShader);
-		m_pShadowAlphaPSO->Finalize("Shadow Mapping (Alpha)");
+		m_pShadowAlphaMaskPSO = std::make_unique<PipelineState>(*m_pShadowOpaquePSO);
+		m_pShadowAlphaMaskPSO->SetPixelShader(alphaClipPixelShader);
+		m_pShadowAlphaMaskPSO->Finalize("Shadow Mapping Alpha Mask");
 	}
 
 	// depth prepass
 	// simple vertex shader to fill the depth buffer to optimize later passes
 	{
 		Shader vertexShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
+		Shader pixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 		// root signature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>(this);
 		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass RS", vertexShader);
 
 		// pipeline state
-		m_pDepthPrepassPSO = std::make_unique<PipelineState>(this);
-		m_pDepthPrepassPSO->SetInputLayout(depthOnlyInputElements, std::size(depthOnlyInputElements));
-		m_pDepthPrepassPSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
-		m_pDepthPrepassPSO->SetVertexShader(vertexShader);
-		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount);
-		m_pDepthPrepassPSO->Finalize("Depth Prepass");
+		m_pDepthPrepassOpaquePSO = std::make_unique<PipelineState>(this);
+		m_pDepthPrepassOpaquePSO->SetInputLayout(depthOnlyInputElements, std::size(depthOnlyInputElements));
+		m_pDepthPrepassOpaquePSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
+		m_pDepthPrepassOpaquePSO->SetVertexShader(vertexShader);
+		m_pDepthPrepassOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		m_pDepthPrepassOpaquePSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount);
+		m_pDepthPrepassOpaquePSO->Finalize("Depth Prepass Opaque");
+
+		m_pDepthPrepassAlphaMaskPSO = std::make_unique<PipelineState>(*m_pDepthPrepassOpaquePSO);
+		m_pDepthPrepassAlphaMaskPSO->SetPixelShader(pixelShader);
+		m_pDepthPrepassAlphaMaskPSO->Finalize("Depth Prepass Alpha Mask");
 	}
 
 	// luminance histogram
@@ -1822,25 +1834,15 @@ void Graphics::InitializePipelines()
 
 	//TAA
 	{
-		{
-			Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
-			
-			m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
-			m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve RS", computeShader);
-						
-			m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
-			m_pTemporalResolvePSO->SetComputeShader(computeShader);
-			m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
-			m_pTemporalResolvePSO->Finalize("Temporal Resolve PSO ");
-		}
-
-		{
-			Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain", { "TAA_TEST" });
-			
-			m_pTemporalResolveTestPSO = std::make_unique<PipelineState>(*m_pTemporalResolvePSO);
-			m_pTemporalResolveTestPSO->SetComputeShader(computeShader);
-			m_pTemporalResolveTestPSO->Finalize("Temporal Resolve Test PSO ");
-		}
+		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+		
+		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
+		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve RS", computeShader);
+					
+		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+		m_pTemporalResolvePSO->SetComputeShader(computeShader);
+		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+		m_pTemporalResolvePSO->Finalize("Temporal Resolve PSO");
 	}
 
 	// mip generation
@@ -2018,11 +2020,11 @@ void Graphics::UpdateImGui()
 	}
 	ImGui::PopStyleVar();
 
-	// m_pVisualizeTexture = m_pClouds->GetNoiseTexture();
-	m_pVisualizeTexture = m_pVelocity.get();
+	m_pVisualizeTexture = m_pAmbientOcclusion.get();
 	if (m_pVisualizeTexture)
 	{
-		ImGui::Begin("Visualize Texture");
+		std::string tabName = std::string("Visualize Texture:") + m_pVisualizeTexture->GetName();
+		ImGui::Begin(tabName.c_str());
 
 		static bool visibleChannels[4] = { true, true, true, true };
 		static int mipLevel = 0;
@@ -2142,7 +2144,6 @@ void Graphics::UpdateImGui()
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
-	ImGui::Checkbox("Test TAA", &Tweakables::g_TestTAA);
 
 	ImGui::End();
 }

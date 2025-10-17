@@ -1,5 +1,6 @@
 #pragma once
 #include "../Light.h"
+#include "Core/Bitfield.h"
 
 class CommandQueue;
 class CommandContext;
@@ -34,11 +35,20 @@ struct MaterialData
 
 struct Batch
 {
+	enum class Blending
+	{
+		Opaque = 1,
+		AlphaMask = 2,
+		AlphaBlend = 4,
+	};
+	int Index{0};
+	Blending BlendMode{Blending::Opaque};
 	const SubMesh* pMesh{};
 	MaterialData Material;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 };
+DECLARE_BITMASK_TYPE(Batch::Blending);
 
 constexpr const int MAX_SHADOW_CASTERS = 32;
 struct ShadowData
@@ -57,8 +67,7 @@ struct SceneData
 	GraphicsTexture* pAO{ nullptr };
 	GraphicsTexture* pReflection{ nullptr };
 	std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps{ nullptr };
-	std::vector<Batch> OpaqueBatches;
-	std::vector<Batch> TransparentBatches;
+	std::vector<Batch> Batches;
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
 	Buffer* pLightBuffer{ nullptr };
 	Camera* pCamera{ nullptr };
@@ -66,6 +75,7 @@ struct SceneData
 	Buffer* pTLAS{ nullptr };
 	Mesh* pMesh{ nullptr };
 	int FrameIndex{ 0 };
+	BitField<128> VisibilityMask;
 };
 
 enum class RenderPath
@@ -191,6 +201,8 @@ private:
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
+	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
+	HANDLE m_DeviceRemovedEvent{0};
 
 	int m_Frame{ 0 };
 	std::array<float, 180> m_FrameTimes{};
@@ -254,12 +266,13 @@ private:
 
 	// shadow mapping
 	std::unique_ptr<RootSignature> m_pShadowRS;
-	std::unique_ptr<PipelineState> m_pShadowPSO;
-	std::unique_ptr<PipelineState> m_pShadowAlphaPSO;
+	std::unique_ptr<PipelineState> m_pShadowOpaquePSO;
+	std::unique_ptr<PipelineState> m_pShadowAlphaMaskPSO;
 
 	// depth prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
-	std::unique_ptr<PipelineState> m_pDepthPrepassPSO;
+	std::unique_ptr<PipelineState> m_pDepthPrepassOpaquePSO;
+	std::unique_ptr<PipelineState> m_pDepthPrepassAlphaMaskPSO;
 
 	// MSAA depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
@@ -296,7 +309,6 @@ private:
 	// TAA
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
 	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
-	std::unique_ptr<PipelineState> m_pTemporalResolveTestPSO;
 
 	// Camera motion
 	std::unique_ptr<PipelineState> m_pCameraMotionPSO;
