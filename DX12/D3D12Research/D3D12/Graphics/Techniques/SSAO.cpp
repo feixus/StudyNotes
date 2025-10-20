@@ -95,15 +95,15 @@ void SSAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 
 			struct ShaderParameters
 			{
-				Vector2 Dimensions;
+				Vector2 DimensionsInv;
 				uint32_t Horizontal{ 0 };
 				float Far{ 0.0f };
 				float Near{ 0.0f };
 			} shaderParameters;
 
 			shaderParameters.Horizontal = 1;
-			shaderParameters.Dimensions.x = 1.0f / pColor->GetWidth();
-			shaderParameters.Dimensions.y = 1.0f / pColor->GetHeight();
+			shaderParameters.DimensionsInv.x = 1.0f / pColor->GetWidth();
+			shaderParameters.DimensionsInv.y = 1.0f / pColor->GetHeight();
 			shaderParameters.Far = camera.GetFar();
 			shaderParameters.Near = camera.GetNear();
 

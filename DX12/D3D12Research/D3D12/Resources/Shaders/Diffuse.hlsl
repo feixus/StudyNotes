@@ -296,9 +296,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     LightResult lightResults = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);
 
-    float ao = tAO.Sample(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r; 
+    float3 ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).rgb; 
     float3 color = lightResults.Diffuse + lightResults.Specular + ssr * ao;
-    color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
+    color += ApplyAmbientLight(diffuseColor, ao.r, tLights[0].GetColor().rgb * 0.1f);
 
     for (int i = 0; i < cViewData.LightCount; ++i)
     {

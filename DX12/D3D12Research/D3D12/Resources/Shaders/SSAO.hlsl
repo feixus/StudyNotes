@@ -7,8 +7,7 @@
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
-                "StaticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), " \
-                "StaticSampler(s1, filter = FILTER_COMPARISON_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_ALL)"
+                "StaticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), "
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -32,27 +31,27 @@ RWTexture2D<float> uAmbientOcclusion : register(u0);
 
 struct CS_INPUT
 {
-    uint3 GroupId : SV_GroupID;
-    uint3 GroupThreadId : SV_GroupThreadID;
-    uint3 DispatchThreadId : SV_DispatchThreadID;
-    uint GroupIndex : SV_GroupIndex;
+	uint3 GroupId : SV_GROUPID;
+	uint3 GroupThreadId : SV_GROUPTHREADID;
+	uint3 DispatchThreadId : SV_DISPATCHTHREADID;
+	uint GroupIndex : SV_GROUPINDEX;
 };
 
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
-    float2 dimInv = rcp(float2(cDimensions));
+	float2 dimInv = rcp((float2) cDimensions);
     float2 texCoord = (float2)input.DispatchThreadId.xy * dimInv;
     float depth = tDepthTexture.SampleLevel(sSampler, texCoord, 0).r;
     float3 normal = NormalFromDepth(tDepthTexture, sSampler, texCoord, dimInv, cProjectionInverse);
     float3 viewPos = ViewFromDepth(texCoord.xy, depth, cProjectionInverse);
 
     // tangent space to view space 
-    int state = SeedThread(input.DispatchThreadId.x + input.DispatchThreadId.y * cDimensions.x);
+    uint state = SeedThread(input.DispatchThreadId.x + input.DispatchThreadId.y * cDimensions.x);
     float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
     float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
-    float3 bitangent = cross(normal, tangent);
+	float3 bitangent = cross(tangent, normal);
     float3x3 TBN = float3x3(tangent, bitangent, normal);
 
     float occlusion = 0;
@@ -69,7 +68,7 @@ void CSMain(CS_INPUT input)
         if (newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
         {
             float sampleDepth = tDepthTexture.SampleLevel(sSampler, newTexCoord.xy, 0).r;
-            float depthVpos = LinearizeDepth01(sampleDepth, cNear, cFar);
+            float depthVpos = LinearizeDepth(sampleDepth, cNear, cFar);
             // discard the long distance samples
             float rangeCheck = smoothstep(0.0f, 1.0f, cAoRadius / (viewPos.z - depthVpos));
             // add depth bias to avoid self-occlusion
