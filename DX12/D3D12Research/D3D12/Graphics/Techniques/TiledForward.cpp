@@ -188,6 +188,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                     if (Any(b.BlendMode, blendMode) && inputResource.VisibilityMask.GetBit(b.Index))
                     {
                         objectData.World = b.WorldMatrix;
+						objectData.Material = b.Material;
                         context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 					    b.pMesh->Draw(&context);
                     }
