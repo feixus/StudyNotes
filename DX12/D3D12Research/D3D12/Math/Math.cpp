@@ -68,7 +68,7 @@ namespace Math
 	{
         float n, f;
         GetProjectionClipPlanes(projection, n, f);
-		std::swap(n, f);
+		std::swap(n, f);	// bounding frustum need noraml near/far clip plane
         projection._33 = f / (f - n);
         projection._43 = -projection._33 * n;
 	}

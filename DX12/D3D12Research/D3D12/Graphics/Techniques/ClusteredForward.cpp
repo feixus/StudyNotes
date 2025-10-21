@@ -537,6 +537,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pMarkUniqueClustersOpaquePSO->SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
         m_pMarkUniqueClustersOpaquePSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
         m_pMarkUniqueClustersOpaquePSO->SetDepthWrite(false);
+		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);  // mark cluster must need GREATER_EQUAL on reverse-Z depth
         m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters");
 
 		m_pMarkUniqueClustersTransparentPSO = std::make_unique<PipelineState>(*m_pMarkUniqueClustersOpaquePSO);
