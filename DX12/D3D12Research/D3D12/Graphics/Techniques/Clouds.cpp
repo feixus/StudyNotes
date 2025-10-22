@@ -209,7 +209,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				context.InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 				context.FlushResourceBarriers();
 
-				context.BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, nullptr, RenderPassAccess::NoAccess));
+				context.BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, nullptr, RenderPassAccess::NoAccess, false));
 
 				context.SetPipelineState(m_pCloudsPS.get());
 				context.SetGraphicsRootSignature(m_pCloudsRS.get());

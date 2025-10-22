@@ -158,13 +158,14 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
 			context.InsertResourceBarrier(inputResource.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			RenderPassInfo renderPass;
-			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_DontCare;
+			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
 			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
 			renderPass.DepthStencilTarget.Target = inputResource.pDepthBuffer;
+            renderPass.DepthStencilTarget.Write = false;
 			renderPass.RenderTargetCount = 2;
-			renderPass.RenderTargets[0].Access = RenderPassAccess::Clear_Store;
+			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[0].Target = inputResource.pRenderTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::DontCare_Resolve;
 			renderPass.RenderTargets[1].Target = inputResource.pNormals;
 			renderPass.RenderTargets[1].ResolveTarget = inputResource.pResolvedNormals;
 			context.BeginRenderPass(renderPass);

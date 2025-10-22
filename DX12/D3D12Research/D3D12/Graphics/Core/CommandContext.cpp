@@ -319,10 +319,9 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		}
 		renderPassDepthStencilDesc.DepthEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.Access);
 
-		bool writeable = true;
 		if (renderPassDepthStencilDesc.DepthEndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD)
 		{
-			writeable = false;
+			check(renderPassInfo.DepthStencilTarget.Write == false);
 		}
 
 		renderPassDepthStencilDesc.StencilBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
@@ -336,7 +335,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		renderPassDepthStencilDesc.StencilEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
 		if (renderPassInfo.DepthStencilTarget.Target)
 		{
-			renderPassDepthStencilDesc.cpuDescriptor = renderPassInfo.DepthStencilTarget.Target->GetDSV(writeable);
+			renderPassDepthStencilDesc.cpuDescriptor = renderPassInfo.DepthStencilTarget.Target->GetDSV(renderPassInfo.DepthStencilTarget.Write);
 		}
 
 		std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs{};
@@ -357,7 +356,14 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 				clearValue.Color[3] = color.w;
 				clearValue.Format = data.Target->GetFormat();
 			}
-			renderTargetDescs[i].EndingAccess.Type = ExtractEndingAccess(data.Access);
+
+			D3D12_RENDER_PASS_ENDING_ACCESS_TYPE endingAccess = ExtractEndingAccess(data.Access);
+			if (data.Target->GetDesc().SampleCount <= 1 && endingAccess == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
+			{
+				validateOncef(false, "render target %d is set to resolve but has a sample count of 1. this will just do a CopyTexture instead which is wasteful.", i);
+				endingAccess = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+			}
+			renderTargetDescs[i].EndingAccess.Type = endingAccess;
 
 			uint32_t subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
 			if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
@@ -396,13 +402,12 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	{
 		FlushResourceBarriers();
 
-		bool writeable = true;
 		if (ExtractEndingAccess(renderPassInfo.DepthStencilTarget.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD)
 		{
-			writeable = false;
+			check(renderPassInfo.DepthStencilTarget.Write == false);
 		}
 
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target->GetDSV(writeable) : D3D12_CPU_DESCRIPTOR_HANDLE{};
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target->GetDSV(renderPassInfo.DepthStencilTarget.Write) : D3D12_CPU_DESCRIPTOR_HANDLE{};
 		D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
 		if (ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 		{
@@ -461,6 +466,16 @@ void CommandContext::EndRenderPass()
 	if (GetGraphics()->UseRenderPasses() && m_pRaytracingCommandList)
 	{
 		m_pRaytracingCommandList->EndRenderPass();
+
+		for (uint32_t i = 0; i < m_CurrentRenderPassInfo.RenderTargetCount; ++i)
+		{
+			const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
+			if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE && data.Target->GetDesc().SampleCount <= 1)
+			{
+				FlushResourceBarriers();
+				CopyTexture(data.Target, data.ResolveTarget);
+			}
+		}
 	}
 	else
 #endif
@@ -479,6 +494,7 @@ void CommandContext::EndRenderPass()
 				}
 				else
 				{
+					validateOncef(false, "render target %d is set to resolve but has a sample count of 1. this will just do a CopyTexture instead which is wasteful.", i);
 					FlushResourceBarriers();
 					CopyTexture(data.Target, data.ResolveTarget);
 				}

@@ -127,8 +127,9 @@ public:
     
 private:
     DECLARE_DELEGATE(ExecutePassDelegate, CommandContext&, const RGPassResource&);
-    ExecutePassDelegate m_ExecuteCallback;
+    
     const char* m_Name;
+    ExecutePassDelegate m_ExecuteCallback;
     std::vector<RGResourceHandle> m_Reads;
     std::vector<RGResourceHandle> m_Writes;
     RGGraph& m_RenderGraph;

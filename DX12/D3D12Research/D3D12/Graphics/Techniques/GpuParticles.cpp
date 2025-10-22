@@ -15,6 +15,7 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
 
+static bool g_Enable = true;
 static int32_t g_EmitCount = 30;
 static float g_LifeTime = 4.0f;
 static bool g_Simulate = true;
@@ -137,6 +138,7 @@ void GpuParticles::Initialize(Graphics* pGraphics)
     pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
         ImGui::Begin("Parameters");
         ImGui::Text("Particles");
+        ImGui::Checkbox("Enabled", &g_Enable);
         ImGui::Checkbox("Simulate", &g_Simulate);
         ImGui::SliderInt("Emit Count", &g_EmitCount, 0, cMaxParticleCount / 50);
         ImGui::SliderFloat("Life Time", &g_LifeTime, 0.f, 10.f);
@@ -146,7 +148,7 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 
 void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const Camera& camera)
 {
-    if (!g_Simulate)
+    if (!g_Simulate || !g_Enable)
     {
         return;
     }
@@ -286,6 +288,11 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 
 void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera)
 {
+    if (!g_Enable)
+    {
+        return;
+    }
+
 	RGPassBuilder renderParticles = graph.AddPass("Render Particles");
     renderParticles.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
@@ -294,7 +301,7 @@ void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsText
 			context.InsertResourceBarrier(m_pAliveList1.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_DontCare));
+			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
 
 			context.SetPipelineState(m_pParticleRenderPSO.get());
 			context.SetGraphicsRootSignature(m_pParticleRenderRS.get());

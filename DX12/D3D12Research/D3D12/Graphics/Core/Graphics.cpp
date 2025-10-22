@@ -746,10 +746,10 @@ void Graphics::Update()
 		{
 			GraphicsTexture* pDepthStencil = inputResources.GetTexture(sceneData.DepthStencil);
 
-			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 			renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-			RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
+			RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_Store, false);
 
 			renderContext.BeginRenderPass(info);
 			renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1646,23 +1646,23 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 		m_Lights[0] = Light::Directional(position, -direction, 10.0f);
 		m_Lights[0].CastShadows = true;
-		m_Lights[0].VolumetricLighting = true;
+		m_Lights[0].VolumetricLighting = false;
 
 		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 		m_Lights[1].CastShadows = true;
-		m_Lights[1].VolumetricLighting = true;
+		m_Lights[1].VolumetricLighting = false;
 
 		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 		m_Lights[2].CastShadows = true;
-		m_Lights[2].VolumetricLighting = true;
+		m_Lights[2].VolumetricLighting = false;
 
 		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 		m_Lights[3].CastShadows = true;
-		m_Lights[3].VolumetricLighting = true;
+		m_Lights[3].VolumetricLighting = false;
 
 		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 		m_Lights[4].CastShadows = true;
-		m_Lights[4].VolumetricLighting = true;
+		m_Lights[4].VolumetricLighting = false;
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
@@ -2295,7 +2295,7 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 
 bool Graphics::UseRenderPasses() const
 {
-	return m_RenderPassTier > D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
+	return m_RenderPassTier >= D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
 }
 
 bool Graphics::IsFenceComplete(uint64_t fenceValue)
