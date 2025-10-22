@@ -150,13 +150,24 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.InsertResourceBarrier(m_pLightGridTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexListBufferTransparent.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
             context.InsertResourceBarrier(inputResource.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(inputResource.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(inputResource.pNormals, D3D12_RESOURCE_STATE_RENDER_TARGET);
             context.InsertResourceBarrier(inputResource.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(inputResource.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(inputResource.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-            context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Clear_Store, inputResource.pDepthBuffer, RenderPassAccess::Load_DontCare));
+			RenderPassInfo renderPass;
+			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_DontCare;
+			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
+			renderPass.DepthStencilTarget.Target = inputResource.pDepthBuffer;
+			renderPass.RenderTargetCount = 2;
+			renderPass.RenderTargets[0].Access = RenderPassAccess::Clear_Store;
+			renderPass.RenderTargets[0].Target = inputResource.pRenderTarget;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
+			renderPass.RenderTargets[1].Target = inputResource.pNormals;
+			renderPass.RenderTargets[1].ResolveTarget = inputResource.pResolvedNormals;
+			context.BeginRenderPass(renderPass);
 
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
@@ -323,14 +334,15 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 		m_pDiffuseRS = std::make_unique<RootSignature>(pGraphics);
 		m_pDiffuseRS->FinalizeFromShader("Diffuse PBR RS", vertexShader);
 
-		// opaque
 		{
+			DXGI_FORMAT formats[] = { Graphics::RENDER_TARGET_FORMAT, DXGI_FORMAT_R16G16B16A16_FLOAT };
+			// opaque
 			m_pDiffusePSO = std::make_unique<PipelineState>(pGraphics);
 			m_pDiffusePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 			m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			m_pDiffusePSO->SetVertexShader(vertexShader);
 			m_pDiffusePSO->SetPixelShader(pixelShader);
-			m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+			m_pDiffusePSO->SetRenderTargetFormats(formats, std::size(formats), Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
 			m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			m_pDiffusePSO->SetDepthWrite(false);
 			m_pDiffusePSO->Finalize("Diffuse PBR Pipeline");

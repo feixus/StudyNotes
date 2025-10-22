@@ -11,12 +11,21 @@ cbuffer LightData : register(b2)
     uint cNumCascades;
 }
 
-float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
+// Unpacks a 2 channel BC5 nromal to xyz
+float3 UnpackBC5Normal(float2 packedNormal)
 {
-    sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+    float3 normal;
+    normal.xy = packedNormal * 2.0f - 1.0f;
+    normal.z = sqrt(1.0f - saturate(dot(normal.xy, normal.xy)));
+    return normal;
+}
 
-#ifdef NORMAL_BC5
-    sampledNormal.z = sqrt(saturate(1.0f - dot(sampledNormal.xy, sampledNormal.xy)));
+float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invertY)
+{
+#if NORMAL_BC5
+    sampledNormal = UnpackBC5Normal(sampledNormal.xy);
+#else
+    sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
 #endif
 
     if (invertY)
@@ -112,22 +121,20 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
         float4 cascades = cCascadeDepths > 0;
         int cascadeIndex = dot(splits, cascades);
 
-#define FADE_SHADOW_CASCADES 1
-#define FADE_THRESHOLD 0.1f
-#if FADE_SHADOW_CASCADES
+        const float cascadeFadeThreshold = 0.1f;
         float nextSplit = cCascadeDepths[cascadeIndex];
         float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
         float fadeFactor = (nextSplit - pos.w) / splitRange;
-        if (fadeFactor < FADE_THRESHOLD && cascadeIndex != cNumCascades - 1)
+        if (fadeFactor < cascadeFadeThreshold && cascadeIndex != cNumCascades - 1)
         {
-            float lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
+            float lerpAmount = smoothstep(0.0f, cascadeFadeThreshold, fadeFactor);
             float dither = InterleavedGradientNoise(pos.xy);
             if (lerpAmount < dither)
             {
                 cascadeIndex++;
             }
         }
-#endif
+
         shadowIndex += cascadeIndex;
     }
     else if (light.Type == LIGHT_POINT)

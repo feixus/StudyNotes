@@ -351,6 +351,7 @@ void Graphics::Update()
 	m_SceneData.pResolvedDepth = GetResolveDepthStencil();
 	m_SceneData.pShadowMaps = &m_ShadowMaps;
 	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
+	m_SceneData.pResolvedTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
@@ -359,6 +360,8 @@ void Graphics::Update()
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pTLAS = m_pTLAS.get();
 	m_SceneData.pMesh = m_pMesh.get();
+	m_SceneData.pNormals = m_pNormals.get();
+	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 
 	BoundingFrustum frustum = m_pCamera->GetFrustum();
 	for (const Batch& b : m_SceneData.Batches)
@@ -614,11 +617,6 @@ void Graphics::Update()
 		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), *m_pCamera);
 	}
 
-	if (Tweakables::g_RaytracedReflections)
-	{
-		m_SceneData.pReflection = m_pRTReflections->Execute(graph, m_SceneData);
-	}
-
 	// shadow mapping
 	//  - renders the scene depth onto a separate depth buffer from the light's view
 	if (shadowIndex > 0)
@@ -804,6 +802,11 @@ void Graphics::Update()
 				context.CopyTexture(m_pHDRRenderTarget.get(), m_pTAASource.get());
 			}
 		});
+
+	if (Tweakables::g_RaytracedReflections)
+	{
+		m_pRTReflections->Execute(graph, m_SceneData);
+	}
 
 	if (Tweakables::g_TAA)
 	{
@@ -1320,6 +1323,8 @@ void Graphics::InitD3D()
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 
+	m_pNormals = std::make_unique<GraphicsTexture>(this, "MSAA Normals");
+	m_pResolvedNormals = std::make_unique<GraphicsTexture>(this, "Resolved Normals");
 	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(this, "HDR Render Target");
 	m_pPreviousColor = std::make_unique<GraphicsTexture>(this, "Previous Color");
 	m_pTonemapTarget = std::make_unique<GraphicsTexture>(this, "Tonemap Target");
@@ -1421,6 +1426,8 @@ void Graphics::OnResize(int width, int height)
 		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
 	}
 
+	m_pNormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
+	m_pResolvedNormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget));
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
@@ -1435,6 +1442,7 @@ void Graphics::OnResize(int width, int height)
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 	m_pTiledForward->OnSwapchainCreated(width, height);
 	m_pSSAO->OnSwapchainCreated(width, height);
+	m_pRTReflections->OnResize(width, height);
 
 	m_ReductionTargets.clear();
 	int w = width;

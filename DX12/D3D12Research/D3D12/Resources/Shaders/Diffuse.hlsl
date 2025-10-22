@@ -168,8 +168,9 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float4 position, float3 N, fl
     return ssr;
 }
 
-float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
+float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R, out float reflectionWeight)
 {
+    reflectionWeight = 0;
     float3 ssr = 0;
     const float roughnessThreshold = 0.1f;
     bool ssrEnabled = R < roughnessThreshold;
@@ -247,6 +248,7 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
             float roughnessMask = saturate(1.0 - (R / (1 - roughnessThreshold)));
             float ssrWeight = hitColor.w * roughnessMask;
             ssr = saturate(hitColor.xyz * ssrWeight);
+            reflectionWeight = ssrWeight;
         }
     }
     return ssr;
@@ -266,27 +268,30 @@ PSInput VSMain(VSInput input)
     return result;
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+void PSMain(PSInput input,
+              out float4 outColor : SV_Target0,
+              out float4 outNormalRoughness : SV_Target1)
 {
     float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
     float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
     float metalness = tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
-    float r = 0.5f; //tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).x;
+    float r = 0.2f; //tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).x;
     float3 specular = 0.5f; 
 
     float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
     float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
     float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-    float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, input.texCoord, true);
+    float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, true);
     float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
     
     float3 ssr = 0;
+    float reflectionWeight = 0;
     if (cViewData.SsrSamples > 0)
     {
         if (cViewData.SsrSamples < 32)
         {
-            ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
+            ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r, reflectionWeight);
         }
         else
         {
@@ -296,9 +301,10 @@ float4 PSMain(PSInput input) : SV_TARGET
 
     LightResult lightResults = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);
 
-    float3 ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).rgb; 
-    float3 color = lightResults.Diffuse + lightResults.Specular + ssr * ao;
-    color += ApplyAmbientLight(diffuseColor, ao.r, tLights[0].GetColor().rgb * 0.1f);
+    float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r; 
+    float3 color = lightResults.Diffuse + lightResults.Specular;
+    color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
+    color += ssr * ao;
 
     for (int i = 0; i < cViewData.LightCount; ++i)
     {
@@ -309,5 +315,8 @@ float4 PSMain(PSInput input) : SV_TARGET
         }
     }
 
-    return float4(color, baseColor.a);
+    outColor = float4(color, baseColor.a);
+
+    float reflectivity = pow(1.0f - saturate(dot(V, N)), 5.0f) - reflectionWeight;
+    outNormalRoughness = float4(N, reflectivity);
 }

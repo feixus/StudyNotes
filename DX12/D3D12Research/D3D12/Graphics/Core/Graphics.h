@@ -63,7 +63,10 @@ struct SceneData
 	GraphicsTexture* pDepthBuffer{ nullptr };
 	GraphicsTexture* pResolvedDepth{ nullptr };
 	GraphicsTexture* pRenderTarget{ nullptr };
+	GraphicsTexture* pResolvedTarget{ nullptr };
 	GraphicsTexture* pPreviousColor{ nullptr };
+	GraphicsTexture* pNormals{ nullptr };
+	GraphicsTexture* pResolvedNormals{ nullptr };
 	GraphicsTexture* pAO{ nullptr };
 	GraphicsTexture* pReflection{ nullptr };
 	std::vector<std::unique_ptr<GraphicsTexture>>* pShadowMaps{ nullptr };
@@ -216,6 +219,8 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pResolveDepthStencil;
 	std::unique_ptr<GraphicsTexture> m_pTAASource;
 	std::unique_ptr<GraphicsTexture> m_pVelocity;
+	std::unique_ptr<GraphicsTexture> m_pNormals;
+	std::unique_ptr<GraphicsTexture> m_pResolvedNormals;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ShadowMaps;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
