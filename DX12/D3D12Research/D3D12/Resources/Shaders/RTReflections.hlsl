@@ -1,26 +1,32 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
 
+GlobalRootSignature GlobalRootSig = 
+{
+    "CBV(b0, visibility=SHADER_VISIBILITY_ALL),"
+    "DescriptorTable(UAV(u0, numDescriptors=1, visibility=SHADER_VISIBILITY_ALL),"
+    "DescriptorTable(SRV(t0, numDescriptors=6, visibility=SHADER_VISIBILITY_ALL),"
+    "DescriptorTable(SRV(t200, numDescriptors=128, visibility=SHADER_VISIBILITY_ALL),"
+    "staticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
+};
+
 RWTexture2D<float4> gOutput : register(u0);
 
 RaytracingAccelerationStructure SceneBVH : register(t0);
-Texture2D tDepth : register(t1);
-StructuredBuffer<Light> tLights : register(t2);
-ByteAddressBuffer tGeometryData : register(t3);
-Texture2D tNormals : register(t4);
-Texture2D tSceneColor : register(t5);
+Texture2D tSceneColor : register(t1);
+Texture2D tSceneDepth : register(t2);
+Texture2D tSceneNormals : register(t3);
+StructuredBuffer<Light> tLights : register(t4);
+ByteAddressBuffer tGeometryData : register(t5);
 Texture2D tMaterialTextures[] : register(t200);
 
 SamplerState sSceneSampler : register(s0);
 
-struct Vertex
+cbuffer ShaderParameters : register(b0)
 {
-    float3 position;
-    float2 texCoord;
-    float3 normal;
-    float3 tangent;
-    float3 bitangent;
-};
+    float4x4 cViewInverse;
+    float4x4 cViewProjectionInverse;
+}
 
 cbuffer HitData : register(b1)
 {
@@ -32,11 +38,14 @@ cbuffer HitData : register(b1)
     uint IndexBufferOffset;
 }
 
-cbuffer ShaderParameters : register(b0)
+struct Vertex
 {
-    float4x4 cViewInverse;
-    float4x4 cViewProjectionInverse;
-}
+    float3 position;
+    float2 texCoord;
+    float3 normal;
+    float3 tangent;
+    float3 bitangent;
+};
 
 struct RayPayload
 {
@@ -208,8 +217,8 @@ void RayGen()
     uint launchIndex1d = launchIndex.x + launchIndex.y * DispatchRaysDimensions().x;
     float2 texCoord = (float2)launchIndex * dimInv;
 
-    float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sSceneSampler, texCoord, 0).r, cViewProjectionInverse);
-    float4 reflectionSample = tNormals.SampleLevel(sSceneSampler, texCoord, 0);
+    float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sSceneSampler, texCoord, 0).r, cViewProjectionInverse);
+    float4 reflectionSample = tSceneNormals.SampleLevel(sSceneSampler, texCoord, 0);
     float3 N = reflectionSample.rgb;
     float reflectivity = reflectionSample.a;
     if (reflectivity > 0)

@@ -4,12 +4,14 @@
 
 #define MAX_SHADOW_CASTERS 32
 
-cbuffer LightData : register(b2)
+struct ShadowData
 {
-    float4x4 cLightViewProjection[MAX_SHADOW_CASTERS];
-    float4 cCascadeDepths;
-    uint cNumCascades;
-}
+    float4x4 LightViewProjection[MAX_SHADOW_CASTERS];
+    float4 CascadeDepths;
+    uint NumCascades;
+};
+
+ConstantBuffer<ShadowData> cShadowData : register(b2);
 
 // Unpacks a 2 channel BC5 nromal to xyz
 float3 UnpackBC5Normal(float2 packedNormal)
@@ -40,7 +42,7 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invert
 float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
     // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
-    float4 lightPos = mul(float4(wPos, 1), cLightViewProjection[shadowMapIndex]);
+    float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjection[shadowMapIndex]);
     lightPos.xyz /= lightPos.w;
     lightPos.x = lightPos.x / 2.0f + 0.5f;
     lightPos.y = lightPos.y / -2.0f + 0.5f;
@@ -117,15 +119,15 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
     int shadowIndex = light.ShadowIndex;
     if (light.Type == LIGHT_DIRECTIONAL)
     {
-        float4 splits = pos.w > cCascadeDepths;
-        float4 cascades = cCascadeDepths > 0;
+        float4 splits = pos.w > cShadowData.CascadeDepths;
+        float4 cascades = cShadowData.CascadeDepths > 0;
         int cascadeIndex = dot(splits, cascades);
 
         const float cascadeFadeThreshold = 0.1f;
-        float nextSplit = cCascadeDepths[cascadeIndex];
-        float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
+        float nextSplit = cShadowData.CascadeDepths[cascadeIndex];
+        float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cShadowData.CascadeDepths[cascadeIndex - 1];
         float fadeFactor = (nextSplit - pos.w) / splitRange;
-        if (fadeFactor < cascadeFadeThreshold && cascadeIndex != cNumCascades - 1)
+        if (fadeFactor < cascadeFadeThreshold && cascadeIndex != cShadowData.NumCascades - 1)
         {
             float lerpAmount = smoothstep(0.0f, cascadeFadeThreshold, fadeFactor);
             float dither = InterleavedGradientNoise(pos.xy);
@@ -246,7 +248,7 @@ float3 ApplyVolumetricLighting(float3 startPoint, float3 endPoint, float4 pos, f
             if (light.ShadowIndex >= 0)
             {
                 int shadowMapIndex = GetShadowIndex(light, pos, currentPosition);
-                float4x4 lightViewProjection = cLightViewProjection[shadowMapIndex];
+                float4x4 lightViewProjection = cShadowData.LightViewProjection[shadowMapIndex];
                 float4 lightPos = mul(float4(currentPosition, 1.0f), lightViewProjection);
 
                 lightPos.xyz /= lightPos.w;
