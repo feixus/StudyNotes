@@ -257,6 +257,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 			{
 				Matrix View;
 				Matrix Projection;
+                Matrix ProjectionInverse;
                 Matrix ViewProjection;
                 Matrix ReprojectionMatrix;
                 Vector4 ViewPosition;
@@ -275,6 +276,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 
 			frameData.View = inputResource.pCamera->GetView();
 			frameData.Projection = inputResource.pCamera->GetProjection();
+            frameData.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
             frameData.ViewProjection = inputResource.pCamera->GetViewProjection();
             frameData.ViewPosition = Vector4(inputResource.pCamera->GetPosition());
 			frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);

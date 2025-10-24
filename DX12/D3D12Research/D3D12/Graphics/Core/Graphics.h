@@ -175,7 +175,6 @@ public:
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
-	uint32_t GetMaxMSAAQuality(uint32_t msaa, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 

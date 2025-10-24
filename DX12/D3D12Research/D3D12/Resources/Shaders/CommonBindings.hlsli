@@ -8,14 +8,15 @@ StructuredBuffer<Light> tLights :                        register(t5);
 Texture2D tAO :                                          register(t6);
 Texture2D tDepth :                                       register(t7);
 Texture2D tPreviousSceneColor :                          register(t8);
-Texture2D tShadowMapTextures[] :                         register(t10, space1);
+Texture2D tSceneNormals :                                register(t9);
+ByteAddressBuffer tGeometryData :                        register(t10);
+Texture2D tShadowMapTextures[] :                         register(t100, space1);
+RaytracingAccelerationStructure tAccelerationStructure : register(t500);
 Texture2D tMaterialTextures[] :                          register(t1000, space2);
 
 // samplers
 SamplerState sDiffuseSampler :                           register(s0);
 SamplerState sClampSampler :                             register(s1);
 SamplerComparisonState sShadowMapSampler :               register(s2);
-
-RaytracingAccelerationStructure tAccelerationStructure : register(t500);
 
 #endif

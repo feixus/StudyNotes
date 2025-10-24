@@ -9,25 +9,20 @@ public:
 
     void SetPosition(const Vector3& position);
     void SetRotation(const Quaternion& rotation);
+    void SetFoV(float fov);
+    void SetClippingPlanes(float nearPlane, float farPlane);
+    void SetOrthographic(bool orthographic, float size = -1.0f);
+    void SetNewPlane(float nearPlane);
+    void SetFarPlane(float farPlane);
+    void SetViewport(const FloatRect& rect);
+    void SetDirty() { m_Dirty = true; }
+    void SetJitterWeight(float weight);
 
     const Vector3& GetPosition() const { return m_Position; }
     const Quaternion& GetRotation() const { return m_Rotation; }
-
-    void SetDirty() { m_Dirty = true; }
-
-    void SetFoV(float fov);
-    void SetAspectRatio(float aspectRatio);
-    void SetClippingPlanes(float nearPlane, float farPlane);
-
-    void SetOrthographic(bool orthographic, float size = -1.0f);
-
-    void SetNewPlane(float nearPlane);
-    void SetFarPlane(float farPlane);
-
     float GetNear() const { return m_NearPlane; }
     float GetFar() const { return m_FarPlane; }
     float GetFoV() const { return m_FoV; }
-
     const Vector2& GetJitter() const { return m_Jitter; }
     const Vector2& GetPrevJitter() const { return m_PrevJitter; }
     const Matrix& GetView() const;
@@ -47,12 +42,13 @@ protected:
 private:
     void UpdateMatrices() const;
 
+    FloatRect m_Viewport;
     float m_FoV{60.f * Math::PI / 180};
     float m_NearPlane{1.f};
     float m_FarPlane{500.f};
     float m_OrthographicSize{1};
-    float m_AspectRatio{1};
     int m_JitterIndex{0};
+    float m_JitterWeight{1.0f};
     mutable Vector2 m_Jitter;
     Vector2 m_PrevJitter;
 

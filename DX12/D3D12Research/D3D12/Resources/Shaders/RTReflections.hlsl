@@ -1,26 +1,18 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
+#include "Lighting.hlsli"
 
 GlobalRootSignature GlobalRootSig = 
 {
     "CBV(b0, visibility=SHADER_VISIBILITY_ALL),"
-    "DescriptorTable(UAV(u0, numDescriptors=1, visibility=SHADER_VISIBILITY_ALL),"
-    "DescriptorTable(SRV(t0, numDescriptors=6, visibility=SHADER_VISIBILITY_ALL),"
-    "DescriptorTable(SRV(t200, numDescriptors=128, visibility=SHADER_VISIBILITY_ALL),"
+    "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),"
+    "DescriptorTable(SRV(t5, numDescriptors=6), visibility=SHADER_VISIBILITY_ALL),"
+    "DescriptorTable(SRV(t500, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),"
+    "DescriptorTable(SRV(t1000, numDescriptors=128, space = 2), visibility=SHADER_VISIBILITY_ALL),"
     "staticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
 };
 
 RWTexture2D<float4> gOutput : register(u0);
-
-RaytracingAccelerationStructure SceneBVH : register(t0);
-Texture2D tSceneColor : register(t1);
-Texture2D tSceneDepth : register(t2);
-Texture2D tSceneNormals : register(t3);
-StructuredBuffer<Light> tLights : register(t4);
-ByteAddressBuffer tGeometryData : register(t5);
-Texture2D tMaterialTextures[] : register(t200);
-
-SamplerState sSceneSampler : register(s0);
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -57,66 +49,6 @@ struct ShadowRayPayload
     uint hit;
 };
 
-float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invertY)
-{
-    sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
-
-#ifdef NORMAL_BC5
-    sampledNormal.z = sqrt(saturate(1.0f - dot(sampledNormal.xy, sampledNormal.xy)));
-#endif
-
-    if (invertY)
-    {
-        sampledNormal.y = -sampledNormal.y;
-    }
-
-    sampledNormal = normalize(sampledNormal);
-    return mul(sampledNormal, TBN);
-}
-
-float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
-{
-    return ao * diffuse * lightColor;
-}
-
-// Angle >= Umbra -> 0
-// Angle < Penumbra -> 1
-//Gradient between Umbra and Penumbra
-float DirectionAttenuation(float3 L, float3 direction, float cosUmbra, float cosPrenumbra)
-{
-    float cosAngle = dot(-normalize(L), direction);
-    float falloff = saturate((cosAngle - cosUmbra) / (cosPrenumbra - cosUmbra));
-    return falloff * falloff;
-}
-
-//Distance between rays is proportional to distance squared
-//Extra windowing function to make light radius finite
-//https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
-float RadialAttenuation(float3 L, float range)
-{
-    float distSq = dot(L, L);
-    float distanceAttenuatio = 1 / (distSq + 1);
-    float windowing = Square(saturate(1 - Square(distSq * Square(rcp(range)))));
-    return distanceAttenuatio * windowing;
-}
-
-float GetAttenuation(Light light, float3 wPos)
-{
-    float attenuation = 1.0f;
-
-    if (light.Type >= LIGHT_POINT)
-    {
-        float3 L = light.Position - wPos;
-        attenuation *= RadialAttenuation(L, light.Range);
-        if (light.Type >= LIGHT_SPOT)
-        {
-            attenuation *= DirectionAttenuation(L, light.Direction, light.SpotlightAngles.y, light.SpotlightAngles.x);
-        }
-    }
-
-    return attenuation;
-}
-
 [shader("closesthit")]
 void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
@@ -135,12 +67,12 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
     float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     float3 V = normalize(wPos - cViewInverse[3].xyz);
 
-    float rayDistanceScale = RayTCurrent() / (500.0f - RayTMin());
+    float rayDistanceScale = RayTCurrent() / (1000.0f - RayTMin());
     float cosAngle = 1.0f - dot(WorldRayDirection(), N);
-    int mipLevel = (cosAngle / 2.0f + rayDistanceScale / 2.0f) * 7.0f;
+    int mipLevel = (cosAngle / 2.0f + rayDistanceScale / 2.0f) * 6.0f;
 
-    float3 diffuse = tMaterialTextures[DiffuseIndex].SampleLevel(sSceneSampler, texCoord, mipLevel).rgb;
-    float3 sampledNormal = tMaterialTextures[NormalIndex].SampleLevel(sSceneSampler, texCoord, mipLevel).rgb;
+    float3 diffuse = tMaterialTextures[DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
+    float3 sampledNormal = tMaterialTextures[NormalIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
     N = TangentSpaceNormalMapping(sampledNormal, TBN, false);
 
     float roughness = 0.5f;
@@ -168,7 +100,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 
         // trace the ray
         TraceRay(
-            SceneBVH,                                                       // Acceleration structure
+            tAccelerationStructure,                                                       // Acceleration structure
             RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE,    // Ray flags
             0xFF,                                                           // InstanceInclusionMask
             1,                                                              // RayContributionToHitGroupIndex
@@ -217,8 +149,8 @@ void RayGen()
     uint launchIndex1d = launchIndex.x + launchIndex.y * DispatchRaysDimensions().x;
     float2 texCoord = (float2)launchIndex * dimInv;
 
-    float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sSceneSampler, texCoord, 0).r, cViewProjectionInverse);
-    float4 reflectionSample = tSceneNormals.SampleLevel(sSceneSampler, texCoord, 0);
+    float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r, cViewProjectionInverse);
+    float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
     float3 N = reflectionSample.rgb;
     float reflectivity = reflectionSample.a;
     if (reflectivity > 0)
@@ -233,7 +165,7 @@ void RayGen()
         ray.TMax = 10000;
 
         TraceRay(
-            SceneBVH, 
+            tAccelerationStructure, 
             RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE,
             0xFF,
             0,
@@ -244,6 +176,6 @@ void RayGen()
         );
     }
 
-    float4 colorSample = tSceneColor.SampleLevel(sSceneSampler, texCoord, 0);
+    float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
     gOutput[launchIndex] = colorSample + float4(reflectivity * payload.output, 0);
 }

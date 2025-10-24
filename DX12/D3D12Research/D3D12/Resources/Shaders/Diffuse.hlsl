@@ -9,7 +9,7 @@
                 "CBV(b2, visibility = SHADER_VISIBILITY_PIXEL), " \
                 "DescriptorTable(SRV(t1000, numDescriptors = 128, space = 2), visibility = SHADER_VISIBILITY_PIXEL), " \
                 "DescriptorTable(SRV(t3, numDescriptors = 7), visibility = SHADER_VISIBILITY_PIXEL), " \
-                "DescriptorTable(SRV(t10, numDescriptors = 32, space = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
+                "DescriptorTable(SRV(t100, numDescriptors = 32, space = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
                 "SRV(t500, visibility = SHADER_VISIBILITY_PIXEL), " \
                 "StaticSampler(s0, filter = FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
                 "StaticSampler(s1, filter = FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
@@ -28,6 +28,7 @@ struct PerViewData
 {
     float4x4 View;
     float4x4 Projection;
+    float4x4 projectionInverse;
     float4x4 ViewProjection;
     float4x4 ReprojectionMatrix;
     float4 ViewPosition;
@@ -83,6 +84,48 @@ uint GetSliceFromDepth(float depth)
 }
 #endif
 
+float ScreenSpaceShadows(float3 worldPos, float3 lightDir, int stepCount, float rayLength, float ditherOffset)
+{
+    const float4 ScreenToUV = float4(float2(0.5f, -0.5f), float2(0.5f, 0.5f));
+
+    float4 rayStartPS = mul(float4(worldPos, 1), cViewData.ViewProjection);
+    float4 rayDirPS = mul(float4(lightDir * rayLength, 0), cViewData.ViewProjection);
+    float4 rayEndPS = rayStartPS + rayDirPS;
+    rayStartPS.xyz /= rayStartPS.w;
+    rayEndPS.xyz /= rayEndPS.w;
+    float3 rayStep = rayEndPS.xyz - rayStartPS.xyz;
+    float stepSize = 1.0f / stepCount;
+
+    float4 rayDepthClip = rayStartPS + mul(float4(0, 0, rayLength, 0), cViewData.Projection);
+    rayDepthClip.z /= rayDepthClip.w;
+    float tolerance = abs(rayDepthClip.z - rayStartPS.z) * stepSize * 2;
+
+    float occlusion = 0.0f;
+    float hitStep = -1.0f;
+
+    float n = stepSize * ditherOffset + stepSize;
+
+    [unroll]
+    for (uint i = 0; i < stepCount; i++)
+    {
+        float3 rayPos = rayStartPS.xyz + n * rayStep;
+        float depth = tDepth.SampleLevel(sDiffuseSampler, rayPos.xy * ScreenToUV.xy + ScreenToUV.zw, 0).r;
+        float diff = rayPos.z - depth;
+
+        bool hit = abs(diff + tolerance) < tolerance;
+        hitStep = hit && hitStep < 0.0f ? n : hitStep;
+        n += stepSize;
+    }
+
+    if (hitStep > 0.0f)
+    {
+        float2 hitUV = rayStartPS.xy + n * rayStep.xy;
+        hitUV = hitUV * ScreenToUV.xy + ScreenToUV.zw;
+        occlusion = ScreenFade(hitUV);
+    }
+    return 1.0f - occlusion;
+}
+
 LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
 #if TILED_FORWARD
@@ -110,8 +153,19 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
         Light light = tLights[lightIndex];
 
         LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, N, V);
-        totalResult.Diffuse += result.Diffuse;
-        totalResult.Specular += result.Specular;
+
+        float3 L = normalize(light.Position - wPos);
+        if (light.Type == LIGHT_DIRECTIONAL)
+        {
+            L = -light.Direction;
+        }
+
+        float ditherValue = InterleavedGradientNoise(pos.xy, cViewData.FrameIndex);
+        float length = 0.1f * pos.w * cViewData.projectionInverse[1][1];
+        float occlusion = ScreenSpaceShadows(wPos, L, 8, length, ditherValue);
+
+        totalResult.Diffuse += result.Diffuse * occlusion;
+        totalResult.Specular += result.Specular * occlusion;
     }
 
     return totalResult;

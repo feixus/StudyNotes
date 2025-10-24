@@ -1436,7 +1436,7 @@ void Graphics::OnResize(int width, int height)
 	m_pTAASource->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
-	m_pCamera->SetAspectRatio((float)width / height);
+	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
 	m_pCamera->SetDirty();
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
@@ -1637,7 +1637,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	GenerateAccelerationStructure(m_pMesh.get(), context);
 
 	{
-		int lightCount = 5;
+		int lightCount = 1;
 		m_Lights.resize(lightCount);
 
 		Vector3 position(-150, 160, -10);
@@ -1648,21 +1648,21 @@ void Graphics::InitializeAssets(CommandContext& context)
 		m_Lights[0].CastShadows = true;
 		m_Lights[0].VolumetricLighting = false;
 
-		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		m_Lights[1].CastShadows = true;
-		m_Lights[1].VolumetricLighting = false;
+		// m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		// m_Lights[1].CastShadows = true;
+		// m_Lights[1].VolumetricLighting = false;
 
-		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		m_Lights[2].CastShadows = true;
-		m_Lights[2].VolumetricLighting = false;
+		// m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		// m_Lights[2].CastShadows = true;
+		// m_Lights[2].VolumetricLighting = false;
 
-		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		m_Lights[3].CastShadows = true;
-		m_Lights[3].VolumetricLighting = false;
+		// m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		// m_Lights[3].CastShadows = true;
+		// m_Lights[3].VolumetricLighting = false;
 
-		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		m_Lights[4].CastShadows = true;
-		m_Lights[4].VolumetricLighting = false;
+		// m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		// m_Lights[4].CastShadows = true;
+		// m_Lights[4].VolumetricLighting = false;
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
@@ -2303,16 +2303,6 @@ bool Graphics::IsFenceComplete(uint64_t fenceValue)
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
 	CommandQueue* pQueue = GetCommandQueue(type);
 	return pQueue->IsFenceComplete(fenceValue);
-}
-
-uint32_t Graphics::GetMaxMSAAQuality(uint32_t msaa, DXGI_FORMAT format)
-{
-	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
-	qualityLevels.Format = format == DXGI_FORMAT_UNKNOWN ? RENDER_TARGET_FORMAT : format;
-	qualityLevels.SampleCount = msaa;
-	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)), GetDevice());
-	return qualityLevels.NumQualityLevels - 1;
 }
 
 ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue)
