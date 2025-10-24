@@ -12,37 +12,27 @@ struct DynamicAllocation
 	void* pMappedMemory{ nullptr };
 };
 
-class AllocationPage : public Buffer
-{
-public:
-	AllocationPage(Graphics* pGraphics);
-	void Create(uint64_t size);
-	inline void* GetMappedData() const { return m_pMappedData; }
-
-private:
-	void* m_pMappedData{nullptr};
-};
-
 class DynamicAllocationManager : public GraphicsObject
 {
 public:
-	DynamicAllocationManager(Graphics* pGraphics);
+	DynamicAllocationManager(Graphics* pGraphics, BufferFlag bufferFlags);
 	~DynamicAllocationManager();
 
-	AllocationPage* AllocatePage(size_t size);
-	AllocationPage* CreateNewPage(size_t size);
+	Buffer* AllocatePage(size_t size);
+	Buffer* CreateNewPage(size_t size);
 
-	void FreePages(uint64_t fenceValue, const std::vector<AllocationPage*> pPages);
-	void FreeLargePages(uint64_t fenceValue, const std::vector<AllocationPage*> pLargePages);
+	void FreePages(uint64_t fenceValue, const std::vector<Buffer*> pPages);
+	void FreeLargePages(uint64_t fenceValue, const std::vector<Buffer*> pLargePages);
 	void CollectGrabage();
 
 	uint64_t GetMemoryUsage() const;
 
 private:
+	BufferFlag m_BufferFlags;
 	std::mutex m_PageMutex;
-	std::vector<std::unique_ptr<AllocationPage>> m_Pages;
-	std::queue<std::pair<uint64_t, AllocationPage*>> m_FreedPages;
-	std::queue<std::pair<uint64_t, std::unique_ptr<AllocationPage>>> m_DeleteQueue;
+	std::vector<std::unique_ptr<Buffer>> m_Pages;
+	std::queue<std::pair<uint64_t, Buffer*>> m_FreedPages;
+	std::queue<std::pair<uint64_t, std::unique_ptr<Buffer>>> m_DeleteQueue;
 };
 
 class DynamicResourceAllocator
@@ -56,9 +46,9 @@ public:
 private:
 	DynamicAllocationManager* m_pPageManager;
 
-	AllocationPage* m_pCurrentPage{ nullptr };
+	Buffer* m_pCurrentPage{ nullptr };
 	size_t m_CurrentOffset{ 0 };
-	std::vector<AllocationPage*> m_UsedPages;
-	std::vector<AllocationPage*> m_UsedLargePages;
+	std::vector<Buffer*> m_UsedPages;
+	std::vector<Buffer*> m_UsedLargePages;
 };
 

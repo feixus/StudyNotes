@@ -1318,7 +1318,7 @@ void Graphics::InitD3D()
 		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture>(this, "MSAA Render Target");
 	}
 
-	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
@@ -1637,7 +1637,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	GenerateAccelerationStructure(m_pMesh.get(), context);
 
 	{
-		int lightCount = 1;
+		int lightCount = 5;
 		m_Lights.resize(lightCount);
 
 		Vector3 position(-150, 160, -10);
@@ -1648,21 +1648,21 @@ void Graphics::InitializeAssets(CommandContext& context)
 		m_Lights[0].CastShadows = true;
 		m_Lights[0].VolumetricLighting = false;
 
-		// m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		// m_Lights[1].CastShadows = true;
-		// m_Lights[1].VolumetricLighting = false;
+		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[1].CastShadows = true;
+		m_Lights[1].VolumetricLighting = false;
 
-		// m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		// m_Lights[2].CastShadows = true;
-		// m_Lights[2].VolumetricLighting = false;
+		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[2].CastShadows = true;
+		m_Lights[2].VolumetricLighting = false;
 
-		// m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		// m_Lights[3].CastShadows = true;
-		// m_Lights[3].VolumetricLighting = false;
+		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[3].CastShadows = true;
+		m_Lights[3].VolumetricLighting = false;
 
-		// m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		// m_Lights[4].CastShadows = true;
-		// m_Lights[4].VolumetricLighting = false;
+		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[4].CastShadows = true;
+		m_Lights[4].VolumetricLighting = false;
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));

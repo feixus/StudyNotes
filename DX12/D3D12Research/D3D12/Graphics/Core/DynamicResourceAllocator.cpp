@@ -17,7 +17,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 
 	if (bufferSize > PAGE_SIZE)
 	{
-		AllocationPage* pPage = m_pPageManager->CreateNewPage(bufferSize);
+		Buffer* pPage = m_pPageManager->CreateNewPage(bufferSize);
 		m_UsedLargePages.push_back(pPage);
 
 		allocation.Offset = 0;
@@ -61,8 +61,8 @@ void DynamicResourceAllocator::Free(uint64_t fenceValue)
 }
 
 
-DynamicAllocationManager::DynamicAllocationManager(Graphics* pGraphics)
-	: GraphicsObject(pGraphics)
+DynamicAllocationManager::DynamicAllocationManager(Graphics* pGraphics, BufferFlag bufferFlags)
+	: GraphicsObject(pGraphics), m_BufferFlags(bufferFlags)
 {
 }
 
@@ -70,11 +70,11 @@ DynamicAllocationManager::~DynamicAllocationManager()
 {
 }
 
-AllocationPage* DynamicAllocationManager::AllocatePage(size_t size)
+Buffer* DynamicAllocationManager::AllocatePage(size_t size)
 {
 	std::scoped_lock lockGuard(m_PageMutex);
 
-	AllocationPage* pPage = nullptr;
+	Buffer* pPage = nullptr;
 	if (m_FreedPages.size() > 0 && GetGraphics()->IsFenceComplete(m_FreedPages.front().first))
 	{
 		pPage = m_FreedPages.front().second;
@@ -89,23 +89,24 @@ AllocationPage* DynamicAllocationManager::AllocatePage(size_t size)
 	return pPage;
 }
 
-AllocationPage* DynamicAllocationManager::CreateNewPage(size_t size)
+Buffer* DynamicAllocationManager::CreateNewPage(size_t size)
 {
-	AllocationPage* pNewPage = new AllocationPage(GetGraphics());
-	pNewPage->Create(size);
+	Buffer* pNewPage = new Buffer(GetGraphics(), "Dynamic Allocation Buffer");
+	pNewPage->Create(BufferDesc::CreateBuffer((uint32_t)size, m_BufferFlags));
+	pNewPage->Map();
 	return pNewPage;
 }
 
-void DynamicAllocationManager::FreePages(uint64_t fenceValue, const std::vector<AllocationPage*> pPages)
+void DynamicAllocationManager::FreePages(uint64_t fenceValue, const std::vector<Buffer*> pPages)
 {
 	std::scoped_lock lockGuard(m_PageMutex);
-	for (AllocationPage* pPage : pPages)
+	for (Buffer* pPage : pPages)
 	{
 		m_FreedPages.emplace(fenceValue, pPage);
 	}
 }
 
-void DynamicAllocationManager::FreeLargePages(uint64_t fenceValue, const std::vector<AllocationPage*> pLargePages)
+void DynamicAllocationManager::FreeLargePages(uint64_t fenceValue, const std::vector<Buffer*> pLargePages)
 {
 	std::scoped_lock lockGuard(m_PageMutex);
 
@@ -114,7 +115,7 @@ void DynamicAllocationManager::FreeLargePages(uint64_t fenceValue, const std::ve
 		m_DeleteQueue.pop();
 	}
 
-	for (AllocationPage* pPage : pLargePages)
+	for (Buffer* pPage : pLargePages)
 	{
 		m_DeleteQueue.emplace(fenceValue, pPage);
 	}
@@ -137,14 +138,4 @@ uint64_t DynamicAllocationManager::GetMemoryUsage() const
 		size += pPage->GetSize();
 	}
 	return size;
-}
-
-AllocationPage::AllocationPage(Graphics* pGraphics) : Buffer(pGraphics, "Dynamic Allocation Page")
-{
-}
-
-void AllocationPage::Create(uint64_t size)
-{
-	Buffer::Create(BufferDesc((uint32_t)size, 1, BufferFlag::Upload));
-	m_pMappedData = Map();
 }

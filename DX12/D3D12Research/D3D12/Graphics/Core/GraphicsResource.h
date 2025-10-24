@@ -65,6 +65,10 @@ public:
 	GraphicsResource(Graphics* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 	virtual ~GraphicsResource();
 
+	void* Map(uint32_t subResource = 0, uint64_t readFrom = 0, uint64_t readTo = 0);
+	void UnMap(uint32_t subResource = 0, uint64_t writeFrom = 0, uint64_t writeTo = 0);
+	void* GetMappedData() const { return m_pMappedData; }
+
 	void Release();
 	void SetName(const char* pName);
 	std::string GetName() const;
@@ -85,6 +89,7 @@ public:
 
 protected:
 	ID3D12Resource* m_pResource{nullptr};	// when use ComPtr, the render target created from swap chain, reference counter is confusing
+	void* m_pMappedData{nullptr};
 	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;	
 	ResourceState m_ResourceState;
 };

@@ -4,7 +4,7 @@
 #define RPP 64
 
 // raytracing output texture, accessed as a UAV
-RWTexture2D<float> gOutput : register(u0);
+RWTexture2D<float> uOutput : register(u0);
 
 // raytracing acceleration structure, accessed as a SRV
 RaytracingAccelerationStructure SceneBVH : register(t0);
@@ -116,5 +116,5 @@ void RayGen()
     }
 
     accumulateAo /= cSamples;
-    gOutput[launchIndex] = pow(1 - accumulateAo, cPower);
+    uOutput[launchIndex] = pow(1 - accumulateAo, cPower);
 }

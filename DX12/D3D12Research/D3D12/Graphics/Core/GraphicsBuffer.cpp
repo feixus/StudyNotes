@@ -113,24 +113,6 @@ void Buffer::SetData(CommandContext* pContext, const void* pData, uint64_t dataS
 	pContext->InitializeBuffer(this, pData, dataSize, offset);
 }
 
-void* Buffer::Map(uint32_t subResource /*= 0*/, uint64_t readFrom /*= 0*/, uint64_t readTo /*= 0*/)
-{
-	check(m_pResource);
-
-	CD3DX12_RANGE range(readFrom, readTo);
-	void* pMappedData = nullptr;
-	m_pResource->Map(subResource, &range, &pMappedData);
-	return pMappedData;
-}
-
-void Buffer::UnMap(uint32_t subResource /*= 0*/, uint64_t writeFrom /*= 0*/, uint64_t writeTo /*= 0*/)
-{
-	check(m_pResource);
-
-	CD3DX12_RANGE range(writeFrom, writeTo);
-	m_pResource->Unmap(subResource, &range);
-}
-
 void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
 {
 	if (*pView == nullptr)

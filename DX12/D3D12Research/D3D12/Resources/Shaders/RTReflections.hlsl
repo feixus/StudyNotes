@@ -18,6 +18,7 @@ cbuffer ShaderParameters : register(b0)
 {
     float4x4 cViewInverse;
     float4x4 cViewProjectionInverse;
+    uint cNumLights;
 }
 
 cbuffer HitData : register(b1)
@@ -79,28 +80,33 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
     float3 specularColor = ComputeF0(0.5f, diffuse, 0);
 
     LightResult totalResult = (LightResult)0;
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < cNumLights; ++i)
     {
         Light light = tLights[i];
         float attenuation = GetAttenuation(light, wPos);
+        if (attenuation <= 0.0f)
+        {
+            continue;
+        }
+
         float3 L = normalize(light.Position - wPos);
         if (light.Type == LIGHT_DIRECTIONAL)
         {
             L = -light.Direction;
         }
 
-        ShadowRayPayload payload = (ShadowRayPayload)0;
-
-    #if 1
+    #define SHADOW_RAY 1
+    #if SHADOW_RAY
         RayDesc ray;
         ray.Origin = wPos + 0.001f * L;
         ray.Direction = L;
         ray.TMin = 0.0f;
         ray.TMax = length(wPos - light.Position);
 
+        ShadowRayPayload payload = (ShadowRayPayload)0;
         // trace the ray
         TraceRay(
-            tAccelerationStructure,                                                       // Acceleration structure
+            tAccelerationStructure,                                         // Acceleration structure
             RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE,    // Ray flags
             0xFF,                                                           // InstanceInclusionMask
             1,                                                              // RayContributionToHitGroupIndex
@@ -146,7 +152,6 @@ void RayGen()
 
     float2 dimInv = rcp(DispatchRaysDimensions().xy);
     uint2 launchIndex = DispatchRaysIndex().xy;
-    uint launchIndex1d = launchIndex.x + launchIndex.y * DispatchRaysDimensions().x;
     float2 texCoord = (float2)launchIndex * dimInv;
 
     float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r, cViewProjectionInverse);
