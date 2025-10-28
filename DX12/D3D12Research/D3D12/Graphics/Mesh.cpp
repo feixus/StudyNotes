@@ -35,17 +35,26 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		Vector3 Bitangent;
 	};
 
-	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
-	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32_t), BufferFlag::ShaderResource | BufferFlag::ByteAddress));
+	uint64_t bufferSize = vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32_t);
 
-	uint32_t dataOffset = 0;
+	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
+	m_pGeometryData->Create(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress));
+
+	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+
+	uint64_t dataOffset = 0;
+	auto CopyData = [this, &dataOffset, &pContext](void* pSource, uint64_t size)
+	{
+		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
+		dataOffset += size;
+	};
+
 	for (uint32_t i = 0; i < pScene->mNumMeshes; i++)
 	{
 		const aiMesh* pMesh = pScene->mMeshes[i];
 		std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 		std::vector<Vertex> vertices(pMesh->mNumVertices);
-		std::vector<uint32_t> indices(pMesh->mNumFaces * 3);
-
+		
 		for (uint32_t j = 0; j < pMesh->mNumVertices; j++)
 		{
 			Vertex& vertex = vertices[j];
@@ -61,7 +70,8 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 				vertex.Bitangent = *reinterpret_cast<Vector3*>(&pMesh->mBitangents[j]);
 			}
 		}
-
+		
+		std::vector<uint32_t> indices(pMesh->mNumFaces * 3);
 		for (uint32_t k = 0; k < pMesh->mNumFaces; k++)
 		{
 			const aiFace& face = pMesh->mFaces[k];
@@ -77,21 +87,19 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		
 		pSubMesh->m_VertexCount = (uint32_t)vertices.size();
 		pSubMesh->m_VerticesLocation = m_pGeometryData->GetGpuHandle() + dataOffset;
-		m_pGeometryData->SetData(pContext, vertices.data(), sizeof(Vertex) * vertices.size(), dataOffset);
-		dataOffset += (uint32_t)vertices.size() * sizeof(Vertex);
+		CopyData(vertices.data(), sizeof(Vertex) * vertices.size());
 
 		pSubMesh->m_IndexCount = (uint32_t)indices.size();
 		pSubMesh->m_IndicesLocation = m_pGeometryData->GetGpuHandle() + dataOffset;
-		m_pGeometryData->SetData(pContext, indices.data(), sizeof(uint32_t) * indices.size(), dataOffset);
-		dataOffset += (uint32_t)indices.size() * sizeof(uint32_t);
-		
-		pContext->FlushResourceBarriers();
+		CopyData(indices.data(), sizeof(uint32_t) * indices.size());
 
 		pSubMesh->m_Stride = sizeof(Vertex);
 		pSubMesh->m_pParent = this;
 
 		m_Meshes.push_back(std::move(pSubMesh));
 	}
+
+	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COMMON);
 
 	m_Textures.push_back(std::make_unique<GraphicsTexture>(pGraphics, "Dummy White"));
 	m_Textures.back()->Create(pContext, "Resources/textures/dummy.dds", true);
@@ -183,5 +191,10 @@ VertexBufferView SubMesh::GetVertexBuffer() const
 IndexBufferView SubMesh::GetIndexBuffer() const
 {
 	return IndexBufferView(m_IndicesLocation, m_IndexCount, false);
+}
+
+Buffer* SubMesh::GetSourceBuffer() const
+{
+	return m_pParent->GetData();
 }
 

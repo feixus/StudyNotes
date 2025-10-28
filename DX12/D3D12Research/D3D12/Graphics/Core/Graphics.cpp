@@ -39,40 +39,40 @@
 
 namespace Tweakables
 {
-	bool g_DumpRenderGraph = false;
-	bool g_Screenshot = false;
-
+	// post processing
 	float g_WhitePoint = 1;
 	float g_MinLogLuminance = -10.0f;
 	float g_MaxLogLuminance = 20.0f;
 	float g_Tau = 2;
-
 	bool g_DrawHistogram = false;
 	uint32_t g_ToneMapper = 2;
+	bool g_TAA = true;
 
+	// shadows
 	bool g_ShowSDSM = false;
 	bool g_StabilizeCascases = true;
 	bool g_VisualizeShadowCascades = false;
 	int g_ShadowCascades = 4;
 	float g_PSSMFactor = 1.0f;
 
+	// misc lighting
 	bool g_RaytracedAO = false;
-	bool g_RaytracedReflections = false;
-
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
 
-	bool g_TAA = true;
-
+	// lighting
 	float g_SunInclination = 0.2f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5000.0f;
 	float g_SunIntensity = 3.0f;
 
+	// reflections
+	bool g_RaytracedReflections = false;
 	int g_SsrSamples = 16;
-
-	int g_ShadowMapIndex = 0;
-
+	
+	// Misc
+	bool g_DumpRenderGraph = false;
+	bool g_Screenshot = false;
 	bool g_EnableUI = true;
 }
 
@@ -359,7 +359,6 @@ void Graphics::Update()
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pTLAS = m_pTLAS.get();
-	m_SceneData.pMesh = m_pMesh.get();
 	m_SceneData.pNormals = m_pNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 
@@ -1006,7 +1005,7 @@ void Graphics::Update()
 					context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
 
-					context.Dispatch(1, m_pLuminanceHistogram->GetDesc().ElementCount);
+					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
 		}
 	}

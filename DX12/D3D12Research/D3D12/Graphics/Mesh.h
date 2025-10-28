@@ -20,6 +20,7 @@ public:
 
     VertexBufferView GetVertexBuffer() const;
     IndexBufferView GetIndexBuffer() const;
+    Buffer* GetSourceBuffer() const;
 
 private:
     int m_Stride{0};

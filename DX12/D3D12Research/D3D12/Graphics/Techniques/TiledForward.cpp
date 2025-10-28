@@ -75,7 +75,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             Data.NumThreadGroups.y = Math::DivideAndRoundUp(inputResource.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
             Data.NumThreadGroups.z = 1;
             Data.ScreenDimensionsInv = Vector2(1.0f / inputResource.pResolvedDepth->GetWidth(), 1.0f / inputResource.pResolvedDepth->GetHeight());
-            Data.LightCount = (uint32_t)inputResource.pLightBuffer->GetDesc().ElementCount;
+            Data.LightCount = (uint32_t)inputResource.pLightBuffer->GetNumElements();
             Data.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
 
             context.SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
@@ -128,7 +128,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             frameData.FarZ = inputResource.pCamera->GetFar();
             frameData.FrameIndex = inputResource.FrameIndex;
             frameData.SsrSamples = Tweakables::g_SsrSamples;
-			frameData.LightCount = inputResource.pLightBuffer->GetDesc().ElementCount;
+			frameData.LightCount = inputResource.pLightBuffer->GetNumElements();
 
             Matrix reprojectionMatrix = inputResource.pCamera->GetViewProjection().Invert() * inputResource.pCamera->GetPreviousViewProjection();
             // tranform from uv to clip space: texcoord * 2 - 1

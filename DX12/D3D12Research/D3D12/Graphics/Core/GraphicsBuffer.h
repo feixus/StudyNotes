@@ -29,10 +29,10 @@ DECLARE_BITMASK_TYPE(BufferFlag)
 struct BufferDesc
 {
 	BufferDesc() = default;
-	BufferDesc(uint32_t elementCount, uint32_t stride, BufferFlag usage = BufferFlag::None)
-		: ElementCount(elementCount), ElementSize(stride), Usage(usage) {}
+	BufferDesc(uint64_t elements, uint32_t elementSize, BufferFlag usage = BufferFlag::None)
+		: Size(elements * elementSize), ElementSize(elementSize), Usage(usage) {}
 
-	static BufferDesc CreateBuffer(uint32_t sizeInBytes, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateBuffer(uint64_t sizeInBytes, BufferFlag usage = BufferFlag::None)
 	{
 		return BufferDesc(sizeInBytes, 1, usage);
 	}
@@ -55,8 +55,8 @@ struct BufferDesc
 	static BufferDesc CreateStructured(uint32_t elementCount, uint32_t elementSize, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
 		BufferDesc desc;
-		desc.ElementCount = elementCount;
 		desc.ElementSize = elementSize;
+		desc.Size = elementCount * desc.ElementSize;
 		desc.Usage = usage | BufferFlag::Structured;
 		return desc;
 	}
@@ -65,7 +65,7 @@ struct BufferDesc
 	{
 		check(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = (uint32_t)bytes / 4;
+		desc.Size = bytes;
 		desc.ElementSize = 4;
 		desc.Usage = usage | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess;
 		return desc;
@@ -75,8 +75,8 @@ struct BufferDesc
 	static BufferDesc CreateIndirectArgumemnts(int elements = 1, BufferFlag usage = BufferFlag::None)
 	{
 		BufferDesc desc;
-		desc.ElementCount = elements;
 		desc.ElementSize = sizeof(IndirectParameters);
+		desc.Size = elements * desc.ElementSize;
 		desc.Usage = usage | BufferFlag::IndirectArgument | BufferFlag::UnorderedAccess;
 		return desc;
 	}
@@ -85,7 +85,7 @@ struct BufferDesc
 	{
 		check(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = (uint32_t)bytes / 4;
+		desc.Size = bytes;
 		desc.ElementSize = 4;
 		desc.Usage = desc.Usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
 		return desc;
@@ -95,16 +95,21 @@ struct BufferDesc
 	{
 		check(!D3D::IsBlockCompressFormat(format));
 		BufferDesc desc;
-		desc.ElementCount = elementCount;
 		desc.ElementSize = D3D::GetFormatRowDataSize(format, 1);
+		desc.Size = elementCount * desc.ElementSize;
 		desc.Usage = usage;
 		desc.Format = format;
 		return desc;
 	}
 
+	uint32_t NumElements() const
+	{
+		return static_cast<uint32_t>(Size / ElementSize);
+	}
+
 	bool operator==(const BufferDesc& other) const
 	{
-		return ElementCount == other.ElementCount && ElementSize == other.ElementSize && Usage == other.Usage;
+		return Size == other.Size && ElementSize == other.ElementSize && Usage == other.Usage;
 	}
 
 	bool operator!=(const BufferDesc& other) const
@@ -112,7 +117,7 @@ struct BufferDesc
 		return !(*this == other);
 	}
 
-	uint32_t ElementCount{0};
+	uint64_t Size{0};
 	uint32_t ElementSize{0};
 	BufferFlag Usage{BufferFlag::None};
 	DXGI_FORMAT Format{DXGI_FORMAT_UNKNOWN};
@@ -126,10 +131,11 @@ public:
 	~Buffer();
 
 	void Create(const BufferDesc& desc);
-	void SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint32_t offset = 0);
+	void SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint64_t offset = 0);
 
-	inline uint64_t GetSize() const { return (uint64_t)m_Desc.ElementCount * m_Desc.ElementSize; }
-	const BufferDesc& GetDesc() const { return m_Desc; }
+	inline uint64_t GetSize() const { return m_Desc.Size; }
+	inline uint32_t GetNumElements() const { return m_Desc.NumElements(); }
+	inline const BufferDesc& GetDesc() const { return m_Desc; }
 
 	void CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc);
 	void CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc);
@@ -157,8 +163,8 @@ struct VertexBufferView
 	VertexBufferView(Buffer* pBuffer)
 	{
 		Location = pBuffer->GetGpuHandle();
-		Elements = (uint32_t)pBuffer->GetDesc().ElementCount;
 		Stride = pBuffer->GetDesc().ElementSize;
+		Elements = (uint32_t)(pBuffer->GetSize() / Stride);
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS Location;
@@ -175,7 +181,7 @@ struct IndexBufferView
 	IndexBufferView(Buffer* pBuffer)
 	{
 		Location = pBuffer->GetGpuHandle();
-		Elements = (uint32_t)pBuffer->GetDesc().ElementCount;
+		Elements = (uint32_t)(pBuffer->GetSize() / pBuffer->GetDesc().ElementSize);
 		SmallIndices = pBuffer->GetDesc().Format == DXGI_FORMAT_R16_UINT;
 	}
 

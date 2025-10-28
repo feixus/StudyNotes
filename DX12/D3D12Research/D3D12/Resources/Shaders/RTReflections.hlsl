@@ -17,8 +17,6 @@ GlobalRootSignature GlobalRootSig =
     "staticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
 };
 
-RWTexture2D<float4> uOutput : register(u0);
-
 struct ViewData
 {
     float4x4 ViewInverse;
@@ -26,7 +24,6 @@ struct ViewData
     uint NumLights;
     float ViewPixelSpreadAngle;
 };
-ConstantBuffer<ViewData> cViewData : register(b0);
 
 struct HitData
 {
@@ -34,10 +31,7 @@ struct HitData
     int NormalIndex;
     int RoughnessIndex;
     int MetallicIndex;
-    uint VertexBufferOffset;
-    uint IndexBufferOffset;
 };
-ConstantBuffer<HitData> cHitData : register(b1);
 
 struct Vertex
 {
@@ -58,6 +52,13 @@ struct ShadowRayPayload
 {
     uint hit;
 };
+
+RWTexture2D<float4> uOutput : register(u0);
+StructuredBuffer<Vertex> tVertices : register(t0);
+StructuredBuffer<uint3> tIndices : register(t1);
+
+ConstantBuffer<ViewData> cViewData : register(b0);
+ConstantBuffer<HitData> cHitData : register(b1);
 
 ShadowRayPayload CastShadowRay(float3 origin, float3 target)
 {
@@ -121,11 +122,11 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
     payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
     // resolve geometry data
-    uint3 indices = tGeometryData.Load3(cHitData.IndexBufferOffset + PrimitiveIndex() * sizeof(uint3));
+    uint3 indices = tIndices[PrimitiveIndex()];
     float3 b = float3(1.0f - attrib.barycentrics.x - attrib.barycentrics.y, attrib.barycentrics.x, attrib.barycentrics.y);
-    Vertex v0 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.x * sizeof(Vertex));
-    Vertex v1 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.y * sizeof(Vertex));
-    Vertex v2 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.z * sizeof(Vertex));
+    Vertex v0 = tVertices[indices.x];
+    Vertex v1 = tVertices[indices.y];
+    Vertex v2 = tVertices[indices.z];
     float2 texCoord = v0.texCoord * b.x + v1.texCoord * b.y + v2.texCoord * b.z;
 
     float3 N = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;
