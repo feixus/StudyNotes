@@ -20,10 +20,6 @@ private:
     void SetupResources(Graphics* pGraphics);
     void SetupPipelines(Graphics* pGraphics);
 
-    std::unique_ptr<RootSignature> m_pRayGenSignature;
-    std::unique_ptr<RootSignature> m_pHitSignature;
-    std::unique_ptr<RootSignature> m_pMissSignature;
     std::unique_ptr<RootSignature> m_pGlobalRS;
-
     ComPtr<ID3D12StateObject> m_pStateObject;
 };

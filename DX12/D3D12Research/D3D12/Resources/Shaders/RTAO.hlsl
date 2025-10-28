@@ -25,25 +25,20 @@ cbuffer ShaderParameters : register(b0)
 
 struct RayPayload
 {
-    float hitDistance;
+    int hit;
 };
-
-[shader("closesthit")]
-void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
-{
-    payload.hitDistance = RayTCurrent();
-}
 
 [shader("miss")]
 void Miss(inout RayPayload payload : SV_RayPayload)
 {
-   payload.hitDistance = 0;
+   payload.hit = 0;
 }
 
 [shader("raygeneration")]
 void RayGen()
 {
     RayPayload payload = (RayPayload)0;
+    payload.hit = 1;
 
     float2 dimInv = rcp((float)DispatchRaysDimensions().xy);
     uint2 launchIndex = DispatchRaysIndex().xy;
@@ -66,7 +61,7 @@ void RayGen()
     {
         float3 n = mul(cRandomVectors[Random(state, 0, RPP - 1)].xyz, TBN);
         RayDesc ray;
-        ray.Origin = world + 0.001f * n;
+        ray.Origin = world + 0.01f * n;
         ray.Direction = n;
         ray.TMin = 0.0f;
         ray.TMax = cRadius;
@@ -112,7 +107,7 @@ void RayGen()
             payload
         );
 
-        accumulateAo += payload.hitDistance != 0;
+        accumulateAo += payload.hit;
     }
 
     accumulateAo /= cSamples;

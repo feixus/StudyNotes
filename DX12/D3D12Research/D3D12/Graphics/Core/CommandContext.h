@@ -207,6 +207,7 @@ public:
 
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
 
+	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetGraphicsRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	void SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize);
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData);
@@ -221,6 +222,7 @@ public:
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	void SetShadingRate(D3D12_SHADING_RATE shadingRate = D3D12_SHADING_RATE_1X1);
+	void SetShadingRateImage(GraphicsTexture* pTexture);
 
 	DynamicAllocation AllocateTransientMemory(uint64_t size);
 	DescriptorHandle AllocateTransientDescriptor(uint32_t count, D3D12_DESCRIPTOR_HEAP_TYPE type);

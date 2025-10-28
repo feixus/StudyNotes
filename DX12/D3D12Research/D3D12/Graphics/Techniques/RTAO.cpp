@@ -32,8 +32,8 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 	ImGui::Begin("Parameters");
     ImGui::Text("Ambient Occlusion");
 	ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
-	ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 2.0f);
-	ImGui::SliderInt("Samples", &g_AoSamples, 4, 64);
+	ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 5.0f);
+	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
 	ImGui::End();
 
     RG_GRAPH_SCOPE("Ambient Occlusion", graph);
@@ -81,9 +81,8 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
             parameters.Samples = g_AoSamples;
 
             ShaderBindingTable bindingTable(m_pStateObject.Get());
-            bindingTable.AddRayGenEntry("RayGen", {});
-            bindingTable.AddMissEntry("Miss", {});
-            bindingTable.AddHitGroupEntry("HitGroup", {});
+            bindingTable.BindRayGenShader("RayGen");
+            bindingTable.BindMissShader("Miss", 0);
 
             context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.SetDynamicDescriptor(1, 0, pColor->GetUAV());
@@ -99,37 +98,22 @@ void RTAO::SetupResources(Graphics* pGraphics)
 
 void RTAO::SetupPipelines(Graphics* pGraphics)
 {
-    // raytracing pipeline
-    {
-        m_pRayGenSignature = std::make_unique<RootSignature>(pGraphics);
-        m_pRayGenSignature->Finalize("Ray Gen RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+    m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
+    m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
+    m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
+    m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP), D3D12_SHADER_VISIBILITY_ALL);
+    m_pGlobalRS->Finalize("Ray Global RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);
+    
+    ShaderLibrary shaderLibrary("RTAO.hlsl");
 
-        m_pHitSignature = std::make_unique<RootSignature>(pGraphics);
-        m_pHitSignature->Finalize("Ray Hit RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-
-        m_pMissSignature = std::make_unique<RootSignature>(pGraphics);
-        m_pMissSignature->Finalize("Ray MissHit RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-
-        m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
-        m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
-        m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP), D3D12_SHADER_VISIBILITY_ALL);
-        m_pGlobalRS->Finalize("Ray Global RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);
-        
-        ShaderLibrary shaderLibrary("RTAO.hlsl");
-
-        CD3DX12_STATE_OBJECT_HELPER stateObjectDesc;
-        const char* pLibraryExports[] = { "RayGen", "ClosestHit", "Miss" };
-        stateObjectDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, (uint32_t)std::size(pLibraryExports));
-        stateObjectDesc.AddHitGroup("HitGroup", "ClosestHit");
-		stateObjectDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
-		stateObjectDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());
-		stateObjectDesc.BindLocalRootSignature("HitGroup", m_pHitSignature->GetRootSignature());
-        stateObjectDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
-        stateObjectDesc.SetRaytracingPipelineConfig(1);
-        stateObjectDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
-        D3D12_STATE_OBJECT_DESC desc = stateObjectDesc.Desc();
-        pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pStateObject.GetAddressOf()));
-    }
+    CD3DX12_STATE_OBJECT_HELPER stateObjectDesc;
+    const char* pLibraryExports[] = { "RayGen", "Miss" };
+    stateObjectDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, (uint32_t)std::size(pLibraryExports));
+    stateObjectDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
+    stateObjectDesc.SetRaytracingPipelineConfig(1);
+    stateObjectDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
+    
+    D3D12_STATE_OBJECT_DESC desc = stateObjectDesc.Desc();
+    pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pStateObject.GetAddressOf()));
 }

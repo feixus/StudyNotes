@@ -23,8 +23,6 @@ private:
 
     ComPtr<ID3D12StateObject> m_pRtSO;
 
-    std::unique_ptr<RootSignature> m_pRayGenRS;
-    std::unique_ptr<RootSignature> m_pMissRS;
     std::unique_ptr<RootSignature> m_pHitRS;
     std::unique_ptr<RootSignature> m_pGlobalRS;
 

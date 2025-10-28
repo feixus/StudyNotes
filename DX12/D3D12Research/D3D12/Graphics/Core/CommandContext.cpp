@@ -504,6 +504,11 @@ void CommandContext::EndRenderPass()
 	m_InRenderPass = false;
 }
 
+void CommandContext::SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS gpuAddress)
+{
+	m_pCommandList->SetGraphicsRootShaderResourceView(rootIndex, gpuAddress);
+}
+
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
@@ -717,6 +722,12 @@ void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate)
 {
 	check(m_pMeshShadingCommandList);
 	m_pMeshShadingCommandList->RSSetShadingRate(shadingRate, nullptr);
+}
+
+void CommandContext::SetShadingRateImage(GraphicsTexture* pTexture)
+{
+	check(m_pMeshShadingCommandList);
+	m_pMeshShadingCommandList->RSSetShadingRateImage(pTexture->GetResource());
 }
 
 DynamicAllocation CommandContext::AllocateTransientMemory(uint64_t size)

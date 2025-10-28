@@ -86,8 +86,6 @@ uint GetSliceFromDepth(float depth)
 
 float ScreenSpaceShadows(float3 worldPos, float3 lightDir, int stepCount, float rayLength, float ditherOffset)
 {
-    const float4 ScreenToUV = float4(float2(0.5f, -0.5f), float2(0.5f, 0.5f));
-
     float4 rayStartPS = mul(float4(worldPos, 1), cViewData.ViewProjection);
     float4 rayDirPS = mul(float4(lightDir * rayLength, 0), cViewData.ViewProjection);
     float4 rayEndPS = rayStartPS + rayDirPS;
@@ -109,7 +107,7 @@ float ScreenSpaceShadows(float3 worldPos, float3 lightDir, int stepCount, float 
     for (uint i = 0; i < stepCount; i++)
     {
         float3 rayPos = rayStartPS.xyz + n * rayStep;
-        float depth = tDepth.SampleLevel(sDiffuseSampler, rayPos.xy * ScreenToUV.xy + ScreenToUV.zw, 0).r;
+        float depth = tDepth.SampleLevel(sDiffuseSampler, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
         float diff = rayPos.z - depth;
 
         bool hit = abs(diff + tolerance) < tolerance;
@@ -120,7 +118,7 @@ float ScreenSpaceShadows(float3 worldPos, float3 lightDir, int stepCount, float 
     if (hitStep > 0.0f)
     {
         float2 hitUV = rayStartPS.xy + n * rayStep.xy;
-        hitUV = hitUV * ScreenToUV.xy + ScreenToUV.zw;
+        hitUV = hitUV * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
         occlusion = ScreenFade(hitUV);
     }
     return 1.0f - occlusion;
