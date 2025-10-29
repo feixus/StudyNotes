@@ -111,6 +111,9 @@ void Graphics::Update()
 
 	PROFILE_BEGIN("UpdateGameState");
 
+	m_pShaderManager->ConditionallyReloadShaders();
+	m_pShaderManager->DrawImGuiStats();
+
 	m_pCamera->Update();
 
 	float costheta = cosf(Tweakables::g_SunOrientation);
@@ -1325,7 +1328,15 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
+
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
+
+	m_pShaderManager->OnShaderRecompiledEvent().AddLambda([](Shader* pOldShader, Shader* pNewShader) {
+		E_LOG(Info, "Shader recompiled: %s", pNewShader->GetEntryPoint().c_str());
+	});
+	m_pShaderManager->OnLibraryRecompiledEvent().AddLambda([](ShaderLibrary* pOldLibrary, ShaderLibrary* pNewLibrary) {
+		E_LOG(Info, "Shader library recompiled: %s", pOldLibrary);
+	});
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));

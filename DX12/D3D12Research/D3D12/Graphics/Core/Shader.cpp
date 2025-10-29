@@ -2,7 +2,7 @@
 #include "Shader.h"
 #include "Core/Paths.h"
 #include "Core/CommandLine.h"
-
+#include "Core/FileWatcher.h"
 #include <D3Dcompiler.h>
 
 #ifndef USE_SHADER_LINE_DIRECTIVE
@@ -233,7 +233,10 @@ namespace ShaderCompiler
 		return result;
 	}
 
-	CompileResult Compile(const char* pIdentifier, const char* pShaderSource, uint32_t shaderSourceSize, const char* pTarget, const char* pEntryPoint, uint32_t majVersion, uint32_t minVersion, const std::vector<std::string>& defines)
+	CompileResult Compile(const char* pIdentifier, const char* pShaderSource, 
+						  uint32_t shaderSourceSize, const char* pTarget, 
+						  const char* pEntryPoint, uint32_t majVersion, 
+						  uint32_t minVersion, const std::vector<ShaderDefine>& defines)
 	{
 		char target[16];
 		size_t i = strlen(pTarget);
@@ -244,13 +247,10 @@ namespace ShaderCompiler
 		target[i++] = '0' + (char)minVersion;
 		target[i++] = 0;
 
-		std::vector<std::string> definesActual(defines);
-		for (std::string& define : definesActual)
+		std::vector<std::string> definesActual;
+		for (const ShaderDefine& define : defines)
 		{
-			if (define.find('=') == std::string::npos)
-			{
-				define += std::string("=1");
-			}
+			definesActual.push_back(define.Value);
 		}
 
 		std::stringstream str;
@@ -281,7 +281,78 @@ uint32_t ShaderBase::GetByteCodeSize() const
 	return (uint32_t)m_pByteCode->GetBufferSize();
 }
 
-bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)
+ShaderManager::ShaderManager(const std::string& shaderSourcePath, uint8_t shaderModelMajor, uint8_t shaderModelMinor)
+	: m_ShaderSourcePath(shaderSourcePath), m_ShaderModelMajor(shaderModelMajor), m_ShaderModelMinor(shaderModelMinor)
+{
+	//if (CommandLine::GetBool("shaderhotreload"))
+	{
+		m_pFileWatcher = std::make_unique<FileWatcher>();
+		m_pFileWatcher->StartWatching(shaderSourcePath, true);
+	}
+}
+
+ShaderManager::~ShaderManager()
+{
+	if (m_pFileWatcher)
+	{
+		m_pFileWatcher->StopWatching();
+	}
+}
+
+void ShaderManager::ConditionallyReloadShaders()
+{
+	if (!m_pFileWatcher)
+	{
+		return;
+	}
+
+	FileWatcher::FileEvent fileEvent;
+	while(m_pFileWatcher->GetNextChange(fileEvent))
+	{
+		switch (fileEvent.EventType)
+		{
+			case FileWatcher::FileEvent::Type::Added:
+			case FileWatcher::FileEvent::Type::Modified:
+				RecompileFromFileChange(fileEvent.Path);
+				break;
+		}
+	}
+}
+
+void ShaderManager::RecompileFromFileChange(const std::string& filePath)
+{
+	auto it = m_IncludeDependencyMap.find(filePath);
+	if (it == m_IncludeDependencyMap.end())
+	{
+		return;
+	}
+
+	const std::set<std::string>& dependencies = it->second;
+	for (const std::string& dependency : dependencies)
+	{
+		auto objectMapIt = m_FilepathToObjectMap.find(dependency);
+		if (objectMapIt == m_FilepathToObjectMap.end())
+		{
+			continue;
+		}
+
+		ShadersInFileMap objectMap = objectMapIt->second;
+		for (auto shader : objectMap.Shaders)
+		{
+			Shader* pOldShader = shader.second;
+			Shader* pNewShader = GetShader(dependency, pOldShader->GetType(), pOldShader->GetEntryPoint().c_str(), pOldShader->GetDefines());
+			m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
+		}
+		for (auto library : objectMap.Libraries)
+		{
+			ShaderLibrary* pOldLibrary = library.second;
+			ShaderLibrary* pNewLibrary = GetLibrary(dependency, pOldLibrary->GetDefines());
+			m_OnLibraryRecompiledEvent.Broadcast(pOldLibrary, pNewLibrary);
+		}
+	}
+}
+
+bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<std::string>& processedIncludes, std::vector<std::string>& dependencies)
 {
 	if (sourcePath != filePath)
 	{
@@ -314,7 +385,7 @@ bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::stri
 				return false;
 			}
 			std::string includeFilePath = line.substr(start, end - start);
-			StringHash includeHash(includeFilePath);
+			std::string includeHash(includeFilePath);
 			if (std::find(processedIncludes.begin(), processedIncludes.end(), includeHash) == processedIncludes.end())
 			{
 				processedIncludes.push_back(includeHash);
@@ -344,10 +415,23 @@ bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::stri
 	return true;
 }
 
-Shader* ShaderManager::GetShader(const std::string& shaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<std::string>& defines)
+Shader* ShaderManager::GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines)
 {
+	ShadersInFileMap::EntryPointAndDefinesHash hash(entryPoint);
+	for (const ShaderDefine& define : defines)
+	{
+		hash.Combine(ShadersInFileMap::EntryPointAndDefinesHash(define.Value));
+	}
+
+	auto& shaderMap = m_FilepathToObjectMap[shaderPath].Shaders;
+	auto it = shaderMap.find(hash);
+	if (it != shaderMap.end())
+	{
+		return it->second;
+	}
+
 	std::stringstream shaderSource;
-	std::vector<StringHash> includes;
+	std::vector<std::string> includes;
 	std::vector<std::string> dependencies;
 	std::string filePath = m_ShaderSourcePath + shaderPath;
 	if (!ProcessSource(filePath, filePath, shaderSource, includes, dependencies))
@@ -358,7 +442,7 @@ Shader* ShaderManager::GetShader(const std::string& shaderPath, ShaderType shade
 	std::string source = shaderSource.str();
 
 	auto result = ShaderCompiler::Compile(shaderPath.c_str(), source.c_str(), (uint32_t)source.size(), 
-										  ShaderCompiler::GetShaderTarget(shaderType), pEntryPoint, 
+										  ShaderCompiler::GetShaderTarget(shaderType), entryPoint.c_str(), 
 										  m_ShaderModelMajor, m_ShaderModelMinor, defines);
 	if (!result.Success)
 	{
@@ -366,15 +450,37 @@ Shader* ShaderManager::GetShader(const std::string& shaderPath, ShaderType shade
 		return nullptr;
 	}
 
-	ShaderPtr pNewShader = std::make_unique<Shader>(result.pBlob, shaderType, pEntryPoint);
+	for (const std::string& include : includes)
+	{
+		m_IncludeDependencyMap[include].insert(shaderPath);
+	}
+
+	ShaderPtr pNewShader = std::make_unique<Shader>(result.pBlob, shaderType, entryPoint, defines);
 	m_Shaders.push_back(std::move(pNewShader));
-	return m_Shaders.back().get();
+
+	Shader* pShader = m_Shaders.back().get();
+	shaderMap[hash] = pShader;
+
+	return pShader;
 }
 
-ShaderLibrary* ShaderManager::GetLibrary(const std::string& shaderPath, const std::vector<std::string>& defines)
+ShaderLibrary* ShaderManager::GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines)
 {
+	ShadersInFileMap::EntryPointAndDefinesHash hash;
+	for (const ShaderDefine& define : defines)
+	{
+		hash.Combine(ShadersInFileMap::EntryPointAndDefinesHash(define.Value));
+	}
+
+	auto& libraryMap = m_FilepathToObjectMap[shaderPath].Libraries;
+	auto it = libraryMap.find(hash);
+	if (it != libraryMap.end())
+	{
+		return it->second;
+	}
+
 	std::stringstream shaderSource;
-	std::vector<StringHash> includes;
+	std::vector<std::string> includes;
 	std::vector<std::string> dependencies;
 	std::string filePath = m_ShaderSourcePath + shaderPath;
 	if (!ProcessSource(filePath, filePath, shaderSource, includes, dependencies))
@@ -391,7 +497,22 @@ ShaderLibrary* ShaderManager::GetLibrary(const std::string& shaderPath, const st
 		return nullptr;
 	}
 
-	LibraryPtr pNewLibrary = std::make_unique<ShaderLibrary>(result.pBlob);
+	for (const std::string& include : includes)
+	{
+		m_IncludeDependencyMap[include].insert(shaderPath);
+	}
+
+	LibraryPtr pNewLibrary = std::make_unique<ShaderLibrary>(result.pBlob, defines);
 	m_Libraries.push_back(std::move(pNewLibrary));
-	return m_Libraries.back().get();
+
+	ShaderLibrary* pLibrary = m_Libraries.back().get();
+	libraryMap[hash] = pLibrary;
+
+	return pLibrary;
+}
+
+void ShaderManager::DrawImGuiStats()
+{
+	ImGui::Text("# Shaders: %d", m_Shaders.size());
+	ImGui::Text("# Libraries: %d", m_Libraries.size());
 }

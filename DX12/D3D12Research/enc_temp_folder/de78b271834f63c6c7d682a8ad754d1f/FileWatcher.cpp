@@ -38,12 +38,9 @@ bool FileWatcher::StartWatching(const std::string& directory, const bool recursi
 
 void FileWatcher::StopWatching()
 {
-	if (!m_Exiting)
-	{
-		m_Exiting = true;
-		CancelIoEx(m_FileHandle, nullptr);
-		CloseHandle(m_FileHandle);
-	}
+    m_Exiting = true;
+    CancelIoEx(m_FileHandle, nullptr);
+    CloseHandle(m_FileHandle);
 }
 
 bool FileWatcher::GetNextChange(FileEvent& fileEvent)
@@ -88,6 +85,18 @@ int FileWatcher::ThreadFunction()
             while (offset < bytesFilled)
             {
                 FILE_NOTIFY_INFORMATION* record = (FILE_NOTIFY_INFORMATION*)&buffer[offset];
+
+				char cString1[256];
+				int result = WideCharToMultiByte(
+					CP_UTF8,           // or CP_ACP for ANSI
+					0,
+					record->FileName,
+					record->FileNameLength / sizeof(wchar_t),  // Number of wide chars
+					cString1,
+					256,
+					nullptr,
+					nullptr
+				);
                 
                 wchar_t target[256];
                 memcpy(target, record->FileName, record->FileNameLength);

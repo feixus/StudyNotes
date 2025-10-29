@@ -86,7 +86,7 @@ uint GetSliceFromDepth(float depth)
 
 float ScreenSpaceShadows(float3 worldPos, float3 lightDir, int stepCount, float rayLength, float ditherOffset)
 {
-    float4 rayStartPS = mul(float4(worldPos, 1), cViewData.ViewProjection) ;
+    float4 rayStartPS = mul(float4(worldPos, 1), cViewData.ViewProjection);
     float4 rayDirPS = mul(float4(lightDir * rayLength, 0), cViewData.ViewProjection);
     float4 rayEndPS = rayStartPS + rayDirPS;
     rayStartPS.xyz /= rayStartPS.w;
