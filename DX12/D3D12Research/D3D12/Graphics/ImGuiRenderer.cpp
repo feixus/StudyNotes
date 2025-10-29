@@ -121,12 +121,12 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 {
 	// shaders
-	Shader vertexShader("imgui.hlsl", ShaderType::Vertex, "VSMain");
-	Shader pixelShader("imgui.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("imgui.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("imgui.hlsl", ShaderType::Pixel, "PSMain");
 
 	// root signature
 	m_pRootSignature = std::make_unique<RootSignature>(pGraphics);
-	m_pRootSignature->FinalizeFromShader("imgui", vertexShader);
+	m_pRootSignature->FinalizeFromShader("imgui", pVertexShader);
 
 	// input layout
 	CD3DX12_INPUT_ELEMENT_DESC elementDesc[] = {
@@ -144,8 +144,8 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineStateObject->SetInputLayout(elementDesc, (uint32_t)std::size(elementDesc));
 	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
 	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
-	m_pPipelineStateObject->SetVertexShader(vertexShader);
-	m_pPipelineStateObject->SetPixelShader(pixelShader);
+	m_pPipelineStateObject->SetVertexShader(pVertexShader);
+	m_pPipelineStateObject->SetPixelShader(pPixelShader);
 	m_pPipelineStateObject->Finalize("ImGui Pipeline");
 }
 

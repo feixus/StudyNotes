@@ -137,26 +137,26 @@ void SSAO::SetupPipelines(Graphics* pGraphics)
 {
 	// SSAO
 	{
-		Shader computeShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pSSAORS = std::make_unique<RootSignature>(pGraphics);
-		m_pSSAORS->FinalizeFromShader("SSAO RS", computeShader);
+		m_pSSAORS->FinalizeFromShader("SSAO RS", pComputeShader);
 
 		m_pSSAOPSO = std::make_unique<PipelineState>(pGraphics);
-		m_pSSAOPSO->SetComputeShader(computeShader);
+		m_pSSAOPSO->SetComputeShader(pComputeShader);
 		m_pSSAOPSO->SetRootSignature(m_pSSAORS->GetRootSignature());
 		m_pSSAOPSO->Finalize("SSAO PSO");
 	}
 
 	// SSAO Blur
 	{
-		Shader computeShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pSSAOBlurRS = std::make_unique<RootSignature>(pGraphics);
-		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur RS", computeShader);
+		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur RS", pComputeShader);
 
 		m_pSSAOBlurPSO = std::make_unique<PipelineState>(pGraphics);
-		m_pSSAOBlurPSO->SetComputeShader(computeShader);
+		m_pSSAOBlurPSO->SetComputeShader(pComputeShader);
 		m_pSSAOBlurPSO->SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
 		m_pSSAOBlurPSO->Finalize("SSAO Blur PSO");
 	}

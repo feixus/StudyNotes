@@ -24,6 +24,7 @@ class RTAO;
 class SSAO;
 class GpuParticles;
 class RTReflections;
+class ShaderManager;
 
 struct MaterialData
 {
@@ -159,21 +160,20 @@ public:
 		return m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
-	int32_t GetWindowWidth() const { return m_WindowWidth; }
-	int32_t GetWindowHeight() const { return m_WindowHeight; }
-
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
 	bool UseRenderPasses() const;
 	bool SupportsRaytracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
 	bool SupportMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
-	bool GetShaderModel(int& major, int& minor) const;
 	bool IsFenceComplete(uint64_t fenceValue);
-
+	
+	int32_t GetWindowWidth() const { return m_WindowWidth; }
+	int32_t GetWindowHeight() const { return m_WindowHeight; }
+	bool GetShaderModel(int& major, int& minor) const;
+	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_pResolveDepthStencil.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
-
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
@@ -205,6 +205,8 @@ private:
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
 	HANDLE m_DeviceRemovedEvent{0};
+
+	std::unique_ptr<ShaderManager> m_pShaderManager;
 
 	int m_Frame{ 0 };
 	std::array<float, 180> m_FrameTimes{};
@@ -243,10 +245,12 @@ private:
 
 	D3D12_RENDER_PASS_TIER m_RenderPassTier{ D3D12_RENDER_PASS_TIER_0 };
 	D3D12_RAYTRACING_TIER m_RayTracingTier{ D3D12_RAYTRACING_TIER_NOT_SUPPORTED };
-	int m_ShaderModelMajor{ -1 };
-	int m_ShaderModelMinor{ -1 };
+	uint8_t m_ShaderModelMajor{0};
+	uint8_t m_ShaderModelMinor{0};
 	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{ D3D12_MESH_SHADER_TIER_NOT_SUPPORTED };
 	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{ D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED };
+	D3D12_VARIABLE_SHADING_RATE_TIER m_VSRTier{ D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED };
+	int m_VSRTileSize{-1};
 
 	int m_SampleCount{ 1 };
 

@@ -77,53 +77,53 @@ void GpuParticles::Initialize(Graphics* pGraphics)
     m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
     {
-        Shader computerShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+        Shader* pComputerShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
         m_pSimulateRS = std::make_unique<RootSignature>(pGraphics);
-        m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computerShader);
+        m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", pComputerShader);
     }
 
     {
-        Shader computerShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+        Shader* pComputerShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
         m_pPrepareArgumentsPSO = std::make_unique<PipelineState>(pGraphics);
-        m_pPrepareArgumentsPSO->SetComputeShader(computerShader);
+        m_pPrepareArgumentsPSO->SetComputeShader(pComputerShader);
         m_pPrepareArgumentsPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
         m_pPrepareArgumentsPSO->Finalize("Prepare Particle Arguments PSO");
     }
 
     {
-        Shader computerShader("ParticleSimulate.hlsl", ShaderType::Compute, "Emit");
+        Shader* pComputerShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Emit");
         m_pEmitPSO = std::make_unique<PipelineState>(pGraphics);
-        m_pEmitPSO->SetComputeShader(computerShader);
+        m_pEmitPSO->SetComputeShader(pComputerShader);
         m_pEmitPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
         m_pEmitPSO->Finalize("Particles Emit PSO");
     }
 
     {
-        Shader simulateShader("ParticleSimulate.hlsl", ShaderType::Compute, "Simulate");
+        Shader* pSimulateShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Simulate");
         m_pSimulatePSO = std::make_unique<PipelineState>(pGraphics);
-        m_pSimulatePSO->SetComputeShader(simulateShader);
+        m_pSimulatePSO->SetComputeShader(pSimulateShader);
         m_pSimulatePSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
         m_pSimulatePSO->Finalize("Particles Simulate PSO");        
     }
 
     {
-        Shader simulateShader("ParticleSimulate.hlsl", ShaderType::Compute, "SimulateEnd");
+        Shader* pSimulateShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "SimulateEnd");
         m_pSimulateEndPSO = std::make_unique<PipelineState>(pGraphics);
-        m_pSimulateEndPSO->SetComputeShader(simulateShader);
+        m_pSimulateEndPSO->SetComputeShader(pSimulateShader);
         m_pSimulateEndPSO->SetRootSignature(m_pSimulateRS->GetRootSignature());
         m_pSimulateEndPSO->Finalize("Particles Simulate End PSO");
     }
 
     {
-		Shader vertexShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader pixelShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pParticleRenderRS = std::make_unique<RootSignature>(pGraphics);
-        m_pParticleRenderRS->FinalizeFromShader("Particles Render RS", vertexShader);
+        m_pParticleRenderRS->FinalizeFromShader("Particles Render RS", pVertexShader);
         
 		m_pParticleRenderPSO = std::make_unique<PipelineState>(pGraphics);
-		m_pParticleRenderPSO->SetVertexShader(vertexShader);
-		m_pParticleRenderPSO->SetPixelShader(pixelShader);
+		m_pParticleRenderPSO->SetVertexShader(pVertexShader);
+		m_pParticleRenderPSO->SetPixelShader(pPixelShader);
 		m_pParticleRenderPSO->SetRootSignature(m_pParticleRenderRS->GetRootSignature());
         m_pParticleRenderPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
         m_pParticleRenderPSO->SetInputLayout(nullptr, 0);

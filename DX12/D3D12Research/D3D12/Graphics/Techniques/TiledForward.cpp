@@ -300,14 +300,14 @@ void TiledForward::SetupResources(Graphics* pGraphics)
 void TiledForward::SetupPipelines(Graphics* pGraphics)
 {
     {
-        Shader computeShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
+        Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
 
         m_pComputeLightCullRS = std::make_unique<RootSignature>(pGraphics);
-        m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", computeShader);
+        m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", pComputeShader);
 
         m_pComputeLightCullPipeline = std::make_unique<PipelineState>(pGraphics);
         m_pComputeLightCullPipeline->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
-        m_pComputeLightCullPipeline->SetComputeShader(computeShader);
+        m_pComputeLightCullPipeline->SetComputeShader(pComputeShader);
         m_pComputeLightCullPipeline->Finalize("Tiled Light Culling PSO");
 
         m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
@@ -330,12 +330,12 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
     // PBR diffuse passes
 	{
 		// shaders
-		Shader vertexShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
-		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
+		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
+		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
 
 		// root signature
 		m_pDiffuseRS = std::make_unique<RootSignature>(pGraphics);
-		m_pDiffuseRS->FinalizeFromShader("Diffuse PBR RS", vertexShader);
+		m_pDiffuseRS->FinalizeFromShader("Diffuse PBR RS", pVertexShader);
 
 		{
 			DXGI_FORMAT formats[] = { Graphics::RENDER_TARGET_FORMAT, DXGI_FORMAT_R16G16B16A16_FLOAT };
@@ -343,8 +343,8 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 			m_pDiffusePSO = std::make_unique<PipelineState>(pGraphics);
 			m_pDiffusePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 			m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
-			m_pDiffusePSO->SetVertexShader(vertexShader);
-			m_pDiffusePSO->SetPixelShader(pixelShader);
+			m_pDiffusePSO->SetVertexShader(pVertexShader);
+			m_pDiffusePSO->SetPixelShader(pPixelShader);
 			m_pDiffusePSO->SetRenderTargetFormats(formats, std::size(formats), Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
 			m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			m_pDiffusePSO->SetDepthWrite(false);
@@ -358,14 +358,14 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 	}
 
     {
-        Shader computeShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
+        Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
 
         m_pVisualizeLightsRS = std::make_unique<RootSignature>(pGraphics);
-        m_pVisualizeLightsRS->FinalizeFromShader("Visualize Light Density RS", computeShader);
+        m_pVisualizeLightsRS->FinalizeFromShader("Visualize Light Density RS", pComputeShader);
 
         m_pVisualizeLightsPSO = std::make_unique<PipelineState>(pGraphics);
         m_pVisualizeLightsPSO->SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
-        m_pVisualizeLightsPSO->SetComputeShader(computeShader);
+        m_pVisualizeLightsPSO->SetComputeShader(pComputeShader);
         m_pVisualizeLightsPSO->Finalize("Visualize Light Density PSO");
     }
 }

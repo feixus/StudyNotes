@@ -115,7 +115,7 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 {
     // raytracing pipeline
     {
-        ShaderLibrary shaderLibrary("RTReflections.hlsl");
+        ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTReflections.hlsl");
 
         m_pHitRS = std::make_unique<RootSignature>(pGraphics);
         m_pHitRS->SetConstantBufferView(0, 1, D3D12_SHADER_VISIBILITY_ALL);
@@ -124,11 +124,11 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
         m_pHitRS->Finalize("Hit RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
         m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
-        m_pGlobalRS->FinalizeFromShader("Global RS", shaderLibrary);
+        m_pGlobalRS->FinalizeFromShader("Global RS", pShaderLibrary);
 
         CD3DX12_STATE_OBJECT_HELPER stateObjectDesc;
         const char* pLibraryExports[] = { "RayGen", "ClosestHit", "Miss", "ShadowMiss" };
-        stateObjectDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, (uint32_t)std::size(pLibraryExports));
+        stateObjectDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(pShaderLibrary->GetByteCode(), pShaderLibrary->GetByteCodeSize()), pLibraryExports, (uint32_t)std::size(pLibraryExports));
 		stateObjectDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit");
 		stateObjectDesc.BindLocalRootSignature("ReflectionHitGroup", m_pHitRS->GetRootSignature());
         stateObjectDesc.SetRaytracingShaderConfig(5 * sizeof(float), 2 * sizeof(float));

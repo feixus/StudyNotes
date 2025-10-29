@@ -65,7 +65,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 	}));
 
 	{
-		Shader shader("WorleyNoise.hlsl", ShaderType::Compute, "WorleyNoiseCS");
+		Shader* pShader = pGraphics->GetShaderManager()->GetShader("WorleyNoise.hlsl", ShaderType::Compute, "WorleyNoiseCS");
 		
 		m_pWorleyNoiseRS = std::make_unique<RootSignature>(pGraphics);
 		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
@@ -73,7 +73,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pWorleyNoiseRS->Finalize("Worley Noise RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 		m_pWorleyNoisePS = std::make_unique<PipelineState>(pGraphics);
-		m_pWorleyNoisePS->SetComputeShader(shader);
+		m_pWorleyNoisePS->SetComputeShader(pShader);
 		m_pWorleyNoisePS->SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
 		m_pWorleyNoisePS->Finalize("Worley Noise PS");
 
@@ -82,10 +82,10 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{
-		Shader vertexShader("Clouds.hlsl", ShaderType::Vertex, "VSMain");
-		Shader pixelShader("Clouds.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pvVertexShader = pGraphics->GetShaderManager()->GetShader("Clouds.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("Clouds.hlsl", ShaderType::Pixel, "PSMain");
 		m_pCloudsRS = std::make_unique<RootSignature>(pGraphics);
-		m_pCloudsRS->FinalizeFromShader("Clouds RS", vertexShader);
+		m_pCloudsRS->FinalizeFromShader("Clouds RS", pvVertexShader);
 
 		D3D12_INPUT_ELEMENT_DESC quadIL[] = {
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -93,8 +93,8 @@ void Clouds::Initialize(Graphics *pGraphics)
 		};
 
 		m_pCloudsPS = std::make_unique<PipelineState>(pGraphics);
-		m_pCloudsPS->SetVertexShader(vertexShader);
-		m_pCloudsPS->SetPixelShader(pixelShader);
+		m_pCloudsPS->SetVertexShader(pvVertexShader);
+		m_pCloudsPS->SetPixelShader(pPixelShader);
 		m_pCloudsPS->SetInputLayout(quadIL, std::size(quadIL));
 		m_pCloudsPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		m_pCloudsPS->SetDepthEnable(false);
