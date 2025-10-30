@@ -1,9 +1,12 @@
 #pragma once
-#include <set>
 
 class FileWatcher;
 
 using ShaderBlob = ComPtr<IDxcBlob>;
+
+#ifndef SHADER_HASH_DEBUG
+#define SHADER_HASH_DEBUG 0
+#endif
 
 enum class ShaderType
 {
@@ -62,8 +65,8 @@ public:
 	ShaderLibrary(const ShaderBlob& shaderBlob, const std::vector<ShaderDefine>& defines) : ShaderBase(shaderBlob, defines) {}
 };
 
-DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader*, Shader*);
-DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, ShaderLibrary*, ShaderLibrary*);
+DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, const std::string&, Shader*, Shader*);
+DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, const std::string&, ShaderLibrary*, ShaderLibrary*);
 
 class ShaderManager
 {
@@ -79,31 +82,37 @@ public:
 	OnShaderRecompiled& OnShaderRecompiledEvent() { return m_OnShaderRecompiledEvent; }
 	OnLibraryRecompiled& OnLibraryRecompiledEvent() { return m_OnLibraryRecompiledEvent; }
 
-	void DrawImGuiStats();
-
 private:
+	Shader* LoadShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
+	ShaderLibrary* LoadLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
+
+#if SHADER_HASH_DEBUG
+	using ShaderStringHash = std::string;
+#else
+	using ShaderStringHash = StringHash;
+#endif
+
 	void RecompileFromFileChange(const std::string& filePath);
 
 	static bool ProcessSource(const std::string& sourcePath, const std::string& filePath, 
-							  std::stringstream& output, std::vector<std::string>& processedIncludes, std::vector<std::string>& dependencies);
+							  std::stringstream& output, std::vector<ShaderStringHash>& processedIncludes);
 
 	std::unique_ptr<FileWatcher> m_pFileWatcher;
 
 	using ShaderPtr = std::unique_ptr<Shader>;
 	using LibraryPtr = std::unique_ptr<ShaderLibrary>;
 
-	std::vector<ShaderPtr> m_Shaders;
-	std::vector<LibraryPtr> m_Libraries;
+	std::list<ShaderPtr> m_Shaders;
+	std::list<LibraryPtr> m_Libraries;
 
-	std::unordered_map<std::string, std::set<std::string>> m_IncludeDependencyMap;
+	std::unordered_map<ShaderStringHash, std::unordered_set<std::string>> m_IncludeDependencyMap;
 
 	struct ShadersInFileMap
 	{
-		using EntryPointAndDefinesHash = StringHash;
-		std::unordered_map<EntryPointAndDefinesHash, Shader*> Shaders;
-		std::unordered_map<EntryPointAndDefinesHash, ShaderLibrary*> Libraries;
+		std::unordered_map<StringHash, Shader*> Shaders;
+		std::unordered_map<StringHash, ShaderLibrary*> Libraries;
 	};
-	std::unordered_map<std::string, ShadersInFileMap> m_FilepathToObjectMap;
+	std::unordered_map<ShaderStringHash, ShadersInFileMap> m_FilepathToObjectMap;
 
 	std::string m_ShaderSourcePath;
 	uint8_t m_ShaderModelMajor;

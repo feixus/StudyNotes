@@ -112,7 +112,6 @@ void Graphics::Update()
 	PROFILE_BEGIN("UpdateGameState");
 
 	m_pShaderManager->ConditionallyReloadShaders();
-	m_pShaderManager->DrawImGuiStats();
 
 	m_pCamera->Update();
 
@@ -1331,11 +1330,11 @@ void Graphics::InitD3D()
 
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
 
-	m_pShaderManager->OnShaderRecompiledEvent().AddLambda([](Shader* pOldShader, Shader* pNewShader) {
-		E_LOG(Info, "Shader recompiled: %s", pNewShader->GetEntryPoint().c_str());
+	m_pShaderManager->OnShaderRecompiledEvent().AddLambda([](const std::string& name, Shader* pOldShader, Shader* pNewShader) {
+		E_LOG(Info, "Shader recompiled: %s: %s", name.c_str(), pNewShader->GetEntryPoint().c_str());
 	});
-	m_pShaderManager->OnLibraryRecompiledEvent().AddLambda([](ShaderLibrary* pOldLibrary, ShaderLibrary* pNewLibrary) {
-		E_LOG(Info, "Shader library recompiled: %s", pOldLibrary);
+	m_pShaderManager->OnLibraryRecompiledEvent().AddLambda([](const std::string& name, ShaderLibrary* pOldLibrary, ShaderLibrary* pNewLibrary) {
+		E_LOG(Info, "Shader library recompiled: %s: %s", name.c_str(), pNewLibrary);
 	});
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);

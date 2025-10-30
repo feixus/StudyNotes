@@ -77,7 +77,7 @@ int FileWatcher::ThreadFunction()
             buffer,
             BUFFERSIZE,
             m_RecursiveWatch,
-            FILE_NOTIFY_CHANGE_LAST_WRITE,
+            FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME,
             &bytesFilled,
             nullptr,
             nullptr))
