@@ -65,8 +65,8 @@ public:
 	ShaderLibrary(const ShaderBlob& shaderBlob, const std::vector<ShaderDefine>& defines) : ShaderBase(shaderBlob, defines) {}
 };
 
-DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, const std::string&, Shader*, Shader*);
-DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, const std::string&, ShaderLibrary*, ShaderLibrary*);
+DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader*, Shader*);
+DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, ShaderLibrary*, ShaderLibrary*);
 
 class ShaderManager
 {
@@ -83,14 +83,15 @@ public:
 	OnLibraryRecompiled& OnLibraryRecompiledEvent() { return m_OnLibraryRecompiledEvent; }
 
 private:
-	Shader* LoadShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
-	ShaderLibrary* LoadLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
-
 #if SHADER_HASH_DEBUG
 	using ShaderStringHash = std::string;
 #else
 	using ShaderStringHash = StringHash;
 #endif
+
+	ShaderStringHash GetEntryPointHash(const std::string& entryPoint, const std::vector<ShaderDefine>& defines);
+	Shader* LoadShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
+	ShaderLibrary* LoadLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
 
 	void RecompileFromFileChange(const std::string& filePath);
 

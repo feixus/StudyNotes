@@ -2,7 +2,6 @@
 #include "Lighting.hlsli"
 
 #define BLOCK_SIZE 16
-
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
                 "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_ALL), " \

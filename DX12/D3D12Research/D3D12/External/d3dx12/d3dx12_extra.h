@@ -38,7 +38,6 @@ struct CD3DX12_QUERY_HEAP_DESC : public D3D12_QUERY_HEAP_DESC
     }
 };
 
-
 class CD3DX12_STATE_OBJECT_HELPER
 {
 	class PODLinearAllocator

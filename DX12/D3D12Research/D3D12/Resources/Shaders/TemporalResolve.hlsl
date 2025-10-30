@@ -2,6 +2,7 @@
 #include "Color.hlsli"
 
 #define HISTORY_REJECT_NONE             0
+
 #define HISTORY_REJECT_CLAMP            1
 #define HISTORY_REJECT_CLIP             2   // [Karis14]
 #define HISTORY_REJECT_VARIANCE_CLIP    3   // [Salvi16]

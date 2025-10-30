@@ -102,7 +102,7 @@ void ProfileNode::RenderImGui(int frameIndex)
 {
 	ImGui::Spacing();
 
-	if (ImGui::BeginTable("Profiling", 3, ImGuiTableFlags_None))
+	if (ImGui::BeginTable("Profiling", 3, ImGuiTableFlags_SizingStretchProp))
 	{
 		ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_WidthStretch, 3.0f);
 		ImGui::TableSetupColumn("CPU (ms)", ImGuiTableColumnFlags_WidthStretch, 1.0f);

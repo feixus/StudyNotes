@@ -13,15 +13,49 @@ PipelineState::PipelineState(Graphics* pParent) : GraphicsObject(pParent)
 	m_Desc.PS.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	m_Desc.PS.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
     m_Desc.PS.NodeMask = 0;
+
+	m_ReloadHandle = pParent->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
 }
 
-PipelineState::PipelineState(const PipelineState& other) : GraphicsObject(other.m_pGraphics), m_Desc(other.m_Desc), m_Type(other.m_Type)
-{}
+PipelineState::PipelineState(const PipelineState& other)
+	: GraphicsObject(other.m_pGraphics), m_Desc(other.m_Desc), m_Type(other.m_Type),
+	  m_Shaders(other.m_Shaders), m_InputLayout(other.m_InputLayout)
+{
+	m_ReloadHandle = m_pGraphics->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
+}
 
 void PipelineState::Finalize(const char* pName)
 {
     ComPtr<ID3D12Device2> pDevice2;
     VERIFY_HR_EX(GetGraphics()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetGraphics()->GetDevice());
+
+	auto GetByteCode = [this](ShaderType type) -> D3D12_SHADER_BYTECODE& {
+		switch (type)
+		{
+		case ShaderType::Vertex: return m_Desc.PS.VS;
+		case ShaderType::Pixel: return m_Desc.PS.PS;
+		case ShaderType::Geometry: return m_Desc.PS.GS;
+		case ShaderType::Hull: return m_Desc.PS.HS;
+		case ShaderType::Domain: return m_Desc.PS.DS;
+		case ShaderType::Mesh: return m_Desc.MS;
+		case ShaderType::Amplification: return m_Desc.AS;
+		case ShaderType::Compute: return m_Desc.PS.CS;
+		case ShaderType::MAX:
+		default:
+			noEntry();
+			static D3D12_SHADER_BYTECODE dummy;
+			return dummy;
+		}
+	};
+
+	for (uint32_t i = 0; i < (int)ShaderType::MAX; i++)
+	{
+		Shader* pShader = m_Shaders[i];
+		if (pShader)
+		{
+			GetByteCode((ShaderType)i) = D3D12_SHADER_BYTECODE{ pShader->GetByteCode(), pShader->GetByteCodeSize() };
+		}
+	}
 
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {
         .SizeInBytes = sizeof(CD3DX12_PIPELINE_STATE_STREAM1),
@@ -32,9 +66,20 @@ void PipelineState::Finalize(const char* pName)
         streamDesc.SizeInBytes = sizeof(PipelineDesc);
     }
 
-    VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())), GetGraphics()->GetDevice());
+    VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetGraphics()->GetDevice());
 
     D3D_SETNAME(m_pPipelineState.Get(), pName);
+	m_Name = pName;
+}
+
+void PipelineState::ConditionallyReload()
+{
+	if (m_NeedsReload)
+	{
+		Finalize(m_Name.c_str());
+		m_NeedsReload = false;
+		E_LOG(Info, "Reloaded Pipeline: %s", m_Name.c_str());
+	}
 }
 
 void PipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32_t msaa)
@@ -208,8 +253,10 @@ void PipelineState::SetDepthBias(int depthBias, float depthBiasClamp, float slop
 void PipelineState::SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32_t count)
 {
     D3D12_INPUT_LAYOUT_DESC* pIlDesc = &m_Desc.PS.InputLayout;
+	m_InputLayout.resize(count);
+	memcpy(m_InputLayout.data(), pElements, sizeof(D3D12_INPUT_ELEMENT_DESC) * count);
     pIlDesc->NumElements = count;
-    pIlDesc->pInputElementDescs = pElements;
+    pIlDesc->pInputElementDescs = m_InputLayout.data();
 }
 
 void PipelineState::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology)
@@ -225,46 +272,58 @@ void PipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)
 void PipelineState::SetVertexShader(Shader* pShader)
 {
     m_Type = PipelineStateType::Graphics;
-    m_Desc.PS.VS = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+    m_Shaders[(int)ShaderType::Vertex] = pShader;
 }
 
 void PipelineState::SetPixelShader(Shader* pShader)
 {
-	m_Desc.PS.PS = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Pixel] = pShader;
 }
 
 void PipelineState::SetHullShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.PS.HS = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Hull] = pShader;
 }
 
 void PipelineState::SetDomainShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.PS.DS = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Domain] = pShader;
 }
 
 void PipelineState::SetGeometryShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.PS.GS = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Geometry] = pShader;
 }
 
 void PipelineState::SetComputeShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Compute;
-	m_Desc.PS.CS = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Compute] = pShader;
 }
 
 void PipelineState::SetMeshShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Desc.MS = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Mesh] = pShader;
 }
 
 void PipelineState::SetAmplificationShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Desc.AS = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Amplification] = pShader;
+}
+
+void PipelineState::OnShaderReloaded(Shader* pOldShader, Shader* pNewShader)
+{
+	for (Shader*& pShader : m_Shaders)
+	{
+		if (pShader && pShader == pOldShader)
+		{
+			pShader = pNewShader;
+			m_NeedsReload = true;
+		}
+	}
 }

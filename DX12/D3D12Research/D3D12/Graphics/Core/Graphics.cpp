@@ -1330,13 +1330,6 @@ void Graphics::InitD3D()
 
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
 
-	m_pShaderManager->OnShaderRecompiledEvent().AddLambda([](const std::string& name, Shader* pOldShader, Shader* pNewShader) {
-		E_LOG(Info, "Shader recompiled: %s: %s", name.c_str(), pNewShader->GetEntryPoint().c_str());
-	});
-	m_pShaderManager->OnLibraryRecompiledEvent().AddLambda([](const std::string& name, ShaderLibrary* pOldLibrary, ShaderLibrary* pNewLibrary) {
-		E_LOG(Info, "Shader library recompiled: %s: %s", name.c_str(), pNewLibrary);
-	});
-
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 
@@ -2007,7 +2000,7 @@ void Graphics::UpdateImGui()
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	if (showOutputLog)
 	{
-		ImGui::SetScrollHereY(1.0f);
+		ImGui::SetScrollHereY(0.0f);
 		for (const Console::LogEntry& entry : Console::GetHistory())
 		{
 			switch (entry.Type)

@@ -58,7 +58,7 @@ bool FileWatcher::GetNextChange(FileEvent& fileEvent)
     LARGE_INTEGER currentTime;
     QueryPerformanceCounter(&currentTime);
     float timeDiff = ((float)currentTime.QuadPart - fileEvent.Time.QuadPart) / m_TimeFrequency.QuadPart;
-    if (timeDiff < 1)
+    if (timeDiff < 0.02)
     {
         return false;
     }
@@ -69,37 +69,41 @@ bool FileWatcher::GetNextChange(FileEvent& fileEvent)
 
 int FileWatcher::ThreadFunction()
 {
+	const uint32_t fileNotifyFlags = FILE_NOTIFY_CHANGE_LAST_WRITE |
+									 FILE_NOTIFY_CHANGE_FILE_NAME |
+									 FILE_NOTIFY_CHANGE_SIZE |
+									 FILE_NOTIFY_CHANGE_CREATION;
     while (!m_Exiting)
     {
-        unsigned char buffer[BUFFERSIZE];
+        unsigned char buffer[1 << 12];
         DWORD bytesFilled = 0;
         if (ReadDirectoryChangesW(m_FileHandle,
             buffer,
-            BUFFERSIZE,
+            sizeof(buffer),
             m_RecursiveWatch,
-            FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME,
+			fileNotifyFlags,
             &bytesFilled,
             nullptr,
             nullptr))
         {
-            unsigned offset = 0;
-
             std::scoped_lock lock(m_Mutex);
+
+            unsigned offset = 0;
+			char outString[MAX_PATH];
             while (offset < bytesFilled)
             {
-                FILE_NOTIFY_INFORMATION* record = (FILE_NOTIFY_INFORMATION*)&buffer[offset];
+                FILE_NOTIFY_INFORMATION* pRecord = (FILE_NOTIFY_INFORMATION*)&buffer[offset];
                 
-                wchar_t target[256];
-                memcpy(target, record->FileName, record->FileNameLength);
-                target[record->FileNameLength / sizeof(wchar_t)] = L'\0';
+				int length = WideCharToMultiByte(CP_ACP, 0,
+					pRecord->FileName,
+					pRecord->FileNameLength / sizeof(wchar_t),
+					outString, MAX_PATH - 1, nullptr, nullptr);
+				outString[length] = '\0';
 
-                char cString[256];
-                ToMultibyte(target, cString, 256);
+				FileEvent newEvent;
+				newEvent.Path = outString;
 
-                FileEvent newEvent;
-                newEvent.Path = cString;
-
-                switch (record->Action)
+				switch (pRecord->Action)
                 {
                     case FILE_ACTION_MODIFIED: newEvent.EventType = FileEvent::Type::Modified; break;
                     case FILE_ACTION_REMOVED: newEvent.EventType = FileEvent::Type::Removed; break;
@@ -111,12 +115,12 @@ int FileWatcher::ThreadFunction()
                 QueryPerformanceCounter(&newEvent.Time);
                 m_Changes.push_back(newEvent);
 
-                if (record->NextEntryOffset == 0)
-                {
-                    break;
-                }
+                if (pRecord->NextEntryOffset == 0)
+				{
+					break;
+				}
 
-                offset += record->NextEntryOffset;
+				offset += pRecord->NextEntryOffset;
             }
         }
     }
