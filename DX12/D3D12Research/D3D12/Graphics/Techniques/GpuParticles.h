@@ -30,23 +30,23 @@ private:
     std::unique_ptr<Buffer> m_pParticleBuffer;
     std::unique_ptr<Buffer> m_pCounterBuffer;
     
-    std::unique_ptr<PipelineState> m_pPrepareArgumentsPSO;
+    PipelineState* m_pPrepareArgumentsPSO{nullptr};
 
-    std::unique_ptr<PipelineState> m_pEmitPSO;
+    PipelineState* m_pEmitPSO{nullptr};
     std::unique_ptr<Buffer> m_pEmitArguments;
 
     std::unique_ptr<RootSignature> m_pSimulateRS;
-    std::unique_ptr<PipelineState> m_pSimulatePSO;
+    PipelineState* m_pSimulatePSO{nullptr};
     std::unique_ptr<Buffer> m_pSimulateArguments;
 
-    std::unique_ptr<PipelineState> m_pSimulateEndPSO;
+    PipelineState* m_pSimulateEndPSO{nullptr};
     std::unique_ptr<Buffer> m_pDrawArguments;
 
     std::unique_ptr<CommandSignature> m_pSimpleDispatchCommandSignature;
     std::unique_ptr<CommandSignature> m_pSimpleDrawCommandSignature;
 
     std::unique_ptr<RootSignature> m_pParticleRenderRS;
-    std::unique_ptr<PipelineState> m_pParticleRenderPSO;
+    PipelineState* m_pParticleRenderPSO{nullptr};
 
     float m_ParticlesToSpawn{0};
 };

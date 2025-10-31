@@ -32,7 +32,7 @@ private:
 		
 	ImGuiCallback m_UpdateCallback;
 
-	std::unique_ptr<PipelineState> m_pPipelineStateObject;
+	PipelineState* m_pPipelineStateObject{nullptr};
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsTexture> m_pFontTexture;
 };

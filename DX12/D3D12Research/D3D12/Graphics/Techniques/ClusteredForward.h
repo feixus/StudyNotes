@@ -44,30 +44,30 @@ private:
 
     // step 1: AABB
     std::unique_ptr<RootSignature> m_pCreateAabbRS;
-    std::unique_ptr<PipelineState> m_pCreateAabbPSO;
+    PipelineState* m_pCreateAabbPSO{nullptr};
     std::unique_ptr<Buffer> m_pAabbBuffer;
 
     // step 2: mark unique clusters
     std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
-	std::unique_ptr<PipelineState> m_pMarkUniqueClustersOpaquePSO;
-	std::unique_ptr<PipelineState> m_pMarkUniqueClustersTransparentPSO;
+	PipelineState* m_pMarkUniqueClustersOpaquePSO{nullptr};
+	PipelineState* m_pMarkUniqueClustersTransparentPSO{nullptr};
     std::unique_ptr<Buffer> m_pUniqueClusterBuffer;
     UnorderedAccessView* m_pUniqueClusterBufferRawUAV{nullptr};
 
     // step 3: compact cluster list
     std::unique_ptr<RootSignature> m_pCompactClusterListRS;
-    std::unique_ptr<PipelineState> m_pCompactClusterListPSO;
+    PipelineState* m_pCompactClusterListPSO{nullptr};
     std::unique_ptr<Buffer> m_pCompactedClusterBuffer;
     UnorderedAccessView* m_pCompactedClusterBufferRawUAV{nullptr};
 
     // step 4: update Indirect Dispatch Buffer
     std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
-	std::unique_ptr<PipelineState> m_pUpdateIndirectArgumentsPSO;
+	PipelineState* m_pUpdateIndirectArgumentsPSO{nullptr};
     std::unique_ptr<Buffer> m_pIndirectArguments;
 
     // step 5: light culling
     std::unique_ptr<RootSignature> m_pLightCullingRS;
-    std::unique_ptr<PipelineState> m_pLightCullingPSO;
+    PipelineState* m_pLightCullingPSO{nullptr};
     std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;;
     std::unique_ptr<Buffer> m_pLightIndexCounter;
     std::unique_ptr<Buffer> m_pLightIndexGrid;
@@ -76,12 +76,12 @@ private:
 
     // step 6: lighting
     std::unique_ptr<RootSignature> m_pDiffuseRS;
-	std::unique_ptr<PipelineState> m_pDiffusePSO;
-	std::unique_ptr<PipelineState> m_pDiffuseTransparencyPSO;
+	PipelineState* m_pDiffusePSO{nullptr};
+	PipelineState* m_pDiffuseTransparencyPSO{nullptr};
 
     // cluster debug rendering
     std::unique_ptr<RootSignature> m_pDebugClusterRS;
-    std::unique_ptr<PipelineState> m_pDebugClusterPSO;
+    PipelineState* m_pDebugClusterPSO{nullptr};
     std::unique_ptr<Buffer> m_pDebugCompactedClusterBuffer;
     std::unique_ptr<Buffer> m_pDebugLightGrid;
     Matrix m_DebugClusterViewMatrix;
@@ -89,7 +89,7 @@ private:
 
     // visualize light count
 	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
-	std::unique_ptr<PipelineState> m_pVisualizeLightsPSO;
+	PipelineState* m_pVisualizeLightsPSO{nullptr};
 	std::unique_ptr<GraphicsTexture> m_pVisualizeIntermediateTexture;
 
     bool m_ViewportDirty{true};

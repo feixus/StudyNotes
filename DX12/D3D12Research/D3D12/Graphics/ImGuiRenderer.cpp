@@ -136,17 +136,18 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	};
 
 	// pipeline state
-	m_pPipelineStateObject = std::make_unique<PipelineState>(pGraphics);
-	m_pPipelineStateObject->SetBlendMode(BlendMode::Alpha, false);
-	m_pPipelineStateObject->SetDepthWrite(false);
-	m_pPipelineStateObject->SetDepthEnable(false);
-	m_pPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
-	m_pPipelineStateObject->SetInputLayout(elementDesc, (uint32_t)std::size(elementDesc));
-	m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
-	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
-	m_pPipelineStateObject->SetVertexShader(pVertexShader);
-	m_pPipelineStateObject->SetPixelShader(pPixelShader);
-	m_pPipelineStateObject->Finalize("ImGui Pipeline");
+	PipelineStateInitializer psoDesc;
+	psoDesc.SetBlendMode(BlendMode::Alpha, false);
+	psoDesc.SetDepthWrite(false);
+	psoDesc.SetDepthEnable(false);
+	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+	psoDesc.SetInputLayout(elementDesc, (uint32_t)std::size(elementDesc));
+	psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
+	psoDesc.SetRootSignature(m_pRootSignature->GetRootSignature());
+	psoDesc.SetVertexShader(pVertexShader);
+	psoDesc.SetPixelShader(pPixelShader);
+	psoDesc.SetName("ImGui Pipeline");
+	m_pPipelineStateObject = pGraphics->CreatePipeline(psoDesc);
 }
 
 void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
@@ -163,7 +164,7 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 		{
 			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 				
-			context.SetPipelineState(m_pPipelineStateObject.get());
+			context.SetPipelineState(m_pPipelineStateObject);
 			context.SetGraphicsRootSignature(m_pRootSignature.get());
 
 			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0, 0.0f, 1.0f);

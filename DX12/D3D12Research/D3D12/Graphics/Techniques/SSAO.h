@@ -23,7 +23,7 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusionIntermediate;
 
 	std::unique_ptr<RootSignature> m_pSSAORS;
-	std::unique_ptr<PipelineState> m_pSSAOPSO;
+	PipelineState* m_pSSAOPSO{nullptr};
 	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
-	std::unique_ptr<PipelineState> m_pSSAOBlurPSO;
+	PipelineState* m_pSSAOBlurPSO{nullptr};
 };

@@ -72,10 +72,11 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pWorleyNoiseRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pWorleyNoiseRS->Finalize("Worley Noise RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-		m_pWorleyNoisePS = std::make_unique<PipelineState>(pGraphics);
-		m_pWorleyNoisePS->SetComputeShader(pShader);
-		m_pWorleyNoisePS->SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
-		m_pWorleyNoisePS->Finalize("Worley Noise PS");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(pShader);
+		psoDesc.SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
+		psoDesc.SetName("Worley Noise PS");
+		m_pWorleyNoisePS = pGraphics->CreatePipeline(psoDesc);
 
 		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>(pGraphics, "Worley Noise");
 		m_pWorleyNoiseTexture->Create(TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource, TextureDimension::Texture3D));
@@ -92,16 +93,17 @@ void Clouds::Initialize(Graphics *pGraphics)
 			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		m_pCloudsPS = std::make_unique<PipelineState>(pGraphics);
-		m_pCloudsPS->SetVertexShader(pvVertexShader);
-		m_pCloudsPS->SetPixelShader(pPixelShader);
-		m_pCloudsPS->SetInputLayout(quadIL, std::size(quadIL));
-		m_pCloudsPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-		m_pCloudsPS->SetDepthEnable(false);
-		m_pCloudsPS->SetDepthWrite(false);
-		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
-		m_pCloudsPS->SetRootSignature(m_pCloudsRS->GetRootSignature());
-		m_pCloudsPS->Finalize("Clouds PS");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetVertexShader(pvVertexShader);
+		psoDesc.SetPixelShader(pPixelShader);
+		psoDesc.SetInputLayout(quadIL, std::size(quadIL));
+		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+		psoDesc.SetDepthEnable(false);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+		psoDesc.SetRootSignature(m_pCloudsRS->GetRootSignature());
+		psoDesc.SetName("Clouds PS");
+		m_pCloudsPS = pGraphics->CreatePipeline(psoDesc);
 	}
 
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -150,7 +152,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 		RGPassBuilder worleyNoisePass = graph.AddPass("Compute Worley Noise");
 		worleyNoisePass.Bind([=](CommandContext& context, const RGPassResource& passResources)
 			{
-				context.SetPipelineState(m_pWorleyNoisePS.get());
+				context.SetPipelineState(m_pWorleyNoisePS);
 				context.SetComputeRootSignature(m_pWorleyNoiseRS.get());
 
 				struct
@@ -211,7 +213,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 
 				context.BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, nullptr, RenderPassAccess::NoAccess, false));
 
-				context.SetPipelineState(m_pCloudsPS.get());
+				context.SetPipelineState(m_pCloudsPS);
 				context.SetGraphicsRootSignature(m_pCloudsRS.get());
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

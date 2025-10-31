@@ -56,20 +56,21 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 	// opaque
-	m_pTrianglesPSO = std::make_unique<PipelineState>(pGraphics);
-	m_pTrianglesPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-	m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
-	m_pTrianglesPSO->SetVertexShader(pVertexShader);
-	m_pTrianglesPSO->SetPixelShader(pPixelShader);
-	m_pTrianglesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-	m_pTrianglesPSO->SetDepthWrite(true);
-	m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
-	m_pTrianglesPSO->Finalize("Triangles DebugRenderer PSO");
+    PipelineStateInitializer psoDesc;
+	psoDesc.SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+	psoDesc.SetRootSignature(m_pRS->GetRootSignature());
+	psoDesc.SetVertexShader(pVertexShader);
+	psoDesc.SetPixelShader(pPixelShader);
+	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+	psoDesc.SetDepthWrite(true);
+	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+	psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+	psoDesc.SetName("Triangles DebugRenderer PSO");
+	m_pTrianglesPSO = pGraphics->CreatePipeline(psoDesc);
 
-    m_pLinesPSO = std::make_unique<PipelineState>(*m_pTrianglesPSO);
-    m_pLinesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
-    m_pLinesPSO->Finalize("Lines DebugRenderer PSO");
+    psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
+    psoDesc.SetName("Lines DebugRenderer PSO");
+    m_pLinesPSO = pGraphics->CreatePipeline(psoDesc);
 }
 
 void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, GraphicsTexture* pTarget, GraphicsTexture* pDepth)
@@ -97,14 +98,14 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Graphic
 			if (linePrimitives != 0)
 			{
 				context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
-				context.SetPipelineState(m_pLinesPSO.get());
+				context.SetPipelineState(m_pLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 				context.Draw(0, linePrimitives);
 			}
 			if (trianglePrimitives != 0)
 			{
 				context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
-				context.SetPipelineState(m_pTrianglesPSO.get());
+				context.SetPipelineState(m_pTrianglesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.Draw(0, trianglePrimitives);
 			}

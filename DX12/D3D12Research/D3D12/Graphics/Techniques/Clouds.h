@@ -19,11 +19,11 @@ public:
 	GraphicsTexture* GetNoiseTexture() const { return m_pWorleyNoiseTexture.get(); }
 
 private:
-	std::unique_ptr<PipelineState> m_pWorleyNoisePS;
+	PipelineState* m_pWorleyNoisePS{nullptr};
 	std::unique_ptr<RootSignature> m_pWorleyNoiseRS;
 	std::unique_ptr<GraphicsTexture> m_pWorleyNoiseTexture;
 
-	std::unique_ptr<PipelineState> m_pCloudsPS;
+	PipelineState* m_pCloudsPS{nullptr};
 	std::unique_ptr<RootSignature> m_pCloudsRS;
 
 	std::unique_ptr<GraphicsTexture> m_pIntermediateColor;

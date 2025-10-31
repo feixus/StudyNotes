@@ -33,7 +33,7 @@ private:
 
 	// light culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
-	std::unique_ptr<PipelineState> m_pComputeLightCullPipeline;
+	PipelineState* m_pComputeLightCullPipeline{nullptr};
 	std::unique_ptr<Buffer> m_pLightIndexCounter;
 	UnorderedAccessView* m_pLightIndexCounterRawUAV{nullptr};
 	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
@@ -43,11 +43,11 @@ private:
 
 	// diffuse
 	std::unique_ptr<RootSignature> m_pDiffuseRS;
-	std::unique_ptr<PipelineState> m_pDiffusePSO;
-	std::unique_ptr<PipelineState> m_pDiffuseAlphaPSO;
+	PipelineState* m_pDiffusePSO{nullptr};
+	PipelineState* m_pDiffuseAlphaPSO{nullptr};
 
 	// visualize light count
 	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
-	std::unique_ptr<PipelineState> m_pVisualizeLightsPSO;
+	PipelineState* m_pVisualizeLightsPSO{nullptr};
 	std::unique_ptr<GraphicsTexture> m_pVisualizeIntermediateTexture;
 };
