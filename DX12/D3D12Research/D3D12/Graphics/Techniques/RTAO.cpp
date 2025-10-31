@@ -11,6 +11,7 @@
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/RaytracingCommon.h"
+#include "Graphics/Core/StateObject.h"
 
 RTAO::RTAO(Graphics* pGraphics)
 {
@@ -45,7 +46,7 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 			context.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 
             context.SetComputeRootSignature(m_pGlobalRS.get());
-			context.SetPipelineState(m_pStateObject.Get());
+			context.SetPipelineState(m_pStateObject);
                 
             constexpr const int numRandomVectors = 64;
             struct Parameters
@@ -80,7 +81,7 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
             parameters.Radius = g_AoRadius;
             parameters.Samples = g_AoSamples;
 
-            ShaderBindingTable bindingTable(m_pStateObject.Get());
+            ShaderBindingTable bindingTable(m_pStateObject->GetStateObject());
             bindingTable.BindRayGenShader("RayGen");
             bindingTable.BindMissShader("Miss", 0);
 
@@ -107,13 +108,13 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
     
     ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTAO.hlsl");
 
-    CD3DX12_STATE_OBJECT_HELPER stateObjectDesc;
-    const char* pLibraryExports[] = { "RayGen", "Miss" };
-    stateObjectDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(pShaderLibrary->GetByteCode(), pShaderLibrary->GetByteCodeSize()), pLibraryExports, (uint32_t)std::size(pLibraryExports));
-    stateObjectDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
-    stateObjectDesc.SetRaytracingPipelineConfig(1);
-    stateObjectDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
-    
-    D3D12_STATE_OBJECT_DESC desc = stateObjectDesc.Desc();
-    pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pStateObject.GetAddressOf()));
+    StateObjectInitializer stateDesc;
+    stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "Miss" });
+    stateDesc.Name = "RT AO";
+    stateDesc.MaxPayloadSize = sizeof(float);
+    stateDesc.MaxAttributeSize = 2 * sizeof(float);
+    stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
+    stateDesc.RayGenShader = "RayGen";
+    stateDesc.AddMissShader("Miss");
+    m_pStateObject = pGraphics->CreateStateObject(stateDesc);
 }

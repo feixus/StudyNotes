@@ -28,6 +28,7 @@
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
 #include "Content/image.h"
+#include "StateObject.h"
 
 #ifndef D3D_VALIDATION
 #define D3D_VALIDATION 1
@@ -2343,10 +2344,18 @@ ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_
 	return pResource;
 }
 
-PipelineState* Graphics::CreatePipeline(const PipelineStateInitializer& initializer)
+PipelineState* Graphics::CreatePipeline(const PipelineStateInitializer& psoDesc)
 {
 	std::unique_ptr<PipelineState> pPipeline = std::make_unique<PipelineState>(this);
-	pPipeline->Create(initializer);
+	pPipeline->Create(psoDesc);
 	m_Pipelines.push_back(std::move(pPipeline));
 	return m_Pipelines.back().get();
+}
+
+StateObject* Graphics::CreateStateObject(const StateObjectInitializer& stateDesc)
+{
+	std::unique_ptr<StateObject> pStateObject = std::make_unique<StateObject>(this);
+	pStateObject->Create(stateDesc);
+	m_StateObjects.push_back(std::move(pStateObject));
+	return m_StateObjects.back().get();
 }

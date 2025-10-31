@@ -8,6 +8,7 @@ class Camera;
 class CommandContext;
 class Buffer;
 class RGGraph;
+class StateObject;
 
 class RTAO
 {
@@ -21,5 +22,5 @@ private:
     void SetupPipelines(Graphics* pGraphics);
 
     std::unique_ptr<RootSignature> m_pGlobalRS;
-    ComPtr<ID3D12StateObject> m_pStateObject;
+    StateObject* m_pStateObject;
 };

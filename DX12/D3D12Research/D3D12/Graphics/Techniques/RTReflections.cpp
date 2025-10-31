@@ -11,6 +11,7 @@
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
+#include "Graphics/Core/StateObject.h"
 
 RTReflections::RTReflections(Graphics* pGraphics)
 {
@@ -34,7 +35,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
             context.InsertResourceBarrier(sceneData.pResolvedTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
             context.SetComputeRootSignature(m_pGlobalRS.get());
-            context.SetPipelineState(m_pRtSO.Get());
+            context.SetPipelineState(m_pRtSO);
 
             struct Parameters
             {
@@ -49,7 +50,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
             parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
             parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() * 0.5f) / (float)m_pSceneColor->GetHeight());
 
-            ShaderBindingTable bindingTable(m_pRtSO.Get());
+            ShaderBindingTable bindingTable(m_pRtSO->GetStateObject());
             bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("Miss", 0);
 			bindingTable.BindMissShader("ShadowMiss", 1);
@@ -126,16 +127,17 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
         m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
         m_pGlobalRS->FinalizeFromShader("Global RS", pShaderLibrary);
 
-        CD3DX12_STATE_OBJECT_HELPER stateObjectDesc;
-        const char* pLibraryExports[] = { "RayGen", "ClosestHit", "Miss", "ShadowMiss" };
-        stateObjectDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(pShaderLibrary->GetByteCode(), pShaderLibrary->GetByteCodeSize()), pLibraryExports, (uint32_t)std::size(pLibraryExports));
-		stateObjectDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit");
-		stateObjectDesc.BindLocalRootSignature("ReflectionHitGroup", m_pHitRS->GetRootSignature());
-        stateObjectDesc.SetRaytracingShaderConfig(5 * sizeof(float), 2 * sizeof(float));
-        stateObjectDesc.SetRaytracingPipelineConfig(2);
-        stateObjectDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
-    
-        D3D12_STATE_OBJECT_DESC desc = stateObjectDesc.Desc();
-        VERIFY_HR_EX(pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pRtSO.GetAddressOf())), pGraphics->GetRaytracingDevice());
+        StateObjectInitializer stateDesc;
+        stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ClosestHit", "Miss", "ShadowMiss" });
+        stateDesc.Name = "RT Reflections";
+        stateDesc.MaxPayloadSize = 5 * sizeof(float);
+        stateDesc.MaxAttributeSize = 2 * sizeof(float);
+        stateDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit", "", "", m_pHitRS.get());
+        stateDesc.MaxRecursion = 2;
+        stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
+        stateDesc.RayGenShader = "RayGen";
+        stateDesc.AddMissShader("Miss");
+        stateDesc.AddMissShader("ShadowMiss");
+        m_pRtSO = pGraphics->CreateStateObject(stateDesc);
     }
 }

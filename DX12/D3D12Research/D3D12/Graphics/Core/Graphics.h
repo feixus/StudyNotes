@@ -26,6 +26,8 @@ class GpuParticles;
 class RTReflections;
 class ShaderManager;
 class PipelineStateInitializer;
+class StateObject;
+class StateObjectInitializer;
 
 struct MaterialData
 {
@@ -178,7 +180,8 @@ public:
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
-	PipelineState* CreatePipeline(const PipelineStateInitializer& initializer);
+	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
+	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
 
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
@@ -211,6 +214,7 @@ private:
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
 	std::vector<std::unique_ptr<PipelineState>> m_Pipelines;
+	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
 	int m_Frame{ 0 };
 	std::array<float, 180> m_FrameTimes{};
