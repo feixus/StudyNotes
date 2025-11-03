@@ -49,6 +49,13 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 	ImFontConfig fontConfig;
 	fontConfig.OversampleH = 2;
 	fontConfig.OversampleV = 2;
+
+	/*wchar_t buffer[MAX_PATH];
+	GetModuleFileNameW(NULL, buffer, MAX_PATH);
+	std::filesystem::path exePath(buffer);
+	std::filesystem::path resourcePath = exePath.parent_path() / "Resources" / "Fonts";
+	std::string finalPath = resourcePath.generic_string() + "/Roboto-Bold.ttf";
+	io.Fonts->AddFontFromFileTTF(finalPath.c_str(), 15.0f, &fontConfig);*/
 	io.Fonts->AddFontFromFileTTF("Resources/Fonts/Roboto-Bold.ttf", 15.0f, &fontConfig);
 
 	unsigned char* pPixels;

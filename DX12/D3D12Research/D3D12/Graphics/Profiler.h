@@ -10,8 +10,8 @@ class CommandContext;
 #define PROFILE_BEGIN(name) Profiler::Get()->Begin(name, nullptr);
 #define PROFILE_END() Profiler::Get()->End();
 
-#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler MACRO_CONCAT(profiler, __COUNTER__)(name, cmdlist);
-#define PROFILE_SCOPE(name) ScopeProfiler MACRO_CONCAT(profiler, __COUNTER__)(name, nullptr);
+#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler MACRO_CONCAT(profiler, __COUNTER__)(name, cmdlist); OPTICK_GPU_EVENT(name);
+#define PROFILE_SCOPE(name) ScopeProfiler MACRO_CONCAT(profiler, __COUNTER__)(name, nullptr); OPTICK_EVENT_DYNAMIC(name);
 
 class CpuTimer
 {

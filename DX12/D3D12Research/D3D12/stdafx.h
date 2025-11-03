@@ -78,3 +78,4 @@ using namespace DirectX;
 #include "External/d3dx12/d3dx12_extra.h"
 #include "External/imgui/imgui.h"
 #include <External/Dxc/dxcapi.h>
+#include "optick.h"

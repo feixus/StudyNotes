@@ -1114,6 +1114,9 @@ void Graphics::EndFrame(uint64_t fenceValue)
 {
 	Profiler::Get()->Resolve(this, m_Frame);
 
+	OPTICK_GPU_FLIP(m_pSwapchain.Get());
+	OPTICK_CATEGORY("Present", Optick::Category::Wait);
+
 	// the top third(triple buffer) is not need wait, just record the every frame fenceValue.
 	// the 'm_CurrentBackBufferIndex' is always in the new buffer frame
 	// we present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame
@@ -1311,6 +1314,9 @@ void Graphics::InitD3D()
 	// swap chain
 	CreateSwapchain();
 
+	ID3D12CommandQueue* pQueue = GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue();
+	OPTICK_GPU_INIT_D3D12(m_pDevice.Get(), &pQueue, 1);
+
 	// create the textures but don't create the resources themselves yet. 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
@@ -1325,6 +1331,13 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
+
+	/*wchar_t buffer[MAX_PATH];
+	GetModuleFileNameW(NULL, buffer, MAX_PATH);
+	std::filesystem::path exePath(buffer);
+	std::filesystem::path resourcePath = exePath.parent_path() / "Resources" / "Shaders";
+	std::string finalPath = resourcePath.generic_string() + "/";
+	m_pShaderManager = std::make_unique<ShaderManager>(finalPath, m_ShaderModelMajor, m_ShaderModelMinor);*/
 
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
 

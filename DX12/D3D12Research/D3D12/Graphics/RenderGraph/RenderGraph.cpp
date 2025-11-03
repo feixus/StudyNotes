@@ -221,6 +221,7 @@ int64_t RGGraph::Execute()
     RG_ASSERT(m_EventStackSize == 0, "Missing PopEvent");
 
     CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    OPTICK_GPU_CONTEXT(pContext->GetCommandList());
     for (int passIdx = 0; passIdx < m_RenderPasses.size(); passIdx++)
     {
         RGPass* pPass = m_RenderPasses[passIdx];

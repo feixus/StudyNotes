@@ -491,42 +491,6 @@ namespace D3D
 			return 0;
 		}
 	}
-
-	static std::vector<std::byte> ReadFile11(const std::filesystem::path& filePath, std::ios_base::openmode mode = std::ios::ate)
-	{
-		if (filePath.empty())
-		{
-			throw std::runtime_error("File path is empty");
-		}
-
-		if (!std::filesystem::exists(filePath))
-		{
-			throw std::runtime_error("File does not exist: " + filePath.string());
-		}
-
-		std::ifstream file(filePath, mode | std::ios::binary);
-		if (!file)
-		{
-			throw std::runtime_error("Failed to open file: " + filePath.string());
-		}
-
-		const auto size = static_cast<size_t>(file.tellg());
-		if (size == 0)
-		{
-			return {};
-		}
-
-		std::vector<std::byte> buffer(size);
-		file.seekg(0);
-		
-		if (!file.read(reinterpret_cast<char*>(buffer.data()), size))
-		{
-			throw std::runtime_error("Failed to read file: " + filePath.string());
-		}
-
-		file.close();
-		return buffer;
-	}
 }
 
 
