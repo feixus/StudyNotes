@@ -33,6 +33,13 @@ function AddDxc()
 	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
 end
 
+function AddOptick()
+	links { "OptickCore" }
+	includedirs (ROOT .. "D3D12/External/Optick/include")
+	libdirs	(ROOT .. "D3D12/External/Optick/lib")
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Optick\\bin\\OptickCore.dll\" \"$(OutDir)\"") }
+end
+
 newaction {
 	trigger     = "clean",
 	description = "Remove all binaries and generated files",
