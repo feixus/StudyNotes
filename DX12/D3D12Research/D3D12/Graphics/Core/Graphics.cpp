@@ -1182,10 +1182,7 @@ void Graphics::InitD3D()
 
 		if (!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
 		{
-			char name[256];
-			ToMultibyte(desc.Description, name, 256);
-
-			E_LOG(Info, "\t%s - %f GB", name, (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
+			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
 
 			break;
 		}

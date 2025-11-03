@@ -447,13 +447,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 {
 	// Check to see if a copy of WinPixGpuCapturer.dll has already been injected into the application.
 	// This may happen if the application is launched through the PIX UI. 
-	/*if (GetModuleHandle("WinPixGpuCapturer.dll") == 0)
-	{
-		std::wstring aa = GetLatestWinPixGpuCapturerPath();
-		char name[256];
-		ToMultibyte(aa.c_str(), name, 256);
-		LoadLibrary(name);
-	}*/
+	// if (GetModuleHandle("WinPixGpuCapturer.dll") == 0)
+	// {
+	// 	std::wstring aa = GetLatestWinPixGpuCapturerPath();
+	// 	LoadLibrary(UNICODE_TO_MULTIBYTE(aa.c_str()));
+	// }
 
 	ViewWrapper vw;
 	return vw.Run(hInstance, lpCmdLine);

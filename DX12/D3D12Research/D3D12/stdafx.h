@@ -63,6 +63,7 @@ using namespace DirectX;
 
 #include "Math/MathTypes.h"
 #include "Math/Math.h"
+#include "Core/String.h"
 #include "Core/Thread.h"
 #include "Core/CommandLine.h"
 #include "Core/Delegates.h"
@@ -77,13 +78,3 @@ using namespace DirectX;
 #include "External/d3dx12/d3dx12_extra.h"
 #include "External/imgui/imgui.h"
 #include <External/Dxc/dxcapi.h>
-
-inline int ToMultibyte(const wchar_t* pStr, char* pOut, int len)
-{
-	return WideCharToMultiByte(CP_UTF8, 0, pStr, -1, pOut, len, nullptr, nullptr);
-}
-
-inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
-{
-	return MultiByteToWideChar(CP_UTF8, 0, pStr, -1, pOut, len);
-}

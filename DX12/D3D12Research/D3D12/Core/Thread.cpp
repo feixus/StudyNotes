@@ -107,8 +107,6 @@ bool Thread::IsMainThread(uint32_t threadId)
 
 void Thread::SetName(const std::string& name)
 {
-    wchar_t wideName[256];
-    ToWidechar(name.c_str(), wideName, 256);
-    SetThreadDescription((HANDLE)m_pHandle, wideName);
+    SetThreadDescription((HANDLE)m_pHandle, MULTIBYTE_TO_UNICODE(name.c_str()));
 }
 

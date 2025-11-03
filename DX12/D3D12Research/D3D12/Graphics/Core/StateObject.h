@@ -13,7 +13,7 @@ public:
         friend class StateObjectInitializer;
 
     public:
-        D3D12_STATE_OBJECT_DESC Desc;
+        D3D12_STATE_OBJECT_DESC Desc{};
 
     private:
         template<size_t SIZE>
@@ -57,9 +57,9 @@ public:
 	void AddLibrary(ShaderLibrary* pLibrary, const std::vector<std::string>& exports = {});
     void AddCollection(StateObject* pOtherObject);
     void AddMissShader(const std::string& name, RootSignature* pRootSignature = nullptr);
-    void SetRayGenShader(const std::string& name);
 
     void CreateStateObjectStream(StateObjectStream& stateObjectStream);
+	void SetMaxPipelineStackSize(StateObject* pStateObject);
 
     std::string Name;
     uint32_t MaxRecursion{1};
@@ -90,7 +90,7 @@ public:
 
     struct LibraryExports
     {
-        ShaderLibrary* pLibrary;
+        ShaderLibrary* pLibrary{nullptr};
         std::vector<std::string> Exports;
     };
 
