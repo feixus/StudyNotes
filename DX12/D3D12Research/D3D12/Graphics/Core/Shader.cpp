@@ -340,6 +340,10 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 				m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
 				m_Shaders.remove_if([pOldShader](const ShaderPtr& ptr) { return ptr.get() == pOldShader; });
 			}
+			else
+			{
+				E_LOG(Warning, "Failed to reload shader: \"%s - %s\"", dependency.c_str(), pOldShader->GetEntryPoint().c_str());
+			}
 		}
 		for (auto library : objectMap.Libraries)
 		{
@@ -350,6 +354,10 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 				E_LOG(Info, "Reloaded shader library: \"%s\"", dependency.c_str());
 				m_OnLibraryRecompiledEvent.Broadcast(pOldLibrary, pNewLibrary);
 				m_Libraries.remove_if([pOldLibrary](const LibraryPtr& ptr) { return ptr.get() == pOldLibrary; });
+			}
+			else
+			{
+				E_LOG(Warning, "Failed to reload shader library: \"%s\"", dependency.c_str());
 			}
 		}
 	}

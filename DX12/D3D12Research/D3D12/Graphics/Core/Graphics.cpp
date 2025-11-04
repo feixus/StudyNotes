@@ -97,7 +97,7 @@ void Graphics::Initialize(HWND hWnd)
 	InitD3D();
 	InitializePipelines();
 
-	CommandContext* pContext = AllocateCommandContext();
+	CommandContext* pContext = GetCommandContext();
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
@@ -1216,6 +1216,7 @@ void Graphics::InitD3D()
 
 	HANDLE deviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
 	VERIFY_HR(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pDeviceRemovalFence.GetAddressOf())));
+	D3D::SetObjectName(m_pDeviceRemovalFence.Get(), "Device Removal Fence");
 	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
 	RegisterWaitForSingleObject(&deviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);*/
 
@@ -1302,7 +1303,17 @@ void Graphics::InitD3D()
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
-	//m_CommandQueues[D3D12_COMMAND_LIST_TYPE_BUNDLE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_BUNDLE);
+
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
+
+	const uint32_t numDirectContexts = 1;
+	for (uint32_t i = 0; i < numDirectContexts; i++)
+	{
+		std::unique_ptr<CommandContext> pContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT), m_pDynamicAllocationManager.get());
+		m_GraphicsContexts.push_back(std::move(pContext));
+	}
+	m_pComputeContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE), m_pDynamicAllocationManager.get());	
+	m_pCopyContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY), m_pDynamicAllocationManager.get());	
 
 	// allocate descriptor heaps pool
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
@@ -1329,15 +1340,6 @@ void Graphics::InitD3D()
 	{
 		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture>(this, "MSAA Render Target");
 	}
-
-	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
-
-	/*wchar_t buffer[MAX_PATH];
-	GetModuleFileNameW(NULL, buffer, MAX_PATH);
-	std::filesystem::path exePath(buffer);
-	std::filesystem::path resourcePath = exePath.parent_path() / "Resources" / "Shaders";
-	std::string finalPath = resourcePath.generic_string() + "/";
-	m_pShaderManager = std::make_unique<ShaderManager>(finalPath, m_ShaderModelMajor, m_ShaderModelMinor);*/
 
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
 
@@ -1601,6 +1603,38 @@ void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& contex
 
 void Graphics::InitializeAssets(CommandContext& context)
 {
+	{
+		int lightCount = 5;
+		m_Lights.resize(lightCount);
+
+		Vector3 position(-150, 160, -10);
+		Vector3 direction;
+		position.Normalize(direction);
+
+		m_Lights[0] = Light::Directional(position, -direction, 10.0f);
+		m_Lights[0].CastShadows = true;
+		m_Lights[0].VolumetricLighting = false;
+
+		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[1].CastShadows = true;
+		m_Lights[1].VolumetricLighting = false;
+
+		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[2].CastShadows = true;
+		m_Lights[2].VolumetricLighting = false;
+
+		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[3].CastShadows = true;
+		m_Lights[3].VolumetricLighting = false;
+
+		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+		m_Lights[4].CastShadows = true;
+		m_Lights[4].VolumetricLighting = false;
+
+		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
+		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
+	}
+
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
 
@@ -1656,38 +1690,6 @@ void Graphics::InitializeAssets(CommandContext& context)
 	}
 
 	GenerateAccelerationStructure(m_pMesh.get(), context);
-
-	{
-		int lightCount = 5;
-		m_Lights.resize(lightCount);
-
-		Vector3 position(-150, 160, -10);
-		Vector3 direction;
-		position.Normalize(direction);
-
-		m_Lights[0] = Light::Directional(position, -direction, 10.0f);
-		m_Lights[0].CastShadows = true;
-		m_Lights[0].VolumetricLighting = false;
-
-		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		m_Lights[1].CastShadows = true;
-		m_Lights[1].VolumetricLighting = false;
-
-		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		m_Lights[2].CastShadows = true;
-		m_Lights[2].VolumetricLighting = false;
-
-		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		m_Lights[3].CastShadows = true;
-		m_Lights[3].VolumetricLighting = false;
-
-		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-		m_Lights[4].CastShadows = true;
-		m_Lights[4].VolumetricLighting = false;
-
-		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
-		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
-	}
 }
 
 void Graphics::InitializePipelines()
@@ -2194,33 +2196,18 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 	return m_CommandQueues.at(type).get();
 }
 
-CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
+CommandContext* Graphics::GetCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
-	int typeIndex = type;
-	CommandContext* pCommandContext = nullptr;
-
+	switch (type)
 	{
-		std::scoped_lock lockGuard(m_ContextAllocationMutex);
-
-		if (m_FreeCommandContexts[typeIndex].size() > 0)
-		{
-			pCommandContext = m_FreeCommandContexts[typeIndex].front();
-			m_FreeCommandContexts[typeIndex].pop();
-			pCommandContext->Reset();
-		}
-		else
-		{
-			ComPtr<ID3D12CommandList> pCommandList;
-			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
-			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
-			D3D::SetObjectName(pCommandList.Get(), "Pooled CommandList");
-			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
-			pCommandContext = m_CommandListPool[typeIndex].back().get();
-		}
+		case D3D12_COMMAND_LIST_TYPE_DIRECT: return m_GraphicsContexts[0].get();
+		case D3D12_COMMAND_LIST_TYPE_COMPUTE: return m_pComputeContext.get();
+		case D3D12_COMMAND_LIST_TYPE_COPY: return m_pCopyContext.get();
+		default:
+			noEntry();
+			return nullptr;
+			break;
 	}
-
-	return pCommandContext;
 }
 
 void Graphics::WaitForFence(uint64_t fenceValue)
@@ -2228,12 +2215,6 @@ void Graphics::WaitForFence(uint64_t fenceValue)
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
 	CommandQueue* pQueue = GetCommandQueue(type);
 	pQueue->WaitForFence(fenceValue);
-}
-
-void Graphics::FreeCommandList(CommandContext* pCommandContext)
-{
-	std::scoped_lock lockGuard(m_ContextAllocationMutex);
-	m_FreeCommandContexts[pCommandContext->GetType()].push(pCommandContext);
 }
 
 bool Graphics::GetShaderModel(int& major, int& minor) const

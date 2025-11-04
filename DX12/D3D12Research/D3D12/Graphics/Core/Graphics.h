@@ -115,10 +115,8 @@ public:
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
-	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
-	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
-	void FreeCommandList(CommandContext* pCommandContext);
-
+	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
+	CommandContext* GetCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);	
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 	OfflineDescriptorAllocator* GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE type) const { return m_DescriptorHeaps[type].get(); }
 
@@ -199,27 +197,57 @@ private:
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void CreateSwapchain();
-
+	void GenerateAccelerationStructure(Mesh* pMesh, CommandContext& context);
 	void UpdateImGui();
 
-	void GenerateAccelerationStructure(Mesh* pMesh, CommandContext& context);
-
+	/*
+		base graphics objects
+	*/
 	ComPtr<IDXGIFactory7> m_pFactory;
-	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
 	HANDLE m_DeviceRemovedEvent{0};
+
+	D3D12_RENDER_PASS_TIER m_RenderPassTier{ D3D12_RENDER_PASS_TIER_0 };
+	D3D12_RAYTRACING_TIER m_RayTracingTier{ D3D12_RAYTRACING_TIER_NOT_SUPPORTED };
+	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{ D3D12_MESH_SHADER_TIER_NOT_SUPPORTED };
+	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{ D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED };
+	D3D12_VARIABLE_SHADING_RATE_TIER m_VSRTier{ D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED };
+	uint8_t m_ShaderModelMajor{0};
+	uint8_t m_ShaderModelMinor{0};
+	int m_VSRTileSize{-1};
+
+	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
+	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
+	
+	HWND m_pWindow{};
+	uint32_t m_WindowWidth;
+	uint32_t m_WindowHeight;
+	uint32_t m_CurrentBackBufferIndex{ 0 };
+	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
+	ComPtr<IDXGISwapChain3> m_pSwapchain;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
 	std::vector<std::unique_ptr<PipelineState>> m_Pipelines;
 	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
-	int m_Frame{ 0 };
+	int m_Frame{0};
 	std::array<float, 180> m_FrameTimes{};
 
-	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
+	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	std::vector<std::unique_ptr<CommandContext>> m_GraphicsContexts;
+	std::unique_ptr<CommandContext> m_pComputeContext;
+	std::unique_ptr<CommandContext> m_pCopyContext;
+
+	/*
+		render pass objects
+	*/
+	std::unique_ptr<Camera> m_pCamera;
+
+	int m_SampleCount{1};
+
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pHDRRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pPreviousColor;
@@ -232,47 +260,18 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pResolvedNormals;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ShadowMaps;
 
-	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
-	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
-
-	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
-	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandContexts;
-	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
-	std::mutex m_ContextAllocationMutex;
-
+	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
-	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<SSAO> m_pSSAO;
 	std::unique_ptr<RTReflections> m_pRTReflections;
 
-	std::unique_ptr<Camera> m_pCamera;
-	HWND m_pWindow{};
-
-	D3D12_RENDER_PASS_TIER m_RenderPassTier{ D3D12_RENDER_PASS_TIER_0 };
-	D3D12_RAYTRACING_TIER m_RayTracingTier{ D3D12_RAYTRACING_TIER_NOT_SUPPORTED };
-	uint8_t m_ShaderModelMajor{0};
-	uint8_t m_ShaderModelMinor{0};
-	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{ D3D12_MESH_SHADER_TIER_NOT_SUPPORTED };
-	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{ D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED };
-	D3D12_VARIABLE_SHADING_RATE_TIER m_VSRTier{ D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED };
-	int m_VSRTileSize{-1};
-
-	int m_SampleCount{ 1 };
-
-	uint32_t m_WindowWidth;
-	uint32_t m_WindowHeight;
+	int32_t m_ScreenshotDelay{-1};
+	int32_t m_ScreenshotRowPitch{0};
 	std::unique_ptr<Buffer> m_pScreenshotBuffer;
-	int32_t m_ScreenshotDelay{ -1 };
-	int32_t m_ScreenshotRowPitch{ 0 };
-
-	uint32_t m_CurrentBackBufferIndex{ 0 };
-	//std::array<UINT64, FRAME_COUNT> m_FenceValues{};
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
-	ShowGraph m_ShowGraph = ShowGraph::AO;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<Buffer> m_pBLAS;
@@ -338,14 +337,14 @@ private:
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
 
-	GraphicsTexture* m_pVisualizeTexture{ nullptr };
-
 	// particles
 	std::unique_ptr<GpuParticles> m_pGpuParticles;
+
 	// clouds
 	std::unique_ptr<class Clouds> m_pClouds;
-
+	
+	GraphicsTexture* m_pVisualizeTexture{ nullptr };
 	SceneData m_SceneData;
-
 	bool m_CapturePix{ false };
+
 };

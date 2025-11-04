@@ -78,4 +78,17 @@ using namespace DirectX;
 #include "External/d3dx12/d3dx12_extra.h"
 #include "External/imgui/imgui.h"
 #include <External/Dxc/dxcapi.h>
+
+#define USE_OPTICK 1
+#define OPTICK_ENABLE_TRACING 1
+#define OPTICK_ENABLE_GPU_D3D12 1
+#define OPTICK_ENABLE_GPU_VULKAN 0
 #include "optick.h"
+
+template<typename... Args>
+std::string Sprintf(const char* pFormat, Args... args)
+{
+	char buff[256];
+	sprintf_s(buff, pFormat, args...);
+	return buff;
+}

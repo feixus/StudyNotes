@@ -5,47 +5,12 @@
 
 #include "pix3.h"
 
-CommandAllocatorPool::CommandAllocatorPool(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
-	: GraphicsObject(pGraphics), m_Type(type)
-{}
-
-ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64_t fenceValue)
-{
-	std::scoped_lock lock(m_AllocationMutex);
-
-	if (m_FreeAllocators.empty() == false)
-	{
-		std::pair<ID3D12CommandAllocator*, uint64_t>& pFirst = m_FreeAllocators.front();
-		if (pFirst.second <= fenceValue)
-		{
-			m_FreeAllocators.pop();
-			pFirst.first->Reset();
-			return pFirst.first;
-		}
-	}
-
-	ComPtr<ID3D12CommandAllocator> pAllocator;
-	GetGraphics()->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
-	D3D::SetObjectName(pAllocator.Get(), "Pooled Allocator");
-	m_CommandAllocators.push_back(std::move(pAllocator));
-
-	return m_CommandAllocators.back().Get();
-}
-
-void CommandAllocatorPool::FreeAllocator(ID3D12CommandAllocator* pAllocator, uint64_t fenceValue)
-{
-	std::scoped_lock lock(m_AllocationMutex);
-	m_FreeAllocators.push(std::pair<ID3D12CommandAllocator*, uint64_t>(pAllocator, fenceValue));
-}
-
 CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	: GraphicsObject(pGraphics),
 	m_NextFenceValue((uint64_t)type << 56 | 1),			// set the command list type nested in fence value
 	m_LastCompletedFenceValue((uint64_t)type << 56),
 	m_Type(type)
 {
-	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics, type);
-
 	D3D12_COMMAND_QUEUE_DESC desc = {};
 	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	desc.NodeMask = 0;
@@ -53,10 +18,17 @@ CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	desc.Type = type;
 
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), GetGraphics()->GetDevice());
-	D3D::SetObjectName(m_pCommandQueue.Get(), "Main CommandQueue");
+	D3D::SetObjectName(m_pCommandQueue.Get(), Sprintf("CommandQueue - %s", D3D::CommandlistTypeToString(m_Type)).c_str());
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), GetGraphics()->GetDevice());
-	D3D::SetObjectName(m_pFence.Get(), "CommandQueue Fence");
+	D3D::SetObjectName(m_pFence.Get(), Sprintf("CommandQueue Fence - %s", D3D::CommandlistTypeToString(m_Type)).c_str());
 	m_pFenceEventHandle = CreateEventExA(nullptr, "CommandQueue Fence", 0, EVENT_ALL_ACCESS);
+
+	// create new commandlist and immediately close it
+	ID3D12CommandAllocator* pAllocator = RequestAllocator();
+	GetGraphics()->GetDevice()->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(m_pTransitionCommandList.GetAddressOf()));
+	m_pTransitionCommandList->Close();
+	FreeAllocator(0, pAllocator);
+	D3D::SetObjectName(m_pTransitionCommandList.Get(), Sprintf("Transition CommandList - %s", D3D::CommandlistTypeToString(m_Type)).c_str());
 }
 
 CommandQueue::~CommandQueue()
@@ -77,6 +49,7 @@ uint64_t CommandQueue::ExecuteCommandList(CommandContext** pCommandContexts, uin
 
 	std::vector<ID3D12CommandList*> commandLists;
 	commandLists.reserve(numContexts + 1);
+
 	CommandContext* pCurrentContext = nullptr;
 	for (uint32_t i = 0; i < numContexts; i++)
 	{
@@ -98,10 +71,18 @@ uint64_t CommandQueue::ExecuteCommandList(CommandContext** pCommandContexts, uin
 		{
 			if (!pCurrentContext)
 			{
-				pCurrentContext = GetGraphics()->AllocateCommandContext(m_Type);
-				pCurrentContext->Free(m_NextFenceValue);
+				// commandlist to flush all the initial barriers
+				ID3D12CommandAllocator* pTransitionAllocator = RequestAllocator();
+				FreeAllocator(m_NextFenceValue, pTransitionAllocator);
+				m_pTransitionCommandList->Reset(pTransitionAllocator, nullptr);
+				barriers.Flush(m_pTransitionCommandList.Get());
+				m_pTransitionCommandList->Close();
+				commandLists.push_back(m_pTransitionCommandList.Get());
 			}
-			barriers.Flush(pCurrentContext->GetCommandList());
+			else
+			{
+				barriers.Flush(pCurrentContext->GetCommandList());
+			}
 		}
 
 		if (pCurrentContext)
@@ -154,12 +135,29 @@ uint64_t CommandQueue::IncrementFence()
 ID3D12CommandAllocator* CommandQueue::RequestAllocator()
 {
 	uint64_t completedFence = m_pFence->GetCompletedValue();
-	return m_pAllocatorPool->GetAllocator(completedFence);
+	std::scoped_lock lock(m_AllocationMutex);
+	if (!m_FreeAllocators.empty())
+	{
+		std::pair<ID3D12CommandAllocator*, uint64_t>& pFirst = m_FreeAllocators.front();
+		if (pFirst.second <= completedFence)
+		{
+			m_FreeAllocators.pop();
+			pFirst.first->Reset();
+			return pFirst.first;
+		}
+	}
+
+	ComPtr<ID3D12CommandAllocator> pAllocator;
+	GetGraphics()->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
+	D3D::SetObjectName(pAllocator.Get(), Sprintf("Pooled Allocator %d - %s", (int)m_CommandAllocators.size(), D3D::CommandlistTypeToString(m_Type)).c_str());
+	m_CommandAllocators.push_back(std::move(pAllocator));
+	return m_CommandAllocators.back().Get();
 }
 
 void CommandQueue::FreeAllocator(uint64_t fenceValue, ID3D12CommandAllocator* pAllocator)
 {
-	m_pAllocatorPool->FreeAllocator(pAllocator, fenceValue);
+	std::scoped_lock lock(m_AllocationMutex);
+	m_FreeAllocators.push(std::pair<ID3D12CommandAllocator*, uint64_t>(pAllocator, fenceValue));
 }
 
 void CommandQueue::WaitForFence(uint64_t fenceValue)

@@ -22,6 +22,12 @@ public:
 
 	void SetSize(uint32_t size, bool shrink = true);
 
+	template<typename T>
+	void SetRootConstants(uint32_t rootIndex, uint32_t shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+	{
+		SetRootConstants(rootIndex, shaderRegister, sizeof(T) / sizeof(uint32_t), visibility);
+	}
+
 	void SetRootConstants(uint32_t rootIndex, uint32_t shaderRegister, uint32_t constantCount, D3D12_SHADER_VISIBILITY visibility);
 	void SetConstantBufferView(uint32_t rootIndex, uint32_t shaderRegister, D3D12_SHADER_VISIBILITY visibility);
 	void SetShaderResourceView(uint32_t rootIndex, uint32_t shaderRegister, D3D12_SHADER_VISIBILITY visibility);

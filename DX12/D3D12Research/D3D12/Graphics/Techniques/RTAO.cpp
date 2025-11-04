@@ -6,12 +6,12 @@
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/StateObject.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/ShaderBindingTable.h"
-#include "Graphics/Core/StateObject.h"
 
 RTAO::RTAO(Graphics* pGraphics)
 {

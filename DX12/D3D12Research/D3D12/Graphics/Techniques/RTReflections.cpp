@@ -3,6 +3,7 @@
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/StateObject.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/GraphicsTexture.h"
@@ -11,7 +12,6 @@
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
-#include "Graphics/Core/StateObject.h"
 
 RTReflections::RTReflections(Graphics* pGraphics)
 {

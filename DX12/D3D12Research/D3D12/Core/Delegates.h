@@ -707,6 +707,11 @@ public:
         return Remove(handle);
     }
 
+    DelegateHandle operator+=(void(*pCallback)(Args...))
+    {
+        return Add(DelegateT::CreateStatic(pCallback));
+    }
+
     inline DelegateHandle Add(DelegateT&& handler) noexcept
     {
         // favour an empty space over a possible array relllocation

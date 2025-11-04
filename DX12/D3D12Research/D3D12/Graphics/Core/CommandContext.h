@@ -19,6 +19,8 @@ class UnorderedAccessView;
 class ShaderResourceView;
 class CommandSignature;
 class ShaderBindingTable;
+class CommandQueue;
+class DynamicAllocationManager;
 struct BufferView;
 
 enum class CommandListContext
@@ -143,11 +145,10 @@ private:
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator);
+	CommandContext(Graphics* pGraphics, CommandQueue* pQueue, DynamicAllocationManager* pDynamicAllocator);
 	virtual ~CommandContext() = default;
 
-	virtual void Reset();
-	virtual uint64_t Execute(bool wait);
+	uint64_t Execute(bool wait);
 	static uint64_t Execute(CommandContext** pContexts, uint32_t numContexts, bool wait);
 	void Free(uint64_t fenceValue);
 	
@@ -162,11 +163,11 @@ public:
 	void InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 
-	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
+	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList.Get(); }
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return m_pRaytracingCommandList.Get(); }
 	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const {	return m_pMeshShadingCommandList.Get(); }
 	
-	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
+	CommandQueue* GetQueue() const { return m_pQueue; }
 
 	// commands
 	void Dispatch(const IntVector3& groupCounts);
@@ -266,11 +267,11 @@ private:
 	ResourceBarrierBatcher m_BarrierBatcher;
 
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
-	ID3D12GraphicsCommandList* m_pCommandList{};
+	ComPtr<ID3D12GraphicsCommandList> m_pCommandList;
 	ComPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
 	ComPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	ID3D12CommandAllocator* m_pAllocator{};
-	D3D12_COMMAND_LIST_TYPE m_Type{};
+	CommandQueue* m_pQueue{};
 
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass{ false };

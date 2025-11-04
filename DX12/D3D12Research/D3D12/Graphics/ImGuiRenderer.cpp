@@ -50,12 +50,6 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 	fontConfig.OversampleH = 2;
 	fontConfig.OversampleV = 2;
 
-	/*wchar_t buffer[MAX_PATH];
-	GetModuleFileNameW(NULL, buffer, MAX_PATH);
-	std::filesystem::path exePath(buffer);
-	std::filesystem::path resourcePath = exePath.parent_path() / "Resources" / "Fonts";
-	std::string finalPath = resourcePath.generic_string() + "/Roboto-Bold.ttf";
-	io.Fonts->AddFontFromFileTTF(finalPath.c_str(), 15.0f, &fontConfig);*/
 	io.Fonts->AddFontFromFileTTF("Resources/Fonts/Roboto-Bold.ttf", 15.0f, &fontConfig);
 
 	unsigned char* pPixels;
@@ -64,7 +58,7 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 
 	m_pFontTexture = std::make_unique<GraphicsTexture>(pGraphics, "ImGui Font");
 	m_pFontTexture->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource));
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pGraphics->GetCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels);
 	
 	io.Fonts->TexID = m_pFontTexture.get();

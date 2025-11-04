@@ -18,22 +18,22 @@ namespace D3D
 			return "COMMON";
 		}
 
-		char out[1024];
-		out[0] = '\0';
-		char* pCurrent = out;
+		char outString[1024];
+		outString[0] = '\0';
+		char* pCurrent = outString;
 		int i = 0;
-		auto addText = [&](const char* pText) {
+		auto AddText = [&](const char* pText)
+		{
 			if (i++ > 0)
 			{
 				*pCurrent++ = '/';
 			}
+			strcpy_s(pCurrent, 1024 - (pCurrent - outString), pText);
 			size_t len = strlen(pText);
-			memcpy(pCurrent, pText, len);
 			pCurrent += len;
-			*pCurrent = '\0';
 		};
 
-#define STATE_CASE(name) if ((state & D3D12_RESOURCE_STATE_##name) == D3D12_RESOURCE_STATE_##name) addText(#name)
+#define STATE_CASE(name) if ((state & D3D12_RESOURCE_STATE_##name) == D3D12_RESOURCE_STATE_##name) AddText(#name)
 		STATE_CASE(VERTEX_AND_CONSTANT_BUFFER);
 		STATE_CASE(INDEX_BUFFER);
 		STATE_CASE(RENDER_TARGET);
@@ -59,7 +59,7 @@ namespace D3D
 		STATE_CASE(VIDEO_ENCODE_WRITE);
 
 #undef STATE_CASE
-		return out;
+		return outString;
 	}
 
 	inline const char* CommandlistTypeToString(D3D12_COMMAND_LIST_TYPE type)
@@ -490,6 +490,15 @@ namespace D3D
 			assert(false);
 			return 0;
 		}
+	}
+
+	inline std::string GetAbsolutePath(std::string relativePath)
+	{
+		wchar_t buffer[MAX_PATH];
+		GetModuleFileNameW(NULL, buffer, MAX_PATH);
+		std::filesystem::path exePath(buffer);
+		std::string finalPath = exePath.parent_path().generic_string() + "/" + relativePath;
+		return finalPath;
 	}
 }
 

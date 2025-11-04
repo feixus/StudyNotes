@@ -37,7 +37,7 @@ GpuParticles::GpuParticles(Graphics* pGraphics)
 
 void GpuParticles::Initialize(Graphics* pGraphics)
 {
-    CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    CommandContext* pContext = pGraphics->GetCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
     m_pCounterBuffer = std::make_unique<Buffer>(pGraphics, "GpuParticle CounterBuffer");
     m_pCounterBuffer->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));

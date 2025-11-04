@@ -508,7 +508,7 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
     m_pLightGrid = std::make_unique<Buffer>(pGraphics, "Light Grid");
     m_pDebugLightGrid = std::make_unique<Buffer>(pGraphics, "Debug Light Grid");
 
-    CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    CommandContext* pContext = m_pGraphics->GetCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
     m_pHeatMapTexture = std::make_unique<GraphicsTexture>(pGraphics, "Heatmap texture");
     m_pHeatMapTexture->Create(pContext, "Resources/textures/HeatMap.png");
     pContext->Execute(true);
