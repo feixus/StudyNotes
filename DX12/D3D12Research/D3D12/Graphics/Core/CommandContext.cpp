@@ -667,8 +667,8 @@ void CommandContext::ResolveResource(GraphicsTexture* pSource, uint32_t sourceSu
 void CommandContext::PrepareDraw(DescriptorTableType type)
 {
 	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(type);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(type);
+	m_pShaderResourceDescriptorAllocator->BindStagedDescriptors(type);
+	m_pSamplerDescriptorAllocator->BindStagedDescriptors(type);
 }
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)

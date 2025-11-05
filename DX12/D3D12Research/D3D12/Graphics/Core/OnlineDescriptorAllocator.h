@@ -57,30 +57,24 @@ public:
 	OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap, CommandContext* pContext);
 	~OnlineDescriptorAllocator() = default;
 
-    DescriptorHandle Allocate(int count);
+    DescriptorHandle Allocate(uint32_t count);
 
     void SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-    void UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType);
+    void BindStagedDescriptors(DescriptorTableType descriptorTableType);
 
     void ParseRootSignature(RootSignature* pRootSignature);
     void ReleaseUsedHeaps(uint64_t fenceValue);
 
 private:
-    static const int MAX_NUM_ROOT_PARAMETERS = 10;
-    static const int MAX_DESCRIPTORS_PER_TABLE = 128;
-
-    void UnbindAll();
-    void EnsureSpace(uint32_t count);
+    static const int MAX_NUM_ROOT_PARAMETERS = 16;
 
     struct RootDescriptorEntry
     {
-        BitField<MAX_DESCRIPTORS_PER_TABLE> AssignedHandlesBitMap{};
-        D3D12_CPU_DESCRIPTOR_HANDLE* TableStart{};
         uint32_t TableSize{};
+        DescriptorHandle GpuHandle;
     };
 
     std::array<RootDescriptorEntry, MAX_NUM_ROOT_PARAMETERS> m_RootDescriptorTable{};
-    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, MAX_NUM_ROOT_PARAMETERS * MAX_DESCRIPTORS_PER_TABLE> m_HandleCache{};
 
     BitField32 m_RootDescriptorMask{};
     BitField32 m_StaleRootParameters{};
