@@ -382,7 +382,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			D3D12_RENDER_PASS_ENDING_ACCESS_TYPE endingAccess = ExtractEndingAccess(data.Access);
 			if (data.Target->GetDesc().SampleCount <= 1 && endingAccess == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
-				validateOncef(false, "render target %d is set to resolve but has a sample count of 1. this will just do a CopyTexture instead which is wasteful.", i);
+				validateOncef(data.Target == data.ResolveTarget, "render target %d is set to resolve but has a sample count of 1. this will just do a CopyTexture instead which is wasteful.", i);
 				endingAccess = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
 			}
 			renderTargetDescs[i].EndingAccess.Type = endingAccess;
@@ -492,7 +492,7 @@ void CommandContext::EndRenderPass()
 		for (uint32_t i = 0; i < m_CurrentRenderPassInfo.RenderTargetCount; ++i)
 		{
 			const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
-			if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE && data.Target->GetDesc().SampleCount <= 1)
+			if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE && data.Target->GetDesc().SampleCount <= 1 && data.Target != data.ResolveTarget)
 			{
 				FlushResourceBarriers();
 				CopyTexture(data.Target, data.ResolveTarget);
@@ -514,7 +514,7 @@ void CommandContext::EndRenderPass()
 					uint32_t subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
 					ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
 				}
-				else
+				else if (data.Target != data.ResolveTarget)
 				{
 					validateOncef(false, "render target %d is set to resolve but has a sample count of 1. this will just do a CopyTexture instead which is wasteful.", i);
 					FlushResourceBarriers();

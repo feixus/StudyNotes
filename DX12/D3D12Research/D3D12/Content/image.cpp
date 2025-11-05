@@ -11,6 +11,15 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "External/stb/stb_image_write.h"
 
+Image::Image(int width, int height, ImageFormat format, void* pInitialData)
+{
+	SetSize(width, height, GetNumChannels(format));
+	m_Format = format;
+	if (pInitialData)
+	{
+		SetData(pInitialData);
+	}
+}
 
 bool Image::Load(const char* filePath)
 {
@@ -63,7 +72,8 @@ bool Image::SetSize(int x, int y, int components)
 	m_Depth = 1;
 	m_Pixels.clear();
 	m_Pixels.resize(m_Width * m_Height * m_Components);
-	
+	m_Format = ImageFormat::RGBA;
+
 	return true;
 }
 
@@ -527,5 +537,30 @@ bool Image::LoadStbi(const char* inputStream)
 		memcpy(m_Pixels.data(), pPixels, m_Pixels.size());
 		stbi_image_free(pPixels);
 		return true;
+	}
+}
+
+int32_t Image::GetNumChannels(ImageFormat format)
+{
+	switch (format)
+	{
+	case ImageFormat::RGBA:
+	case ImageFormat::BGRA:
+	case ImageFormat::RGBA16:
+	case ImageFormat::RGBA32:
+		return 4;
+	case ImageFormat::RGB32:
+		return 3;
+	case ImageFormat::BC1:
+	case ImageFormat::BC2:
+	case ImageFormat::BC3:
+	case ImageFormat::BC4:
+	case ImageFormat::BC5:
+	case ImageFormat::BC6H:
+	case ImageFormat::BC7:
+		return -1;
+	default:
+		noEntry();
+		return -1;
 	}
 }

@@ -24,9 +24,13 @@ void ShaderBindingTable::BindMissShader(const char* pName, uint32_t rayIndex, co
     m_MissRecordSize = Math::Max<int>(m_MissRecordSize, entrySize);
 }
 
-void ShaderBindingTable::BindHitGroup(const char* pName, const std::vector<uint64_t>& data)
+void ShaderBindingTable::BindHitGroup(const char* pName, uint32_t index, const std::vector<uint64_t>& data)
 {
-    m_HitGroupShaderRecords.push_back(CreateRecord(pName, data));
+    if (index > m_HitGroupShaderRecords.size())
+    {
+        m_HitGroupShaderRecords.resize(index + 1);
+    }
+    m_HitGroupShaderRecords[index] = CreateRecord(pName, data);
     uint32_t entrySize = Math::AlignUp<uint32_t>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + (uint32_t)data.size() * sizeof(uint64_t), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
     m_HitRecordSize = Math::Max<int>(m_HitRecordSize, entrySize);
 }

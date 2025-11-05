@@ -101,15 +101,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COMMON);
 
-	m_Textures.push_back(std::make_unique<GraphicsTexture>(pGraphics, "Dummy White"));
-	m_Textures.back()->Create(pContext, "Resources/textures/dummy.dds", true);
-	m_Textures.push_back(std::make_unique<GraphicsTexture>(pGraphics, "Dummy Black"));
-	m_Textures.back()->Create(pContext, "Resources/textures/dummy_black.dds", true);
-	m_Textures.push_back(std::make_unique<GraphicsTexture>(pGraphics, "Dummy Normal"));
-	m_Textures.back()->Create(pContext, "Resources/textures/dummy_ddn.dds", true);
-	// m_Textures.push_back(std::make_unique<GraphicsTexture>(pGraphics, "Dummy Gray"));
-	// m_Textures.back()->Create(pContext, "Resources/textures/dummy_gray.dds", true);
-
 	std::filesystem::path filePath(pFilePath);
 	std::filesystem::path basePath = filePath.parent_path();
 
@@ -119,40 +110,31 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
 		bool success = ret == aiReturn_SUCCESS;
 
-		if (!success)
-		{
-			switch (type)
-			{
-			case aiTextureType_SPECULAR: return m_Textures[1].get();
-			case aiTextureType_NORMALS: return m_Textures[2].get();
-			// case aiTextureType_SHININESS: return m_Textures[3].get();
-			case aiTextureType_AMBIENT: return m_Textures[1].get();
-			default: return m_Textures[0].get();
-			}
-		}
-
-		std::filesystem::path texturePath = path.C_Str();
-		if (texturePath.is_absolute() || texturePath.has_root_path())
-		{
-			texturePath = texturePath.relative_path();
-		}
-		texturePath = basePath / texturePath;
-
-		std::string pathStr = texturePath.string();
-		StringHash pathHash = StringHash(pathStr);
-		auto it = m_ExistingTextures.find(pathHash);
-		if (it != m_ExistingTextures.end())
-		{
-			return it->second;
-		}
-
-		std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphics, "Material Texture");
-		success = pTex->Create(pContext, pathStr.c_str(), srgb);
 		if (success)
 		{
-			m_Textures.push_back(std::move(pTex));
-			m_ExistingTextures[pathHash] = m_Textures.back().get();
-			return m_Textures.back().get();
+			std::filesystem::path texturePath = path.C_Str();
+			if (texturePath.is_absolute() || texturePath.has_root_path())
+			{
+				texturePath = texturePath.relative_path();
+			}
+			texturePath = basePath / texturePath;
+
+			std::string pathStr = texturePath.string();
+			StringHash pathHash = StringHash(pathStr);
+			auto it = m_ExistingTextures.find(pathHash);
+			if (it != m_ExistingTextures.end())
+			{
+				return it->second;
+			}
+
+			std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphics, pathStr.c_str());
+			success = pTex->Create(pContext, pathStr.c_str(), srgb);
+			if (success)
+			{
+				m_Textures.push_back(std::move(pTex));
+				m_ExistingTextures[pathHash] = m_Textures.back().get();
+				return m_Textures.back().get();
+			}
 		}
 		return (GraphicsTexture*)nullptr;
 	};
@@ -164,7 +146,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		const aiMaterial* pMaterial = pScene->mMaterials[i];
 		m.pDiffuseTexture = loadTexture(pMaterial, aiTextureType_DIFFUSE, true);
 		m.pNormalTexture = loadTexture(pMaterial, aiTextureType_NORMALS, false);
-		m.pRoughnessTexture = loadTexture(pMaterial, aiTextureType_SPECULAR, false);
+		m.pRoughnessTexture = loadTexture(pMaterial, aiTextureType_SHININESS, false);
 		m.pMetallicTexture = loadTexture(pMaterial, aiTextureType_AMBIENT, false);
 		aiString p;
 		m.IsTransparent = pMaterial->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;

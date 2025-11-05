@@ -65,9 +65,6 @@ public:
 	ShaderLibrary(const ShaderBlob& shaderBlob, const std::vector<ShaderDefine>& defines) : ShaderBase(shaderBlob, defines) {}
 };
 
-DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader*, Shader*);
-DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, ShaderLibrary*, ShaderLibrary*);
-
 class ShaderManager
 {
 public:
@@ -79,7 +76,9 @@ public:
 	Shader* GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
 
+	DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader*, Shader*);
 	OnShaderRecompiled& OnShaderRecompiledEvent() { return m_OnShaderRecompiledEvent; }
+	DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, ShaderLibrary*, ShaderLibrary*);
 	OnLibraryRecompiled& OnLibraryRecompiledEvent() { return m_OnLibraryRecompiledEvent; }
 
 private:

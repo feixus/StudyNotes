@@ -30,6 +30,9 @@ struct MipLevelInfo
 class Image final
 {
 public:
+	Image() = default;
+	Image(int width, int height, ImageFormat format, void* pInitialData = nullptr);
+
 	bool Load(const char* filePath);
 	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
 	void Save(const char* pFilePath);
@@ -50,17 +53,17 @@ public:
 	bool IsSRGB() const { return m_sRgb; }
 	bool IsHDR() const { return m_IsHdr; }
 	bool IsCubemap() const { return m_IsCubemap; }
+	bool IsCompressed() const { return m_Format != ImageFormat::RGBA; }
 
 	uint8_t* GetWritableData() { return m_Pixels.data(); }
 	const uint8_t* GetData(int mipLevel) const;
 	uint32_t GetTotalSize() const { return (uint32_t)m_Pixels.size(); }
 	MipLevelInfo GetMipLevelInfo(int mipLevel) const;
 	int GetMipLevels() const { return m_MipLevels; }
-	bool IsCompressed() const { return m_Format != ImageFormat::RGBA; }
 	ImageFormat GetFormat() const { return m_Format; }
 	bool GetSurfaceInfo(int width, int height, int depth, int mipLevel, MipLevelInfo& mipLevelInfo) const;
-
 	const Image* GetNextImage() const { return m_pNextImage.get(); }
+	static int32_t GetNumChannels(ImageFormat format);
 
 	static unsigned int TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb);
 

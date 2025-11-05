@@ -81,7 +81,6 @@ struct SceneData
 	Camera* pCamera{ nullptr };
 	ShadowData* pShadowData{ nullptr };
 	Buffer* pTLAS{ nullptr };
-	Mesh* pMesh{ nullptr };
 	int FrameIndex{ 0 };
 	BitField<128> VisibilityMask;
 };
@@ -207,9 +206,8 @@ private:
 	void GenerateAccelerationStructure(Mesh* pMesh, CommandContext& context);
 	void UpdateImGui();
 
-	/*
-		base graphics objects
-	*/
+	int RegisterBindlessTexture(GraphicsTexture* pTexture, GraphicsTexture* pFallback = nullptr);
+
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
@@ -227,6 +225,7 @@ private:
 
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
+
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 	
@@ -251,12 +250,10 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
-	/*
-		render pass objects
-	*/
-	std::unique_ptr<Camera> m_pCamera;
-
-	int m_SampleCount{1};
+	std::unique_ptr<GraphicsTexture> m_pBlackTexture;
+	std::unique_ptr<GraphicsTexture> m_pWhiteTexture;
+	std::unique_ptr<GraphicsTexture> m_pGrayTexture;
+	std::unique_ptr<GraphicsTexture> m_pDummyNormalTexture;
 
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pHDRRenderTarget;
@@ -352,9 +349,12 @@ private:
 
 	// clouds
 	std::unique_ptr<class Clouds> m_pClouds;
-	
-	GraphicsTexture* m_pVisualizeTexture{ nullptr };
-	SceneData m_SceneData;
-	bool m_CapturePix{ false };
 
+	SceneData m_SceneData;
+	std::unique_ptr<Camera> m_pCamera;
+	GraphicsTexture* m_pVisualizeTexture{ nullptr };
+	std::map<GraphicsTexture*, int> m_TextureToDescriptorIndex;
+
+	int m_SampleCount{1};
+	bool m_CapturePix{false};
 };
