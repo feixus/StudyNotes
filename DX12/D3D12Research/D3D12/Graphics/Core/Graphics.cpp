@@ -97,7 +97,7 @@ void Graphics::Initialize(HWND hWnd)
 	InitD3D();
 	InitializePipelines();
 
-	CommandContext* pContext = GetCommandContext();
+	CommandContext* pContext = AllocateCommandContext();
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
@@ -1308,15 +1308,6 @@ void Graphics::InitD3D()
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
 	m_pGlobalSamplerHeap =  std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 256, 2048);
 
-	const uint32_t numDirectContexts = 1;
-	for (uint32_t i = 0; i < numDirectContexts; i++)
-	{
-		std::unique_ptr<CommandContext> pContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT), m_pDynamicAllocationManager.get());
-		m_GraphicsContexts.push_back(std::move(pContext));
-	}
-	m_pComputeContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE), m_pDynamicAllocationManager.get());	
-	m_pCopyContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY), m_pDynamicAllocationManager.get());	
-
 	// allocate descriptor heaps pool
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
@@ -2198,18 +2189,37 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 	return m_CommandQueues.at(type).get();
 }
 
-CommandContext* Graphics::GetCommandContext(D3D12_COMMAND_LIST_TYPE type)
+void Graphics::FreeCommandList(CommandContext* pCommandList)
 {
-	switch (type)
+	std::lock_guard lockGuard(m_ContextAllocationMutex);
+	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
+}
+
+CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
+{
+	int typeIndex = (int)type;
+	CommandContext* pContext = nullptr;
+
 	{
-		case D3D12_COMMAND_LIST_TYPE_DIRECT: return m_GraphicsContexts[0].get();
-		case D3D12_COMMAND_LIST_TYPE_COMPUTE: return m_pComputeContext.get();
-		case D3D12_COMMAND_LIST_TYPE_COPY: return m_pCopyContext.get();
-		default:
-			noEntry();
-			return nullptr;
-			break;
+		std::scoped_lock lock(m_ContextAllocationMutex);
+		if (m_FreeCommandLists[typeIndex].size() > 0)
+		{
+			pContext = m_FreeCommandLists[typeIndex].front();
+			m_FreeCommandLists[typeIndex].pop();
+			pContext->Reset();
+		}
+		else
+		{
+			ComPtr<ID3D12CommandList> pCommandList;
+			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
+			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
+			D3D::SetObjectName(pCommandList.Get(), "Pooled Commandlist");
+			m_CommandLists.push_back(std::move(pCommandList));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
+			pContext = m_CommandListPool[typeIndex].back().get();
+		}
 	}
+	return pContext;
 }
 
 void Graphics::WaitForFence(uint64_t fenceValue)

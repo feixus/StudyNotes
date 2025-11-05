@@ -106,7 +106,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pCloudsPS = pGraphics->CreatePipeline(psoDesc);
 	}
 
-	CommandContext* pContext = pGraphics->GetCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
 		struct Vertex
 		{

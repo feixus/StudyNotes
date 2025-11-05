@@ -145,9 +145,10 @@ private:
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(Graphics* pGraphics, CommandQueue* pQueue, DynamicAllocationManager* pDynamicAllocator);
+	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator);
 	~CommandContext() = default;
 
+	void Reset();
 	uint64_t Execute(bool wait);
 	static uint64_t Execute(CommandContext** pContexts, uint32_t numContexts, bool wait);
 	void Free(uint64_t fenceValue);
@@ -163,11 +164,11 @@ public:
 	void InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 
-	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList.Get(); }
+	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return m_pRaytracingCommandList.Get(); }
 	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const {	return m_pMeshShadingCommandList.Get(); }
 	
-	CommandQueue* GetQueue() const { return m_pQueue; }
+	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	// commands
 	void Dispatch(const IntVector3& groupCounts);
@@ -226,7 +227,6 @@ public:
 	void SetShadingRateImage(GraphicsTexture* pTexture);
 
 	DynamicAllocation AllocateTransientMemory(uint64_t size);
-	DescriptorHandle AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	struct PendingBarrier
 	{
@@ -261,19 +261,19 @@ private:
 
 	ResourceBarrierBatcher m_BarrierBatcher;
 
-	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
-	ComPtr<ID3D12GraphicsCommandList> m_pCommandList;
+	ID3D12GraphicsCommandList* m_pCommandList;
 	ComPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
 	ComPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
+
+	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12CommandAllocator* m_pAllocator{};
-	CommandQueue* m_pQueue{};
+	D3D12_COMMAND_LIST_TYPE m_Type;
+	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
+	std::vector<PendingBarrier> m_PendingBarriers;
 
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass{ false };
 	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubresourceParameters{};
-
-	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
-	std::vector<PendingBarrier> m_PendingBarriers;
 };
 
 class ScopedBarrier
