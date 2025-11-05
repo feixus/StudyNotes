@@ -28,6 +28,7 @@ class ShaderManager;
 class PipelineStateInitializer;
 class StateObject;
 class StateObjectInitializer;
+class GlobalOnlineDescriptorHeap;
 
 struct MaterialData
 {
@@ -112,13 +113,14 @@ public:
 	void WaitForFence(uint64_t fenceValue);
 	void IdleGPU();
 
+	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
-	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
-	CommandContext* GetCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);	
+	CommandContext* GetCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
-	OfflineDescriptorAllocator* GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE type) const { return m_DescriptorHeaps[type].get(); }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -161,21 +163,24 @@ public:
 		return m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
+	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
+	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap.get(); }
+
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
 	bool UseRenderPasses() const;
 	bool SupportsRaytracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
 	bool SupportMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
 	bool IsFenceComplete(uint64_t fenceValue);
+	bool GetShaderModel(int& major, int& minor) const;
+	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 	
 	int32_t GetWindowWidth() const { return m_WindowWidth; }
 	int32_t GetWindowHeight() const { return m_WindowHeight; }
-	bool GetShaderModel(int& major, int& minor) const;
-	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
+
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_pResolveDepthStencil.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
-	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
@@ -218,6 +223,8 @@ private:
 	uint8_t m_ShaderModelMinor{0};
 	int m_VSRTileSize{-1};
 
+	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
+	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 	

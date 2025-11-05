@@ -83,7 +83,11 @@ void CommandContext::Free(uint64_t fenceValue)
 	m_pAllocator = m_pQueue->RequestAllocator();
 	m_pCommandList->Reset(m_pAllocator, nullptr);
 
-	BindDescriptorHeaps();
+	ID3D12DescriptorHeap* pHeaps[] = {
+		GetGraphics()->GetGlobalViewHeap()->GetHeap(),
+		GetGraphics()->GetGlobalSamplerHeap()->GetHeap()
+	};
+	m_pCommandList->SetDescriptorHeaps((UINT)std::size(pHeaps), pHeaps);
 }
 
 bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after)
@@ -635,7 +639,7 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values)
 {
 	FlushResourceBarriers();
-	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
+	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->Allocate(1);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uav = pUav->GetDescriptor();
 	GetGraphics()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -646,7 +650,7 @@ void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView
 void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values)
 {
 	FlushResourceBarriers();
-	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
+	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->Allocate(1);
 	
 	D3D12_CPU_DESCRIPTOR_HANDLE uav = pUav->GetDescriptor();
 	GetGraphics()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -728,15 +732,6 @@ void CommandContext::SetDynamicSamplerDescriptors(int rootIndex, int offset, con
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, handles);
 }
 
-void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type)
-{
-	if (m_CurrentDescriptorHeaps[(int)type] != pHeap)
-	{
-		m_CurrentDescriptorHeaps[(int)type] = pHeap;
-		BindDescriptorHeaps();
-	}
-}
-
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate)
 {
 	check(m_pMeshShadingCommandList);
@@ -754,27 +749,9 @@ DynamicAllocation CommandContext::AllocateTransientMemory(uint64_t size)
 	return m_DynamicAllocator->Allocate(size);
 }
 
-DescriptorHandle CommandContext::AllocateTransientDescriptor(uint32_t count, D3D12_DESCRIPTOR_HEAP_TYPE type)
+DescriptorHandle CommandContext::AllocateTransientDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-	return m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(count);
-}
-
-void CommandContext::BindDescriptorHeaps()
-{
-	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> heapsToBind{};
-	int heapCount = 0;
-	for (size_t i = 0; i < heapsToBind.size(); ++i)
-	{
-		if (m_CurrentDescriptorHeaps[i] != nullptr)
-		{
-			heapsToBind[heapCount++] = m_CurrentDescriptorHeaps[i];
-		}
-	}
-
-	if (heapCount > 0)
-	{
-		m_pCommandList->SetDescriptorHeaps(heapCount, heapsToBind.data());
-	}
+	return m_pShaderResourceDescriptorAllocator->Allocate(count);
 }
 
 void ResourceBarrierBatcher::AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource)

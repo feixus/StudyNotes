@@ -146,7 +146,7 @@ class CommandContext : public GraphicsObject
 {
 public:
 	CommandContext(Graphics* pGraphics, CommandQueue* pQueue, DynamicAllocationManager* pDynamicAllocator);
-	virtual ~CommandContext() = default;
+	~CommandContext() = default;
 
 	uint64_t Execute(bool wait);
 	static uint64_t Execute(CommandContext** pContexts, uint32_t numContexts, bool wait);
@@ -173,6 +173,7 @@ public:
 	void Dispatch(const IntVector3& groupCounts);
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
 	void DispatchMesh(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
+
 	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32_t argumentsOffset = 0, uint32_t countOffset = 0);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
@@ -182,6 +183,7 @@ public:
 
 	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
+	
 	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values = nullptr);
 	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
 	
@@ -194,9 +196,9 @@ public:
 	void EndRenderPass();
 
 	// bindings
-	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
+	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 
@@ -208,7 +210,6 @@ public:
 	void SetDynamicSamplerDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
 
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
-
 	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetGraphicsRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	void SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize);
@@ -221,13 +222,11 @@ public:
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 
-	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
-
 	void SetShadingRate(D3D12_SHADING_RATE shadingRate = D3D12_SHADING_RATE_1X1);
 	void SetShadingRateImage(GraphicsTexture* pTexture);
 
 	DynamicAllocation AllocateTransientMemory(uint64_t size);
-	DescriptorHandle AllocateTransientDescriptor(uint32_t count, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	DescriptorHandle AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	struct PendingBarrier
 	{
@@ -257,12 +256,8 @@ public:
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandListType, D3D12_RESOURCE_STATES state);
 
 private:
-	void BindDescriptorHeaps();
-
 	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
 	std::unique_ptr<OnlineDescriptorAllocator> m_pSamplerDescriptorAllocator;
-
-	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_CurrentDescriptorHeaps{};
 
 	ResourceBarrierBatcher m_BarrierBatcher;
 
