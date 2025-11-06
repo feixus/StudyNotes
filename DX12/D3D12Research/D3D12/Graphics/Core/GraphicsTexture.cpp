@@ -53,7 +53,7 @@ D3D12_RESOURCE_DESC GetResourceDesc(const TextureDesc& textureDesc)
 		break;
 	case TextureDimension::TextureCube:
 	case TextureDimension::TextureCubeArray:
-		desc = CD3DX12_RESOURCE_DESC::Tex2D(textureDesc.Format, width, height, (UINT16)textureDesc.DepthOrArraySize * 6, (UINT16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+		desc = CD3DX12_RESOURCE_DESC::Tex2D(textureDesc.Format, width, height, (UINT16)textureDesc.DepthOrArraySize * 6, (UINT16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 		break;
 	case TextureDimension::Texture3D:
 		desc = CD3DX12_RESOURCE_DESC::Tex3D(textureDesc.Format, width, height, (UINT16)textureDesc.DepthOrArraySize, (UINT16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
@@ -319,6 +319,15 @@ bool GraphicsTexture::Create(CommandContext* pContext, const Image& img, bool sr
 	Create(desc);
 	pContext->InitializeTexture(this, subresourceData.data(), 0, (int)subresourceData.size());
 	return true;
+}
+
+void GraphicsTexture::Create(CommandContext* pContext, const TextureDesc& desc, void* pInitialData)
+{
+	Create(desc);
+	if (pInitialData)
+	{
+		SetData(pContext, pInitialData);
+	}
 }
 
 void GraphicsTexture::SetData(CommandContext* pContext, const void* pData)

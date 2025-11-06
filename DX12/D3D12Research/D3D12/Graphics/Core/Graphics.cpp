@@ -1114,9 +1114,6 @@ void Graphics::EndFrame(uint64_t fenceValue)
 {
 	Profiler::Get()->Resolve(this, m_Frame);
 
-	OPTICK_GPU_FLIP(m_pSwapchain.Get());
-	OPTICK_CATEGORY("Present", Optick::Category::Wait);
-
 	// the top third(triple buffer) is not need wait, just record the every frame fenceValue.
 	// the 'm_CurrentBackBufferIndex' is always in the new buffer frame
 	// we present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame
@@ -1171,42 +1168,85 @@ void Graphics::InitD3D()
 	// factory
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
-	bool allowTearing = false;
+	bool allowTearing = true;
 	HRESULT hr = m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
 	allowTearing &= SUCCEEDED(hr);
 
-	// look for an adapter
 	ComPtr<IDXGIAdapter4> pAdapter;
-	uint32_t adapter = 0;
-	while (m_pFactory->EnumAdapterByGpuPreference(adapter++, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND)
-	{
-		DXGI_ADAPTER_DESC3 desc;
-		pAdapter->GetDesc3(&desc);
 
-		if (!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
+	bool useWarpAdapter = CommandLine::GetBool("warp");
+	if (!useWarpAdapter)
+	{
+		uint32_t adapterIndex = 0;
+		E_LOG(Info, "Adapters:");
+		DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_UNSPECIFIED;
+		while (m_pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) == S_OK)
 		{
+			DXGI_ADAPTER_DESC3 desc;
+			pAdapter->GetDesc3(&desc);
 			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
 
-			break;
+			uint32_t outputIndex = 0;
+			ComPtr<IDXGIOutput> pOutput;
+			while(pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
+			{
+				ComPtr<IDXGIOutput6> pOutput1;
+				pOutput.As(&pOutput1);
+				DXGI_OUTPUT_DESC1 outputDesc;
+				pOutput1->GetDesc1(&outputDesc);
+
+				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP",
+					outputIndex,
+					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
+					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
+					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
+					outputDesc.BitsPerColor);
+			}
 		}
+		m_pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf()));
+		DXGI_ADAPTER_DESC3 desc;
+		pAdapter->GetDesc3(&desc);
+		E_LOG(Info, "Using %s", UNICODE_TO_MULTIBYTE(desc.Description));
+
+		// device
+		constexpr D3D_FEATURE_LEVEL featureLevels[] =
+		{
+			D3D_FEATURE_LEVEL_12_1,
+			D3D_FEATURE_LEVEL_12_0,
+			D3D_FEATURE_LEVEL_11_1,
+			D3D_FEATURE_LEVEL_11_0
+		};
+
+		auto GetFeatureLevelName = [](D3D_FEATURE_LEVEL featureLevel) {
+			switch(featureLevel)
+			{
+			case D3D_FEATURE_LEVEL_12_1 : return "D3D_FEATURE_LEVEL_12_1";
+			case D3D_FEATURE_LEVEL_12_0 : return "D3D_FEATURE_LEVEL_12_0";
+			case D3D_FEATURE_LEVEL_11_1 : return "D3D_FEATURE_LEVEL_11_1";
+			case D3D_FEATURE_LEVEL_11_0 : return "D3D_FEATURE_LEVEL_11_0";
+			default: noEntry(); return "";
+			}
+		};
+
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
+		D3D12_FEATURE_DATA_FEATURE_LEVELS caps = {
+			.NumFeatureLevels = std::size(featureLevels),
+			.pFeatureLevelsRequested = featureLevels,
+		};
+		VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)), GetDevice());
+		VERIFY_HR_EX(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())), GetDevice());
+		E_LOG(Info, "D3D12 Device Created: %s", GetFeatureLevelName(caps.MaxSupportedFeatureLevel));
 	}
 
-	// device
-	constexpr D3D_FEATURE_LEVEL featureLevels[] =
+	if (!m_pDevice)
 	{
-		D3D_FEATURE_LEVEL_12_1,
-		D3D_FEATURE_LEVEL_12_0,
-		D3D_FEATURE_LEVEL_11_1,
-		D3D_FEATURE_LEVEL_11_0
-	};
+		E_LOG(Warning, "No D3D12 Adapter selected. Falling back to WARP");
+		m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
+	}
 
-	VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
-	D3D12_FEATURE_DATA_FEATURE_LEVELS caps = {
-		.NumFeatureLevels = std::size(featureLevels),
-		.pFeatureLevelsRequested = featureLevels,
-	};
-	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)), GetDevice());
-	VERIFY_HR_EX(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())), GetDevice());
+	m_pDevice.As(&m_pRaytracingDevice);
+	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	/*auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 		Graphics* pGraphics = (Graphics*)pContext;
@@ -1219,11 +1259,6 @@ void Graphics::InitD3D()
 	D3D::SetObjectName(m_pDeviceRemovalFence.Get(), "Device Removal Fence");
 	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
 	RegisterWaitForSingleObject(&deviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);*/
-
-	pAdapter.Reset();
-
-	m_pDevice.As(&m_pRaytracingDevice);
-	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	if (debugD3D)
 	{
@@ -1317,9 +1352,6 @@ void Graphics::InitD3D()
 
 	// swap chain
 	CreateSwapchain();
-
-	ID3D12CommandQueue* pQueue = GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue();
-	OPTICK_GPU_INIT_D3D12(m_pDevice.Get(), &pQueue, 1);
 
 	// create the textures but don't create the resources themselves yet. 
 	for (int i = 0; i < FRAME_COUNT; i++)
@@ -1480,7 +1512,7 @@ void Graphics::OnResize(int width, int height)
 	}
 }
 
-void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& context)
+void Graphics::GenerateAccelerationStructure(CommandContext& context, const Matrix* transforms, uint32_t count)
 {
 	if (!SupportsRaytracing())
 	{
@@ -1489,63 +1521,14 @@ void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& contex
 
 	ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
 
-	// bottom level acceleration structure
-	{
-		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
-		for (size_t i = 0; i < pMesh->GetMeshCount(); i++)
-		{
-			const SubMesh* pSubMesh = pMesh->GetMesh((int)i);
-
-			D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
-			geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-			geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-			geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndexBuffer().Location;
-			geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexBuffer().Elements;
-			geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-			geometryDesc.Triangles.Transform3x4 = 0;
-			geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVertexBuffer().Location;
-			geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetVertexBuffer().Stride;
-			geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexBuffer().Elements;
-			geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-			geometries.push_back(geometryDesc);
-		}
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
-			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
-			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
-			.NumDescs = (uint32_t)geometries.size(),
-			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-			.pGeometryDescs = geometries.data(),
-		};
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-		GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-		m_pBLASScratch = std::make_unique<Buffer>(this, "BLAS Scratch Buffer");
-		m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-		m_pBLAS = std::make_unique<Buffer>(this, "BLAS");
-		m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
-			.DestAccelerationStructureData = m_pBLAS->GetGpuHandle(),
-			.Inputs = prebuildInfo,
-			.SourceAccelerationStructureData = 0,
-			.ScratchAccelerationStructureData = m_pBLASScratch->GetGpuHandle(),
-		};
-
-		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-		context.InsertUavBarrier(m_pBLAS.get());
-		context.FlushResourceBarriers();
-	}
-
 	// top level acceleration structure
 	{
+		uint32_t numMeshes = (uint32_t)m_Meshes.size();
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
 			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
 			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
 					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
-			.NumDescs = 1,
+			.NumDescs = numMeshes,
 			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
 		};
 
@@ -1557,14 +1540,6 @@ void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& contex
 		m_pTLAS = std::make_unique<Buffer>(this, "TLAS");
 		m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 
-		DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
-		D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(allocation.pMappedMemory);
-		pInstanceDesc->AccelerationStructure = m_pBLAS->GetGpuHandle();
-		pInstanceDesc->Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-		pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
-		pInstanceDesc->InstanceID = 0;
-		pInstanceDesc->InstanceMask = 0xFF;
-
 		// the layout of Transform is a transpose of how affine matrices are typically stored in memory. 
 		// Instead of four 3-vectors. Transform is laid out as three 4-vectors.
 		auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
@@ -1573,14 +1548,33 @@ void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& contex
 				desc.Transform[1][0] = m.m[0][1]; desc.Transform[1][1] = m.m[1][1]; desc.Transform[1][2] = m.m[2][1]; desc.Transform[1][3] = m.m[3][1];
 				desc.Transform[2][0] = m.m[0][2]; desc.Transform[2][1] = m.m[1][2]; desc.Transform[2][2] = m.m[2][2]; desc.Transform[2][3] = m.m[3][2];
 			};
-		ApplyTransform(Matrix::Identity, *pInstanceDesc);
+
+		DynamicAllocation allocation = context.AllocateTransientMemory(numMeshes * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+		D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(allocation.pMappedMemory);
+		int meshCount = 0;
+		for (uint32_t i = 0; i < numMeshes; i++)
+		{
+			pInstanceDesc->AccelerationStructure = m_Meshes[i]->GetBLAS()->GetGpuHandle();
+			pInstanceDesc->Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+			pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
+			pInstanceDesc->InstanceID = 0;
+			pInstanceDesc->InstanceMask = 0xFF;
+
+			if (i < count)
+			{
+				ApplyTransform(transforms[i], *pInstanceDesc);
+			}
+			++pInstanceDesc;
+			meshCount += m_Meshes[i]->GetMeshCount();
+		}
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
 			.DestAccelerationStructureData = m_pTLAS->GetGpuHandle(),
 			.Inputs = {
 				.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
-				.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
-				.NumDescs = 1,
+				.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE |
+						D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE,
+				.NumDescs = numMeshes,
 				.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
 				.InstanceDescs = allocation.GpuHandle,
 			},
@@ -1597,48 +1591,63 @@ void Graphics::GenerateAccelerationStructure(Mesh* pMesh, CommandContext& contex
 void Graphics::InitializeAssets(CommandContext& context)
 {
 	uint32_t BLACK = 0xFF000000;
-	m_pBlackTexture = std::make_unique<GraphicsTexture>(this, "Default Black");
-	m_pBlackTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &BLACK));
+	m_DefaultTextures[(int)DefaultTexture::Black2D] = std::make_unique<GraphicsTexture>(this, "Default Black");
+	m_DefaultTextures[(int)DefaultTexture::Black2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
 
 	uint32_t WHITE = 0xFFFFFFFF;
-	m_pWhiteTexture = std::make_unique<GraphicsTexture>(this, "Default White");
-	m_pWhiteTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &WHITE));
+	m_DefaultTextures[(int)DefaultTexture::White2D] = std::make_unique<GraphicsTexture>(this, "Default White");
+	m_DefaultTextures[(int)DefaultTexture::White2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
+
+	uint32_t MAGENTA = 0xFFFF00FF;
+	m_DefaultTextures[(int)DefaultTexture::Magenta2D] = std::make_unique<GraphicsTexture>(this, "Default Magenta");
+	m_DefaultTextures[(int)DefaultTexture::Magenta2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
 
 	uint32_t GRAY = 0xFF808080;
-	m_pGrayTexture = std::make_unique<GraphicsTexture>(this, "Default Gray");
-	m_pGrayTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &GRAY));
+	m_DefaultTextures[(int)DefaultTexture::Gray2D] = std::make_unique<GraphicsTexture>(this, "Default Gray");
+	m_DefaultTextures[(int)DefaultTexture::Gray2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
 
 	uint32_t DEFAULT_NORMAL = 0xFFFF8080;
-	m_pDummyNormalTexture = std::make_unique<GraphicsTexture>(this, "Default Normal");
-	m_pDummyNormalTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &DEFAULT_NORMAL));
+	m_DefaultTextures[(int)DefaultTexture::Normal2D] = std::make_unique<GraphicsTexture>(this, "Default Normal");
+	m_DefaultTextures[(int)DefaultTexture::Normal2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
+	
+	uint32_t BLACK_CUBE[6] = {};
+	m_DefaultTextures[(int)DefaultTexture::BlackCube] = std::make_unique<GraphicsTexture>(this, "Default Black CUbe");
+	m_DefaultTextures[(int)DefaultTexture::BlackCube]->Create(&context, TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK_CUBE);
 
-	RegisterBindlessTexture(m_pBlackTexture.get());
-	RegisterBindlessTexture(m_pWhiteTexture.get());
-	RegisterBindlessTexture(m_pGrayTexture.get());
-	RegisterBindlessTexture(m_pDummyNormalTexture.get());
-
-	m_pMesh = std::make_unique<Mesh>();
-	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
-
-	m_SceneData.Batches.resize(m_pMesh->GetMeshCount());
-
-	for (int i = 0; i < m_pMesh->GetMeshCount(); i++)
 	{
-		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
-		Batch& b = m_SceneData.Batches[i];
-		b.Index = i;
-		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
-		b.pMesh = m_pMesh->GetMesh(i);
-
-		b.Material.Diffuse = RegisterBindlessTexture(material.pDiffuseTexture, m_pGrayTexture.get());
-		b.Material.Normal = RegisterBindlessTexture(material.pNormalTexture, m_pDummyNormalTexture.get());
-		b.Material.Roughness = RegisterBindlessTexture(material.pRoughnessTexture, m_pGrayTexture.get());
-		b.Material.Metallic = RegisterBindlessTexture(material.pMetallicTexture, m_pBlackTexture.get());
-
-		b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();	
+		pMesh->Load("Resources/sponza/sponza.dae", this, &context);
+		m_Meshes.push_back(std::move(pMesh));
 	}
 
-	GenerateAccelerationStructure(m_pMesh.get(), context);
+	Matrix transforms[] = {
+		Matrix::CreateTranslation(0, 0, 0),
+	};
+
+	for (uint32_t j = 0; j < (uint32_t)m_Meshes.size(); j++)
+	{
+		auto& pMesh = m_Meshes[j];
+		for (int i = 0; i < pMesh->GetMeshCount(); i++)
+		{
+			const Material& material = pMesh->GetMaterial(pMesh->GetMesh(i)->GetMaterialId());
+			m_SceneData.Batches.push_back(Batch{});
+			Batch& b = m_SceneData.Batches.back();
+			b.Index = (int)m_SceneData.Batches.size() - 1;
+			b.Bounds = pMesh->GetMesh(i)->GetBounds();
+			b.pMesh = pMesh->GetMesh(i);
+			b.WorldMatrix = transforms[j];
+			b.Bounds.Transform(b.Bounds, b.WorldMatrix);
+
+			b.Material.Diffuse = RegisterBindlessTexture(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::White2D));
+			b.Material.Normal = RegisterBindlessTexture(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
+			b.Material.Roughness = RegisterBindlessTexture(material.pRoughnessTexture, GetDefaultTexture(DefaultTexture::Gray2D));
+			b.Material.Metallic = RegisterBindlessTexture(material.pMetallicTexture, GetDefaultTexture(DefaultTexture::Black2D));
+
+			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+		}
+	}
+
+	GenerateAccelerationStructure(context, transforms, std::size(transforms));
 
 	{
 		Vector3 position(-150, 160, -10);

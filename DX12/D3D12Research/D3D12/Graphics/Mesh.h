@@ -50,12 +50,17 @@ public:
 	SubMesh* GetMesh(int index) const { return m_Meshes[index].get(); }
     const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
+    Buffer* GetBLAS() const { return m_pBLAS.get(); }
     Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
+    void GenerateBLAS(Graphics* pGraphics, CommandContext* pContext);
+
     std::vector<std::unique_ptr<SubMesh>> m_Meshes;
     std::vector<Material> m_Materials;
     std::unique_ptr<Buffer> m_pGeometryData;
     std::vector<std::unique_ptr<GraphicsTexture>> m_Textures;
     std::map<StringHash, GraphicsTexture*> m_ExistingTextures;
+    std::unique_ptr<Buffer> m_pBLAS;
+	std::unique_ptr<Buffer> m_pBLASScratch;
 };

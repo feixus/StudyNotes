@@ -30,6 +30,17 @@ class StateObject;
 class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
 
+enum class DefaultTexture
+{
+	White2D,
+	Black2D,
+	Magenta2D,
+	Gray2D,
+	Normal2D,
+	BlackCube,
+	MAX
+};
+
 struct MaterialData
 {
 	int Diffuse{ 0 };
@@ -82,7 +93,7 @@ struct SceneData
 	ShadowData* pShadowData{ nullptr };
 	Buffer* pTLAS{ nullptr };
 	int FrameIndex{ 0 };
-	BitField<128> VisibilityMask;
+	BitField<256> VisibilityMask;
 };
 
 enum class RenderPath
@@ -114,6 +125,7 @@ public:
 
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
+	IDXGISwapChain3* GetSwapchain() const { return m_pSwapchain.Get(); }
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
 
@@ -178,6 +190,7 @@ public:
 	int32_t GetWindowWidth() const { return m_WindowWidth; }
 	int32_t GetWindowHeight() const { return m_WindowHeight; }
 
+	GraphicsTexture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_pResolveDepthStencil.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
@@ -203,7 +216,7 @@ private:
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void CreateSwapchain();
-	void GenerateAccelerationStructure(Mesh* pMesh, CommandContext& context);
+	void GenerateAccelerationStructure(CommandContext& context, const Matrix* transforms, uint32_t count);
 	void UpdateImGui();
 
 	int RegisterBindlessTexture(GraphicsTexture* pTexture, GraphicsTexture* pFallback = nullptr);
@@ -250,10 +263,7 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
-	std::unique_ptr<GraphicsTexture> m_pBlackTexture;
-	std::unique_ptr<GraphicsTexture> m_pWhiteTexture;
-	std::unique_ptr<GraphicsTexture> m_pGrayTexture;
-	std::unique_ptr<GraphicsTexture> m_pDummyNormalTexture;
+	std::array<std::unique_ptr<GraphicsTexture>, (int)DefaultTexture::MAX> m_DefaultTextures;
 
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<GraphicsTexture> m_pHDRRenderTarget;
@@ -280,10 +290,8 @@ private:
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
 
-	std::unique_ptr<Mesh> m_pMesh;
-	std::unique_ptr<Buffer> m_pBLAS;
+	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;
-	std::unique_ptr<Buffer> m_pBLASScratch;
 	std::unique_ptr<Buffer> m_pTLASScratch;
 
 	// shadow mapping
