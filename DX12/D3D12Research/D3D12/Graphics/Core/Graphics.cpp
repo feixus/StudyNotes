@@ -35,7 +35,7 @@
 #endif
 
 #ifndef GPU_VALIDATION
-#define GPU_VALIDATION 0
+#define GPU_VALIDATION 1
 #endif
 
 namespace Tweakables
@@ -486,14 +486,14 @@ void Graphics::Update()
 
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 			
-			renderContext.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
+			renderContext.BindResources(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
 
 			struct ViewData
 			{
 				Matrix ViewProjection;
 			} viewData{};
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
-			renderContext.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
+			renderContext.SetGraphicsDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
 			
 			auto DrawBatches = [&](Batch::Blending blendMode)
 			{
@@ -509,7 +509,7 @@ void Graphics::Update()
 					{
 						objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
-						renderContext.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+						renderContext.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 						b.pMesh->Draw(&renderContext);
 					}
 				}
@@ -541,8 +541,8 @@ void Graphics::Update()
 				renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
 				renderContext.SetPipelineState(m_pResolveDepthPSO);
 
-				renderContext.SetDynamicDescriptor(0, 0, pDepthStencilResolve->GetUAV());
-				renderContext.SetDynamicDescriptor(1, 0, pDepthStencil->GetSRV());
+				renderContext.BindResource(0, 0, pDepthStencilResolve->GetUAV());
+				renderContext.BindResource(1, 0, pDepthStencil->GetSRV());
 
 				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 16);
 				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 16);
@@ -599,8 +599,8 @@ void Graphics::Update()
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
-				renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
-				renderContext.SetDynamicDescriptor(2, 0, GetResolveDepthStencil()->GetSRV());
+				renderContext.BindResource(1, 0, m_pVelocity->GetUAV());
+				renderContext.BindResource(2, 0, GetResolveDepthStencil()->GetSRV());
 
 				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
 				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
@@ -646,8 +646,8 @@ void Graphics::Update()
 					parameters.Far = m_pCamera->GetFar();
 
 					renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(parameters));
-					renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[0]->GetUAV());
-					renderContext.SetDynamicDescriptor(2, 0, pDepthStencil->GetSRV());
+					renderContext.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
+					renderContext.BindResource(2, 0, pDepthStencil->GetSRV());
 
 					renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
 
@@ -657,8 +657,8 @@ void Graphics::Update()
 						renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 						renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-						renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[i]->GetUAV());
-						renderContext.SetDynamicDescriptor(2, 0, m_ReductionTargets[i - 1]->GetSRV());
+						renderContext.BindResource(1, 0, m_ReductionTargets[i]->GetUAV());
+						renderContext.BindResource(2, 0, m_ReductionTargets[i - 1]->GetSRV());
 
 						renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
 					}
@@ -694,7 +694,7 @@ void Graphics::Update()
 					context.BeginRenderPass(RenderPassInfo(pShadowMap, RenderPassAccess::Clear_Store));
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
-					context.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
+					context.SetGraphicsDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
 
 					struct PerObjectData
 					{
@@ -702,7 +702,7 @@ void Graphics::Update()
 						MaterialData Material;
 					} objectData;
 
-					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
+					context.BindResources(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
 
 					auto DrawBatches = [&](const Batch::Blending blendModes)
 					{
@@ -712,7 +712,7 @@ void Graphics::Update()
 							{
 								objectData.World = b.WorldMatrix;
 								objectData.Material = b.Material;
-								context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+								context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 	
 								b.pMesh->Draw(&context);
 							}
@@ -775,7 +775,7 @@ void Graphics::Update()
 			constBuffer.SunDirection = -m_Lights[0].Direction;
 			constBuffer.SunDirection.Normalize();
 
-			renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+			renderContext.SetGraphicsDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 
 			renderContext.Draw(0, 36);
 
@@ -835,11 +835,11 @@ void Graphics::Update()
 				parameters.Jitter.y = -(m_pCamera->GetPrevJitter().y - m_pCamera->GetJitter().y);
 				context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(TemporalParameters));
 
-				context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
-				context.SetDynamicDescriptor(2, 0, m_pVelocity->GetSRV());
-				context.SetDynamicDescriptor(2, 1, m_pPreviousColor->GetSRV());
-				context.SetDynamicDescriptor(2, 2, m_pTAASource->GetSRV());
-				context.SetDynamicDescriptor(2, 3, GetResolveDepthStencil()->GetSRV());
+				context.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
+				context.BindResource(2, 0, m_pVelocity->GetSRV());
+				context.BindResource(2, 1, m_pPreviousColor->GetSRV());
+				context.BindResource(2, 2, m_pTAASource->GetSRV());
+				context.BindResource(2, 3, GetResolveDepthStencil()->GetSRV());
 
 				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
 				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
@@ -881,8 +881,8 @@ void Graphics::Update()
 					Parameters.TargetDimensionsInv = Vector2(1.0f / pTonemapInput->GetWidth(), 1.0f / pTonemapInput->GetHeight());
 
 					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
-					context.SetDynamicDescriptor(1, 0, pTonemapInput->GetUAV());
-					context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+					context.BindResource(1, 0, pTonemapInput->GetUAV());
+					context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 
 					context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 8), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 8));
 				});
@@ -897,7 +897,7 @@ void Graphics::Update()
 				GraphicsTexture* pTonemapInput = resources.GetTexture(toneMappingInput);
 
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(pTonemapInput, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(pTonemapInput, D3D12_RESOURCE_STATE_SHADER_RESOURCE);
 
 				context.ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
 
@@ -918,8 +918,8 @@ void Graphics::Update()
 				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
 				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
-				context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
-				context.SetDynamicDescriptor(2, 0, pTonemapInput->GetSRV());
+				context.BindResource(1, 0, m_pLuminanceHistogram->GetUAV());
+				context.BindResource(2, 0, pTonemapInput->GetSRV());
 
 				context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 16), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 16));
 			});
@@ -950,8 +950,8 @@ void Graphics::Update()
 				AverageParameters.Tau = Tweakables::g_Tau;
 
 				context.SetComputeDynamicConstantBufferView(0, &AverageParameters, sizeof(AverageLuminanceParameters));
-				context.SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
-				context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
+				context.BindResource(1, 0, m_pAverageLuminance->GetUAV());
+				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 
 				context.Dispatch(1, 1, 1);
 			});
@@ -975,9 +975,9 @@ void Graphics::Update()
 				context.SetComputeRootSignature(m_pToneMapRS.get());
 
 				context.SetComputeDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
-				context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
-				context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
-				context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
+				context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
+				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
+				context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 
 				context.Dispatch(Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16), Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16));
 			});
@@ -1004,9 +1004,9 @@ void Graphics::Update()
 					Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
 					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
-					context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
-					context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
-					context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
+					context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
+					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
+					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});

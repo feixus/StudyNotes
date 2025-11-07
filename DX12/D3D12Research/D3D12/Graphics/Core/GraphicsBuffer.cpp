@@ -110,7 +110,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 void Buffer::SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint64_t offset /*= 0*/)
 {
 	check(dataSize + offset <= GetSize());
-	pContext->InitializeBuffer(this, pData, dataSize, offset);
+	pContext->InitializeBuffer(this, pData, dataSize, (uint32_t)offset);
 }
 
 void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)

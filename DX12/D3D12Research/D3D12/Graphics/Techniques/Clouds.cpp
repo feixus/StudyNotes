@@ -195,7 +195,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				context.FlushResourceBarriers();
 
 				context.SetComputeDynamicConstantBufferView(0, &Constants, sizeof(Constants));
-				context.SetDynamicDescriptor(1, 0, m_pWorleyNoiseTexture->GetUAV());
+				context.BindResource(1, 0, m_pWorleyNoiseTexture->GetUAV());
 		
 				context.Dispatch(Resolution / 8, Resolution / 8, Resolution / 8);
 			});
@@ -238,12 +238,12 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				sCloudParameters.SunDirection = Vector4(sunLight.Direction);
 				sCloudParameters.SunColor = sunLight.Colour;
 
-				context.SetDynamicConstantBufferView(0, &sCloudParameters, sizeof(sCloudParameters));
+				context.SetGraphicsDynamicConstantBufferView(0, &sCloudParameters, sizeof(sCloudParameters));
 
-				context.SetDynamicDescriptor(1, 0, pSceneTexture->GetSRV());
-				context.SetDynamicDescriptor(1, 1, pDepthTexture->GetSRV());
-				context.SetDynamicDescriptor(1, 2, m_pWorleyNoiseTexture->GetSRV());
-				context.SetDynamicDescriptor(1, 3, m_pVerticalDensityTexture->GetSRV());
+				context.BindResource(1, 0, pSceneTexture->GetSRV());
+				context.BindResource(1, 1, pDepthTexture->GetSRV());
+				context.BindResource(1, 2, m_pWorleyNoiseTexture->GetSRV());
+				context.BindResource(1, 3, m_pVerticalDensityTexture->GetSRV());
 
 				context.SetVertexBuffer(m_pQuadVertexBuffer.get());
 				context.Draw(0, 6);

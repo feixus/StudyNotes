@@ -169,7 +169,7 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 			context.SetGraphicsRootSignature(m_pRootSignature.get());
 
 			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0, 0.0f, 1.0f);
-			context.SetDynamicConstantBufferView(1, &projectionMatrix, sizeof(Matrix));
+			context.SetGraphicsDynamicConstantBufferView(1, &projectionMatrix, sizeof(Matrix));
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetViewport(FloatRect(0, 0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
@@ -214,16 +214,16 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 						{
 						case TextureDimension::Texture2D:
 							batchData.TextureType = 1;
-							context.SetDynamicDescriptor(2, 0, textureData.pTexture->GetSRV());
+							context.BindResource(2, 0, textureData.pTexture->GetSRV());
 							break;
 						case TextureDimension::Texture3D:
 							batchData.TextureType = 2;
-							context.SetDynamicDescriptor(3, 0, textureData.pTexture->GetSRV());
+							context.BindResource(3, 0, textureData.pTexture->GetSRV());
 							break;
 						}
 					}
 
-					context.SetDynamicConstantBufferView(0, &batchData, sizeof(batchData));
+					context.SetGraphicsDynamicConstantBufferView(0, &batchData, sizeof(batchData));
 					context.DrawIndexed(pCmd->ElemCount, indexOffset, 0);
 					
 					indexOffset += pCmd->ElemCount;

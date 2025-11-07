@@ -164,13 +164,6 @@ public:
 	void InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 
-	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
-	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return m_pRaytracingCommandList.Get(); }
-	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const {	return m_pMeshShadingCommandList.Get(); }
-	
-	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
-
-	// commands
 	void Dispatch(const IntVector3& groupCounts);
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
 	void DispatchMesh(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
@@ -184,36 +177,28 @@ public:
 
 	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
-	
-	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values = nullptr);
-	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
-	
 	void ResolveResource(GraphicsTexture* pSource, uint32_t sourceSubResource, GraphicsTexture* pTarget, uint32_t targetSubResource, DXGI_FORMAT format);
 	
-	void PrepareDraw(DescriptorTableType type);
+	void PrepareDraw(GraphicsPipelineType type);
+
+	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values = nullptr);
+	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
 
 	// a more structured way for applications to decalare data dependencies and output targets for a set of rendering operations. 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	// bindings
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
-	void SetComputeRootSignature(RootSignature* pRootSignature);
-	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
-	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
 
-	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
-	void SetDynamicDescriptor(int rootIndex, int offset, ShaderResourceView* pSrv);
-	void SetDynamicDescriptor(int rootIndex, int offset, UnorderedAccessView* pUav);
-	void SetDynamicDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
-	void SetDynamicSamplerDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
-	void SetDynamicSamplerDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
-
-	void SetGraphicsRootSignature(RootSignature* pRootSignature);
-	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetGraphicsRootConstants(int rootIndex, uint32_t count, const void* pConstants);
-	void SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize);
+	
+	void BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void BindResource(int rootIndex, int offset, ShaderResourceView* pSrv);
+	void BindResource(int rootIndex, int offset, UnorderedAccessView* pUav);
+	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
+	void BindSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void BindSamplers(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
+	
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
@@ -226,7 +211,27 @@ public:
 	void SetShadingRate(D3D12_SHADING_RATE shadingRate = D3D12_SHADING_RATE_1X1);
 	void SetShadingRateImage(GraphicsTexture* pTexture);
 
-	DynamicAllocation AllocateTransientMemory(uint64_t size);
+	// compute
+	void SetComputeRootSignature(RootSignature* pRootSignature);
+	void SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetComputeRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
+	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
+	
+	// graphics
+	void SetGraphicsRootSignature(RootSignature* pRootSignature);
+	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetGraphicsRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetGraphicsRootConstants(int rootIndex, uint32_t count, const void* pConstants);
+	void SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize);
+
+	DynamicAllocation AllocateTransientMemory(uint64_t size, uint32_t alignment = 256);
+
+	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
+	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return m_pRaytracingCommandList.Get(); }
+	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const {	return m_pMeshShadingCommandList.Get(); }
+	
+	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	struct PendingBarrier
 	{

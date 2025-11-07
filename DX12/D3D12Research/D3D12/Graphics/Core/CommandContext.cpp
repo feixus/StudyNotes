@@ -237,14 +237,14 @@ void CommandContext::Dispatch(const IntVector3& groupCounts)
 
 void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
-	PrepareDraw(DescriptorTableType::Compute);
+	PrepareDraw(GraphicsPipelineType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
 void CommandContext::DispatchMesh(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
 	check(m_pMeshShadingCommandList);
-	PrepareDraw(DescriptorTableType::Graphics);
+	PrepareDraw(GraphicsPipelineType::Graphics);
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
@@ -258,32 +258,32 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uin
 	rayDesc.Height = height;
 	rayDesc.Depth = depth;
 	
-	PrepareDraw(DescriptorTableType::Compute);
+	PrepareDraw(GraphicsPipelineType::Compute);
 	m_pRaytracingCommandList->DispatchRays(&rayDesc);
 }
 
 // GPU-driven rendering
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32_t argumentsOffset, uint32_t countOffset)
 {
-	PrepareDraw(pCommandSignature->IsCompute() ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
+	PrepareDraw(pCommandSignature->IsCompute() ? GraphicsPipelineType::Compute : GraphicsPipelineType::Graphics);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
 {
-	PrepareDraw(DescriptorTableType::Graphics);
+	PrepareDraw(GraphicsPipelineType::Graphics);
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
 void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex)
 {
-	PrepareDraw(DescriptorTableType::Graphics);
+	PrepareDraw(GraphicsPipelineType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex, int instanceStart)
 {
-	PrepareDraw(DescriptorTableType::Graphics);
+	PrepareDraw(GraphicsPipelineType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
@@ -531,6 +531,11 @@ void CommandContext::SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS
 	m_pCommandList->SetGraphicsRootShaderResourceView(rootIndex, gpuAddress);
 }
 
+void CommandContext::SetGraphicsRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+	m_pCommandList->SetGraphicsRootUnorderedAccessView(rootIndex, address);
+}
+
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
@@ -538,7 +543,7 @@ void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
 }
 
-void CommandContext::SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize)
+void CommandContext::SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
@@ -643,6 +648,7 @@ void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uav = pUav->GetDescriptor();
 	GetGraphics()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
 	uint32_t zeros[4] = {0, 0, 0, 0};
 	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
@@ -654,6 +660,7 @@ void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessVie
 	
 	D3D12_CPU_DESCRIPTOR_HANDLE uav = pUav->GetDescriptor();
 	GetGraphics()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
 	float zeros[4] = {0, 0, 0, 0};
 	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
@@ -664,7 +671,7 @@ void CommandContext::ResolveResource(GraphicsTexture* pSource, uint32_t sourceSu
 	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, format);
 }
 
-void CommandContext::PrepareDraw(DescriptorTableType type)
+void CommandContext::PrepareDraw(GraphicsPipelineType type)
 {
 	FlushResourceBarriers();
 	m_pShaderResourceDescriptorAllocator->BindStagedDescriptors(type);
@@ -690,6 +697,16 @@ void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
 }
 
+void CommandContext::SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+	m_pCommandList->SetComputeRootShaderResourceView(rootIndex, address);
+}
+
+void CommandContext::SetComputeRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+	m_pCommandList->SetComputeRootUnorderedAccessView(rootIndex, address);
+}
+
 void CommandContext::SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants)
 {
 	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
@@ -702,32 +719,32 @@ void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, void* pD
 	m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
-void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CommandContext::BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
 	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
-void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, ShaderResourceView* pSrv)
+void CommandContext::BindResource(int rootIndex, int offset, ShaderResourceView* pSrv)
 {
-	SetDynamicDescriptor(rootIndex, offset, pSrv->GetDescriptor());
+	BindResource(rootIndex, offset, pSrv->GetDescriptor());
 }
 
-void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, UnorderedAccessView* pUav)
+void CommandContext::BindResource(int rootIndex, int offset, UnorderedAccessView* pUav)
 {
-	SetDynamicDescriptor(rootIndex, offset, pUav->GetDescriptor());
+	BindResource(rootIndex, offset, pUav->GetDescriptor());
 }
 
-void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
 
-void CommandContext::SetDynamicSamplerDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CommandContext::BindSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
-void CommandContext::SetDynamicSamplerDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::BindSamplers(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, handles);
 }
@@ -744,9 +761,9 @@ void CommandContext::SetShadingRateImage(GraphicsTexture* pTexture)
 	m_pMeshShadingCommandList->RSSetShadingRateImage(pTexture->GetResource());
 }
 
-DynamicAllocation CommandContext::AllocateTransientMemory(uint64_t size)
+DynamicAllocation CommandContext::AllocateTransientMemory(uint64_t size, uint32_t alignment)
 {
-	return m_DynamicAllocator->Allocate(size);
+	return m_DynamicAllocator->Allocate(size, alignment);
 }
 
 void ResourceBarrierBatcher::AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource)

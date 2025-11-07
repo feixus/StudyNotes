@@ -79,13 +79,13 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             Data.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
 
             context.SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
-            context.SetDynamicDescriptor(1, 0, m_pLightIndexCounter->GetUAV());
-            context.SetDynamicDescriptor(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
-            context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetUAV());
-            context.SetDynamicDescriptor(1, 3, m_pLightIndexListBufferTransparent->GetUAV());
-            context.SetDynamicDescriptor(1, 4, m_pLightGridTransparent->GetUAV());
-            context.SetDynamicDescriptor(2, 0, inputResource.pResolvedDepth->GetSRV());
-            context.SetDynamicDescriptor(2, 1, inputResource.pLightBuffer->GetSRV());
+            context.BindResource(1, 0, m_pLightIndexCounter->GetUAV());
+            context.BindResource(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
+            context.BindResource(1, 2, m_pLightGridOpaque->GetUAV());
+            context.BindResource(1, 3, m_pLightIndexListBufferTransparent->GetUAV());
+            context.BindResource(1, 4, m_pLightGridTransparent->GetUAV());
+            context.BindResource(2, 0, inputResource.pResolvedDepth->GetSRV());
+            context.BindResource(2, 1, inputResource.pLightBuffer->GetSRV());
 
             context.Dispatch(Data.NumThreadGroups);
         });
@@ -175,19 +175,19 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-            context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-            context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
+            context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+            context.SetGraphicsDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
 
-            context.SetDynamicDescriptors(3, 0, inputResource.MaterialTextures.data(), (int)inputResource.MaterialTextures.size());
-            context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
-            context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
-			context.SetDynamicDescriptor(4, 4, inputResource.pResolvedDepth->GetSRV());
-			context.SetDynamicDescriptor(4, 5, inputResource.pPreviousColor->GetSRV());
+            context.BindResources(3, 0, inputResource.MaterialTextures.data(), (int)inputResource.MaterialTextures.size());
+            context.BindResource(4, 2, inputResource.pLightBuffer->GetSRV());
+            context.BindResource(4, 3, inputResource.pAO->GetSRV());
+			context.BindResource(4, 4, inputResource.pResolvedDepth->GetSRV());
+			context.BindResource(4, 5, inputResource.pPreviousColor->GetSRV());
 
             int idx = 0;
             for (auto& pShadowMap : *inputResource.pShadowMaps)
             {
-                context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
+                context.BindResource(5, idx++, pShadowMap->GetSRV());
             }
 
             if (inputResource.pTLAS)
@@ -203,7 +203,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                     {
                         objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
-                        context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+                        context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 					    b.pMesh->Draw(&context);
                     }
                 }
@@ -213,8 +213,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 GPU_PROFILE_SCOPE("Opaque", &context);
                 context.SetPipelineState(m_pDiffusePSO);
                         
-                context.SetDynamicDescriptor(4, 0, m_pLightGridOpaque->GetSRV());
-                context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
+                context.BindResource(4, 0, m_pLightGridOpaque->GetSRV());
+                context.BindResource(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
 
                 DrawBatches(Batch::Blending::Opaque | Batch::Blending::AlphaMask);
             }
@@ -223,8 +223,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 GPU_PROFILE_SCOPE("Transparent", &context);
                 context.SetPipelineState(m_pDiffuseAlphaPSO);
                         
-                context.SetDynamicDescriptor(4, 0, m_pLightGridTransparent->GetSRV());
-                context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferTransparent->GetSRV());
+                context.BindResource(4, 0, m_pLightGridTransparent->GetSRV());
+                context.BindResource(4, 1, m_pLightIndexListBufferTransparent->GetSRV());
 
                 DrawBatches(Batch::Blending::AlphaBlend);
             }
@@ -278,11 +278,11 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Graphic
 
             context.SetComputeDynamicConstantBufferView(0, &constantData, sizeof(Data));
 
-            context.SetDynamicDescriptor(1, 0, pTarget->GetSRV());
-            context.SetDynamicDescriptor(1, 1, pDepth->GetSRV());
-            context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetSRV());
+            context.BindResource(1, 0, pTarget->GetSRV());
+            context.BindResource(1, 1, pDepth->GetSRV());
+            context.BindResource(1, 2, m_pLightGridOpaque->GetSRV());
             
-            context.SetDynamicDescriptor(2, 0, m_pVisualizeIntermediateTexture->GetUAV());
+            context.BindResource(2, 0, m_pVisualizeIntermediateTexture->GetUAV());
 
             context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 16), Math::DivideAndRoundUp(pTarget->GetHeight(), 16));
             context.InsertUavBarrier();

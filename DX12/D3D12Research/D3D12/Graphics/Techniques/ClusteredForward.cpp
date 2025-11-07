@@ -97,7 +97,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 
                 context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(constantBuffer));
-                context.SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetUAV());
+                context.BindResource(1, 0, m_pAabbBuffer->GetUAV());
 
                 // Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
                 context.Dispatch(m_ClusterCountX, m_ClusterCountY, Math::DivideAndRoundUp(cClusterCountZ, 32));
@@ -141,8 +141,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             perFrameParameters.View = inputResource.pCamera->GetView();
             perFrameParameters.ViewProjection = inputResource.pCamera->GetViewProjection();
             
-            context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(perFrameParameters));
-            context.SetDynamicDescriptor(2, 0, m_pUniqueClusterBuffer->GetUAV());
+            context.SetGraphicsDynamicConstantBufferView(1, &perFrameParameters, sizeof(perFrameParameters));
+            context.BindResource(2, 0, m_pUniqueClusterBuffer->GetUAV());
 
             auto DrawBatches = [&](Batch::Blending blendMode)
             {
@@ -151,7 +151,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                     if (Any(b.BlendMode, blendMode) && inputResource.VisibilityMask.GetBit(b.Index))
                     {
                         perObjectParameters.World = b.WorldMatrix;
-                        context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
+                        context.SetGraphicsDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
 					    b.pMesh->Draw(&context);
                     }
                 }
@@ -186,8 +186,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetPipelineState(m_pCompactClusterListPSO);
             context.SetComputeRootSignature(m_pCompactClusterListRS.get());
 
-            context.SetDynamicDescriptor(0, 0, m_pUniqueClusterBuffer->GetSRV());
-            context.SetDynamicDescriptor(1, 0, m_pCompactedClusterBuffer->GetUAV());
+            context.BindResource(0, 0, m_pUniqueClusterBuffer->GetSRV());
+            context.BindResource(1, 0, m_pCompactedClusterBuffer->GetUAV());
 
             context.Dispatch(Math::RoundUp(m_MaxClusters / 64.f));
         });
@@ -202,8 +202,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetPipelineState(m_pUpdateIndirectArgumentsPSO);
             context.SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
 
-            context.SetDynamicDescriptor(0, 0, m_pCompactedClusterBuffer->GetUAV()->GetCounter()->GetSRV());
-            context.SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
+            context.BindResource(0, 0, m_pCompactedClusterBuffer->GetUAV()->GetCounter()->GetSRV());
+            context.BindResource(1, 0, m_pIndirectArguments->GetUAV());
 
             context.Dispatch(1, 1, 1);
         });
@@ -234,12 +234,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             constantBuffer.LightCount = inputResource.pLightBuffer->GetNumElements();
 
             context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-            context.SetDynamicDescriptor(1, 0, inputResource.pLightBuffer->GetSRV());
-            context.SetDynamicDescriptor(1, 1, m_pAabbBuffer->GetSRV());
-            context.SetDynamicDescriptor(1, 2, m_pCompactedClusterBuffer->GetSRV());
-            context.SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
-            context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
-            context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+            context.BindResource(1, 0, inputResource.pLightBuffer->GetSRV());
+            context.BindResource(1, 1, m_pAabbBuffer->GetSRV());
+            context.BindResource(1, 2, m_pCompactedClusterBuffer->GetSRV());
+            context.BindResource(2, 0, m_pLightIndexCounter->GetUAV());
+            context.BindResource(2, 1, m_pLightIndexGrid->GetUAV());
+            context.BindResource(2, 2, m_pLightGrid->GetUAV());
 
             context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), 1, m_pIndirectArguments.get(), nullptr);
     });
@@ -333,19 +333,19 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-            context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-            context.SetDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
-            context.SetDynamicDescriptors(3, 0, inputResource.MaterialTextures.data(), (int)inputResource.MaterialTextures.size());
-            context.SetDynamicDescriptor(4, 0, m_pLightGrid->GetSRV());
-            context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
-            context.SetDynamicDescriptor(4, 2, inputResource.pLightBuffer->GetSRV());
-            context.SetDynamicDescriptor(4, 3, inputResource.pAO->GetSRV());
-            context.SetDynamicDescriptor(4, 4, inputResource.pResolvedDepth->GetSRV());
-            context.SetDynamicDescriptor(4, 5, inputResource.pPreviousColor->GetSRV());
+            context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+            context.SetGraphicsDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
+            context.BindResources(3, 0, inputResource.MaterialTextures.data(), (int)inputResource.MaterialTextures.size());
+            context.BindResource(4, 0, m_pLightGrid->GetSRV());
+            context.BindResource(4, 1, m_pLightIndexGrid->GetSRV());
+            context.BindResource(4, 2, inputResource.pLightBuffer->GetSRV());
+            context.BindResource(4, 3, inputResource.pAO->GetSRV());
+            context.BindResource(4, 4, inputResource.pResolvedDepth->GetSRV());
+            context.BindResource(4, 5, inputResource.pPreviousColor->GetSRV());
             int idx = 0;
             for (auto& pShadowMap : *inputResource.pShadowMaps)
             {
-                context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
+                context.BindResource(5, idx++, pShadowMap->GetSRV());
             }
 
             if (inputResource.pTLAS)
@@ -361,7 +361,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                     {
                         objectData.World = Matrix::Identity;
                         objectData.Material = b.Material;
-                        context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+                        context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
                         b.pMesh->Draw(&context);
                     }
                 }
@@ -403,11 +403,11 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 context.SetGraphicsRootSignature(m_pDebugClusterRS.get());
 
                 Matrix p = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
-                context.SetDynamicConstantBufferView(0, &p, sizeof(Matrix));
-                context.SetDynamicDescriptor(1, 0, m_pAabbBuffer->GetSRV());
-                context.SetDynamicDescriptor(1, 1, m_pDebugCompactedClusterBuffer->GetSRV());
-                context.SetDynamicDescriptor(1, 2, m_pDebugLightGrid->GetSRV());
-                context.SetDynamicDescriptor(1, 3, m_pHeatMapTexture->GetSRV());
+                context.SetGraphicsDynamicConstantBufferView(0, &p, sizeof(Matrix));
+                context.BindResource(1, 0, m_pAabbBuffer->GetSRV());
+                context.BindResource(1, 1, m_pDebugCompactedClusterBuffer->GetSRV());
+                context.BindResource(1, 2, m_pDebugLightGrid->GetSRV());
+                context.BindResource(1, 3, m_pHeatMapTexture->GetSRV());
 
                 if (m_pDebugClusterPSO->GetType() == PipelineStateType::Mesh)
                 {
@@ -478,11 +478,11 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
 
             context.SetComputeDynamicConstantBufferView(0, &constantData, sizeof(Data));
 
-            context.SetDynamicDescriptor(1, 0, pTarget->GetSRV());
-            context.SetDynamicDescriptor(1, 1, pDepth->GetSRV());
-            context.SetDynamicDescriptor(1, 2, m_pLightGrid->GetSRV());
+            context.BindResource(1, 0, pTarget->GetSRV());
+            context.BindResource(1, 1, pDepth->GetSRV());
+            context.BindResource(1, 2, m_pLightGrid->GetSRV());
             
-            context.SetDynamicDescriptor(2, 0, m_pVisualizeIntermediateTexture->GetUAV());
+            context.BindResource(2, 0, m_pVisualizeIntermediateTexture->GetUAV());
 
             context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 16), Math::DivideAndRoundUp(pTarget->GetHeight(), 16));
             context.InsertUavBarrier();

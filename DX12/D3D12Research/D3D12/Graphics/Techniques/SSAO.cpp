@@ -76,8 +76,8 @@ void SSAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 			shaderParameters.Samples = g_AoSamples;
 
 			renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-			renderContext.SetDynamicDescriptor(1, 0, pColor->GetUAV());
-			renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
+			renderContext.BindResource(1, 0, pColor->GetUAV());
+			renderContext.BindResource(2, 0, pDepth->GetSRV());
 
 			int dispatchGroupX = Math::DivideAndRoundUp(pColor->GetWidth(), 16);
 			int dispatchGroupY = Math::DivideAndRoundUp(pColor->GetHeight(), 16);
@@ -108,18 +108,18 @@ void SSAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 			shaderParameters.Near = camera.GetNear();
 
 			renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-			renderContext.SetDynamicDescriptor(1, 0, m_pAmbientOcclusionIntermediate->GetUAV());
-			renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
-			renderContext.SetDynamicDescriptor(2, 1, pColor->GetSRV());
+			renderContext.BindResource(1, 0, m_pAmbientOcclusionIntermediate->GetUAV());
+			renderContext.BindResource(2, 0, pDepth->GetSRV());
+			renderContext.BindResource(2, 1, pColor->GetSRV());
 
 			renderContext.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
 
 			renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			renderContext.SetDynamicDescriptor(1, 0, pColor->GetUAV());
-			renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
-			renderContext.SetDynamicDescriptor(2, 1, m_pAmbientOcclusionIntermediate->GetSRV());
+			renderContext.BindResource(1, 0, pColor->GetUAV());
+			renderContext.BindResource(2, 0, pDepth->GetSRV());
+			renderContext.BindResource(2, 1, m_pAmbientOcclusionIntermediate->GetSRV());
 
 			shaderParameters.Horizontal = 0;
 			renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));

@@ -81,12 +81,13 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offs
     targetHandle += offset * m_pHeapAllocator->GetDescriptorSize();
     for (uint32_t i = 0; i < numHandles; i++)
     {
+        checkf(pHandles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
         GetGraphics()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.GetCpuHandle(), pHandles[i], m_Type);
         targetHandle += m_pHeapAllocator->GetDescriptorSize();
     }
 }
 
-void OnlineDescriptorAllocator::BindStagedDescriptors(DescriptorTableType descriptorTableType)
+void OnlineDescriptorAllocator::BindStagedDescriptors(GraphicsPipelineType descriptorTableType)
 {
     if (m_StaleRootParameters.HasAnyBitSet() == false)
     {
@@ -98,10 +99,10 @@ void OnlineDescriptorAllocator::BindStagedDescriptors(DescriptorTableType descri
         RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
         switch (descriptorTableType)
         {
-        case DescriptorTableType::Compute:
+        case GraphicsPipelineType::Compute:
             m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.GpuHandle.GetGpuHandle());
             break;
-        case DescriptorTableType::Graphics:
+        case GraphicsPipelineType::Graphics:
             m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.GpuHandle.GetGpuHandle());
             break;
         default:
