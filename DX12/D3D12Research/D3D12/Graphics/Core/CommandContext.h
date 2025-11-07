@@ -196,8 +196,7 @@ public:
 	void BindResource(int rootIndex, int offset, ShaderResourceView* pSrv);
 	void BindResource(int rootIndex, int offset, UnorderedAccessView* pUav);
 	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
-	void BindSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
-	void BindSamplers(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count);
+	void BindResourceTable(int rootIndex, D3D12_GPU_DESCRIPTOR_HANDLE handle, CommandListContext context);
 	
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
@@ -261,8 +260,7 @@ public:
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandListType, D3D12_RESOURCE_STATES state);
 
 private:
-	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
-	std::unique_ptr<OnlineDescriptorAllocator> m_pSamplerDescriptorAllocator;
+	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 
 	ResourceBarrierBatcher m_BarrierBatcher;
 

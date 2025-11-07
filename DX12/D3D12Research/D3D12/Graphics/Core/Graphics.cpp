@@ -35,7 +35,7 @@
 #endif
 
 #ifndef GPU_VALIDATION
-#define GPU_VALIDATION 1
+#define GPU_VALIDATION 0
 #endif
 
 namespace Tweakables
@@ -339,8 +339,11 @@ void Graphics::Update()
 			pShadowMap = std::make_unique<GraphicsTexture>(this, "Shadow Map");
 			pShadowMap->Create(TextureDesc::CreateDepth(size, size, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 			++i;
+			RegisterBindlessTexture(pShadowMap.get());
 		}
 	}
+
+	shadowData.ShadowMapOffset = RegisterBindlessTexture(m_ShadowMaps[0].get());
 
 	for (Light& light : m_Lights)
 	{
@@ -352,7 +355,6 @@ void Graphics::Update()
 
 	m_SceneData.pDepthBuffer = GetDepthStencil();
 	m_SceneData.pResolvedDepth = GetResolveDepthStencil();
-	m_SceneData.pShadowMaps = &m_ShadowMaps;
 	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
@@ -486,7 +488,7 @@ void Graphics::Update()
 
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 			
-			renderContext.BindResources(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
+			renderContext.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle, CommandListContext::Graphics);
 
 			struct ViewData
 			{
@@ -702,7 +704,7 @@ void Graphics::Update()
 						MaterialData Material;
 					} objectData;
 
-					context.BindResources(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
+					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle, CommandListContext::Graphics);
 
 					auto DrawBatches = [&](const Batch::Blending blendModes)
 					{
@@ -1342,6 +1344,9 @@ void Graphics::InitD3D()
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
 	m_pGlobalSamplerHeap =  std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 256, 2048);
+
+	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get(), nullptr);
+	m_SceneData.GlobalSRVHeapHandle = m_pGlobalViewHeap->GetHeap()->GetGPUDescriptorHandleForHeapStart();
 
 	// allocate descriptor heaps pool
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
@@ -2364,16 +2369,13 @@ int Graphics::RegisterBindlessTexture(GraphicsTexture* pTexture, GraphicsTexture
 		return it->second;
 	}
 
-	int index = (int)m_TextureToDescriptorIndex.size();
 	if (pTexture)
 	{
-		m_TextureToDescriptorIndex[pTexture] = index;
-		m_SceneData.MaterialTextures.push_back(pTexture->GetSRV());
-	}
-	else
-	{
-		index = pFallbackTexture ? RegisterBindlessTexture(pFallbackTexture) : 0;
+		DescriptorHandle handle = m_pPersistentDescriptorHeap->Allocate(1);
+		m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, pTexture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		m_TextureToDescriptorIndex[pTexture] = handle.HeapIndex;
+		return handle.HeapIndex;
 	}
 
-	return index;
+	return pFallbackTexture ? RegisterBindlessTexture(pFallbackTexture) : 0;
 }

@@ -10,6 +10,7 @@ struct ShadowData
     float4x4 LightViewProjection[MAX_SHADOW_CASTERS];
     float4 CascadeDepths;
     uint NumCascades;
+    uint ShadowMapOffset;
 };
 
 ConstantBuffer<ShadowData> cShadowData : register(b2);
@@ -49,7 +50,7 @@ float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
         
     float2 texCoord = lightPos.xy;
 
-    Texture2D shadowTexture = tShadowMapTextures[shadowMapIndex];
+    Texture2D shadowTexture = tTableTexture2D[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
 
     const float Dilation = 2.0f;
     float d1 = Dilation * invShadowSize * 0.125f;
@@ -252,7 +253,7 @@ float3 ApplyVolumetricLighting(float3 startPoint, float3 endPoint, float4 pos, f
 
                 lightPos.xyz /= lightPos.w;
                 lightPos.xy = lightPos.xy * float2(0.5f, -0.5f) + 0.5f;
-                visibility = tShadowMapTextures[shadowMapIndex].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+                visibility = tTableTexture2D[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
             }
 
             float phase = saturate(HenyeyGreestein(dot(ray, light.Direction)));

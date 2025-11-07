@@ -5,48 +5,41 @@ class DescriptorHandle
 public:
 	DescriptorHandle()
 	{
-		m_CpuHandle = InvalidCPUHandle;
-		m_GpuHandle = InvalidGPUHandle;
+		CpuHandle = InvalidCPUHandle;
+		GpuHandle = InvalidGPUHandle;
 	}
 
 	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle)
-		: m_CpuHandle(cpuHandle), m_GpuHandle(InvalidGPUHandle)
+		: CpuHandle(cpuHandle), GpuHandle(InvalidGPUHandle)
 	{}
 
-	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle)
-		: m_CpuHandle(cpuHandle), m_GpuHandle(gpuHandle)
-	{
-	}
+	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle, uint32_t heapIndex = ~0u)
+		: CpuHandle(cpuHandle), GpuHandle(gpuHandle), HeapIndex(heapIndex)
+	{}
 
-	void operator += (uint32_t offsetScaledByDescriptorSize)
+	void Offset(uint32_t numDescriptors, uint32_t descriptorSize)
 	{
-		if (m_CpuHandle != InvalidCPUHandle)
+		if (CpuHandle != InvalidCPUHandle)
 		{
-			m_CpuHandle.Offset(1, offsetScaledByDescriptorSize);
+			CpuHandle.Offset(numDescriptors, descriptorSize);
 		}
-		if (m_GpuHandle != InvalidGPUHandle)
+		if (GpuHandle != InvalidGPUHandle)
 		{
-			m_GpuHandle.Offset(1, offsetScaledByDescriptorSize);
+			GpuHandle.Offset(numDescriptors, descriptorSize);
+		}
+		if (HeapIndex != ~0u)
+		{
+			HeapIndex += numDescriptors;
 		}
 	}
 
-	DescriptorHandle operator + (uint32_t offset)
-	{
-		DescriptorHandle ret = *this;
-		ret += offset;
-		return ret;
-	}
-
-	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle() const { return m_CpuHandle; }
-	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle() const { return m_GpuHandle; }
-
-	bool IsNull() const { return m_CpuHandle == InvalidCPUHandle; }
-	bool IsShaderVisible() const{ return m_GpuHandle != InvalidGPUHandle; }
+	bool IsNull() const { return CpuHandle == InvalidCPUHandle; }
+	bool IsShaderVisible() const{ return GpuHandle != InvalidGPUHandle; }
 
 	constexpr static D3D12_CPU_DESCRIPTOR_HANDLE InvalidCPUHandle = {~0u};
 	constexpr static D3D12_GPU_DESCRIPTOR_HANDLE InvalidGPUHandle = {~0u};
 
-private:
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_CpuHandle;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE m_GpuHandle;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE CpuHandle;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE GpuHandle;
+	uint32_t HeapIndex{~0u};
 };

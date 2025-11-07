@@ -138,16 +138,16 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
     float3 positions[3] = {v0.position, v1.position, v2.position};
     float2 texCoords[3] = {v0.texCoord, v1.texCoord, v2.texCoord};
     float2 textureDimensions;
-    tMaterialTextures[cHitData.DiffuseIndex].GetDimensions(textureDimensions.x, textureDimensions.y);
+    tTableTexture2D[cHitData.DiffuseIndex].GetDimensions(textureDimensions.x, textureDimensions.y);
     float mipLevel = ComputeRayConeMip(payload.rayCone, positions, texCoords, textureDimensions);
 #else
     float mipLevel = 2.0f;
 #endif
 
     // get material data
-    float3 diffuse = tMaterialTextures[cHitData.DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
-    float3 sampledNormal = tMaterialTextures[cHitData.NormalIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
-    float metalness = tMaterialTextures[cHitData.MetallicIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).r;
+    float3 diffuse = tTableTexture2D[cHitData.DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
+    float3 sampledNormal = tTableTexture2D[cHitData.NormalIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
+    float metalness = tTableTexture2D[cHitData.MetallicIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).r;
     float roughness = 0.5f;
     float specular = 0.5f;
 

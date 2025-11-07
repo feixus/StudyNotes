@@ -275,10 +275,10 @@ void PSMain(PSInput input,
               out float4 outColor : SV_Target0,
               out float4 outNormalRoughness : SV_Target1)
 {
-    float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
-    float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-    float metalness = tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
-    float r = tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
+    float4 baseColor = tTableTexture2D[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+    float3 sampledNormal = tTableTexture2D[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+    float metalness = tTableTexture2D[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
+    float r = tTableTexture2D[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
     float3 specular = 0.5f; 
 
     float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);

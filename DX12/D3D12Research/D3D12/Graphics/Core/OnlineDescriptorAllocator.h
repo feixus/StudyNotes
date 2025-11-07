@@ -69,7 +69,7 @@ private:
     struct RootDescriptorEntry
     {
         uint32_t TableSize{};
-        DescriptorHandle GpuHandle;
+        DescriptorHandle Descriptor;
     };
 
     std::array<RootDescriptorEntry, MAX_NUM_ROOT_PARAMETERS> m_RootDescriptorTable{};
