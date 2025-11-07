@@ -3,21 +3,14 @@
 class DescriptorHandle
 {
 public:
-	DescriptorHandle()
-	{
-		CpuHandle = InvalidCPUHandle;
-		GpuHandle = InvalidGPUHandle;
-	}
-
-	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle)
-		: CpuHandle(cpuHandle), GpuHandle(InvalidGPUHandle)
+	DescriptorHandle() : CpuHandle(InvalidCPUHandle), GpuHandle(InvalidGPUHandle), HeapIndex(InvalidHeapIndex)
 	{}
 
-	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle, uint32_t heapIndex = ~0u)
-		: CpuHandle(cpuHandle), GpuHandle(gpuHandle), HeapIndex(heapIndex)
+	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, uint32_t heapIndex, D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = InvalidGPUHandle)
+		: CpuHandle(cpuHandle), GpuHandle(InvalidGPUHandle), HeapIndex(heapIndex)
 	{}
 
-	void Offset(uint32_t numDescriptors, uint32_t descriptorSize)
+	DescriptorHandle& OffsetInline(uint32_t numDescriptors, uint32_t descriptorSize)
 	{
 		if (CpuHandle != InvalidCPUHandle)
 		{
@@ -27,10 +20,25 @@ public:
 		{
 			GpuHandle.Offset(numDescriptors, descriptorSize);
 		}
-		if (HeapIndex != ~0u)
+		if (HeapIndex != InvalidHeapIndex)
 		{
 			HeapIndex += numDescriptors;
 		}
+
+		return *this;
+	}
+
+	DescriptorHandle Offset(uint32_t numDescriptors, uint32_t descriptorSize)
+	{
+		DescriptorHandle handle = *this;
+		return handle.OffsetInline(numDescriptors, descriptorSize);
+	}
+
+	void Reset()
+	{
+		CpuHandle = InvalidCPUHandle;
+		GpuHandle = InvalidGPUHandle;
+		HeapIndex = InvalidHeapIndex;
 	}
 
 	bool IsNull() const { return CpuHandle == InvalidCPUHandle; }
@@ -38,8 +46,9 @@ public:
 
 	constexpr static D3D12_CPU_DESCRIPTOR_HANDLE InvalidCPUHandle = {~0u};
 	constexpr static D3D12_GPU_DESCRIPTOR_HANDLE InvalidGPUHandle = {~0u};
+	constexpr static uint32_t InvalidHeapIndex = ~0u;
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE CpuHandle;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE GpuHandle;
-	uint32_t HeapIndex{~0u};
+	uint32_t HeapIndex;
 };

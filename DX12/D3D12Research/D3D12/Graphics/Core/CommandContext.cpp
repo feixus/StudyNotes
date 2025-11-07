@@ -38,7 +38,6 @@ void CommandContext::Reset()
 
 	ID3D12DescriptorHeap* pHeaps[] = {
 		GetGraphics()->GetGlobalViewHeap()->GetHeap(),
-		GetGraphics()->GetGlobalSamplerHeap()->GetHeap()
 	};
 	m_pCommandList->SetDescriptorHeaps((UINT)std::size(pHeaps), pHeaps);
 }
@@ -232,14 +231,14 @@ void CommandContext::Dispatch(const IntVector3& groupCounts)
 
 void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
-	PrepareDraw(GraphicsPipelineType::Compute);
+	PrepareDraw(CommandListContext::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
 void CommandContext::DispatchMesh(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
 	check(m_pMeshShadingCommandList);
-	PrepareDraw(GraphicsPipelineType::Graphics);
+	PrepareDraw(CommandListContext::Graphics);
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
@@ -253,32 +252,32 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uin
 	rayDesc.Height = height;
 	rayDesc.Depth = depth;
 	
-	PrepareDraw(GraphicsPipelineType::Compute);
+	PrepareDraw(CommandListContext::Compute);
 	m_pRaytracingCommandList->DispatchRays(&rayDesc);
 }
 
 // GPU-driven rendering
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32_t argumentsOffset, uint32_t countOffset)
 {
-	PrepareDraw(pCommandSignature->IsCompute() ? GraphicsPipelineType::Compute : GraphicsPipelineType::Graphics);
+	PrepareDraw(pCommandSignature->IsCompute() ? CommandListContext::Compute : CommandListContext::Graphics);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
 {
-	PrepareDraw(GraphicsPipelineType::Graphics);
+	PrepareDraw(CommandListContext::Graphics);
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
 void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex)
 {
-	PrepareDraw(GraphicsPipelineType::Graphics);
+	PrepareDraw(CommandListContext::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex, int instanceStart)
 {
-	PrepareDraw(GraphicsPipelineType::Graphics);
+	PrepareDraw(CommandListContext::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
@@ -665,7 +664,7 @@ void CommandContext::ResolveResource(GraphicsTexture* pSource, uint32_t sourceSu
 	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, format);
 }
 
-void CommandContext::PrepareDraw(GraphicsPipelineType type)
+void CommandContext::PrepareDraw(CommandListContext type)
 {
 	FlushResourceBarriers();
 	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(type);
@@ -711,19 +710,10 @@ void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, void* pD
 	m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
-void CommandContext::BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CommandContext::BindResource(int rootIndex, int offset, ResourceView* pView)
 {
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, 1, &handle);
-}
-
-void CommandContext::BindResource(int rootIndex, int offset, ShaderResourceView* pSrv)
-{
-	BindResource(rootIndex, offset, pSrv->GetDescriptor());
-}
-
-void CommandContext::BindResource(int rootIndex, int offset, UnorderedAccessView* pUav)
-{
-	BindResource(rootIndex, offset, pUav->GetDescriptor());
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = pView->GetDescriptor();
+	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, 1, &cpuHandle);
 }
 
 void CommandContext::BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)

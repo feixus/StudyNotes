@@ -9,9 +9,8 @@ Texture2D tAO :                                          register(t6);
 Texture2D tDepth :                                       register(t7);
 Texture2D tPreviousSceneColor :                          register(t8);
 Texture2D tSceneNormals :                                register(t9);
-ByteAddressBuffer tGeometryData :                        register(t10);
 RaytracingAccelerationStructure tAccelerationStructure : register(t500);
-Texture2D tTableTexture2D[] :                            register(t1000, space2);
+Texture2D tTexture2DTable[] :                            register(t1000, space2);
 
 // samplers
 SamplerState sDiffuseSampler :                           register(s0);

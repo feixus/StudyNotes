@@ -8,26 +8,14 @@
 
 GraphicsTexture::GraphicsTexture(Graphics* pGraphics, const char* pName)
 	: GraphicsResource(pGraphics), m_Name(pName)
-{
-}
+{}
 
 GraphicsTexture::~GraphicsTexture()
-{
-}
+{}
 
 D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetRTV() const
 {
 	return m_Rtv;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetUAV() const
-{
-	return m_pUav->GetDescriptor();
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetSRV() const
-{
-	return m_pSrv->GetDescriptor();
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetDSV(bool writeable) const

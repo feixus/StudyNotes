@@ -6,12 +6,7 @@
 
 class CommandContext;
 class Graphics;
-
-enum class GraphicsPipelineType
-{
-    Graphics,
-    Compute,
-};
+enum class CommandListCOntext;
 
 struct DescriptorHeapBlock
 {
@@ -36,6 +31,7 @@ public:
     uint32_t GetDescriptorSize() const { return m_DescriptorSize; }
     ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
     D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
+    DescriptorHandle GetStartHandle() const { return m_StartHandle; }
 
 private:
     std::mutex m_BlockAllocateMutex;
@@ -60,7 +56,7 @@ public:
     DescriptorHandle Allocate(uint32_t count);
 
     void SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-    void BindStagedDescriptors(GraphicsPipelineType descriptorTableType);
+    void BindStagedDescriptors(CommandListCOntext descriptorTableType);
 
     void ParseRootSignature(RootSignature* pRootSignature);
     void ReleaseUsedHeaps(uint64_t fenceValue);

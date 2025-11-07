@@ -178,7 +178,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
             context.SetGraphicsDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
 
-            context.BindResourceTable(3, inputResource.GlobalSRVHeapHandle, CommandListContext::Graphics);
+            context.BindResourceTable(3, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
             context.BindResource(4, 2, inputResource.pLightBuffer->GetSRV());
             context.BindResource(4, 3, inputResource.pAO->GetSRV());
 			context.BindResource(4, 4, inputResource.pResolvedDepth->GetSRV());

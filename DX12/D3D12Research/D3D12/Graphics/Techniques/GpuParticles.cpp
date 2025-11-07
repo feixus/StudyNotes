@@ -171,7 +171,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 		m_pCounterBuffer->GetSRV()->GetDescriptor(),
-		pSourceDepth->GetSRV(),
+		pSourceDepth->GetSRV()->GetDescriptor(),
 	};
 
     RG_GRAPH_SCOPE("Particle Simulation", graph);

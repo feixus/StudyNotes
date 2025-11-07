@@ -60,11 +60,11 @@ StructuredBuffer<uint3> tIndices : register(t1);
 ConstantBuffer<ViewData> cViewData : register(b0);
 ConstantBuffer<HitData> cHitData : register(b1);
 
-ShadowRayPayload CastShadowRay(float3 origin, float3 target)
+ShadowRayPayload CastShadowRay(float3 origin, float3 direction)
 {
     RayDesc ray;
     ray.Origin = origin;
-    ray.Direction = target - origin;
+    ray.Direction = direction;
     ray.TMin = 0.0f;
     ray.TMax = 1.0f;
 
@@ -138,16 +138,16 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
     float3 positions[3] = {v0.position, v1.position, v2.position};
     float2 texCoords[3] = {v0.texCoord, v1.texCoord, v2.texCoord};
     float2 textureDimensions;
-    tTableTexture2D[cHitData.DiffuseIndex].GetDimensions(textureDimensions.x, textureDimensions.y);
+    tTexture2DTable[cHitData.DiffuseIndex].GetDimensions(textureDimensions.x, textureDimensions.y);
     float mipLevel = ComputeRayConeMip(payload.rayCone, positions, texCoords, textureDimensions);
 #else
     float mipLevel = 2.0f;
 #endif
 
     // get material data
-    float3 diffuse = tTableTexture2D[cHitData.DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
-    float3 sampledNormal = tTableTexture2D[cHitData.NormalIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
-    float metalness = tTableTexture2D[cHitData.MetallicIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).r;
+    float3 diffuse = tTexture2DTable[cHitData.DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
+    float3 sampledNormal = tTexture2DTable[cHitData.NormalIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
+    float metalness = tTexture2DTable[cHitData.MetallicIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).r;
     float roughness = 0.5f;
     float specular = 0.5f;
 
@@ -166,14 +166,14 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
             continue;
         }
 
-        float3 L = normalize(light.Position - wPos);
+        float3 L = light.Position - wPos;
         if (light.Type == LIGHT_DIRECTIONAL)
         {
-            L = -light.Direction;
+            L = 1000 * -light.Direction;
         }
 
     #if SECONDARY_SHADOW_RAY
-        ShadowRayPayload shadowRay = CastShadowRay(wPos + L * 0.001f, L);
+        ShadowRayPayload shadowRay = CastShadowRay(wPos + normalze(L) * 0.001f, L);
         attenuation *= shadowRay.hit;
         if (attenuation <= 0.0f)
         {
