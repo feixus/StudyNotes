@@ -362,7 +362,7 @@ void Graphics::Update()
 	m_SceneData.pCamera = m_pCamera.get();
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.FrameIndex = m_Frame;
-	m_SceneData.pTLAS = m_pTLAS.get();
+	m_SceneData.SceneTLAS = RegisterBindlessResource(m_pTLAS ? m_pTLAS->GetSRV() : nullptr);
 	m_SceneData.pNormals = m_pNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 
@@ -613,7 +613,7 @@ void Graphics::Update()
 
 	if (Tweakables::g_RaytracedAO)
 	{
-		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), m_pTLAS.get(), *m_pCamera);
+		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), m_SceneData, *m_pCamera);
 	}
 	else
 	{

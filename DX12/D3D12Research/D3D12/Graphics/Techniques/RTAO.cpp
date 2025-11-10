@@ -24,7 +24,7 @@ RTAO::RTAO(Graphics* pGraphics)
     SetupPipelines(pGraphics);
 }
 
-void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Buffer* pTLAS, Camera& camera)
+void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, const SceneData& sceneData, Camera& camera)
 {
     static float g_AoPower = 3;
     static float g_AoRadius = 0.5f;
@@ -57,6 +57,7 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
                 float Power;
                 float Radius;
                 int32_t Samples;
+                uint32_t TLASIndex;
             } parameters{};
 
             static bool written = false;
@@ -80,6 +81,7 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
             parameters.Power = g_AoPower;
             parameters.Radius = g_AoRadius;
             parameters.Samples = g_AoSamples;
+            parameters.TLASIndex = sceneData.SceneTLAS;
 
             ShaderBindingTable bindingTable(m_pStateObject);
             bindingTable.BindRayGenShader("RayGen");
@@ -87,8 +89,8 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 
             context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.BindResource(1, 0, pColor->GetUAV());
-			context.BindResource(2, 0, pTLAS->GetSRV());
-            context.BindResource(2, 1, pDepth->GetSRV());
+            context.BindResource(2, 0, pDepth->GetSRV());
+			context.BindResourceTable(3, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
                 
             context.DispatchRays(bindingTable, pColor->GetWidth(), pColor->GetHeight());
         });
@@ -99,14 +101,10 @@ void RTAO::SetupResources(Graphics* pGraphics)
 
 void RTAO::SetupPipelines(Graphics* pGraphics)
 {
-    m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
-    m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-    m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-    m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
-    m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP), D3D12_SHADER_VISIBILITY_ALL);
-    m_pGlobalRS->Finalize("Ray Global RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);
-    
     ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTAO.hlsl");
+
+    m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
+    m_pGlobalRS->FinalizeFromShader("Global RS", pShaderLibrary);
 
     StateObjectInitializer stateDesc;
     stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "Miss" });

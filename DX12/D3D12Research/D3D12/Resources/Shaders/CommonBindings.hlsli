@@ -9,13 +9,25 @@ Texture2D tAO :                                          register(t6);
 Texture2D tDepth :                                       register(t7);
 Texture2D tPreviousSceneColor :                          register(t8);
 Texture2D tSceneNormals :                                register(t9);
-RaytracingAccelerationStructure tAccelerationStructure : register(t500);
 Texture2D tTexture2DTable[] :                            register(t1000, space2);
-ByteAddressBuffer tBufferTable[] :                       register(t1000, space3);
+Texture2D tTexture3DTable[] :                            register(t1000, space3);
+Texture2D tTextureCubeTable[] :                          register(t1000, space4);
+ByteAddressBuffer tBufferTable[] :                       register(t1000, space5);
+RaytracingAccelerationStructure tTLASTable[] :           register(t1000, space6);
 
 // samplers
 SamplerState sDiffuseSampler :                           register(s0);
 SamplerState sClampSampler :                             register(s1);
 SamplerComparisonState sShadowMapSampler :               register(s2);
+
+// add a range for each bindless resoure table
+#define GLOBAL_BINDLESS_TABLE \
+    "DescriptorTable("\
+        "SRV(t1000, numDescriptors = 128, space = 2, offset = 0), "\
+        "SRV(t1000, numDescriptors = 128, space = 3, offset = 0), "\
+        "SRV(t1000, numDescriptors = 128, space = 4, offset = 0), "\
+        "SRV(t1000, numDescriptors = 128, space = 5, offset = 0), "\
+        "SRV(t1000, numDescriptors = 128, space = 6, offset = 0), "\
+    "visibility = SHADER_VISIBILITY_ALL), "
 
 #endif

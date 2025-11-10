@@ -9,13 +9,14 @@ class CommandContext;
 class Buffer;
 class RGGraph;
 class StateObject;
+struct SceneData;
 
 class RTAO
 {
 public:
     RTAO(Graphics* pGraphics);
 
-    void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Buffer* pTLAS, Camera& camera);
+    void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, const SceneData& sceneData, Camera& camera);
 
 private:
     void SetupResources(Graphics* pGraphics);

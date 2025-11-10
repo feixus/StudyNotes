@@ -36,6 +36,7 @@ void CommandContext::Reset()
 	m_PendingBarriers.clear();
 	m_ResourceStates.clear();
 
+	// GPU needs to know which heap(s) to read from when you bind descroptor tables.
 	ID3D12DescriptorHeap* pHeaps[] = {
 		GetGraphics()->GetGlobalViewHeap()->GetHeap(),
 	};

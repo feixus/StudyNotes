@@ -342,11 +342,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.BindResource(4, 3, inputResource.pAO->GetSRV());
             context.BindResource(4, 4, inputResource.pResolvedDepth->GetSRV());
             context.BindResource(4, 5, inputResource.pPreviousColor->GetSRV());
-        
-            if (inputResource.pTLAS)
-            {
-                context.GetCommandList()->SetGraphicsRootShaderResourceView(6, inputResource.pTLAS->GetGpuHandle());
-            }
 
             auto DrawBatches = [&](Batch::Blending blendMode)
 			{

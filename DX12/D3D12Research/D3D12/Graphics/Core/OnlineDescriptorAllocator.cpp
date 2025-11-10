@@ -8,6 +8,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pGraphics, D3D1
     : GraphicsObject(pGraphics), m_Type(type), m_NumDescriptors(numDescriptors)
 {
     checkf(numDescriptors % blockSize == 0, "number of descriptors must be a multiple of blockSize (%d)", blockSize);
+    checkf(type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, "Online Decriptor Heap must be either of CBV/SRV/UAV or Sampler type.");
 
     D3D12_DESCRIPTOR_HEAP_DESC desc{};
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -15,7 +16,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pGraphics, D3D1
     desc.NumDescriptors = numDescriptors;
     desc.Type = type;
     VERIFY_HR_EX(GetGraphics()->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(m_pHeap.GetAddressOf())), GetGraphics()->GetDevice());
-    D3D::SetObjectName(m_pHeap.Get(), "Global Online Descriptor Heap");
+    D3D::SetObjectName(m_pHeap.Get(), type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "Global CBV/SRV/UAV Descriptor Heap" : "Global Sampler Descriptor Heap");
 
     m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
     m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), 0, m_pHeap->GetGPUDescriptorHandleForHeapStart());

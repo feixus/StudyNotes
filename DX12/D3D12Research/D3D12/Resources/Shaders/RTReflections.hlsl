@@ -3,6 +3,7 @@
 #include "Lighting.hlsli"
 #include "SkyCommon.hlsli"
 #include "RaytracingCommon.hlsli"
+#include "CommonBindings.hlsli"
 
 #define RAY_CONE_TEXTURE_LOD 1
 #define SECONDARY_SHADOW_RAY 1
@@ -12,9 +13,7 @@ GlobalRootSignature GlobalRootSig =
     "CBV(b0, visibility=SHADER_VISIBILITY_ALL),"
     "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),"
     "DescriptorTable(SRV(t5, numDescriptors=6), visibility=SHADER_VISIBILITY_ALL),"
-    "DescriptorTable(SRV(t500, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),"
-    "DescriptorTable(SRV(t1000, numDescriptors=128, space = 2), visibility=SHADER_VISIBILITY_ALL),"
-    "DescriptorTable(SRV(t1000, numDescriptors=128, space = 3), visibility=SHADER_VISIBILITY_ALL),"
+    GLOBAL_BINDLESS_TABLE
     "staticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
 };
 
@@ -24,6 +23,7 @@ struct ViewData
     float4x4 ProjectionInverse;
     uint NumLights;
     float ViewPixelSpreadAngle;
+    uint TLASIndex;
 };
 
 struct HitData
@@ -73,7 +73,7 @@ ShadowRayPayload CastShadowRay(float3 origin, float3 direction)
     ShadowRayPayload shadowRay = (ShadowRayPayload)0;
 
     TraceRay(
-        tAccelerationStructure,                                         // Acceleration structure
+        tTLASTable[cViewData.TLASIndex],                                         // Acceleration structure
         RAY_FLAG_CULL_BACK_FACING_TRIANGLES | 
         RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | 
         RAY_FLAG_FORCE_OPAQUE,                                          // Ray flags
@@ -105,7 +105,7 @@ RayPayload CastReflectionRay(float3 origin, float3 direction, float depth)
     ray.TMax = 10000;
 
     TraceRay(
-        tAccelerationStructure, 
+        tTLASTable[cViewData.TLASIndex],
         RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE,
         0xFF,
         0,
@@ -175,7 +175,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
         }
 
     #if SECONDARY_SHADOW_RAY
-        ShadowRayPayload shadowRay = CastShadowRay(wPos + normalze(L) * 0.001f, L);
+        ShadowRayPayload shadowRay = CastShadowRay(wPos + normalize(L) * 0.001f, L);
         attenuation *= shadowRay.hit;
         if (attenuation <= 0.0f)
         {
