@@ -156,6 +156,9 @@ protected:
 
 struct VertexBufferView
 {
+	VertexBufferView() : Location(~0u), Elements(0), Stride(0)
+	{}
+
 	VertexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32_t elements, uint32_t stride)
 		: Location(location), Elements(elements), Stride(stride)
 	{}
@@ -174,6 +177,9 @@ struct VertexBufferView
 
 struct IndexBufferView
 {
+	IndexBufferView() : Location(~0u), Elements(0), SmallIndices(false)
+	{}
+
 	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32_t elements, bool smallIndices = false)
 		: Location(location), Elements(elements), SmallIndices(smallIndices)
 	{}

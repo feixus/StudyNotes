@@ -14,6 +14,7 @@ GlobalRootSignature GlobalRootSig =
     "DescriptorTable(SRV(t5, numDescriptors=6), visibility=SHADER_VISIBILITY_ALL),"
     "DescriptorTable(SRV(t500, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),"
     "DescriptorTable(SRV(t1000, numDescriptors=128, space = 2), visibility=SHADER_VISIBILITY_ALL),"
+    "DescriptorTable(SRV(t1000, numDescriptors=128, space = 3), visibility=SHADER_VISIBILITY_ALL),"
     "staticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
 };
 
@@ -31,6 +32,9 @@ struct HitData
     int NormalIndex;
     int RoughnessIndex;
     int MetallicIndex;
+    uint MeshIndex;
+    uint VertexDataOffset;
+    uint IndexDataOffset;
 };
 
 struct Vertex
@@ -54,8 +58,6 @@ struct ShadowRayPayload
 };
 
 RWTexture2D<float4> uOutput : register(u0);
-StructuredBuffer<Vertex> tVertices : register(t0);
-StructuredBuffer<uint3> tIndices : register(t1);
 
 ConstantBuffer<ViewData> cViewData : register(b0);
 ConstantBuffer<HitData> cHitData : register(b1);
@@ -122,11 +124,11 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
     payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
     // resolve geometry data
-    uint3 indices = tIndices[PrimitiveIndex()];
+    uint3 indices = tBufferTable[cHitData.MeshIndex].Load<uint3>(cHitData.IndexDataOffset + PrimitiveIndex() * sizeof(uint3));
     float3 b = float3(1.0f - attrib.barycentrics.x - attrib.barycentrics.y, attrib.barycentrics.x, attrib.barycentrics.y);
-    Vertex v0 = tVertices[indices.x];
-    Vertex v1 = tVertices[indices.y];
-    Vertex v2 = tVertices[indices.z];
+    Vertex v0 = tBufferTable[cHitData.MeshIndex].Load<Vertex>(cHitData.VertexDataOffset + indices.x * sizeof(Vertex));
+    Vertex v1 = tBufferTable[cHitData.MeshIndex].Load<Vertex>(cHitData.VertexDataOffset + indices.y * sizeof(Vertex));
+    Vertex v2 = tBufferTable[cHitData.MeshIndex].Load<Vertex>(cHitData.VertexDataOffset + indices.z * sizeof(Vertex));
     float2 texCoord = v0.texCoord * b.x + v1.texCoord * b.y + v2.texCoord * b.z;
 
     float3 N = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;

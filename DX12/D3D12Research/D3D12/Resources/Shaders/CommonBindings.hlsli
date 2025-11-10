@@ -11,6 +11,7 @@ Texture2D tPreviousSceneColor :                          register(t8);
 Texture2D tSceneNormals :                                register(t9);
 RaytracingAccelerationStructure tAccelerationStructure : register(t500);
 Texture2D tTexture2DTable[] :                            register(t1000, space2);
+ByteAddressBuffer tBufferTable[] :                       register(t1000, space3);
 
 // samplers
 SamplerState sDiffuseSampler :                           register(s0);

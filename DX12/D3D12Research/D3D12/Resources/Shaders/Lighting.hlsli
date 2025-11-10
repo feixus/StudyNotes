@@ -24,11 +24,10 @@ float3 UnpackBC5Normal(float2 packedNormal)
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invertY)
 {
     float3 normal = sampledNormal;
-    normal.xy = normal.xy * 2.0f - 1.0f;
-
 #if SUPPORT_BC5
     normal = UnpackBC5Normal(sampledNormal.xy);
 #endif
+    normal.xy = normal.xy * 2.0f - 1.0f;
 
     if (invertY)
     {
@@ -50,6 +49,7 @@ float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
         
     float2 texCoord = lightPos.xy;
 
+    // dynamic indexing into descriptor arrays where different threads in a wave/warp might access diffrent indices.
     Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
 
     const float Dilation = 2.0f;

@@ -85,12 +85,12 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (Vector3*)&vertices[0], sizeof(Vertex));
 		pSubMesh->m_MaterialId = pMesh->mMaterialIndex;
 		
-		pSubMesh->m_VertexCount = (uint32_t)vertices.size();
-		pSubMesh->m_VerticesLocation = m_pGeometryData->GetGpuHandle() + dataOffset;
+		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32_t)vertices.size(), sizeof(Vertex));
+		pSubMesh->m_VerticesLocation = vbv;
 		CopyData(vertices.data(), sizeof(Vertex) * vertices.size());
 
-		pSubMesh->m_IndexCount = (uint32_t)indices.size();
-		pSubMesh->m_IndicesLocation = m_pGeometryData->GetGpuHandle() + dataOffset;
+		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32_t)indices.size(), false);
+		pSubMesh->m_IndicesLocation = ibv;
 		CopyData(indices.data(), sizeof(uint32_t) * indices.size());
 
 		pSubMesh->m_Stride = sizeof(Vertex);
@@ -221,19 +221,9 @@ SubMesh::~SubMesh()
 
 void SubMesh::Draw(CommandContext* pContext) const
 {
-	pContext->SetVertexBuffer(GetVertexBuffer());
-	pContext->SetIndexBuffer(GetIndexBuffer());
-	pContext->DrawIndexed(m_IndexCount, 0, 0);
-}
-
-VertexBufferView SubMesh::GetVertexBuffer() const
-{
-	return VertexBufferView(m_VerticesLocation, m_VertexCount, m_Stride);
-}
-
-IndexBufferView SubMesh::GetIndexBuffer() const
-{
-	return IndexBufferView(m_IndicesLocation, m_IndexCount, false);
+	pContext->SetVertexBuffer(m_VerticesLocation);
+	pContext->SetIndexBuffer(m_IndicesLocation);
+	pContext->DrawIndexed(m_IndicesLocation.Elements, 0, 0);
 }
 
 Buffer* SubMesh::GetSourceBuffer() const
