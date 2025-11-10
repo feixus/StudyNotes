@@ -23,12 +23,13 @@ struct BufferUAVDesc
 
 struct BufferSRVDesc
 {
-	BufferSRVDesc(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN, bool raw = false, uint32_t indexOffset = 0)
-        : Format(format), Raw(raw), IndexOffset(indexOffset) {}
+	BufferSRVDesc(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN, bool raw = false, uint32_t elementOffset = 0, uint32_t numElements = 0)
+        : Format(format), Raw(raw), ElementOffset(elementOffset), NumElements(numElements) {}
 
 	DXGI_FORMAT Format;
 	bool Raw;
-	uint32_t IndexOffset;
+	uint32_t ElementOffset;
+	uint32_t NumElements;
 };
 
 struct TextureSRVDesc

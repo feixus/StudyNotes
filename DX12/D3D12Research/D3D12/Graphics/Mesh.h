@@ -7,6 +7,7 @@ class GraphicsTexture;
 class Buffer;
 class CommandContext;
 class CommandContext;
+class ShaderResourceView;
 
 class SubMesh
 {
@@ -21,10 +22,14 @@ public:
     VertexBufferView GetVertexBuffer() const { return m_VerticesLocation; };
     IndexBufferView GetIndexBuffer() const { return m_IndicesLocation; };
     Buffer* GetSourceBuffer() const;
+    ShaderResourceView* GetVertexBufferSRV() const { return m_pVertexSRV.get(); };
+    ShaderResourceView* GetIndexBufferSRV() const { return m_pIndexSRV.get(); };
 
 private:
     int m_Stride{0};
     int m_MaterialId{};
+    std::unique_ptr<ShaderResourceView> m_pVertexSRV;
+    std::unique_ptr<ShaderResourceView> m_pIndexSRV;
     VertexBufferView m_VerticesLocation;
     IndexBufferView m_IndicesLocation;
     BoundingBox m_Bounds;
@@ -54,9 +59,9 @@ public:
 private:
     void GenerateBLAS(Graphics* pGraphics, CommandContext* pContext);
 
-    std::vector<std::unique_ptr<SubMesh>> m_Meshes;
     std::vector<Material> m_Materials;
     std::unique_ptr<Buffer> m_pGeometryData;
+    std::vector<std::unique_ptr<SubMesh>> m_Meshes;
     std::vector<std::unique_ptr<GraphicsTexture>> m_Textures;
     std::map<StringHash, GraphicsTexture*> m_ExistingTextures;
     std::unique_ptr<Buffer> m_pBLAS;

@@ -1637,18 +1637,19 @@ void Graphics::InitializeAssets(CommandContext& context)
 	for (uint32_t j = 0; j < (uint32_t)m_Meshes.size(); j++)
 	{
 		auto& pMesh = m_Meshes[j];
-		int geometrySRV = RegisterBindlessResource(pMesh->GetData()->GetSRV());
 		for (int i = 0; i < pMesh->GetMeshCount(); i++)
 		{
-			const Material& material = pMesh->GetMaterial(pMesh->GetMesh(i)->GetMaterialId());
+			SubMesh* pSubMesh = pMesh->GetMesh(i);
+			const Material& material = pMesh->GetMaterial(pSubMesh->GetMaterialId());
 			m_SceneData.Batches.push_back(Batch{});
 			Batch& b = m_SceneData.Batches.back();
 			b.Index = (int)m_SceneData.Batches.size() - 1;
-			b.Bounds = pMesh->GetMesh(i)->GetBounds();
-			b.pMesh = pMesh->GetMesh(i);
+			b.Bounds = pSubMesh->GetBounds();
+			b.pMesh = pSubMesh;
 			b.WorldMatrix = transforms[j];
 			b.Bounds.Transform(b.Bounds, b.WorldMatrix);
-			b.GeometryDescriptor = geometrySRV;
+			b.VertexBufferDescriptor = RegisterBindlessResource(pSubMesh->GetVertexBufferSRV());
+			b.IndexBufferDescriptor = RegisterBindlessResource(pSubMesh->GetIndexBufferSRV());
 
 			b.Material.Diffuse = RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::White2D));
 			b.Material.Normal = RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));

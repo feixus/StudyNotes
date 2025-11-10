@@ -22,6 +22,14 @@ RTReflections::RTReflections(Graphics* pGraphics)
     }
 }
 
+struct HitData
+{
+    MaterialData Material;
+    uint32_t VertexBuffer;
+    uint32_t IndexBuffer;
+};
+static constexpr int gNumHitDataRootConstants = sizeof(HitData) / sizeof(int32_t);
+
 void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 {
     RGPassBuilder rt = graph.AddPass("Raytracing Reflections");
@@ -59,22 +67,14 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
             for (const Batch& b : sceneData.Batches)
             {
-				struct HitData
-				{
-					MaterialData Material;
-					uint32_t MeshIndex;
-					uint32_t VertexDataOffset;
-					uint32_t IndexDataOffset;
-				} hitData;
+				HitData hitData;
 				hitData.Material = b.Material;
-				hitData.MeshIndex = b.GeometryDescriptor;
-				hitData.VertexDataOffset = (uint32_t)(b.pMesh->GetVertexBuffer().Location - b.pMesh->GetSourceBuffer()->GetGpuHandle());
-                hitData.IndexDataOffset = (uint32_t)(b.pMesh->GetIndexBuffer().Location - b.pMesh->GetSourceBuffer()->GetGpuHandle());
+				hitData.VertexBuffer = b.VertexBufferDescriptor;
+                hitData.IndexBuffer = b.IndexBufferDescriptor;
 
-                DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData));
-                memcpy(allocation.pMappedMemory, &hitData, sizeof(HitData));
-
-                bindingTable.BindHitGroup("ReflectionHitGroup", b.Index, { allocation.GpuHandle });
+                std::vector<uint64_t> constantData(gNumHitDataRootConstants / 2);
+                memcpy(constantData.data(), &hitData, sizeof(HitData));
+                bindingTable.BindHitGroup("ReflectionHitGroup", b.Index, constantData);
             }
 
             const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
@@ -114,7 +114,7 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
         ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTReflections.hlsl");
 
         m_pHitRS = std::make_unique<RootSignature>(pGraphics);
-        m_pHitRS->SetConstantBufferView(0, 1, D3D12_SHADER_VISIBILITY_ALL);
+        m_pHitRS->SetRootConstants(0, 1, gNumHitDataRootConstants, D3D12_SHADER_VISIBILITY_ALL);
         m_pHitRS->Finalize("Hit RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
         m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
