@@ -35,7 +35,7 @@
 #endif
 
 #ifndef GPU_VALIDATION
-#define GPU_VALIDATION 0
+#define GPU_VALIDATION 1
 #endif
 
 namespace Tweakables
@@ -696,14 +696,13 @@ void Graphics::Update()
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetGraphicsDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
+					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 					struct PerObjectData
 					{
 						Matrix World;
 						MaterialData Material;
 					} objectData;
-
-					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 					auto DrawBatches = [&](const Batch::Blending blendModes)
 					{
@@ -1303,11 +1302,11 @@ void Graphics::InitD3D()
 	// feature checks
 	{
 		D3D12_FEATURE_DATA_D3D12_OPTIONS caps0{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
 		{
-			checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2, "device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
+			// level for placing different types of resources in the same heap.
+			checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_1, "device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
 			checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2, "device does not support Resource Binding Tier 2 or higher. Tier 1 is not supported");
-
 		}
 
 		D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
@@ -1334,7 +1333,7 @@ void Graphics::InitD3D()
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
 			.HighestShaderModel = D3D_SHADER_MODEL_6_6
 		};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(shaderModelSupport))))
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
 		{
 			m_ShaderModelMajor = (uint8_t)(shaderModelSupport.HighestShaderModel >> 0x4);
 			m_ShaderModelMinor = (uint8_t)(shaderModelSupport.HighestShaderModel & 0xF);
@@ -1349,8 +1348,8 @@ void Graphics::InitD3D()
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
-	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
 
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
 	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get(), nullptr);
 	m_SceneData.GlobalSRVHeapHandle = m_pGlobalViewHeap->GetStartHandle();
 
@@ -2255,7 +2254,7 @@ void Graphics::IdleGPU()
 bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 {
 	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
-	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData)), GetDevice());
+	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS)), GetDevice());
 
 	switch (format)
 	{
@@ -2312,7 +2311,7 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 		if (featureData.TypedUAVLoadAdditionalFormats)
 		{
 			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
-			VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport)), GetDevice());
+			VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)), GetDevice());
 			const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
 			return ((formatSupport.Support2 & mask) == mask);
 		}

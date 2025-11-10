@@ -6,7 +6,7 @@
 
 class CommandContext;
 class Graphics;
-enum class CommandListCOntext;
+enum class CommandListContext;
 
 struct DescriptorHeapBlock
 {
@@ -56,7 +56,7 @@ public:
     DescriptorHandle Allocate(uint32_t count);
 
     void SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-    void BindStagedDescriptors(CommandListCOntext descriptorTableType);
+    void BindStagedDescriptors(CommandListContext descriptorTableType);
 
     void ParseRootSignature(RootSignature* pRootSignature);
     void ReleaseUsedHeaps(uint64_t fenceValue);
