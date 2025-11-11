@@ -14,7 +14,7 @@ class PipelineState;
 class GraphicsTexture;
 class Mesh;
 class Buffer;
-class SubMesh;
+struct SubMesh;
 class GraphicsProfiler;
 class ClusteredForward;
 struct Material;
@@ -203,6 +203,9 @@ public:
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
 
+	int RegisterBindlessResource(GraphicsTexture* pTexture, GraphicsTexture* pFallback = nullptr);
+	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
+
 	// constants
 	static const uint32_t FRAME_COUNT = 3;
 	static const uint32_t SHADOW_MAP_SIZE = 4096;
@@ -221,9 +224,6 @@ private:
 	void CreateSwapchain();
 	void GenerateAccelerationStructure(CommandContext& context, const Matrix* transforms, uint32_t count);
 	void UpdateImGui();
-
-	int RegisterBindlessResource(GraphicsTexture* pTexture, GraphicsTexture* pFallback = nullptr);
-	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
 
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<ID3D12Device> m_pDevice;

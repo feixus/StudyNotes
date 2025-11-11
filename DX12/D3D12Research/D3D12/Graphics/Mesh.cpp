@@ -9,6 +9,14 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Graphics.h"
 
+Mesh::~Mesh()
+{
+	for (SubMesh& subMesh : m_Meshes)
+	{
+		subMesh.Destroy();
+	}
+}
+
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {
 	Assimp::Importer importer;
@@ -55,7 +63,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	for (uint32_t i = 0; i < pScene->mNumMeshes; i++)
 	{
 		const aiMesh* pMesh = pScene->mMeshes[i];
-		std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 		std::vector<Vertex> vertices(pMesh->mNumVertices);
 		
 		for (uint32_t j = 0; j < pMesh->mNumVertices; j++)
@@ -85,25 +92,26 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 			}
 		}
 
-		BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (Vector3*)&vertices[0], sizeof(Vertex));
-		pSubMesh->m_MaterialId = pMesh->mMaterialIndex;
-		
+		SubMesh subMesh;
+		BoundingBox::CreateFromPoints(subMesh.Bounds, vertices.size(), (Vector3*)&vertices[0], sizeof(Vertex));
+		subMesh.MaterialId = pMesh->mMaterialIndex;
+
 		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32_t)vertices.size(), sizeof(Vertex));
-		pSubMesh->m_VerticesLocation = vbv;
-		pSubMesh->m_pVertexSRV = std::make_unique<ShaderResourceView>();
-		pSubMesh->m_pVertexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, (uint32_t)vertices.size() * sizeof(Vertex)));
+		subMesh.VerticesLocation = vbv;
+		subMesh.pVertexSRV = new ShaderResourceView();
+		subMesh.pVertexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, (uint32_t)vertices.size() * sizeof(Vertex)));
 		CopyData(vertices.data(), sizeof(Vertex) * vertices.size());
 
 		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32_t)indices.size(), false);
-		pSubMesh->m_IndicesLocation = ibv;
-		pSubMesh->m_pIndexSRV =  std::make_unique<ShaderResourceView>();
-		pSubMesh->m_pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, (uint32_t)indices.size() * sizeof(uint32_t)));
+		subMesh.IndicesLocation = ibv;
+		subMesh.pIndexSRV =  new ShaderResourceView();
+		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, (uint32_t)indices.size() * sizeof(uint32_t)));
 		CopyData(indices.data(), sizeof(uint32_t) * indices.size());
 
-		pSubMesh->m_Stride = sizeof(Vertex);
-		pSubMesh->m_pParent = this;
+		subMesh.Stride = sizeof(Vertex);
+		subMesh.pParent = this;
 
-		m_Meshes.push_back(std::move(pSubMesh));
+		m_Meshes.push_back(subMesh);
 	}
 
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COMMON);
@@ -178,18 +186,18 @@ void Mesh::GenerateBLAS(Graphics* pGraphics, CommandContext* pContext)
 	std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
 	for (size_t i = 0; i < GetMeshCount(); i++)
 	{
-		const SubMesh* pSubMesh = GetMesh((int)i);
+		const SubMesh& subMesh = GetMesh((int)i);
 
 		D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 		geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-		geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndexBuffer().Location;
-		geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexBuffer().Elements;
+		geometryDesc.Triangles.IndexBuffer = subMesh.IndicesLocation.Location;
+		geometryDesc.Triangles.IndexCount = subMesh.IndicesLocation.Elements;
 		geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
 		geometryDesc.Triangles.Transform3x4 = 0;
-		geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVertexBuffer().Location;
-		geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetVertexBuffer().Stride;
-		geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexBuffer().Elements;
+		geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.VerticesLocation.Location;
+		geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.VerticesLocation.Stride;
+		geometryDesc.Triangles.VertexCount = subMesh.VerticesLocation.Elements;
 		geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 		geometries.push_back(geometryDesc);
 	}
@@ -223,18 +231,8 @@ void Mesh::GenerateBLAS(Graphics* pGraphics, CommandContext* pContext)
 	pContext->FlushResourceBarriers();
 }
 
-SubMesh::~SubMesh()
-{}
-
-void SubMesh::Draw(CommandContext* pContext) const
+void SubMesh::Destroy()
 {
-	pContext->SetVertexBuffer(m_VerticesLocation);
-	pContext->SetIndexBuffer(m_IndicesLocation);
-	pContext->DrawIndexed(m_IndicesLocation.Elements, 0, 0);
+	delete pIndexSRV;
+	delete pVertexSRV;
 }
-
-Buffer* SubMesh::GetSourceBuffer() const
-{
-	return m_pParent->GetData();
-}
-

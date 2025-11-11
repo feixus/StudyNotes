@@ -116,6 +116,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             {
                 Matrix World;
                 MaterialData Material;
+				uint32_t VertexBuffer;
             } objectData{};
 
             frameData.View = inputResource.pCamera->GetView();
@@ -192,8 +193,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                     {
                         objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
+						objectData.VertexBuffer = b.VertexBufferDescriptor;
                         context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-					    b.pMesh->Draw(&context);
+					    context.SetIndexBuffer(b.pMesh->IndicesLocation);
+						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
                     }
                 }
             };
@@ -308,14 +311,6 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
         m_pLightIndexListBufferTransparent = std::make_unique<Buffer>(pGraphics, "Light List Transparent");
         m_pLightIndexListBufferTransparent->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
     }
-    
-    CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-            CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
-            CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32_FLOAT },
-            CD3DX12_INPUT_ELEMENT_DESC{ "NORMAL", DXGI_FORMAT_R32G32B32_FLOAT },
-            CD3DX12_INPUT_ELEMENT_DESC{ "TANGENT", DXGI_FORMAT_R32G32B32_FLOAT },
-            CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1 },
-	};
 
     // PBR diffuse passes
 	{
@@ -331,7 +326,6 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 			DXGI_FORMAT formats[] = { Graphics::RENDER_TARGET_FORMAT, DXGI_FORMAT_R16G16B16A16_FLOAT };
 			// opaque
             PipelineStateInitializer psoDesc;
-			psoDesc.SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);

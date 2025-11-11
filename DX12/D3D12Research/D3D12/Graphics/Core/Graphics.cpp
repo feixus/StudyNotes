@@ -127,8 +127,8 @@ void Graphics::Update()
 	std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), [this](const Batch& a, const Batch& b) {
 		if (a.BlendMode == b.BlendMode)
 		{
-			float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
-			float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
+			float aDist = Vector3::DistanceSquared(a.pMesh->Bounds.Center, m_pCamera->GetPosition());
+			float bDist = Vector3::DistanceSquared(b.pMesh->Bounds.Center, m_pCamera->GetPosition());
 			if (a.BlendMode == Batch::Blending::AlphaBlend)
 			{
 				return aDist > bDist;
@@ -502,6 +502,7 @@ void Graphics::Update()
 				{
 					Matrix World;
 					MaterialData Material;
+					uint32_t VertexBuffer;
 				} objectData;
 
 				for (const Batch& b : m_SceneData.Batches)
@@ -510,8 +511,10 @@ void Graphics::Update()
 					{
 						objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
+						objectData.VertexBuffer = b.VertexBufferDescriptor;
 						renderContext.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-						b.pMesh->Draw(&renderContext);
+						renderContext.SetIndexBuffer(b.pMesh->IndicesLocation);
+						renderContext.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 					}
 				}
 			};
@@ -702,6 +705,7 @@ void Graphics::Update()
 					{
 						Matrix World;
 						MaterialData Material;
+						uint32_t VertexBuffer;
 					} objectData;
 
 					auto DrawBatches = [&](const Batch::Blending blendModes)
@@ -712,9 +716,10 @@ void Graphics::Update()
 							{
 								objectData.World = b.WorldMatrix;
 								objectData.Material = b.Material;
+								objectData.VertexBuffer = b.VertexBufferDescriptor;
 								context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-	
-								b.pMesh->Draw(&context);
+								context.SetIndexBuffer(b.pMesh->IndicesLocation);
+								context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 							}
 						}
 					};
@@ -1059,7 +1064,7 @@ void Graphics::Update()
 	//  - ImGui render, pretty straight forward
 	if (Tweakables::g_EnableUI)
 	{
-		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
+		m_pImGuiRenderer->Render(graph, m_SceneData, m_pTonemapTarget.get());
 	}
 	else
 	{
@@ -1639,17 +1644,17 @@ void Graphics::InitializeAssets(CommandContext& context)
 		auto& pMesh = m_Meshes[j];
 		for (int i = 0; i < pMesh->GetMeshCount(); i++)
 		{
-			SubMesh* pSubMesh = pMesh->GetMesh(i);
-			const Material& material = pMesh->GetMaterial(pSubMesh->GetMaterialId());
+			const SubMesh& subMesh = pMesh->GetMesh(i);
+			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
 			m_SceneData.Batches.push_back(Batch{});
 			Batch& b = m_SceneData.Batches.back();
 			b.Index = (int)m_SceneData.Batches.size() - 1;
-			b.Bounds = pSubMesh->GetBounds();
-			b.pMesh = pSubMesh;
+			b.Bounds = subMesh.Bounds;
+			b.pMesh = &subMesh;
 			b.WorldMatrix = transforms[j];
 			b.Bounds.Transform(b.Bounds, b.WorldMatrix);
-			b.VertexBufferDescriptor = RegisterBindlessResource(pSubMesh->GetVertexBufferSRV());
-			b.IndexBufferDescriptor = RegisterBindlessResource(pSubMesh->GetIndexBufferSRV());
+			b.VertexBufferDescriptor = RegisterBindlessResource(subMesh.pVertexSRV);
+			b.IndexBufferDescriptor = RegisterBindlessResource(subMesh.pIndexSRV);
 
 			b.Material.Diffuse = RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::White2D));
 			b.Material.Normal = RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
@@ -1693,12 +1698,6 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 void Graphics::InitializePipelines()
 {
-	// input layout
-	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
-			CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
-			CD3DX12_INPUT_ELEMENT_DESC{ "TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT },
-	};
-
 	// shadow mapping
 	// vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
@@ -1711,7 +1710,6 @@ void Graphics::InitializePipelines()
 
 		// pipeline state
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 		psoDesc.SetRootSignature(m_pShadowRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
@@ -1738,7 +1736,6 @@ void Graphics::InitializePipelines()
 
 		// pipeline state
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetInputLayout(depthOnlyInputElements, std::size(depthOnlyInputElements));
 		psoDesc.SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
@@ -2067,20 +2064,7 @@ void Graphics::UpdateImGui()
 	{
 		std::string tabName = std::string("Visualize Texture:") + m_pVisualizeTexture->GetName();
 		ImGui::Begin(tabName.c_str());
-
-		static bool visibleChannels[4] = { true, true, true, true };
-		static int mipLevel = 0;
-		static int sliceIndex = 0;
-		ImGui::Checkbox("R", &visibleChannels[0]);
-		ImGui::SameLine();
-		ImGui::Checkbox("G", &visibleChannels[1]);
-		ImGui::SameLine();
-		ImGui::Checkbox("B", &visibleChannels[2]);
-		ImGui::SameLine();
-		ImGui::Checkbox("A", &visibleChannels[3]);
-		ImGui::SameLine();
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
-
 		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
 		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 		float width = windowSize.x;
@@ -2091,22 +2075,7 @@ void Graphics::UpdateImGui()
 			height = windowSize.y;
 		}
 
-		ImGui::SameLine();
-		height -= ImGui::GetFontSize();
-		ImGui::Text("View Resolution: %dx%d", (int)width, (int)height);
-		if (m_pVisualizeTexture->GetMipLevels() > 1)
-		{
-			ImGui::SliderInt("Mip Level", &mipLevel, 0, m_pVisualizeTexture->GetMipLevels() - 1);
-		}
-		if (m_pVisualizeTexture->GetDepth() > 1)
-		{
-			ImGui::SliderInt("Slice Index", &sliceIndex, 0, m_pVisualizeTexture->GetDepth() - 1);
-		}
-
-		mipLevel = Math::Clamp(mipLevel, 0, (int)m_pVisualizeTexture->GetMipLevels() - 1);
-		sliceIndex = Math::Clamp(sliceIndex, 0, (int)m_pVisualizeTexture->GetDepth() - 1);
-
-		ImGui::Image(ImTextureData(m_pVisualizeTexture, visibleChannels[0], visibleChannels[1], visibleChannels[2], visibleChannels[3], mipLevel, sliceIndex), ImVec2(width, height));
+		ImGui::Image(ImTextureData(m_pVisualizeTexture), ImVec2(width, height));
 		ImGui::End();
 	}
 

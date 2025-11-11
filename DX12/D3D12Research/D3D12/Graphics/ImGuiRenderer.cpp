@@ -151,7 +151,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineStateObject = pGraphics->CreatePipeline(psoDesc);
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, GraphicsTexture* pRenderTarget)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -169,12 +169,17 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 			context.SetGraphicsRootSignature(m_pRootSignature.get());
 
 			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0, 0.0f, 1.0f);
-			context.SetGraphicsDynamicConstantBufferView(1, &projectionMatrix, sizeof(Matrix));
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetViewport(FloatRect(0, 0, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
 
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
+
+			struct Data
+			{
+				Matrix ProjectionMatrix;
+				int TextureIndex;
+			} drawData;
 
 			for (int n = 0; n < pDrawData->CmdListsCount; n++)
 			{
@@ -187,45 +192,24 @@ void ImGuiRenderer::Render(RGGraph& graph, GraphicsTexture* pRenderTarget)
 				for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
 				{
 					const ImDrawCmd* pCmd = &pCmdList->CmdBuffer[i];
-
-					struct ColorData
+					if (pCmd->UserCallback)
 					{
-						uint32_t VisibleChannels;
-						int UniqueChannel;
-						int MipIndex;
-						float SliceIndex;
-						int TextureType;
-					} batchData;
-
-					context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
-					ImTextureID textureData = pCmd->TextureId;
-					batchData.VisibleChannels = textureData.VisibleChannels;
-					batchData.MipIndex = textureData.MipLevel;
-					uint32_t minBit = 0, maxBit = 0;
-					BitOperations::LeastSignificantBit(textureData.VisibleChannels, &minBit);
-					BitOperations::MostSignificantBit(textureData.VisibleChannels, &maxBit);
-					batchData.UniqueChannel = (minBit == maxBit) ? minBit : -1;
-
-					if (textureData.pTexture)
-					{
-						context.InsertResourceBarrier(textureData.pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-						batchData.SliceIndex = (float)textureData.SliceIndex / textureData.pTexture->GetDepth();
-						switch (textureData.pTexture->GetDesc().Dimension)
-						{
-						case TextureDimension::Texture2D:
-							batchData.TextureType = 1;
-							context.BindResource(2, 0, textureData.pTexture->GetSRV());
-							break;
-						case TextureDimension::Texture3D:
-							batchData.TextureType = 2;
-							context.BindResource(3, 0, textureData.pTexture->GetSRV());
-							break;
-						}
+						pCmd->UserCallback(pCmdList, pCmd);
 					}
-
-					context.SetGraphicsDynamicConstantBufferView(0, &batchData, sizeof(batchData));
-					context.DrawIndexed(pCmd->ElemCount, indexOffset, 0);
-					
+					else
+					{
+						drawData.ProjectionMatrix = projectionMatrix;
+						context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
+						ImTextureID textureData = pCmd->TextureId;
+						if (textureData)
+						{
+							context.InsertResourceBarrier(textureData.pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+							drawData.TextureIndex = textureData.pTexture->GetGraphics()->RegisterBindlessResource(textureData.pTexture);
+						}
+						context.SetGraphicsDynamicConstantBufferView(0, &drawData, sizeof(Data));
+						context.BindResourceTable(1, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
+						context.DrawIndexed(pCmd->ElemCount, indexOffset, 0);
+					}
 					indexOffset += pCmd->ElemCount;
 				}
 			}

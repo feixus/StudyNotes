@@ -133,6 +133,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             struct PerObjectParameters
             {
                 Matrix World;
+				int VertexBuffer;
             } perObjectParameters{};
 
 			perFrameParameters.LightGridParams = lightGridParams;
@@ -143,6 +144,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             
             context.SetGraphicsDynamicConstantBufferView(1, &perFrameParameters, sizeof(perFrameParameters));
             context.BindResource(2, 0, m_pUniqueClusterBuffer->GetUAV());
+			context.BindResourceTable(3, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
             auto DrawBatches = [&](Batch::Blending blendMode)
             {
@@ -151,8 +153,10 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                     if (Any(b.BlendMode, blendMode) && inputResource.VisibilityMask.GetBit(b.Index))
                     {
                         perObjectParameters.World = b.WorldMatrix;
+						perObjectParameters.VertexBuffer = b.VertexBufferDescriptor;
                         context.SetGraphicsDynamicConstantBufferView(0, &perObjectParameters, sizeof(perObjectParameters));
-					    b.pMesh->Draw(&context);
+					    context.SetIndexBuffer(b.pMesh->IndicesLocation);
+						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
                     }
                 }
             };
@@ -251,6 +255,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 			{
 				Matrix World;
                 MaterialData Material;
+				uint32_t VertexBuffer;
 			} objectData;
 
 			struct PerFrameData
@@ -351,8 +356,10 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
                     {
                         objectData.World = Matrix::Identity;
                         objectData.Material = b.Material;
+						objectData.VertexBuffer = b.VertexBufferDescriptor;
                         context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-                        b.pMesh->Draw(&context);
+                        context.SetIndexBuffer(b.pMesh->IndicesLocation);
+						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
                     }
                 }
 			};
@@ -524,12 +531,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // mark unique clusters
     {
-        CD3DX12_INPUT_ELEMENT_DESC inputElementDescs[] =
-        {
-            CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-            CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
-        };
-
         Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ClusterMarking.hlsl", ShaderType::Vertex, "MarkClusters_VS");
 		Shader* pPixelShaderOpaque = pGraphics->GetShaderManager()->GetShader("ClusterMarking.hlsl", ShaderType::Pixel, "MarkClusters_PS");
 
@@ -537,7 +538,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", pVertexShader);
 
         PipelineStateInitializer psoDesc;
-        psoDesc.SetInputLayout(inputElementDescs, ARRAYSIZE(inputElementDescs));
         psoDesc.SetVertexShader(pVertexShader);
         psoDesc.SetPixelShader(pPixelShaderOpaque);
         psoDesc.SetBlendMode(BlendMode::Replace, false);
@@ -600,15 +600,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
     // diffuse
     {
-        CD3DX12_INPUT_ELEMENT_DESC inputElementDescs[] =
-        {
-            { "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
-            { "TEXCOORD", DXGI_FORMAT_R32G32_FLOAT },
-            { "NORMAL", DXGI_FORMAT_R32G32B32_FLOAT },
-            { "TANGENT", DXGI_FORMAT_R32G32B32_FLOAT },
-            { "TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1 },
-        };
-
         Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
         Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
 
@@ -619,7 +610,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
         // opaque
         PipelineStateInitializer psoDesc;
-        psoDesc.SetInputLayout(inputElementDescs, ARRAYSIZE(inputElementDescs));
         psoDesc.SetVertexShader(pVertexShader);
         psoDesc.SetPixelShader(pPixelShader);
         psoDesc.SetBlendMode(BlendMode::Replace, false);

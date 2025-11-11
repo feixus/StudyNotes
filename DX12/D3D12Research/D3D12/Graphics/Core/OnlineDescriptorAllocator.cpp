@@ -90,26 +90,24 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32_t rootIndex, uint32_t offs
 
 void OnlineDescriptorAllocator::BindStagedDescriptors(CommandListContext descriptorTableType)
 {
-    if (m_StaleRootParameters.HasAnyBitSet() == false)
-    {
-        return;
-    }
-
     for (uint32_t rootIndex : m_StaleRootParameters)
     {
-        RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-        switch (descriptorTableType)
-        {
-        case CommandListContext::Compute:
-            m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-            break;
-        case CommandListContext::Graphics:
-            m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-            break;
-        default:
-            noEntry();
-            break;
-        }
+		if (m_StaleRootParameters.GetBit(rootIndex))
+		{
+			RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
+			switch (descriptorTableType)
+			{
+			case CommandListContext::Compute:
+				m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
+				break;
+			case CommandListContext::Graphics:
+				m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
+				break;
+			default:
+				noEntry();
+				break;
+			}
+		}
     }
 
     m_StaleRootParameters.ClearAll();

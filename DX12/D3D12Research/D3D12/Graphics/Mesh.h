@@ -8,33 +8,7 @@ class Buffer;
 class CommandContext;
 class CommandContext;
 class ShaderResourceView;
-
-class SubMesh
-{
-    friend class Mesh;
-
-public:
-    ~SubMesh();
-    void Draw(CommandContext* pContext) const;
-    int GetMaterialId() const { return m_MaterialId; }
-    const BoundingBox& GetBounds() const { return m_Bounds; }
-
-    VertexBufferView GetVertexBuffer() const { return m_VerticesLocation; };
-    IndexBufferView GetIndexBuffer() const { return m_IndicesLocation; };
-    Buffer* GetSourceBuffer() const;
-    ShaderResourceView* GetVertexBufferSRV() const { return m_pVertexSRV.get(); };
-    ShaderResourceView* GetIndexBufferSRV() const { return m_pIndexSRV.get(); };
-
-private:
-    int m_Stride{0};
-    int m_MaterialId{};
-    std::unique_ptr<ShaderResourceView> m_pVertexSRV;
-    std::unique_ptr<ShaderResourceView> m_pIndexSRV;
-    VertexBufferView m_VerticesLocation;
-    IndexBufferView m_IndicesLocation;
-    BoundingBox m_Bounds;
-    Mesh* m_pParent;
-};
+class Mesh;
 
 struct Material
 {
@@ -42,15 +16,30 @@ struct Material
 	GraphicsTexture* pNormalTexture{nullptr};
 	GraphicsTexture* pRoughnessTexture{nullptr};
 	GraphicsTexture* pMetallicTexture{nullptr};
-    bool IsTransparent{false};
+	bool IsTransparent;
+};
+
+struct SubMesh
+{
+    void Destroy();
+
+    int Stride{0};
+    int MaterialId{0};
+    ShaderResourceView* pVertexSRV{nullptr};
+    ShaderResourceView* pIndexSRV{nullptr};
+    VertexBufferView VerticesLocation;
+    IndexBufferView IndicesLocation;
+    BoundingBox Bounds;
+    Mesh* pParent{nullptr};
 };
 
 class Mesh
 {
 public:
+    ~Mesh();
     bool Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext);
     int GetMeshCount() const { return (int)m_Meshes.size();  }
-	SubMesh* GetMesh(int index) const { return m_Meshes[index].get(); }
+	const SubMesh& GetMesh(int index) const { return m_Meshes[index]; }
     const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
     Buffer* GetBLAS() const { return m_pBLAS.get(); }
@@ -61,7 +50,7 @@ private:
 
     std::vector<Material> m_Materials;
     std::unique_ptr<Buffer> m_pGeometryData;
-    std::vector<std::unique_ptr<SubMesh>> m_Meshes;
+    std::vector<SubMesh> m_Meshes;
     std::vector<std::unique_ptr<GraphicsTexture>> m_Textures;
     std::map<StringHash, GraphicsTexture*> m_ExistingTextures;
     std::unique_ptr<Buffer> m_pBLAS;

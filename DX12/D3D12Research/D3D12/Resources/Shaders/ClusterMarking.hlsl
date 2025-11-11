@@ -1,25 +1,29 @@
 #include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-                "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
+#define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u1, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
+                GLOBAL_BINDLESS_TABLE \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
-cbuffer PerObjectParameters : register(b0)
+struct ObjectData
 {
-    float4x4 cWorld;
-}
+    float4x4 World;
+    uint VertexBuffer;
+};
 
-cbuffer PerViewParameters : register(b1)
+struct ViewData
 {
-    int4 cClusterDimensions;
-    int2 cClusterSize;
-    float2 cLightGridParams;
-    float4x4 cView;
-    float4x4 cViewProjection;
-}
+    int4 ClusterDimensions;
+    int2 ClusterSize;
+    float2 LightGridParams;
+    float4x4 View;
+    float4x4 ViewProjection;
+};
+
+ConstantBuffer<ObjectData> cObjectData : register(b0);
+ConstantBuffer<ViewData> cViewData : register(b1);
 
 // UAV(register u#) and render target outputs(SV_Target#) share the same register namespace.
 // SV_Target0 implicitly uses u0 internally.
@@ -28,16 +32,19 @@ RWStructuredBuffer<uint> uActiveCluster : register(u1);
 // clusterCountZ * (log(depth) - log(n)) / log(f / n)
 uint GetSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cLightGridParams.x - cLightGridParams.y);
+    return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
 }
 
-struct VS_Input
+struct VSInput
 {
     float3 position : POSITION;
     float2 texcoord : TEXCOORD;
+    float3 normal : NORMAL;
+    float3 tangent : TANGENT;
+    float3 bitangent : TEXCOORD1;
 };
 
-struct PS_Input
+struct PSInput
 {
     float4 position : SV_Position;
     float4 positionVS : TEXCOORD0;
@@ -45,22 +52,22 @@ struct PS_Input
 };
 
 [RootSignature(RootSig)]
-PS_Input MarkClusters_VS(VS_Input input)
+PSInput MarkClusters_VS(uint VertexId : SV_VertexID)
 {
-    PS_Input output = (PS_Input)0;
-    float4 posWS = mul(float4(input.position, 1.0f), cWorld);
-    output.positionVS = mul(posWS, cView);
-    output.position = mul(posWS, cViewProjection);
+    PSInput output = (PSInput)0;
+    VSInput input = tBufferTable[cObjectData.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+    float4 posWS = mul(float4(input.position, 1.0f), cObjectData.World);
+    output.positionVS = mul(posWS, cViewData.View);
+    output.position = mul(posWS, cViewData.ViewProjection);
     output.texcoord = input.texcoord;
     return output;
 }
 
 [earlydepthstencil]
-void MarkClusters_PS(PS_Input input)
+void MarkClusters_PS(PSInput input)
 {
-    uint zSlice = GetSliceFromDepth(input.positionVS.z);
-    uint2 clusterIndexXY = floor(input.position.xy / cClusterSize);
-    uint clusterIndex1D = clusterIndexXY.x + cClusterDimensions.x * (clusterIndexXY.y  + zSlice * cClusterDimensions.y);
+    uint3 clusterIndex3D = uint3(floor(input.position.xy / cViewData.ClusterSize), GetSliceFromDepth(input.positionVS.z));
+    uint clusterIndex1D = clusterIndex3D.x + cViewData.ClusterDimensions.x * (clusterIndex3D.y  + clusterIndex3D.z * cViewData.ClusterDimensions.y);
     uActiveCluster[clusterIndex1D] = 1;
 }
 

@@ -151,18 +151,11 @@ using ImIntPtr = int;
 
 struct ImTextureData
 {
-    ImTextureData(GraphicsTexture* pTexture, bool redChannelVisible = true,
-        bool greenChannelVisible = true, bool blueChannelVisible = true,
-        bool alphaChannelVisible = true, unsigned int mipLevel = 0, unsigned int sliceIndex = 0)
-        : pTexture(pTexture), VisibleChannels(0), MipLevel(mipLevel), SliceIndex(sliceIndex)
-    {
-        VisibleChannels |= redChannelVisible * (1 << 0);
-        VisibleChannels |= greenChannelVisible * (1 << 1);
-        VisibleChannels |= blueChannelVisible * (1 << 2);
-        VisibleChannels |= alphaChannelVisible * (1 << 3);
-    }
+    ImTextureData(GraphicsTexture* pTexture)
+        : pTexture(pTexture)
+    {}
 
-    ImTextureData() : pTexture(nullptr), VisibleChannels(0), MipLevel(0), SliceIndex(0)
+    ImTextureData() : pTexture(nullptr)
     {}
 
     bool operator==(const ImTextureData& rhs) const
@@ -181,7 +174,4 @@ struct ImTextureData
     }
 
 	GraphicsTexture* pTexture{ nullptr };
-	unsigned int VisibleChannels;
-	unsigned int MipLevel;
-	unsigned int SliceIndex;
 };
