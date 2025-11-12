@@ -79,7 +79,7 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pWorleyNoisePS = pGraphics->CreatePipeline(psoDesc);
 
 		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>(pGraphics, "Worley Noise");
-		m_pWorleyNoiseTexture->Create(TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource, TextureDimension::Texture3D));
+		m_pWorleyNoiseTexture->Create(TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{

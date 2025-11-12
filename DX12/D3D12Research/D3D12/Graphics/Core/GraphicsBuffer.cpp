@@ -19,7 +19,7 @@ Buffer::~Buffer()
 D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 {
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(
-		Math::AlignUp<int64_t>((int64_t)bufferDesc.Size, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT),
+		Math::AlignUp<uint64_t>(bufferDesc.Size, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT),
 		D3D12_RESOURCE_FLAG_NONE
 	);
 
@@ -31,6 +31,13 @@ D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
+
+	// PIX: this will improve the shader's performance on some hardware.
+	if (Any(bufferDesc.Usage, BufferFlag::Structured))
+	{
+		desc.Width = Math::Max(desc.Width, 16ull);
+	}
+
 	return desc;
 }
 

@@ -165,10 +165,9 @@ void Graphics::Update()
 	if (Tweakables::g_ShowSDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
-		Vector2* pData = (Vector2*)pSourceBuffer->Map();
+		Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
 		minPoint = pData->x;
 		maxPoint = pData->y;
-		pSourceBuffer->UnMap();
 	}
 
 	float n = m_pCamera->GetNear();
@@ -404,8 +403,11 @@ void Graphics::Update()
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 				D3D12_RESOURCE_DESC desc = m_pTonemapTarget->GetResource()->GetDesc();
 				m_pDevice->GetCopyableFootprints(&desc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+
 				m_pScreenshotBuffer = std::make_unique<Buffer>(this, "Screenshot Texture");
 				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
+				m_pScreenshotBuffer->Map();
+
 				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 				renderContext.InsertResourceBarrier(m_pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 				renderContext.CopyTexture(m_pTonemapTarget.get(), m_pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
@@ -421,7 +423,7 @@ void Graphics::Update()
 		{
 			TaskContext taskContext;
 			TaskQueue::Execute([&](uint32_t) {
-				char* pData = (char*)m_pScreenshotBuffer->Map(0, m_pScreenshotBuffer->GetSize());
+				char* pData = (char*)m_pScreenshotBuffer->GetMappedData();
 				Image img;
 				img.SetSize(m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight(), 4);
 				uint32_t imageRowPitch = m_pTonemapTarget->GetWidth() * 4;
@@ -432,7 +434,6 @@ void Graphics::Update()
 					pData += m_ScreenshotRowPitch;
 					targetOffset += imageRowPitch;
 				}
-				m_pScreenshotBuffer->UnMap();
 
 				SYSTEMTIME time;
 				GetSystemTime(&time);
@@ -552,7 +553,7 @@ void Graphics::Update()
 				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 16);
 				renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
 
-				renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
 				renderContext.FlushResourceBarriers();
 			});
@@ -824,7 +825,7 @@ void Graphics::Update()
 				context.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_SHADER_RESOURCE);
 
 				context.SetComputeRootSignature(m_pTemporalResolveRS.get());
 				context.SetPipelineState(m_pTemporalResolvePSO);
@@ -1355,7 +1356,7 @@ void Graphics::InitD3D()
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
-	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get(), nullptr);
+	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get());
 	m_SceneData.GlobalSRVHeapHandle = m_pGlobalViewHeap->GetStartHandle();
 
 	// allocate descriptor heaps pool
@@ -1523,6 +1524,7 @@ void Graphics::OnResize(int width, int height)
 	{
 		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this, "SDSM Reduction Readback Target");
 		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
+		pBuffer->Map();
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
 }
@@ -1605,29 +1607,32 @@ void Graphics::GenerateAccelerationStructure(CommandContext& context, const Matr
 
 void Graphics::InitializeAssets(CommandContext& context)
 {
+	auto RegisterDefaultTexture = [this, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32_t* pData) {
+		m_DefaultTextures[(int)type] = std::make_unique<GraphicsTexture>(this, "Default Black");
+		m_DefaultTextures[(int)type]->Create(&context, desc, pData);
+
+	};
+
 	uint32_t BLACK = 0xFF000000;
-	m_DefaultTextures[(int)DefaultTexture::Black2D] = std::make_unique<GraphicsTexture>(this, "Default Black");
-	m_DefaultTextures[(int)DefaultTexture::Black2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
+	RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
 
 	uint32_t WHITE = 0xFFFFFFFF;
-	m_DefaultTextures[(int)DefaultTexture::White2D] = std::make_unique<GraphicsTexture>(this, "Default White");
-	m_DefaultTextures[(int)DefaultTexture::White2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
+	RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
 
 	uint32_t MAGENTA = 0xFFFF00FF;
-	m_DefaultTextures[(int)DefaultTexture::Magenta2D] = std::make_unique<GraphicsTexture>(this, "Default Magenta");
-	m_DefaultTextures[(int)DefaultTexture::Magenta2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
+	RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
 
 	uint32_t GRAY = 0xFF808080;
-	m_DefaultTextures[(int)DefaultTexture::Gray2D] = std::make_unique<GraphicsTexture>(this, "Default Gray");
-	m_DefaultTextures[(int)DefaultTexture::Gray2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
+	RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
 
 	uint32_t DEFAULT_NORMAL = 0xFFFF8080;
-	m_DefaultTextures[(int)DefaultTexture::Normal2D] = std::make_unique<GraphicsTexture>(this, "Default Normal");
-	m_DefaultTextures[(int)DefaultTexture::Normal2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
+	RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
 	
 	uint32_t BLACK_CUBE[6] = {};
-	m_DefaultTextures[(int)DefaultTexture::BlackCube] = std::make_unique<GraphicsTexture>(this, "Default Black CUbe");
-	m_DefaultTextures[(int)DefaultTexture::BlackCube]->Create(&context, TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK_CUBE);
+	RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
+
+	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<GraphicsTexture>(this, "Color Noise 256px");
+	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/noise.png", false);
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();	
@@ -2059,7 +2064,7 @@ void Graphics::UpdateImGui()
 	}
 	ImGui::PopStyleVar();
 
-	m_pVisualizeTexture = m_pAmbientOcclusion.get();
+	m_pVisualizeTexture = m_pVisualizeTexture != nullptr ? m_pVisualizeTexture : m_pAmbientOcclusion.get();
 	if (m_pVisualizeTexture)
 	{
 		std::string tabName = std::string("Visualize Texture:") + m_pVisualizeTexture->GetName();
@@ -2148,7 +2153,7 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
 	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
 
-	if (m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
+	if (SupportsRaytracing())
 	{
 		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
 		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);

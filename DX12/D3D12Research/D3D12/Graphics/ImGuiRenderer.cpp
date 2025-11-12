@@ -179,6 +179,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, GraphicsT
 			{
 				Matrix ProjectionMatrix;
 				int TextureIndex;
+				TextureDimension TextureType;
 			} drawData;
 
 			for (int n = 0; n < pDrawData->CmdListsCount; n++)
@@ -205,6 +206,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, GraphicsT
 						{
 							context.InsertResourceBarrier(textureData.pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 							drawData.TextureIndex = textureData.pTexture->GetGraphics()->RegisterBindlessResource(textureData.pTexture);
+							drawData.TextureType = textureData.pTexture->GetDesc().Dimension;
 						}
 						context.SetGraphicsDynamicConstantBufferView(0, &drawData, sizeof(Data));
 						context.BindResourceTable(1, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);

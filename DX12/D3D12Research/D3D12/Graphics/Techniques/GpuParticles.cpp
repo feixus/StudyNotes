@@ -237,7 +237,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
             parameters.Origin = Vector3(150, 3, 0);
 
 		    context.SetComputeDynamicConstantBufferView(0, &parameters, (uint32_t)(sizeof(Parameters)));
-		    context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), 1, m_pEmitArguments.get(), nullptr);
+		    context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), 1, m_pEmitArguments.get(), m_pEmitArguments.get());
 		    context.InsertUavBarrier();
         });
 

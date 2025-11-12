@@ -8,7 +8,8 @@ class ShaderBindingTable
 private:
     struct ShaderRecord
     {
-        std::vector<uint64_t> data;
+		std::unique_ptr<char[]> pData;
+		uint32_t Size{0};
         const void* pIdentifier{nullptr};
     };
 
@@ -17,11 +18,16 @@ public:
     void BindRayGenShader(const char* pName, const std::vector<uint64_t>& data = {});
     void BindMissShader(const char* pName, uint32_t rayIndex, const std::vector<uint64_t>& data = {});
     void BindHitGroup(const char* pName, uint32_t index, const std::vector<uint64_t>& data = {});
+	void BindHitGroup(const char* pName, uint32_t index, const void* pData, uint32_t dataSize);
+	template<typename T>
+	void BindHitGroup(const char* pName, uint32_t index, const T& data)
+	{
+		BindHitGroup(pName, index, &data, sizeof(T));
+	}
     void Commit(CommandContext& context, D3D12_DISPATCH_RAYS_DESC& rayDesc);
     
 private:
-    ShaderRecord CreateRecord(const char* pName, const std::vector<uint64_t>& data);
-    uint32_t ComputeRecordSize(uint32_t elements);
+    ShaderRecord CreateRecord(const char* pName, const void* pData, uint32_t dataSize);
     
     StateObject* m_pStateObject;
     ShaderRecord m_RayGenRecord;

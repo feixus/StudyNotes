@@ -50,13 +50,13 @@ private:
 class OnlineDescriptorAllocator : public GraphicsObject
 {
 public:
-	OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap, CommandContext* pContext);
+	OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap);
 	~OnlineDescriptorAllocator() = default;
 
     DescriptorHandle Allocate(uint32_t count);
 
     void SetDescriptors(uint32_t rootIndex, uint32_t offset, uint32_t numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-    void BindStagedDescriptors(CommandListContext descriptorTableType);
+    void BindStagedDescriptors(ID3D12GraphicsCommandList* pCmdList, CommandListContext descriptorTableType);
 
     void ParseRootSignature(RootSignature* pRootSignature);
     void ReleaseUsedHeaps(uint64_t fenceValue);
@@ -77,7 +77,6 @@ private:
     DescriptorHeapBlock* m_pCurrentHeapBlock{nullptr};
     std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
 
-    CommandContext* m_pOwner;
     D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 };
 

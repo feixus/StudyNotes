@@ -28,7 +28,7 @@
 
 #define USE_PIX 1
 
-#include <windows.h>
+#include "Core/MinWindows.h"
 #include <wrl/client.h>
 
 #include <d3d12.h>

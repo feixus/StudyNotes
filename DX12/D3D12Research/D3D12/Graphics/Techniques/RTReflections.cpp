@@ -72,9 +72,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				hitData.VertexBuffer = b.VertexBufferDescriptor;
                 hitData.IndexBuffer = b.IndexBufferDescriptor;
 
-                std::vector<uint64_t> constantData(gNumHitDataRootConstants / 2);
-                memcpy(constantData.data(), &hitData, sizeof(HitData));
-                bindingTable.BindHitGroup("ReflectionHitGroup", b.Index, constantData);
+				bindingTable.BindHitGroup<HitData>("ReflectionHitGroup", b.Index, hitData);
             }
 
             const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {

@@ -40,6 +40,7 @@ enum class DefaultTexture
 	Gray2D,
 	Normal2D,
 	BlackCube,
+	ColorNoise256,
 	MAX
 };
 
@@ -138,6 +139,8 @@ public:
 
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
+
+	void SetVisualize(GraphicsTexture* pTexture) { m_pVisualizeTexture = pTexture; }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};

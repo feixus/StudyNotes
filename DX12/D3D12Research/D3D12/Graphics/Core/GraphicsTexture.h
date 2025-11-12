@@ -121,6 +121,7 @@ struct TextureDesc
 		return desc;
 	}
 
+
 	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
 		check(width);
@@ -156,8 +157,8 @@ struct TextureDesc
 		desc.Dimension = TextureDimension::Texture2D;
 		return desc;
 	}
-
-	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, TextureDimension dimension = TextureDimension::Texture3D, int sampleCount = 1)
+	
+	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureFlag flag = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
 	{
 		check(width);
 		check(height);
@@ -165,12 +166,12 @@ struct TextureDesc
 		desc.Width = width;
 		desc.Height = height;
 		desc.DepthOrArraySize = depth;
-		desc.Mips = 1;
+		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Usage = flag;
 		desc.ClearBindingValue = ClearBinding();
-		desc.Dimension = dimension;
+		desc.Dimension = TextureDimension::Texture3D;
 		return desc;
 	}
 
