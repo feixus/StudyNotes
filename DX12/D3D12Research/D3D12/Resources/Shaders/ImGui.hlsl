@@ -43,11 +43,13 @@ float4 SampleTexture(float2 texCoord)
     }
     // if (TextureType == Texture3D)
     // {
-    //     return tTexture3DTable[TextureID].SampleLevel(sDiffuseSampler, float3(texCoord, 0), 0);
+    //     float4 c = tTexture3DTable[TextureID].SampleLevel(sDiffuseSampler, float3(texCoord, 0), 0);
+    //     return float4(c.xyz, 1.0f);
     // }
     // if (TextureType == TextureCube)
     // {
-    //     return tTextureCubeTable[TextureID].SampleLevel(sDiffuseSampler, float3(texCoord, 0), 0);
+    //     float4 c = tTextureCubeTable[TextureID].SampleLevel(sDiffuseSampler, float3(texCoord, 0), 0);
+    //     return float4(c.xyz, 1.0f);
     // }
     return float4(1, 0, 1, 1);
 }

@@ -12,7 +12,7 @@ public:
     void SetFoV(float fov);
     void SetClippingPlanes(float nearPlane, float farPlane);
     void SetOrthographic(bool orthographic, float size = -1.0f);
-    void SetNewPlane(float nearPlane);
+    void SetNearPlane(float nearPlane);
     void SetFarPlane(float farPlane);
     void SetViewport(const FloatRect& rect);
     void SetDirty() { m_Dirty = true; }

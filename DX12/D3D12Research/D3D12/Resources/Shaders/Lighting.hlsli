@@ -38,7 +38,7 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invert
     return mul(normal, TBN);
 }
 
-float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
+float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
     // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
     float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjection[shadowMapIndex]);
@@ -70,6 +70,20 @@ float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
     ) / 10.0f;
 
     return result * result;
+}
+
+float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
+{
+    float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjection[shadowMapIndex]);
+    lightPos.xyz /= lightPos.w;
+    lightPos.x = lightPos.x / 2.0f + 0.5f;
+    lightPos.y = lightPos.y / -2.0f + 0.5f;
+    lightPos.z += 0.0001f;
+        
+    float2 texCoord = lightPos.xy;
+    Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
+
+    return shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z);
 }
 
 // Angle >= Umbra -> 0
@@ -177,7 +191,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
         }
 #endif
      
-        visibility = DoShadow(wPos, shadowIndex, light.InvShadowSize);
+        visibility = Shadow3x3PCF(wPos, shadowIndex, light.InvShadowSize);
         if (visibility <= 0)
         {
             return result;
@@ -200,7 +214,14 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 }
 
 // volumetric scattering - Henyey-Greenstein phase function
+//      phase function describes the angular distribution of scattered light.
+//      g = 0: isotropic scattering, light scatters equally in all directions.
+//      g > 0: forward scattering, light tends to scatter in the direction of the incoming light.
+//      g < 0: backward scattering, light tends to scatter opposite to the direction of the incoming light.
 // https://pbr-book.org/3ed-2018/Volume_Scattering/Phase_Functions
+//                    1 - g²
+//    P(θ) = ─────────────────────────
+//            4π(1 + g² - 2g·cosθ)^(3/2)
 float HenyeyGreestein(float LoV)
 {
     const float G = 0.1f;   // asymmetry parameter, [-1, 1]
@@ -229,12 +250,7 @@ float3 ApplyVolumetricLighting(float3 startPoint, float3 endPoint, float4 pos, f
             if (light.ShadowIndex >= 0)
             {
                 int shadowMapIndex = GetShadowIndex(light, pos, currentPosition);
-                float4x4 lightViewProjection = cShadowData.LightViewProjection[shadowMapIndex];
-                float4 lightPos = mul(float4(currentPosition, 1.0f), lightViewProjection);
-
-                lightPos.xyz /= lightPos.w;
-                lightPos.xy = lightPos.xy * float2(0.5f, -0.5f) + 0.5f;
-                visibility = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+                visibility = ShadowNoPCF(currentPosition, shadowMapIndex, light.InvShadowSize);
             }
 
             float phase = saturate(HenyeyGreestein(dot(ray, light.Direction)));

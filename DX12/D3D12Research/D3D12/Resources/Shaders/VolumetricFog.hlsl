@@ -1,12 +1,16 @@
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
+#include "Lighting.hlsli"
 
 #define RootSig \
         "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
+        "CBV(b2, visibility = SHADER_VISIBILITY_ALL), " \
         "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
-        "DescriptorTable(SRV(t5, numDescriptors = 10), visibility = SHADER_VISIBILITY_ALL), " \
+        "DescriptorTable(SRV(t4, numDescriptors = 10), visibility = SHADER_VISIBILITY_ALL), " \
         GLOBAL_BINDLESS_TABLE \
-        "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP)"
+        "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP), " \
+        "StaticSampler(s1, filter = FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
+        "StaticSampler(s2, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc = COMPARISON_GREATER) "
 
 struct ShaderData
 {
@@ -15,38 +19,59 @@ struct ShaderData
     float3 InvClusterDimensions;
     int NumLights;
     float4x4 ViewProjectionInv;
-    float4x3 ProjectionInv;
+    float4x4 ProjectionInv;
     float4x4 ViewInv;
+    float NearZ;
+    float FarZ;
 };
 
 ConstantBuffer<ShaderData> cData : register(b0);
 
-RWTexture3D<float3> uOutputTexture : register(u0);
+Texture3D<float4> tLightScattering : register(t4);
+RWTexture3D<float4> uOutLightScattering : register(u0);
+
+float HGPhase(float VdotL, float g)
+{
+    float denom = 1.0f - sqrt(g);
+    float div = (1.0f + sqrt(g)) + ((2.0f * g) * (-VdotL));
+    return denom / ((12.566370964 * div) * sqrt(div));
+}
+
+float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
+{
+    float3 normal = float3(0.0f, 0.0f, 1.0f);
+    float t = depth / dot(normal, lineFromOrigin);
+    return t * lineFromOrigin;
+}
 
 [RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 {
-    float nearPlane = 0.1f;
-    float farPlane = 100.0f;
+    // caculate light scattering for the froxel at threadId(3D grid cell in view space)
 
     // compute the sample point inside the froxel. Jittered
     float2 texelUV = (threadId.xy + 0.5f) * cData.InvClusterDimensions.xy;
-    float sliceMinZ = threadId.z * cData.InvClusterDimensions.z;
-    float minLinearZ = sliceMinZ * (farPlane - nearPlane);
-    float sliceMaxZ = (threadId.z + 1) * cData.InvClusterDimensions.z;
-    float maxLinearZ = sliceMaxZ * (farPlane - nearPlane);
-    float sliceThickness = sliceMaxZ - sliceMinZ;
 
-    float3 worldPosition = WorldFromDepth(texelUV, (minLinearZ + maxLinearZ) * 0.5f, cData.ViewProjectionInv);
+    // compute linear depth from cluster z slice
+    float minZ = (float)threadId.z * cData.InvClusterDimensions.z;
+    float maxZ = (float)(threadId.z + 1) * cData.InvClusterDimensions.z;
+    float minLinearZ = cData.FarZ + minZ * (cData.NearZ - cData.FarZ);
+    float maxLinearZ = cData.FarZ + maxZ * (cData.NearZ - cData.FarZ);
 
-    worldPosition = float3(texelUV * 200 - 100, 0);
+    // reconstruct world position at the center of the froxel
+    float3 viewRay = ViewFromDepth(texelUV, 1.0f, cData.ProjectionInv);
+    float3 vPos = LineFromOriginZIntersection(viewRay, lerp(minLinearZ, maxLinearZ, 0.5f));
+    float3 worldPosition = mul(float4(vPos, 1), cData.ViewInv).xyz;
 
     // calculate Density based on the fog volumes
-    float cellDensity = 0.0f;
+    float cellThickness = maxLinearZ - minLinearZ;
+    float cellDensity = 0.1f;
     float3 cellAbsorption = 0.0f;
     float densityVariation = 0.0f;
+    float3 lightScattering = 0;
 
+    // density variation based on noise. Fractional Brownian Motion
     float3 p = floor(worldPosition * 1.0f);
     float3 f = frac(worldPosition * 1.0f);
     f = (f * f) * (3.0f - (f * 2.0f));
@@ -78,7 +103,79 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     densityVariation /= 30.0f;
 
     // iterate over all the lights and light the froxel
+    float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
+    float4 pos = float4(texelUV, 0, (minLinearZ + maxLinearZ) * 0.5f);
 
+    for (int i = 0; i < cData.NumLights; i++)
+    {
+        Light light = tLights[i];
+        float attenuation = GetAttenuation(light, worldPosition);
+        if (attenuation <= 0.0f)
+        {
+            continue;
+        }
 
-    uOutputTexture[threadId] = float3(densityVariation, 0, 0);
+        if (light.ShadowIndex >= 0)
+        {
+            int shadowIndex = GetShadowIndex(light, pos, worldPosition);
+            attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
+        }
+
+        float3 L = normalize(worldPosition - light.Position);
+        if (light.Type == LIGHT_DIRECTIONAL)
+        {
+            L = -light.Direction;
+        }
+        float VdotL = dot(V, L);
+        float4 lightColor = light.GetColor() * light.Intensity;
+
+        lightScattering += attenuation * lightColor.rgb * HenyeyGreestein(-VdotL);
+    }
+
+    uOutLightScattering[threadId] = float4(lightScattering, cellDensity);
+}
+
+groupshared uint gsMaxDepth;
+
+[RootSignature(RootSig)]
+[numthreads(8, 8, 1)]
+void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_GROUPINDEX)
+{
+    // accumulates fog along view rays from camera to scene depth
+
+    float2 texCoord = threadId.xy * cData.InvClusterDimensions.xy;
+    float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
+
+    if (groupIndex == 0)
+    {
+        gsMaxDepth = 0xffffffff;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    InterlockedMin(gsMaxDepth, asuint(depth));
+
+    GroupMemoryBarrierWithGroupSync();
+
+    float maxDepth = asfloat(gsMaxDepth);
+
+    uint lastSlice = cData.ClusterDimensions.z;
+
+    float3 lightScattering = 0;
+    float cellDensity = 0.0f;
+    float transmittance = 1.0f;
+
+    // each tiny slice of fog blocks a proportional amount of light. such as first slice blocks 10%, next slice blocks 10% of remaining 90
+    uOutLightScattering[int3(threadId.xy, 0)] = float4(lightScattering, transmittance);
+
+    for (int sliceIndex = 1; sliceIndex < lastSlice; sliceIndex++)
+    {
+        float4 scatteringDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
+        lightScattering += scatteringDensity.xyz * transmittance;
+        cellDensity += scatteringDensity.w;
+        // Beer's Law Transmittance. descries how light intensity decreases at it passes through a medium
+        // T = e^(-μ × d)  μ: extinction coefficient, d: distance traveled through the medium
+        transmittance = saturate(exp(-cellDensity));
+        uOutLightScattering[int3(threadId.xy, sliceIndex)] = float4(lightScattering, transmittance);
+    }
 }

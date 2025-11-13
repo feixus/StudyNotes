@@ -91,7 +91,7 @@ void Graphics::Initialize(HWND hWnd)
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetPosition(Vector3(0, 100, -15));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4, 0));
-	m_pCamera->SetNewPlane(500.f);
+	m_pCamera->SetNearPlane(300.f);
 	m_pCamera->SetFarPlane(10.f);
 
 	InitD3D();
@@ -1679,21 +1679,31 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 		Light sunLight = Light::Directional(position, -direction, 10.0f);
 		sunLight.CastShadows = true;
-		sunLight.VolumetricLighting = true;
+		sunLight.VolumetricLighting = false;
 		m_Lights.push_back(sunLight);
 
-		Vector3 spotLocation[] = {
-			Vector3(62, 10, -18),
-			Vector3(-48, 10, 18),
-			Vector3(-48, 10, -18),
-			Vector3(62, 10, 18)
-		};
-		for (int i = 0; i < std::size(spotLocation); i++)
+		if (0)
 		{
-			Light spotLight = Light::Spot(spotLocation[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-			spotLight.CastShadows = true;
-			spotLight.VolumetricLighting = false;
-			m_Lights.push_back(spotLight);
+			Vector3 spotLocation[] = {
+				Vector3(62, 10, -18),
+				Vector3(-48, 10, 18),
+				Vector3(-48, 10, -18),
+				Vector3(62, 10, 18)
+			};
+
+			for (int i = 0; i < std::size(spotLocation); i++)
+			{
+				Light spotLight = Light::Spot(spotLocation[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+				spotLight.CastShadows = true;
+				spotLight.VolumetricLighting = false;
+				m_Lights.push_back(spotLight);
+			}
+		}
+		else
+		{
+			Light pointLight = Light::Point(Vector3(0, 20, 0), 150, 1000, Color(1, 0, 1, 1));
+			pointLight.CastShadows = true;
+			m_Lights.push_back(pointLight);
 		}
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");

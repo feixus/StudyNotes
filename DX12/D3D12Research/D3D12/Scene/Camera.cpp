@@ -38,7 +38,7 @@ void Camera::SetOrthographic(bool orthographic, float size)
     OnDirty();
 }
 
-void Camera::SetNewPlane(float nearPlane)
+void Camera::SetNearPlane(float nearPlane)
 {
     m_NearPlane = nearPlane;
     OnDirty();
