@@ -124,6 +124,11 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     for (int i = 0; i < cData.NumLights; i++)
     {
         Light light = tLights[i];
+        if (light.VolumetricLighting <= 0)
+        {
+            continue;
+        }
+
         float attenuation = GetAttenuation(light, worldPosition);
         if (attenuation <= 0.0f)
         {
@@ -147,7 +152,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
         totalScattering += attenuation * lightColor.rgb * HGPhase(-VdotL, 0.5f);
     }
 
-    totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.001f);
+    //totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.001f);
 
     float4 prevScattering = tLightScattering[threadId];
     float4 newScattering = float4(lightScattering * totalScattering, cellDensity);

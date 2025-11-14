@@ -271,6 +271,7 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
+	std::unique_ptr<GraphicsTexture> m_pLightCookie;
 	std::array<std::unique_ptr<GraphicsTexture>, (int)DefaultTexture::MAX> m_DefaultTextures;
 
 	std::unique_ptr<GraphicsTexture> m_pMultiSampleRenderTarget;

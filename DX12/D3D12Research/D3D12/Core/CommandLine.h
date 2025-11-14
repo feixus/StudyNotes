@@ -6,7 +6,8 @@ public:
     // -DebugShaders
     static bool Parse(const char* pCommandLine);
 
-    static bool GetBool(const std::string& parameter);
+	static bool GetInt(const std::string& name, int& value, int defaultValue = 0);
+	static bool GetBool(const std::string& parameter);
     static const std::string& Get() { return m_CommandLine;}
 
 private:
