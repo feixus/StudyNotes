@@ -91,7 +91,7 @@ namespace Paths
 
     std::string SavedDir()
     {
-        return GameDir() + "Save/";
+        return GameDir() + "Saved/";
     }
 
     std::string ScreenshotDir()

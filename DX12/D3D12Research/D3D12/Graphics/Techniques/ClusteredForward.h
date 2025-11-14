@@ -93,7 +93,7 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pVisualizeIntermediateTexture;
 
     // volumetric fog
-    std::unique_ptr<GraphicsTexture> m_pLightScatteringVolume;
+    std::unique_ptr<GraphicsTexture> m_pLightScatteringVolume[2];
     std::unique_ptr<GraphicsTexture> m_pFinalVolumeFog;
     std::unique_ptr<RootSignature> m_pVolumetricLightingRS;
     PipelineState* m_pInjectVolumeLightPSO{nullptr};

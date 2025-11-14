@@ -28,7 +28,9 @@
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
 #include "Content/image.h"
+#include "Core/Paths.h"
 #include "StateObject.h"
+#include "External/ImGuizmo/ImGuizmo.h"
 
 #ifndef D3D_VALIDATION
 #define D3D_VALIDATION 1
@@ -104,6 +106,90 @@ void Graphics::Initialize(HWND hWnd)
 	m_pDynamicAllocationManager->CollectGrabage();
 }
 
+void EditTransform(const Camera& camera, Matrix& matrix)
+{
+	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
+	static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
+
+	if (!Input::Instance().IsMouseDown(VK_LBUTTON))
+	{
+		if (Input::Instance().IsKeyPressed('W'))
+			mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+		else if (Input::Instance().IsKeyPressed('E'))
+			mCurrentGizmoOperation = ImGuizmo::ROTATE;
+		else if (Input::Instance().IsKeyPressed('R'))
+			mCurrentGizmoOperation = ImGuizmo::SCALE;
+	}
+
+	if (ImGui::RadioButton("Translate", mCurrentGizmoOperation == ImGuizmo::TRANSLATE))
+	{
+		mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+	}
+	if (ImGui::RadioButton("Rotate", mCurrentGizmoOperation == ImGuizmo::ROTATE))
+	{
+		mCurrentGizmoOperation = ImGuizmo::ROTATE;
+	}
+	if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
+	{
+		mCurrentGizmoOperation = ImGuizmo::SCALE;
+	}
+
+	float matrixTranslate[3], matrixRotation[3], matrixScale[3];
+	ImGuizmo::DecomposeMatrixToComponents(&matrix.m[0][0], matrixTranslate, matrixRotation, matrixScale);
+	ImGui::InputFloat3("Tr", matrixTranslate);
+	ImGui::InputFloat3("Rt", matrixRotation);
+	ImGui::InputFloat3("Sc", matrixScale);
+	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslate, matrixRotation, matrixScale, &matrix.m[0][0]);
+
+	if (mCurrentGizmoMode != ImGuizmo::SCALE)
+	{
+		if (ImGui::RadioButton("Local", mCurrentGizmoMode == ImGuizmo::LOCAL))
+		{
+			mCurrentGizmoMode = ImGuizmo::LOCAL;
+		}
+		ImGui::SameLine();
+		if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
+		{
+			mCurrentGizmoMode = ImGuizmo::WORLD;
+		}
+
+		if (Input::Instance().IsKeyPressed(VK_SPACE))
+		{
+			mCurrentGizmoMode = mCurrentGizmoMode == ImGuizmo::LOCAL ? ImGuizmo::WORLD : ImGuizmo::LOCAL;
+		}
+	}
+
+	static Vector3 translationSnap = Vector3(1);
+	static float rotateSnap = 5;
+	static float scaleSnap = 0.1f;
+	float* pSnapValue = &translationSnap.x;
+
+	switch (mCurrentGizmoOperation)
+	{
+	case ImGuizmo::TRANSLATE:
+		ImGui::InputFloat3("Snap", &translationSnap.x);
+		pSnapValue = &translationSnap.x;
+		break;
+	case ImGuizmo::ROTATE:
+		ImGui::InputFloat("Angle Snap", &rotateSnap);
+		pSnapValue = &rotateSnap;
+		break;
+	case ImGuizmo::SCALE:
+		ImGui::InputFloat("Scale Snap", &scaleSnap);
+		pSnapValue = &scaleSnap;
+		break;
+	}
+
+	ImGuiIO& io = ImGui::GetIO();
+	ImGuizmo::SetRect(0, 0, (float)io.DisplaySize.x, (float)io.DisplaySize.y);
+	Matrix view = camera.GetView();
+	Matrix projection = camera.GetProjection();
+	Math::ReverseZProjection(projection);
+	ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], mCurrentGizmoOperation, mCurrentGizmoMode, &matrix.m[0][0], nullptr, pSnapValue);
+}
+
+Matrix spotMatrix = Matrix::CreateScale(100.0f, 0.2f, 1) * Matrix::CreateFromYawPitchRoll(0.1f, 0, 0) * Matrix::CreateTranslation(0, 10, 0);
+
 void Graphics::Update()
 {
 	PROFILE_BEGIN("Update");
@@ -113,6 +199,14 @@ void Graphics::Update()
 	PROFILE_BEGIN("UpdateGameState");
 
 	m_pShaderManager->ConditionallyReloadShaders();
+
+	EditTransform(*m_pCamera, spotMatrix);
+	Vector3 scale, position;
+	Quaternion rotation;
+	spotMatrix.Decompose(scale, rotation, position);
+	m_Lights[1].Range = scale.x;
+	m_Lights[1].Position = position;
+	m_Lights[1].Direction = spotMatrix.Forward();
 
 	m_pCamera->Update();
 
@@ -441,7 +535,8 @@ void Graphics::Update()
 				GetTimeFormat(LOCALE_INVARIANT, TIME_FORCE24HOURFORMAT, &time, "hh_mm_ss", stringTarget, 128);
 
 				char filePath[256];
-				sprintf_s(filePath, "Screenshot_%1s.jpg", stringTarget);
+				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
+				sprintf_s(filePath, "%sScreenshot_%1s.jpg", Paths::ScreenshotDir().c_str(), stringTarget);
 				img.Save(filePath);
 
 				m_pScreenshotBuffer.reset();
@@ -1633,6 +1728,8 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<GraphicsTexture>(this, "Color Noise 256px");
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/noise.png", false);
+	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<GraphicsTexture>(this, "Blue Noise 512px");
+	m_DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise512.png", false);
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();	
@@ -1699,11 +1796,11 @@ void Graphics::InitializeAssets(CommandContext& context)
 				m_Lights.push_back(spotLight);
 			}
 		}
-		else
+		if (1)
 		{
-			Light pointLight = Light::Point(Vector3(0, 20, 0), 150, 1000, Color(1, 0, 1, 1));
-			pointLight.CastShadows = true;
-			m_Lights.push_back(pointLight);
+			Light spotLight = Light::Spot(Vector3(), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+			spotLight.CastShadows = true;
+			m_Lights.push_back(spotLight);
 		}
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");

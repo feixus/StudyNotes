@@ -48,13 +48,14 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
     m_pDebugLightGrid->Create(BufferDesc::CreateStructured(m_MaxClusters, 2 * sizeof(uint32_t)));
 
 	uint32_t froxelSize = 8;
-	uint32_t numDepthFroxels = 64;
+	uint32_t numDepthFroxels = 128;
 	TextureDesc volumeDesc = TextureDesc::Create3D(Math::DivideAndRoundUp(windowWidth, froxelSize),
 		Math::DivideAndRoundUp(windowHeight, froxelSize),
 		numDepthFroxels,
 		DXGI_FORMAT_R16G16B16A16_FLOAT,
 		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
-    m_pLightScatteringVolume->Create(volumeDesc);
+	m_pLightScatteringVolume[0]->Create(volumeDesc);
+	m_pLightScatteringVolume[1]->Create(volumeDesc);
 	m_pFinalVolumeFog->Create(volumeDesc);
 
     m_ViewportDirty = true;
@@ -258,111 +259,133 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), 1, m_pIndirectArguments.get(), nullptr);
     });
 
-	RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volumetric Lights");
-	injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResource& passResource)
-		{
-			context.InsertResourceBarrier(m_pLightScatteringVolume.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	{
+		RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
-			context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
-			context.SetPipelineState(m_pInjectVolumeLightPSO);
+		GraphicsTexture* pSourceVolume = m_pLightScatteringVolume[inputResource.FrameIndex % 2].get();
+		GraphicsTexture* pDestinationVolume = m_pLightScatteringVolume[(inputResource.FrameIndex + 1) % 2].get();
 
-			struct ShaderData
+        Matrix premult = {
+            2, 0, 0, 0,
+            0, -2, 0, 0,
+            0, 0, 1, 0,
+            -1, 1, 0, 1
+        };
+
+        Matrix postmult = {
+            0.5f, 0, 0, 0,
+            0, -0.5f, 0, 0,
+            0, 0, 1, 0,
+            0.5f, 0.5f, 0, 1
+        };
+        Matrix reprojectionMatrix = inputResource.pCamera->GetViewProjection().Invert() * inputResource.pCamera->GetPreviousViewProjection();
+
+        typedef struct ShaderData
+        {
+            IntVector3 ClusterDimensions;
+            int NoiseTexture;
+            Vector3 InvClusterDimensions;
+            int NumLights;
+            Matrix ViewProjectionInv;
+            Matrix ProjectionInv;
+            Matrix ViewInv;
+            float NearZ;
+            float FarZ;
+            int FrameIndex;
+            float Jitter;
+            Matrix ReprojectionMatrix;
+        }ShaderData;
+
+		RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volumetric Lights");
+		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResource& passResource)
 			{
-				IntVector3 ClusterDimensions;
-				int NoiseTexture;
-				Vector3 InvClusterDimensions;
-				int NumLights;
-				Matrix ViewProjectionInv;
-				Matrix ProjectionInv;
-				Matrix ViewInv;
-				float NearZ;
-				float FarZ;
-			} constantBuffer{};
+				context.InsertResourceBarrier(pSourceVolume, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(pDestinationVolume, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			constantBuffer.ClusterDimensions = IntVector3(m_pLightScatteringVolume->GetWidth(), m_pLightScatteringVolume->GetHeight(), m_pLightScatteringVolume->GetDepth());
-			constantBuffer.InvClusterDimensions = Vector3(1.0f / constantBuffer.ClusterDimensions.x, 1.0f / constantBuffer.ClusterDimensions.y, 1.0f / constantBuffer.ClusterDimensions.z);
-			constantBuffer.NoiseTexture = m_pGraphics->RegisterBindlessResource((m_pGraphics->GetDefaultTexture(DefaultTexture::ColorNoise256)));
-			constantBuffer.ViewInv = inputResource.pCamera->GetViewInverse();
-			constantBuffer.ProjectionInv = inputResource.pCamera->GetProjectionInverse();
-			constantBuffer.ViewProjectionInv = inputResource.pCamera->GetProjectionInverse() * inputResource.pCamera->GetViewInverse();
-			constantBuffer.NumLights = inputResource.pLightBuffer->GetNumElements();
-			constantBuffer.NearZ = inputResource.pCamera->GetNear();
-			constantBuffer.FarZ = inputResource.pCamera->GetFar();
+				context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
+				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
-				inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
-				inputResource.pAO->GetSRV()->GetDescriptor(),
-				inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
-			};
+				ShaderData constantBuffer{};
+				constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
+				constantBuffer.InvClusterDimensions = Vector3(1.0f / constantBuffer.ClusterDimensions.x, 1.0f / constantBuffer.ClusterDimensions.y, 1.0f / constantBuffer.ClusterDimensions.z);
+				constantBuffer.NoiseTexture = m_pGraphics->RegisterBindlessResource((m_pGraphics->GetDefaultTexture(DefaultTexture::ColorNoise256)));
+				constantBuffer.ViewInv = inputResource.pCamera->GetViewInverse();
+				constantBuffer.ProjectionInv = inputResource.pCamera->GetProjectionInverse();
+				constantBuffer.ViewProjectionInv = inputResource.pCamera->GetProjectionInverse() * inputResource.pCamera->GetViewInverse();
+				constantBuffer.NumLights = inputResource.pLightBuffer->GetNumElements();
+				constantBuffer.NearZ = inputResource.pCamera->GetNear();
+				constantBuffer.FarZ = inputResource.pCamera->GetFar();
+                constantBuffer.FrameIndex = inputResource.FrameIndex;
+                constantBuffer.Jitter = Math::HaltonSequence<32, 3>()[inputResource.FrameIndex % 32];
+                constantBuffer.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 
-			context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ShaderData));
-			context.SetComputeDynamicConstantBufferView(1, inputResource.pShadowData, sizeof(ShadowData));
-			context.BindResource(2, 0, m_pLightScatteringVolume->GetUAV());
-			context.BindResources(3, 0, srvs, std::size(srvs));
-			context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
+				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
+					inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
+					inputResource.pAO->GetSRV()->GetDescriptor(),
+					inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
+				};
 
-			context.Dispatch(
-				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetWidth(), 8),
-				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetHeight(), 8),
-				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetDepth(), 4));
-		});
+				context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ShaderData));
+				context.SetComputeDynamicConstantBufferView(1, inputResource.pShadowData, sizeof(ShadowData));
+				context.BindResource(2, 0, pDestinationVolume->GetUAV());
+				context.BindResources(3, 0, srvs, std::size(srvs));
+				context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
-	RGPassBuilder accumulateFog = graph.AddPass("Accumulate Scattering");
-	accumulateFog.Bind([=](CommandContext& context, const RGPassResource& passResource)
-		{
-			context.InsertResourceBarrier(m_pLightScatteringVolume.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pFinalVolumeFog.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.Dispatch(
+					Math::DivideAndRoundUp(pDestinationVolume->GetWidth(), 8),
+					Math::DivideAndRoundUp(pDestinationVolume->GetHeight(), 8),
+					Math::DivideAndRoundUp(pDestinationVolume->GetDepth(), 4));
+			});
 
-			context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
-			context.SetPipelineState(m_pAccumulateVolumeLightPSO);
+        RGPassBuilder accumulateFog = graph.AddPass("Accumulate Volume Fog");
+        accumulateFog.Bind([=](CommandContext& context, const RGPassResource& passResource)
+            {
+                context.InsertResourceBarrier(pDestinationVolume, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                context.InsertResourceBarrier(m_pFinalVolumeFog.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			float values[] = { 0, 0, 0, 0 };
-			context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
+                context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
+                context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
-			struct ShaderData
-			{
-				IntVector3 ClusterDimensions;
-				int NoiseTexture;
-				Vector3 InvClusterDimensions;
-				int NumLights;
-				Matrix ViewProjectionInv;
-				Matrix ProjectionInv;
-				Matrix ViewInv;
-				float NearZ;
-				float FarZ;
-			} constantBuffer{};
+                float values[] = { 0, 0, 0, 0 };
+                context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
 
-			constantBuffer.ClusterDimensions = IntVector3(m_pLightScatteringVolume->GetWidth(), m_pLightScatteringVolume->GetHeight(), m_pLightScatteringVolume->GetDepth());
-			constantBuffer.InvClusterDimensions = Vector3(1.0f / constantBuffer.ClusterDimensions.x, 1.0f / constantBuffer.ClusterDimensions.y, 1.0f / constantBuffer.ClusterDimensions.z);
-			constantBuffer.NoiseTexture = m_pGraphics->RegisterBindlessResource((m_pGraphics->GetDefaultTexture(DefaultTexture::ColorNoise256)));
-			constantBuffer.ViewInv = inputResource.pCamera->GetViewInverse();
-			constantBuffer.ProjectionInv = inputResource.pCamera->GetProjectionInverse();
-			constantBuffer.ViewProjectionInv = inputResource.pCamera->GetProjectionInverse() * inputResource.pCamera->GetViewInverse();
-			constantBuffer.NumLights = inputResource.pLightBuffer->GetNumElements();
-			constantBuffer.NearZ = inputResource.pCamera->GetNear();
-			constantBuffer.FarZ = inputResource.pCamera->GetFar();
+                ShaderData constantBuffer{};
+                constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
+                constantBuffer.InvClusterDimensions = Vector3(1.0f / constantBuffer.ClusterDimensions.x, 1.0f / constantBuffer.ClusterDimensions.y, 1.0f / constantBuffer.ClusterDimensions.z);
+                constantBuffer.NoiseTexture = m_pGraphics->RegisterBindlessResource((m_pGraphics->GetDefaultTexture(DefaultTexture::ColorNoise256)));
+                constantBuffer.ViewInv = inputResource.pCamera->GetViewInverse();
+                constantBuffer.ProjectionInv = inputResource.pCamera->GetProjectionInverse();
+                constantBuffer.ViewProjectionInv = inputResource.pCamera->GetProjectionInverse() * inputResource.pCamera->GetViewInverse();
+                constantBuffer.NumLights = inputResource.pLightBuffer->GetNumElements();
+                constantBuffer.NearZ = inputResource.pCamera->GetNear();
+                constantBuffer.FarZ = inputResource.pCamera->GetFar();
+                constantBuffer.FrameIndex = inputResource.FrameIndex;
+                constantBuffer.Jitter = Math::HaltonSequence<32, 3>()[inputResource.FrameIndex % 32];
+                constantBuffer.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
+                
+                D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+                    pDestinationVolume->GetSRV()->GetDescriptor(),
+                    inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
+                    inputResource.pAO->GetSRV()->GetDescriptor(),
+                    inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
+                };
 
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				m_pLightScatteringVolume->GetSRV()->GetDescriptor(),
-				inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
-				inputResource.pAO->GetSRV()->GetDescriptor(),
-				inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
-			};
+                context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ShaderData));
+                context.SetComputeDynamicConstantBufferView(1, inputResource.pShadowData, sizeof(ShadowData));
+                context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
+                context.BindResources(3, 0, srvs, std::size(srvs));
+                context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
-			context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ShaderData));
-			context.SetComputeDynamicConstantBufferView(1, inputResource.pShadowData, sizeof(ShadowData));
-			context.BindResource(2, 0, m_pLightScatteringVolume->GetUAV());
-			context.BindResources(3, 0, srvs, std::size(srvs));
-			context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
+                context.Dispatch(
+                    Math::DivideAndRoundUp(pDestinationVolume->GetWidth(), 8),
+                    Math::DivideAndRoundUp(pDestinationVolume->GetHeight(), 8),
+                    1);
+            });
 
-			context.Dispatch(
-				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetWidth(), 8),
-				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetHeight(), 8),
-				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetDepth(), m_pFinalVolumeFog->GetDepth()));
-		});
+            m_pGraphics->SetVisualize(m_pFinalVolumeFog.get());
+	}
 
-	m_pGraphics->SetVisualize(m_pFinalVolumeFog.get());
     
     RGPassBuilder basePass = graph.AddPass("Base Pass");
     basePass.Bind([=](CommandContext& context, const RGPassResource& passResources)
@@ -629,7 +652,8 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
     m_pLightGrid = std::make_unique<Buffer>(pGraphics, "Light Grid");
     m_pDebugLightGrid = std::make_unique<Buffer>(pGraphics, "Debug Light Grid");
 
-	m_pLightScatteringVolume = std::make_unique<GraphicsTexture>(pGraphics, "Light Scattering Volume");
+	m_pLightScatteringVolume[0] = std::make_unique<GraphicsTexture>(pGraphics, "Light Scattering Volume");
+	m_pLightScatteringVolume[1] = std::make_unique<GraphicsTexture>(pGraphics, "Light Scattering Volume");
 	m_pFinalVolumeFog = std::make_unique<GraphicsTexture>(pGraphics, "Final Light Scattering Volume");
 
     CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);

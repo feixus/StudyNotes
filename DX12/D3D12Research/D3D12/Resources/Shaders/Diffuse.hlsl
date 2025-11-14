@@ -315,6 +315,6 @@ void PSMain(PSInput input,
 
     outColor = float4(color, baseColor.a);
 
-    float reflectivity = ao * saturate(pow(1.0f - saturate(dot(V, N)), 5.0f));
+    float reflectivity = scatteringTransmittance.w * ao * saturate(pow(1.0f - saturate(dot(V, N)), 5.0f));
     outNormalRoughness = float4(N, reflectivity);
 }

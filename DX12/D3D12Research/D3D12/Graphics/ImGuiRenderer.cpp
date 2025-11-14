@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "ImGuiRenderer.h"
 #include "Core/Input.h"
+#include "Core/Paths.h"
 #include "Profiler.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Graphics/Core/CommandContext.h"
@@ -45,6 +46,10 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 	ImGui::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO();
+
+	Paths::CreateDirectoryTree(Paths::SavedDir());
+	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
+	io.IniFilename = imguiPath.c_str();
 
 	ImFontConfig fontConfig;
 	fontConfig.OversampleH = 2;

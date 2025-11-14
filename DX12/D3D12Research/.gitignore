@@ -8,6 +8,6 @@ Build
 *.user
 *.vscode
 *.pdb
-imgui.ini
 _Temp/
 Screenshot*
+Saved

@@ -23,6 +23,9 @@ struct ShaderData
     float4x4 ViewInv;
     float NearZ;
     float FarZ;
+    int FrameIndex;
+    float Jitter;
+    float4x4 ReprojectionMatrix;
 };
 
 ConstantBuffer<ShaderData> cData : register(b0);
@@ -44,6 +47,12 @@ float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
     return t * lineFromOrigin;
 }
 
+float sdBox(float3 p, float3 b)
+{
+    float3 q = abs(p) - b;
+    return length(max(q, 0.0f)) + min(max(q.x, max(q.y, q.z)), 0.0f);
+}
+
 [RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
@@ -59,17 +68,21 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     float minLinearZ = cData.FarZ + minZ * (cData.NearZ - cData.FarZ);
     float maxLinearZ = cData.FarZ + maxZ * (cData.NearZ - cData.FarZ);
 
+    float z = lerp(minLinearZ, maxLinearZ, cData.Jitter);
+
     // reconstruct world position at the center of the froxel
     float3 viewRay = ViewFromDepth(texelUV, 1.0f, cData.ProjectionInv);
-    float3 vPos = LineFromOriginZIntersection(viewRay, lerp(minLinearZ, maxLinearZ, 0.5f));
+    float3 vPos = LineFromOriginZIntersection(viewRay, z);
     float3 worldPosition = mul(float4(vPos, 1), cData.ViewInv).xyz;
 
     // calculate Density based on the fog volumes
     float cellThickness = maxLinearZ - minLinearZ;
-    float cellDensity = 0.1f;
     float3 cellAbsorption = 0.0f;
     float densityVariation = 0.0f;
-    float3 lightScattering = 0;
+
+    float volumeAttenuation = saturate(1 - sdBox(worldPosition, float3(200, 100, 200)));
+    float3 lightScattering = 0.5 * volumeAttenuation;
+    float cellDensity = 0.05f * volumeAttenuation;
 
     // density variation based on noise. Fractional Brownian Motion
     float3 p = floor(worldPosition * 1.0f);
@@ -104,7 +117,9 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 
     // iterate over all the lights and light the froxel
     float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
-    float4 pos = float4(texelUV, 0, (minLinearZ + maxLinearZ) * 0.5f);
+    float4 pos = float4(texelUV, 0, z);
+
+    float3 totalScattering = 0.0f;
 
     for (int i = 0; i < cData.NumLights; i++)
     {
@@ -121,7 +136,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
             attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
         }
 
-        float3 L = normalize(worldPosition - light.Position);
+        float3 L = normalize(light.Position - worldPosition);
         if (light.Type == LIGHT_DIRECTIONAL)
         {
             L = -light.Direction;
@@ -129,10 +144,15 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
         float VdotL = dot(V, L);
         float4 lightColor = light.GetColor() * light.Intensity;
 
-        lightScattering += attenuation * lightColor.rgb * HenyeyGreestein(-VdotL);
+        totalScattering += attenuation * lightColor.rgb * HGPhase(-VdotL, 0.5f);
     }
 
-    uOutLightScattering[threadId] = float4(lightScattering, cellDensity);
+    totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.001f);
+
+    float4 prevScattering = tLightScattering[threadId];
+    float4 newScattering = float4(lightScattering * totalScattering, cellDensity);
+
+    uOutLightScattering[threadId] = lerp(prevScattering, newScattering, 0.05f);
 }
 
 groupshared uint gsMaxDepth;
@@ -158,8 +178,7 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
     GroupMemoryBarrierWithGroupSync();
 
     float maxDepth = asfloat(gsMaxDepth);
-
-    uint lastSlice = cData.ClusterDimensions.z;
+    uint lastSlice = (1 - maxDepth) * cData.ClusterDimensions.z;
 
     float3 lightScattering = 0;
     float cellDensity = 0.0f;
