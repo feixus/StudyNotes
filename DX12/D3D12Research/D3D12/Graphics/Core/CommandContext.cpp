@@ -704,7 +704,7 @@ void CommandContext::SetComputeRootConstants(int rootIndex, uint32_t count, cons
 	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
 }
 
-void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize)
+void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);

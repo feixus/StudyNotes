@@ -10,47 +10,59 @@
         GLOBAL_BINDLESS_TABLE \
         "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP), " \
         "StaticSampler(s1, filter = FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
-        "StaticSampler(s2, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc = COMPARISON_GREATER) "
+        "StaticSampler(s2, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc = COMPARISON_GREATER), " \
+        "StaticSampler(s3, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)"
 
 struct ShaderData
 {
-    int3 ClusterDimensions;
-    int NoiseTexture;
-    float3 InvClusterDimensions;
-    int NumLights;
     float4x4 ViewProjectionInv;
-    float4x4 ProjectionInv;
-    float4x4 ViewInv;
+    float4x4 Projection;
+    float4x4 PrevViewProjection;
+    int3 ClusterDimensions;
+    int NumLights;
+    float3 InvClusterDimensions;
     float NearZ;
+    float3 ViewLocation;
     float FarZ;
-    int FrameIndex;
     float Jitter;
-    float4x4 ReprojectionMatrix;
 };
+
+SamplerState sVolumeSampler : register(s3);
 
 ConstantBuffer<ShaderData> cData : register(b0);
 
 Texture3D<float4> tLightScattering : register(t4);
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
-float HGPhase(float VdotL, float g)
+// volumetric scattering - Henyey-Greenstein phase function
+//      phase function describes the angular distribution of scattered light.
+//      g = 0: isotropic scattering, light scatters equally in all directions.
+//      g > 0: forward scattering, light tends to scatter in the direction of the incoming light.
+//      g < 0: backward scattering, light tends to scatter opposite to the direction of the incoming light.
+// https://pbr-book.org/3ed-2018/Volume_Scattering/Phase_Functions
+//                    1 - g²
+//    P(θ) = ─────────────────────────
+//            4π(1 + g² - 2g·cosθ)^(3/2)
+float HenyeyGreestein(float LoV, float G)
 {
-    float denom = 1.0f - sqrt(g);
-    float div = (1.0f + sqrt(g)) + ((2.0f * g) * (-VdotL));
-    return denom / ((12.566370964 * div) * sqrt(div));
+    float result = 1.0f - G * G;
+    result /= (4.0f * PI * pow(1.0f + G * G - (2.0f * G) * LoV, 1.5f));
+    return result;
 }
 
-float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
+float3 WorldPositionFromFroxel(uint3 index, float offset, out float linearDepth)
 {
-    float3 normal = float3(0.0f, 0.0f, 1.0f);
-    float t = depth / dot(normal, lineFromOrigin);
-    return t * lineFromOrigin;
+    float2 texelUV = ((float2)index.xy + 0.5f) * cData.InvClusterDimensions.xy;
+    float z = (float)(index.z + offset) * cData.InvClusterDimensions.z;
+    linearDepth = cData.FarZ + Square(saturate(z)) * (cData.NearZ - cData.FarZ);
+    float ndcZ = LinearDepthToNDC(linearDepth, cData.Projection);
+    return WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
 }
 
-float sdBox(float3 p, float3 b)
+float3 WorldPositionFromFroxel(uint3 index, float offset)
 {
-    float3 q = abs(p) - b;
-    return length(max(q, 0.0f)) + min(max(q.x, max(q.y, q.z)), 0.0f);
+    float depth;
+    return WorldPositionFromFroxel(index, offset, depth);
 }
 
 [RootSignature(RootSig)]
@@ -59,68 +71,33 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 {
     // caculate light scattering for the froxel at threadId(3D grid cell in view space)
 
-    // compute the sample point inside the froxel. Jittered
-    float2 texelUV = (threadId.xy + 0.5f) * cData.InvClusterDimensions.xy;
+    float z;
+    float3 worldPosition = WorldPositionFromFroxel(threadId, cData.Jitter, z);
 
-    // compute linear depth from cluster z slice
-    float minZ = (float)threadId.z * cData.InvClusterDimensions.z;
-    float maxZ = (float)(threadId.z + 1) * cData.InvClusterDimensions.z;
-    float minLinearZ = cData.FarZ + minZ * (cData.NearZ - cData.FarZ);
-    float maxLinearZ = cData.FarZ + maxZ * (cData.NearZ - cData.FarZ);
+    // compute reprojected UVW
+    float3 reprojWorldPosition = WorldPositionFromFroxel(threadId, 0.5f);
+    float4 reprojNDC = mul(float4(reprojWorldPosition, 1), cData.PrevViewProjection);
+    reprojNDC.xyz /= reprojNDC.w;
+    float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
+    reprojUV.z = LinearizeDepth(reprojUV.z, cData.NearZ, cData.FarZ);
+    reprojUV.z = sqrt((reprojUV.z - cData.FarZ) / (cData.NearZ - cData.FarZ));
 
-    float z = lerp(minLinearZ, maxLinearZ, cData.Jitter);
-
-    // reconstruct world position at the center of the froxel
-    float3 viewRay = ViewFromDepth(texelUV, 1.0f, cData.ProjectionInv);
-    float3 vPos = LineFromOriginZIntersection(viewRay, z);
-    float3 worldPosition = mul(float4(vPos, 1), cData.ViewInv).xyz;
-
-    // calculate Density based on the fog volumes
-    float cellThickness = maxLinearZ - minLinearZ;
     float3 cellAbsorption = 0.0f;
-    float densityVariation = 0.0f;
 
-    float volumeAttenuation = saturate(1 - sdBox(worldPosition, float3(200, 100, 200)));
-    float3 lightScattering = 0.5 * volumeAttenuation;
-    float cellDensity = 0.05f * volumeAttenuation;
+    // test exponential height fog
+    float fogVolumeMaxHeight = 300.0f;
+    float densityAtBase = 0.03f;
+    float heightAbsorption = exp(min(0.0f, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
+    float3 lightScattering = heightAbsorption;
+    float cellDensity = 0.05 * heightAbsorption;
 
-    // density variation based on noise. Fractional Brownian Motion
-    float3 p = floor(worldPosition * 1.0f);
-    float3 f = frac(worldPosition * 1.0f);
-    f = (f * f) * (3.0f - (f * 2.0f));
-    float2 uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
-    float2 rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
-    densityVariation += (lerp(rg.x, rg.y, f.z) * 16.0f);
-
-    p = floor(worldPosition * 2.0f);
-    f = frac(worldPosition * 2.0f);
-    f = (f * f) * (3.0f - (f * 2.0f));
-    uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
-    rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
-    densityVariation += (lerp(rg.x, rg.y, f.z) * 8.0f);
-
-    p = floor(worldPosition * 4.0f);
-    f = frac(worldPosition * 4.0f);
-    f = (f * f) * (3.0f - (f * 2.0f));
-    uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
-    rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
-    densityVariation += (lerp(rg.x, rg.y, f.z) * 4.0f);
-
-    p = floor(worldPosition * 8.0f);
-    f = frac(worldPosition * 8.0f);
-    f = (f * f) * (3.0f - (f * 2.0f));
-    uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
-    rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
-    densityVariation += (lerp(rg.x, rg.y, f.z) * 2.0f);
-
-    densityVariation /= 30.0f;
-
-    // iterate over all the lights and light the froxel
-    float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
-    float4 pos = float4(texelUV, 0, z);
+    float3 V = normalize(cData.ViewLocation.xyz - worldPosition);
+    float4 pos = float4(threadId.xy, 0, z);
 
     float3 totalScattering = 0.0f;
 
+    // iterate over all the lights and light the froxel
+    // todo: leverage clustered light culling
     for (int i = 0; i < cData.NumLights; i++)
     {
         Light light = tLights[i];
@@ -139,6 +116,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
         {
             int shadowIndex = GetShadowIndex(light, pos, worldPosition);
             attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
+            attenuation *= LightTextureMask(light, shadowIndex, worldPosition);
         }
 
         float3 L = normalize(light.Position - worldPosition);
@@ -149,18 +127,26 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
         float VdotL = dot(V, L);
         float4 lightColor = light.GetColor() * light.Intensity;
 
-        totalScattering += attenuation * lightColor.rgb * HGPhase(-VdotL, 0.5f);
+        totalScattering += attenuation * lightColor.rgb * HenyeyGreestein(-VdotL, 0.5f);
     }
 
-    //totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.001f);
+    totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.02f).x;
 
-    float4 prevScattering = tLightScattering[threadId];
+    float blendFactor = 0.05f;
+    if (any(reprojUV < 0) || any(reprojUV > 1))
+    {
+        blendFactor = 1.0f;
+    }
+
     float4 newScattering = float4(lightScattering * totalScattering, cellDensity);
+    if (blendFactor < 1.0f)
+    {
+        float4 prevScattering = tLightScattering.SampleLevel(sVolumeSampler, reprojUV, 0);
+        newScattering = lerp(prevScattering, newScattering, blendFactor);
+    }
 
-    uOutLightScattering[threadId] = lerp(prevScattering, newScattering, 0.05f);
+    uOutLightScattering[threadId] = newScattering;
 }
-
-groupshared uint gsMaxDepth;
 
 [RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
@@ -168,38 +154,28 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
 {
     // accumulates fog along view rays from camera to scene depth
 
-    float2 texCoord = threadId.xy * cData.InvClusterDimensions.xy;
-    float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
+    float3 accumulatedLight = 0;
+    float accumulatedTransmittance = 1.0f;
 
-    if (groupIndex == 0)
-    {
-        gsMaxDepth = 0xffffffff;
-    }
-
-    GroupMemoryBarrierWithGroupSync();
-
-    InterlockedMin(gsMaxDepth, asuint(depth));
-
-    GroupMemoryBarrierWithGroupSync();
-
-    float maxDepth = asfloat(gsMaxDepth);
-    uint lastSlice = (1 - maxDepth) * cData.ClusterDimensions.z;
-
-    float3 lightScattering = 0;
-    float cellDensity = 0.0f;
-    float transmittance = 1.0f;
-
+    float3 previousPosition = WorldPositionFromFroxel(int3(threadId.xy, 0), 0.5f);
     // each tiny slice of fog blocks a proportional amount of light. such as first slice blocks 10%, next slice blocks 10% of remaining 90
-    uOutLightScattering[int3(threadId.xy, 0)] = float4(lightScattering, transmittance);
+    uOutLightScattering[int3(threadId.xy, 0)] = float4(accumulatedLight, accumulatedTransmittance);
 
-    for (int sliceIndex = 1; sliceIndex < lastSlice; sliceIndex++)
+    for (int sliceIndex = 1; sliceIndex <= cData.ClusterDimensions.z; sliceIndex++)
     {
-        float4 scatteringDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
-        lightScattering += scatteringDensity.xyz * transmittance;
-        cellDensity += scatteringDensity.w;
+        float3 worldPosition = WorldPositionFromFroxel(int3(threadId.xy, sliceIndex), 0.5f);
+        float froxelLength = length(worldPosition - previousPosition);
+        previousPosition = worldPosition;
+
+        float4 scatteringAndDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
         // Beer's Law Transmittance. descries how light intensity decreases at it passes through a medium
         // T = e^(-μ × d)  μ: extinction coefficient, d: distance traveled through the medium
-        transmittance = saturate(exp(-cellDensity));
-        uOutLightScattering[int3(threadId.xy, sliceIndex)] = float4(lightScattering, transmittance);
+        float transmittance = exp(-scatteringAndDensity.w * froxelLength);
+
+        float3 scatteringOverSlice = (scatteringAndDensity.xyz - scatteringAndDensity.xyz * transmittance) / max(scatteringAndDensity.w, 0.000001f);
+        accumulatedLight += scatteringOverSlice * accumulatedTransmittance;
+        accumulatedTransmittance *= transmittance;
+
+        uOutLightScattering[int3(threadId.xy, sliceIndex)] = float4(accumulatedLight, accumulatedTransmittance);
     }
 }

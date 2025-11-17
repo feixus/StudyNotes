@@ -299,19 +299,10 @@ void PSMain(PSInput input,
     float3 color = lightResults.Diffuse + lightResults.Specular;
     color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
     color += ssr * ao;
-
-    // for (int i = 0; i < cViewData.LightCount; ++i)
-    // {
-    //     Light l = tLights[i];
-    //     if (l.VolumetricLighting)
-    //     {
-    //         color += 0.3f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS, input.position, cViewData.View, l, 16, cViewData.FrameIndex);
-    //     }
-    // }
-
-    float slice = input.positionVS.z / (cViewData.NearZ - cViewData.FarZ) - cViewData.FarZ;
+    
+    float slice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
     float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, slice), 0);
-    color += color * scatteringTransmittance.w + scatteringTransmittance.rgb;
+    color = color * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
     outColor = float4(color, baseColor.a);
 

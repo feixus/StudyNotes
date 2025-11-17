@@ -143,6 +143,18 @@ private:
 	std::vector<D3D12_RESOURCE_BARRIER> m_QueueBarriers;
 };
 
+namespace ComputeUtils
+{
+	inline IntVector3 GetNumThreadGroups(uint32_t threadsX = 1, uint32_t groupSizeX = 1, uint32_t threadsY = 1, uint32_t groupSizeY = 1, uint32_t threadsZ = 1, uint32_t groupSizeZ = 1)
+	{
+		IntVector3 groups;
+		groups.x = Math::DivideAndRoundUp(threadsX, groupSizeX);
+		groups.y = Math::DivideAndRoundUp(threadsY, groupSizeY);
+		groups.z = Math::DivideAndRoundUp(threadsZ, groupSizeZ);
+		return groups;
+	}
+}
+
 class CommandContext : public GraphicsObject
 {
 public:
@@ -218,7 +230,7 @@ public:
 	{
 		SetComputeRootConstants(rootIndex, sizeof(T) / sizeof(int32_t), &data);
 	}
-	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32_t dataSize);
+	void SetComputeDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize);
 	
 	// graphics
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);

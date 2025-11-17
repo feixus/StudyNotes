@@ -38,6 +38,19 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invert
     return mul(normal, TBN);
 }
 
+float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
+{
+    float mask = 1.0f;
+    if (light.LightTexture >= 0)
+    {
+        float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjection[shadowMapIndex]);
+        lightPos.xyz /= lightPos.w;
+        lightPos.xy = (lightPos.xy + 1) * 0.5f;
+        mask = tTexture2DTable[light.LightTexture].SampleLevel(sClampSampler, lightPos.xy, 0).r;
+    }
+    return mask;
+}
+
 float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
     // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
@@ -190,19 +203,11 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
         }
 #endif
      
+        attenuation *= LightTextureMask(light, shadowIndex, wPos);
         attenuation *= Shadow3x3PCF(wPos, shadowIndex, light.InvShadowSize);
         if (attenuation <= 0)
         {
             return result;
-        }
-
-        if (light.LightTexture >= 0)
-        {
-            float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjection[shadowIndex]);
-            lightPos.xyz /= lightPos.w;
-            lightPos.xy = (lightPos.xy + 1) * 0.5f;
-            float mask = tTexture2DTable[light.LightTexture].SampleLevel(sClampSampler, lightPos.xy, 0).r;
-            attenuation *= mask;
         }
     }
 
@@ -219,54 +224,4 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
     result.Specular *= color.rgb * light.Intensity;
 
     return result;
-}
-
-// volumetric scattering - Henyey-Greenstein phase function
-//      phase function describes the angular distribution of scattered light.
-//      g = 0: isotropic scattering, light scatters equally in all directions.
-//      g > 0: forward scattering, light tends to scatter in the direction of the incoming light.
-//      g < 0: backward scattering, light tends to scatter opposite to the direction of the incoming light.
-// https://pbr-book.org/3ed-2018/Volume_Scattering/Phase_Functions
-//                    1 - g²
-//    P(θ) = ─────────────────────────
-//            4π(1 + g² - 2g·cosθ)^(3/2)
-float HenyeyGreestein(float LoV)
-{
-    const float G = 0.1f;   // asymmetry parameter, [-1, 1]
-    float result = 1.0f - G * G;
-    result /= (4.0f * PI * pow(1.0f + G * G - (2.0f * G) * LoV, 1.5f));
-    return result;
-}
-
-float3 ApplyVolumetricLighting(float3 startPoint, float3 endPoint, float4 pos, float4x4 view, Light light, int samples, int frame)
-{
-    float3 rayVector = startPoint - endPoint;
-    float3 ray = normalize(rayVector);
-    float3 rayStep = rayVector / samples;
-    float3 currentPosition = startPoint;
-    float3 accumFog = 0;
-
-    float ditherValue = InterleavedGradientNoise(pos.xy, frame);
-    currentPosition += rayStep * ditherValue;
-
-    for (int i = 0; i < samples; i++)
-    {
-        float attenuation = GetAttenuation(light, currentPosition);
-        if (attenuation > 0)
-        {
-            float visibility = 1.0f;
-            if (light.ShadowIndex >= 0)
-            {
-                int shadowMapIndex = GetShadowIndex(light, pos, currentPosition);
-                visibility = ShadowNoPCF(currentPosition, shadowMapIndex, light.InvShadowSize);
-            }
-
-            float phase = saturate(HenyeyGreestein(dot(ray, light.Direction)));
-            accumFog += attenuation * visibility * phase * light.GetColor().rgb * light.Intensity;
-        }
-
-        currentPosition += rayStep;
-    }
-    accumFog /= samples;
-    return accumFog;
 }
