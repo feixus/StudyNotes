@@ -1635,12 +1635,35 @@ void Graphics::GenerateAccelerationStructure(CommandContext& context, const Matr
 
 	// top level acceleration structure
 	{
-		uint32_t numMeshes = (uint32_t)m_Meshes.size();
+		std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+		for (uint32_t instanceIndex = 0; instanceIndex < (uint32_t)m_SceneData.Batches.size(); ++instanceIndex)
+		{
+			const Batch& batch = m_SceneData.Batches[instanceIndex];
+			const SubMesh& subMesh = *batch.pMesh;
+			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
+			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
+			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+			instanceDesc.InstanceContributionToHitGroupIndex = instanceIndex;
+			instanceDesc.InstanceID = instanceIndex;
+			instanceDesc.InstanceMask = 0xFF;
+
+			// the layout of Transform is a transpose of how affine matrices are typically stored in memory. 
+			// Instead of four 3-vectors. Transform is laid out as three 4-vectors.
+			auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
+				{
+					Matrix transpose = m.Transpose();
+					memcpy(&desc.Transform, &transpose, sizeof(float) * 12);
+				};
+
+			ApplyTransform(batch.WorldMatrix, instanceDesc);
+			instanceDescs.push_back(instanceDesc);
+		}
+
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
 			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
 			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
 					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
-			.NumDescs = numMeshes,
+			.NumDescs = (uint32_t)instanceDescs.size(),
 			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
 		};
 
@@ -1652,33 +1675,8 @@ void Graphics::GenerateAccelerationStructure(CommandContext& context, const Matr
 		m_pTLAS = std::make_unique<Buffer>(this, "TLAS");
 		m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 
-		// the layout of Transform is a transpose of how affine matrices are typically stored in memory. 
-		// Instead of four 3-vectors. Transform is laid out as three 4-vectors.
-		auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
-			{
-				desc.Transform[0][0] = m.m[0][0]; desc.Transform[0][1] = m.m[1][0]; desc.Transform[0][2] = m.m[2][0]; desc.Transform[0][3] = m.m[3][0];
-				desc.Transform[1][0] = m.m[0][1]; desc.Transform[1][1] = m.m[1][1]; desc.Transform[1][2] = m.m[2][1]; desc.Transform[1][3] = m.m[3][1];
-				desc.Transform[2][0] = m.m[0][2]; desc.Transform[2][1] = m.m[1][2]; desc.Transform[2][2] = m.m[2][2]; desc.Transform[2][3] = m.m[3][2];
-			};
-
-		DynamicAllocation allocation = context.AllocateTransientMemory(numMeshes * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
-		D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(allocation.pMappedMemory);
-		int meshCount = 0;
-		for (uint32_t i = 0; i < numMeshes; i++)
-		{
-			pInstanceDesc->AccelerationStructure = m_Meshes[i]->GetBLAS()->GetGpuHandle();
-			pInstanceDesc->Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-			pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
-			pInstanceDesc->InstanceID = 0;
-			pInstanceDesc->InstanceMask = 0xFF;
-
-			if (i < count)
-			{
-				ApplyTransform(transforms[i], *pInstanceDesc);
-			}
-			++pInstanceDesc;
-			meshCount += m_Meshes[i]->GetMeshCount();
-		}
+		DynamicAllocation allocation = context.AllocateTransientMemory(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+		memcpy(allocation.pMappedMemory, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
 			.DestAccelerationStructureData = m_pTLAS->GetGpuHandle(),
@@ -1686,7 +1684,7 @@ void Graphics::GenerateAccelerationStructure(CommandContext& context, const Matr
 				.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
 				.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE |
 						D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE,
-				.NumDescs = numMeshes,
+				.NumDescs = (uint32_t)instanceDescs.size(),
 				.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
 				.InstanceDescs = allocation.GpuHandle,
 			},
@@ -1726,6 +1724,9 @@ void Graphics::InitializeAssets(CommandContext& context)
 	uint32_t BLACK_CUBE[6] = {};
 	RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
 
+	uint32_t DEFAULT_ROUGHNESS_METALNESS = 0xFF0080FF;
+	RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
+
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<GraphicsTexture>(this, "Color Noise 256px");
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/noise.png", false);
 	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<GraphicsTexture>(this, "Blue Noise 512px");
@@ -1747,9 +1748,9 @@ void Graphics::InitializeAssets(CommandContext& context)
 	for (uint32_t j = 0; j < (uint32_t)m_Meshes.size(); j++)
 	{
 		auto& pMesh = m_Meshes[j];
-		for (int i = 0; i < pMesh->GetMeshCount(); i++)
+		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
 		{
-			const SubMesh& subMesh = pMesh->GetMesh(i);
+			const SubMesh& subMesh = pMesh->GetMesh(node.MeshIndex);
 			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
 			m_SceneData.Batches.push_back(Batch{});
 			Batch& b = m_SceneData.Batches.back();
@@ -1763,8 +1764,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 			b.Material.Diffuse = RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::White2D));
 			b.Material.Normal = RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
-			b.Material.Roughness = RegisterBindlessResource(material.pRoughnessTexture, GetDefaultTexture(DefaultTexture::Gray2D));
-			b.Material.Metallic = RegisterBindlessResource(material.pMetallicTexture, GetDefaultTexture(DefaultTexture::Black2D));
+			b.Material.RoughnessMetalness = RegisterBindlessResource(material.pRoughnessMetalnessTexture, GetDefaultTexture(DefaultTexture::RoughnessMetalness));
 
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 		}
@@ -1782,24 +1782,6 @@ void Graphics::InitializeAssets(CommandContext& context)
 		sunLight.VolumetricLighting = true;
 		m_Lights.push_back(sunLight);
 
-		if (0)
-		{
-			Vector3 spotLocation[] = {
-				Vector3(62, 10, -18),
-				Vector3(-48, 10, 18),
-				Vector3(-48, 10, -18),
-				Vector3(62, 10, 18)
-			};
-
-			for (int i = 0; i < std::size(spotLocation); i++)
-			{
-				Light spotLight = Light::Spot(spotLocation[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
-				spotLight.CastShadows = true;
-				spotLight.VolumetricLighting = false;
-				m_Lights.push_back(spotLight);
-			}
-		}
-		if (1)
 		{
 			Light spotLight = Light::Spot(Vector3(-5, 16, 16), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 			spotLight.CastShadows = true;

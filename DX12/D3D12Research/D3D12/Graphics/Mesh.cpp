@@ -24,7 +24,8 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		aiProcess_Triangulate |
 		aiProcess_ConvertToLeftHanded |
 		aiProcess_GenUVCoords |
-		aiProcess_CalcTangentSpace);
+		aiProcess_CalcTangentSpace |
+		aiProcess_GlobalScale);
 
 	uint32_t vertexCount = 0;
 	uint32_t indexCount = 0;
@@ -59,6 +60,30 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		dataOffset += size;
 		dataOffset = Math::AlignUp<uint64_t>(dataOffset, sBufferAlignment);
 	};
+
+	std::queue<aiNode*> nodesToProcess;
+	nodesToProcess.push(pScene->mRootNode);
+	while (!nodesToProcess.empty())
+	{
+		aiNode* pNode = nodesToProcess.front();
+		nodesToProcess.pop();
+		SubMeshInstance newNode;
+		aiMatrix4x4 t = pNode->mTransformation;
+		if (pNode->mParent)
+		{
+			t = pNode->mParent->mTransformation * t;
+		}
+		newNode.Transform = Matrix(&t.a1).Transpose();
+		for (uint32_t i = 0; i < pNode->mNumMeshes; ++i)
+		{
+			newNode.MeshIndex = pNode->mMeshes[i];
+			m_MeshInstances.push_back(newNode);
+		}
+		for (uint32_t i = 0; i < pNode->mNumChildren; ++i)
+		{
+			nodesToProcess.push(pNode->mChildren[i]);
+		}
+	}
 
 	for (uint32_t i = 0; i < pScene->mNumMeshes; i++)
 	{
@@ -120,6 +145,8 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	std::filesystem::path filePath(pFilePath);
 	std::filesystem::path basePath = filePath.parent_path();
 
+	std::map<StringHash, GraphicsTexture*> textureMap;
+
 	auto loadTexture = [&](const aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
 		aiString path;
@@ -137,8 +164,8 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 			std::string pathStr = texturePath.string();
 			StringHash pathHash = StringHash(pathStr);
-			auto it = m_ExistingTextures.find(pathHash);
-			if (it != m_ExistingTextures.end())
+			auto it = textureMap.find(pathHash);
+			if (it != textureMap.end())
 			{
 				return it->second;
 			}
@@ -148,7 +175,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 			if (success)
 			{
 				m_Textures.push_back(std::move(pTex));
-				m_ExistingTextures[pathHash] = m_Textures.back().get();
+				textureMap[pathHash] = m_Textures.back().get();
 				return m_Textures.back().get();
 			}
 		}
@@ -162,8 +189,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		const aiMaterial* pMaterial = pScene->mMaterials[i];
 		m.pDiffuseTexture = loadTexture(pMaterial, aiTextureType_DIFFUSE, true);
 		m.pNormalTexture = loadTexture(pMaterial, aiTextureType_NORMALS, false);
-		m.pRoughnessTexture = loadTexture(pMaterial, aiTextureType_SHININESS, false);
-		m.pMetallicTexture = loadTexture(pMaterial, aiTextureType_AMBIENT, false);
+		m.pRoughnessMetalnessTexture = loadTexture(pMaterial, aiTextureType_UNKNOWN, false);
 		aiString p;
 		m.IsTransparent = pMaterial->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 	}
@@ -183,10 +209,9 @@ void Mesh::GenerateBLAS(Graphics* pGraphics, CommandContext* pContext)
 	ID3D12GraphicsCommandList4* pCmd = pContext->GetRaytracingCommandList();
 
 	// bottom level acceleration structure
-	std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
 	for (size_t i = 0; i < GetMeshCount(); i++)
 	{
-		const SubMesh& subMesh = GetMesh((int)i);
+		SubMesh& subMesh = m_Meshes[i];
 
 		D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -199,40 +224,42 @@ void Mesh::GenerateBLAS(Graphics* pGraphics, CommandContext* pContext)
 		geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.VerticesLocation.Stride;
 		geometryDesc.Triangles.VertexCount = subMesh.VerticesLocation.Elements;
 		geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-		geometries.push_back(geometryDesc);
+
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
+			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
+			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
+			.NumDescs = 1,
+			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+			.pGeometryDescs = &geometryDesc,
+		};
+
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+		pGraphics->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+		subMesh.pBLASScratch = new Buffer(pGraphics, "BLAS Scratch Buffer");
+		subMesh.pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
+		subMesh.pBLAS = new Buffer(pGraphics, "BLAS");
+		subMesh.pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
+			.DestAccelerationStructureData = subMesh.pBLAS->GetGpuHandle(),
+			.Inputs = prebuildInfo,
+			.SourceAccelerationStructureData = 0,
+			.ScratchAccelerationStructureData = subMesh.pBLASScratch->GetGpuHandle(),
+		};
+
+		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+		pContext->InsertUavBarrier(subMesh.pBLAS);
+		pContext->FlushResourceBarriers();
 	}
-
-	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
-		.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
-		.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-				D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
-		.NumDescs = (uint32_t)geometries.size(),
-		.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-		.pGeometryDescs = geometries.data(),
-	};
-
-	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-	pGraphics->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-	m_pBLASScratch = std::make_unique<Buffer>(pGraphics, "BLAS Scratch Buffer");
-	m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-	m_pBLAS = std::make_unique<Buffer>(pGraphics, "BLAS");
-	m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-
-	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
-		.DestAccelerationStructureData = m_pBLAS->GetGpuHandle(),
-		.Inputs = prebuildInfo,
-		.SourceAccelerationStructureData = 0,
-		.ScratchAccelerationStructureData = m_pBLASScratch->GetGpuHandle(),
-	};
-
-	pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-	pContext->InsertUavBarrier(m_pBLAS.get());
-	pContext->FlushResourceBarriers();
 }
 
 void SubMesh::Destroy()
 {
 	delete pIndexSRV;
 	delete pVertexSRV;
+
+	delete pBLAS;
+	delete pBLASScratch;
 }

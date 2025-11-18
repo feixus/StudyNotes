@@ -29,7 +29,7 @@ float3 Diffuse_Lambert(float3 albedo)
 float D_GGX(float a2, float NoH)
 {
     float d = (NoH * a2 - NoH) * NoH + 1;
-    return a2 / (PI * d * d);
+    return a2 / max(PI * d * d, 0.00001f);
 }
 
 // Approximation of joint Smith term for GGX

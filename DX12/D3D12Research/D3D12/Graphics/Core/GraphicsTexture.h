@@ -227,7 +227,7 @@ public:
 	void Create(const TextureDesc& desc);
 	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
 	bool Create(CommandContext* pContext, const Image& image, bool srgb = false);
-	void Create(CommandContext* pContext, const TextureDesc& desc, void* pInitialData);
+	void Create(CommandContext* pContext, const TextureDesc& desc, const void* pInitialData);
 	void CreateForSwapChain(ID3D12Resource* pTexture);
 	void SetData(CommandContext* pContext, const void* pData);
 

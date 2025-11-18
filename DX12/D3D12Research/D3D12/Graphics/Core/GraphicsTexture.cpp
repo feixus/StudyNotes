@@ -314,7 +314,7 @@ bool GraphicsTexture::Create(CommandContext* pContext, const Image& img, bool sr
 	return true;
 }
 
-void GraphicsTexture::Create(CommandContext* pContext, const TextureDesc& desc, void* pInitialData)
+void GraphicsTexture::Create(CommandContext* pContext, const TextureDesc& desc, const void* pInitialData)
 {
 	Create(desc);
 	if (pInitialData)

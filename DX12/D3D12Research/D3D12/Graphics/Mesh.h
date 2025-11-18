@@ -10,15 +10,6 @@ class CommandContext;
 class ShaderResourceView;
 class Mesh;
 
-struct Material
-{
-	GraphicsTexture* pDiffuseTexture{nullptr};
-	GraphicsTexture* pNormalTexture{nullptr};
-	GraphicsTexture* pRoughnessTexture{nullptr};
-	GraphicsTexture* pMetallicTexture{nullptr};
-	bool IsTransparent;
-};
-
 struct SubMesh
 {
     void Destroy();
@@ -31,6 +22,23 @@ struct SubMesh
     IndexBufferView IndicesLocation;
     BoundingBox Bounds;
     Mesh* pParent{nullptr};
+
+	Buffer* pBLAS{nullptr};
+	Buffer* pBLASScratch{nullptr};
+};
+
+struct SubMeshInstance
+{
+	int MeshIndex;
+	Matrix Transform;
+};
+
+struct Material
+{
+	GraphicsTexture* pDiffuseTexture{ nullptr };
+	GraphicsTexture* pNormalTexture{ nullptr };
+	GraphicsTexture* pRoughnessMetalnessTexture{ nullptr };
+	bool IsTransparent;
 };
 
 class Mesh
@@ -41,8 +49,7 @@ public:
     int GetMeshCount() const { return (int)m_Meshes.size();  }
 	const SubMesh& GetMesh(int index) const { return m_Meshes[index]; }
     const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
-
-    Buffer* GetBLAS() const { return m_pBLAS.get(); }
+	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
     Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
@@ -51,8 +58,6 @@ private:
     std::vector<Material> m_Materials;
     std::unique_ptr<Buffer> m_pGeometryData;
     std::vector<SubMesh> m_Meshes;
+	std::vector<SubMeshInstance> m_MeshInstances;
     std::vector<std::unique_ptr<GraphicsTexture>> m_Textures;
-    std::map<StringHash, GraphicsTexture*> m_ExistingTextures;
-    std::unique_ptr<Buffer> m_pBLAS;
-	std::unique_ptr<Buffer> m_pBLASScratch;
 };
