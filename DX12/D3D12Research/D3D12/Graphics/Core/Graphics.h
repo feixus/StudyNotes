@@ -66,6 +66,7 @@ struct Batch
 	const SubMesh* pMesh{};
 	MaterialData Material;
 	Matrix WorldMatrix;
+	BoundingBox LocalBounds;
 	BoundingBox Bounds;
 	int VertexBufferDescriptor{-1};
 	int IndexBufferDescriptor{-1};
@@ -140,8 +141,6 @@ public:
 
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
-
-	void SetVisualize(GraphicsTexture* pTexture) { m_pVisualizeTexture = pTexture; }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -226,8 +225,9 @@ private:
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void CreateSwapchain();
-	void GenerateAccelerationStructure(CommandContext& context, const Matrix* transforms, uint32_t count);
+
 	void UpdateImGui();
+	void UpdateTLAS(CommandContext& context);
 
 	ComPtr<IDXGIFactory7> m_pFactory;
 	ComPtr<ID3D12Device> m_pDevice;

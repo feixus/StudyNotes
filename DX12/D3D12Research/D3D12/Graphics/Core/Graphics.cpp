@@ -200,6 +200,11 @@ void Graphics::Update()
 
 	m_pShaderManager->ConditionallyReloadShaders();
 
+	for (Batch& b : m_SceneData.Batches)
+	{
+		b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
+	}
+
 	EditTransform(*m_pCamera, spotMatrix);
 	Vector3 scale, position;
 	Quaternion rotation;
@@ -563,6 +568,8 @@ void Graphics::Update()
 			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
+
+			UpdateTLAS(renderContext);
 		});
 
 	// depth prepass
@@ -1273,6 +1280,12 @@ void Graphics::InitD3D()
 	HRESULT hr = m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
 	allowTearing &= SUCCEEDED(hr);
 
+	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
+	if (setStablePowerState)
+	{
+		D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr);
+	}
+
 	ComPtr<IDXGIAdapter4> pAdapter;
 
 	bool useWarpAdapter = CommandLine::GetBool("warp");
@@ -1360,6 +1373,11 @@ void Graphics::InitD3D()
 	D3D::SetObjectName(m_pDeviceRemovalFence.Get(), "Device Removal Fence");
 	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
 	RegisterWaitForSingleObject(&deviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);*/
+
+	if (setStablePowerState)
+	{
+		VERIFY_HR(m_pDevice->SetStablePowerState(true));
+	}
 
 	if (debugD3D)
 	{
@@ -1624,80 +1642,6 @@ void Graphics::OnResize(int width, int height)
 	}
 }
 
-void Graphics::GenerateAccelerationStructure(CommandContext& context, const Matrix* transforms, uint32_t count)
-{
-	if (!SupportsRaytracing())
-	{
-		return;
-	}
-
-	ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
-
-	// top level acceleration structure
-	{
-		std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
-		for (uint32_t instanceIndex = 0; instanceIndex < (uint32_t)m_SceneData.Batches.size(); ++instanceIndex)
-		{
-			const Batch& batch = m_SceneData.Batches[instanceIndex];
-			const SubMesh& subMesh = *batch.pMesh;
-			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
-			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
-			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-			instanceDesc.InstanceContributionToHitGroupIndex = instanceIndex;
-			instanceDesc.InstanceID = instanceIndex;
-			instanceDesc.InstanceMask = 0xFF;
-
-			// the layout of Transform is a transpose of how affine matrices are typically stored in memory. 
-			// Instead of four 3-vectors. Transform is laid out as three 4-vectors.
-			auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
-				{
-					Matrix transpose = m.Transpose();
-					memcpy(&desc.Transform, &transpose, sizeof(float) * 12);
-				};
-
-			ApplyTransform(batch.WorldMatrix, instanceDesc);
-			instanceDescs.push_back(instanceDesc);
-		}
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
-			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
-			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
-			.NumDescs = (uint32_t)instanceDescs.size(),
-			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-		};
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-		GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-		m_pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
-		m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-		m_pTLAS = std::make_unique<Buffer>(this, "TLAS");
-		m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-
-		DynamicAllocation allocation = context.AllocateTransientMemory(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
-		memcpy(allocation.pMappedMemory, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
-			.DestAccelerationStructureData = m_pTLAS->GetGpuHandle(),
-			.Inputs = {
-				.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
-				.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE |
-						D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE,
-				.NumDescs = (uint32_t)instanceDescs.size(),
-				.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-				.InstanceDescs = allocation.GpuHandle,
-			},
-			.SourceAccelerationStructureData = 0,
-			.ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle(),
-		};
-
-		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-		context.InsertUavBarrier(m_pTLAS.get());
-		context.FlushResourceBarriers();
-	}
-}
-
 void Graphics::InitializeAssets(CommandContext& context)
 {
 	auto RegisterDefaultTexture = [this, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32_t* pData) {
@@ -1755,10 +1699,9 @@ void Graphics::InitializeAssets(CommandContext& context)
 			m_SceneData.Batches.push_back(Batch{});
 			Batch& b = m_SceneData.Batches.back();
 			b.Index = (int)m_SceneData.Batches.size() - 1;
-			b.Bounds = subMesh.Bounds;
+			b.LocalBounds = subMesh.Bounds;
 			b.pMesh = &subMesh;
 			b.WorldMatrix = transforms[j];
-			b.Bounds.Transform(b.Bounds, b.WorldMatrix);
 			b.VertexBufferDescriptor = RegisterBindlessResource(subMesh.pVertexSRV);
 			b.IndexBufferDescriptor = RegisterBindlessResource(subMesh.pIndexSRV);
 
@@ -1770,7 +1713,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		}
 	}
 
-	GenerateAccelerationStructure(context, transforms, std::size(transforms));
+	UpdateTLAS(context);
 
 	{
 		Vector3 position(-150, 160, -10);
@@ -2109,12 +2052,19 @@ void Graphics::UpdateImGui()
 		ImGui::TreePop();
 	}
 
+	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
+		pRootNode->RenderImGui(m_Frame);
+		ImGui::TreePop();
+	}
+
 	ImGui::End();
 
 	static bool showOutputLog = false;
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::SetNextWindowPos(ImVec2(300, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
-	ImGui::SetNextWindowSize(ImVec2(showOutputLog ? (float)(m_WindowWidth - 300) * 0.5f : (float)m_WindowWidth - 250, 250));
+	ImGui::SetNextWindowPos(ImVec2(300, (float)m_WindowHeight), 0, ImVec2(0, 1));
+	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 300 * 2.0f, 250));
 	ImGui::SetNextWindowCollapsed(!showOutputLog);
 
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
@@ -2144,56 +2094,13 @@ void Graphics::UpdateImGui()
 		}
 		ImGui::SetScrollHereY(0.0f);
 	}
+	
+	ImGui::PopStyleVar();
 	ImGui::End();
 
-	if (showOutputLog)
-	{
-		ImGui::SetNextWindowPos(ImVec2(300 + (m_WindowWidth - 300) * 0.5f, (float)(showOutputLog ? m_WindowHeight - 250 : m_WindowHeight - 20)));
-		ImGui::SetNextWindowSize(ImVec2((m_WindowWidth - 300) * 0.5f, 250));
-		ImGui::SetNextWindowCollapsed(!showOutputLog);
-		ImGui::Begin("Profiler", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
-		pRootNode->RenderImGui(m_Frame);
-		ImGui::End();
-	}
-	ImGui::PopStyleVar();
-
-	m_pVisualizeTexture = m_pVisualizeTexture != nullptr ? m_pVisualizeTexture : m_pAmbientOcclusion.get();
-	if (m_pVisualizeTexture)
-	{
-		std::string tabName = std::string("Visualize Texture:") + m_pVisualizeTexture->GetName();
-		ImGui::Begin(tabName.c_str());
-		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
-		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
-		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
-		float width = windowSize.x;
-		float height = windowSize.x * image.y / image.x;
-		if (image.x / windowSize.x < image.y / windowSize.y)
-		{
-			width = image.x / image.y * windowSize.y;
-			height = windowSize.y;
-		}
-
-		ImGui::Image(ImTextureData(m_pVisualizeTexture), ImVec2(width, height));
-		ImGui::End();
-	}
-
-	if (Tweakables::g_VisualizeShadowCascades && m_ShadowMaps.size() >= 4)
-	{
-		float imageSize = 230;
-		ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
-		ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
-		ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
-		const Light& sunLight = m_Lights[0];
-		for (int i = 0; i < 4; ++i)
-		{
-			ImGui::Image(ImTextureData(m_ShadowMaps[sunLight.ShadowIndex + i].get()), ImVec2(imageSize, imageSize));
-		}
-		ImGui::End();
-	}
-
-	ImGui::SetNextWindowPos(ImVec2(300, 20), 0, ImVec2(0, 0));
-	ImGui::Begin("Parameters");
+	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
+	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
+	ImGui::Begin("Parameters", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
@@ -2256,6 +2163,119 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
 
 	ImGui::End();
+
+	m_pVisualizeTexture = m_pVisualizeTexture != nullptr ? m_pVisualizeTexture : m_pAmbientOcclusion.get();
+	if (m_pVisualizeTexture)
+	{
+		std::string tabName = std::string("Visualize Texture:") + m_pVisualizeTexture->GetName();
+		ImGui::Begin(tabName.c_str());
+		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
+
+		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
+		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+		float width = windowSize.x;
+		float height = windowSize.x * image.y / image.x;
+		if (image.x / windowSize.x < image.y / windowSize.y)
+		{
+			width = image.x / image.y * windowSize.y;
+			height = windowSize.y;
+		}
+
+		ImGui::Image(m_pVisualizeTexture, ImVec2(width, height));
+		ImGui::End();
+	}
+
+	if (Tweakables::g_VisualizeShadowCascades && m_ShadowMaps.size() >= 4)
+	{
+		float imageSize = 230;
+		ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
+		ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
+		ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
+		const Light& sunLight = m_Lights[0];
+		for (int i = 0; i < 4; ++i)
+		{
+			ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
+		}
+		ImGui::End();
+	}
+}
+
+void Graphics::UpdateTLAS(CommandContext& context)
+{
+	if (!SupportsRaytracing())
+	{
+		return;
+	}
+
+	ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
+
+	bool isUpdate = m_pTLAS != nullptr;
+
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+
+	// top level acceleration structure
+	std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+	for (uint32_t instanceIndex = 0; instanceIndex < (uint32_t)m_SceneData.Batches.size(); ++instanceIndex)
+	{
+		const Batch& batch = m_SceneData.Batches[instanceIndex];
+		const SubMesh& subMesh = *batch.pMesh;
+		D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
+		instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
+		instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+		instanceDesc.InstanceContributionToHitGroupIndex = batch.Index;
+		instanceDesc.InstanceID = batch.Index;
+		instanceDesc.InstanceMask = 0xFF;
+
+		// the layout of Transform is a transpose of how affine matrices are typically stored in memory. 
+		// Instead of four 3-vectors. Transform is laid out as three 4-vectors.
+		auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
+			{
+				Matrix transpose = m.Transpose();
+				memcpy(&desc.Transform, &transpose, sizeof(float) * 12);
+			};
+
+		ApplyTransform(batch.WorldMatrix, instanceDesc);
+		instanceDescs.push_back(instanceDesc);
+	}
+
+	if (!isUpdate)
+	{
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
+			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
+			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
+			.NumDescs = (uint32_t)instanceDescs.size(),
+			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+		};
+
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+		GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+		m_pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
+		m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
+		m_pTLAS = std::make_unique<Buffer>(this, "TLAS");
+		m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+	}
+
+	DynamicAllocation allocation = context.AllocateTransientMemory(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+	memcpy(allocation.pMappedMemory, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
+		.DestAccelerationStructureData = isUpdate ? m_pTLAS->GetGpuHandle() : 0,
+		.Inputs = {
+			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
+			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE |
+					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE,
+			.NumDescs = (uint32_t)instanceDescs.size(),
+			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+			.InstanceDescs = allocation.GpuHandle,
+		},
+		.SourceAccelerationStructureData = 0,
+		.ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle(),
+	};
+
+	pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+	context.InsertUavBarrier(m_pTLAS.get());
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

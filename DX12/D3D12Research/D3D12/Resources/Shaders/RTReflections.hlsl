@@ -15,12 +15,14 @@ GlobalRootSignature GlobalRootSig =
     "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),"
     "DescriptorTable(SRV(t5, numDescriptors=6), visibility=SHADER_VISIBILITY_ALL),"
     GLOBAL_BINDLESS_TABLE
-    "staticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
-    "staticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility=SHADER_VISIBILITY_ALL)"
+    "staticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL)"
+    "staticSampler(s1, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_ALL)"
+    "staticSampler(s2, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL, comparisonFunc = COMPARISON_GREATER)"
 };
 
 struct ViewData
 {
+    float4x4 View;
     float4x4 ViewInverse;
     float4x4 ProjectionInverse;
     uint NumLights;
@@ -65,11 +67,13 @@ ConstantBuffer<HitData> cHitData : register(b1);
 
 ShadowRayPayload CastShadowRay(float3 origin, float3 direction)
 {
+    float len = length(direction);
+
     RayDesc ray;
     ray.Origin = origin;
-    ray.Direction = direction;
-    ray.TMin = 0.0f;
-    ray.TMax = 1.0f;
+    ray.Direction = direction / len;
+    ray.TMin = 0.00f;
+    ray.TMax = len;
 
     ShadowRayPayload shadowRay = (ShadowRayPayload)0;
 
@@ -89,21 +93,21 @@ ShadowRayPayload CastShadowRay(float3 origin, float3 direction)
     return shadowRay;
 }
 
-RayPayload CastReflectionRay(float3 origin, float3 direction, float depth)
+RayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 {
     RayCone cone;
     cone.Width = 0;
     cone.SpreadAngle = cViewData.ViewPixelSpreadAngle;
 
     RayPayload payload;
-    payload.rayCone = PropagateRayCone(cone, 0.0f, depth);
+    payload.rayCone = PropagateRayCone(cone, 0.0f, T);
     payload.output = 0.0f;
 
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
-    ray.TMin = 0.0f;
-    ray.TMax = 10000;
+    ray.TMin = 0.001f;
+    ray.TMax = 1000000.f;
 
     TraceRay(
         tTLASTable[cViewData.TLASIndex],
@@ -179,15 +183,34 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
             L = 1000 * -light.Direction;
         }
 
-        attenuation *= LightTextureMask(light, light.ShadowIndex, wPos);
-
     #if SECONDARY_SHADOW_RAY
-        ShadowRayPayload shadowRay = CastShadowRay(wPos + normalize(L) * 0.001f, L);
-        attenuation *= shadowRay.hit;
+        float3 viewPosition = mul(float4(wPos, 1.0f), cViewData.View).xyz;
+        float4 pos = float4(0, 0, 0, viewPosition.z);
+        int shadowIndex = GetShadowIndex(light, pos, wPos);
+        float4x4 lightViewProjection = cShadowData.LightViewProjection[shadowIndex];
+        float4 lightPos = mul(float4(wPos, 1.0f), lightViewProjection);
+        lightPos.xyz /= lightPos.w;
+        lightPos.x = lightPos.x * 0.5f + 0.5f;
+        lightPos.y = lightPos.y * -0.5f + 0.5f;
+        attenuation *= LightTextureMask(light, shadowIndex, wPos);
+
+        // combine shadow map sampling and ray traced shadow
+        if (lightPos.x >= 0 && lightPos.x <= 1 && lightPos.y >= 0 && lightPos.y < 1.0f)
+        {
+            Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowIndex)];
+            attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+        }
+        else
+        {
+            ShadowRayPayload shadowRay = CastShadowRay(wPos, L);
+            attenuation *= shadowRay.hit;
+        }
+
         if (attenuation <= 0.0f)
         {
             continue;
         }
+
     #endif
 
         LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
@@ -231,7 +254,7 @@ void RayGen()
         float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
         float3 R = reflect(V, N);
 
-        RayPayload payload = CastReflectionRay(world + R * 0.01f, R, depth);
+        RayPayload payload = CastReflectionRay(world, R, depth);
         colorSample += float4(reflectivity * payload.output, 0);
     }
 

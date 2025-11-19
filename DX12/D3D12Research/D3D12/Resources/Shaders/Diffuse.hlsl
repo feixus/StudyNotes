@@ -168,7 +168,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
     return totalResult;
 }
 
-float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
+float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R, inout float ssrWeight)
 {
     float3 ssr = 0;
     const float roughnessThreshold = 0.6f;
@@ -245,7 +245,7 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
             }
 
             float roughnessMask = saturate(1.0 - (R / (1 - roughnessThreshold)));
-            float ssrWeight = hitColor.w * roughnessMask;
+            ssrWeight = hitColor.w * roughnessMask;
             ssr = saturate(hitColor.xyz * ssrWeight);
         }
     }
@@ -288,7 +288,8 @@ void PSMain(PSInput input,
     float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, true);
     float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
     
-    float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, roughness);
+    float ssrWeight = 0.0f;
+    float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, roughness, ssrWeight);
 
     LightResult lightResults = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, roughness);
 
@@ -304,6 +305,6 @@ void PSMain(PSInput input,
 
     outColor = float4(color, baseColor.a);
 
-    float reflectivity = scatteringTransmittance.w * ao * Square(1 - roughness);
-    outNormalRoughness = float4(N, reflectivity);
+    float reflectivity = saturate(scatteringTransmittance.w * ao * Square(1 - roughness));
+    outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 }

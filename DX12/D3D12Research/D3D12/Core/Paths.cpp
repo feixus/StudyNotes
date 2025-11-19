@@ -65,13 +65,16 @@ namespace Paths
 
     void Combine(const std::vector<std::string>& elements, std::string& output)
     {
-        output = "";
-        for (const auto& element : elements)
+        std::stringstream stream;
+        for (size_t i = 0; i < elements.size(); i++)
         {
-            if (!output.empty())
-                output += "/";
-            output += element;
+            stream << elements[i];
+            if (elements[i].back() != '/' && i != elements.size() - 1)
+            {
+                stream << '/';
+            }
         }
+        output = stream.str();
     }
 
     bool FileExists(const std::string& path)

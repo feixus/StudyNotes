@@ -361,10 +361,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 
                 context.Dispatch(ComputeUtils::GetNumThreadGroups(pDestinationVolume->GetWidth(), 8,pDestinationVolume->GetHeight(), 8));
             });
-
-        m_pGraphics->SetVisualize(m_pFinalVolumeFog.get());
 	}
-
     
     RGPassBuilder basePass = graph.AddPass("Base Pass");
     basePass.Bind([=](CommandContext& context, const RGPassResource& passResources)

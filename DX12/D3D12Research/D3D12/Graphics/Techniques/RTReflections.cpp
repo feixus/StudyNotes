@@ -39,6 +39,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
             struct Parameters
             {
+                Matrix View;
                 Matrix ViewInverse;
                 Matrix ProjectionInverse;
                 uint32_t NumLights;
@@ -46,6 +47,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
                 uint32_t TLASIndex;
             } parameters;
 
+            parameters.View = sceneData.pCamera->GetView();
             parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
             parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
             parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
