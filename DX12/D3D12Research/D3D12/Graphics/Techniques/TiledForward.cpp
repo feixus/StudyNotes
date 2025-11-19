@@ -68,17 +68,17 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                 int padding0;
                 Vector2 ScreenDimensionsInv;
                 uint32_t LightCount{0};
-            } Data{};
+            } data{};
 
-            Data.CameraView = inputResource.pCamera->GetView();
-            Data.NumThreadGroups.x = Math::DivideAndRoundUp(inputResource.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
-            Data.NumThreadGroups.y = Math::DivideAndRoundUp(inputResource.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
-            Data.NumThreadGroups.z = 1;
-            Data.ScreenDimensionsInv = Vector2(1.0f / inputResource.pResolvedDepth->GetWidth(), 1.0f / inputResource.pResolvedDepth->GetHeight());
-            Data.LightCount = (uint32_t)inputResource.pLightBuffer->GetNumElements();
-            Data.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
+			data.CameraView = inputResource.pCamera->GetView();
+			data.NumThreadGroups.x = Math::DivideAndRoundUp(inputResource.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
+			data.NumThreadGroups.y = Math::DivideAndRoundUp(inputResource.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
+			data.NumThreadGroups.z = 1;
+			data.ScreenDimensionsInv = Vector2(1.0f / inputResource.pResolvedDepth->GetWidth(), 1.0f / inputResource.pResolvedDepth->GetHeight());
+			data.LightCount = (uint32_t)inputResource.pLightBuffer->GetNumElements();
+			data.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
 
-            context.SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameter));
+			context.SetComputeDynamicConstantBufferView(0, data);
             context.BindResource(1, 0, m_pLightIndexCounter->GetUAV());
             context.BindResource(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
             context.BindResource(1, 2, m_pLightGridOpaque->GetUAV());
@@ -87,7 +87,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.BindResource(2, 0, inputResource.pResolvedDepth->GetSRV());
             context.BindResource(2, 1, inputResource.pLightBuffer->GetSRV());
 
-            context.Dispatch(Data.NumThreadGroups);
+            context.Dispatch(data.NumThreadGroups);
         });
 
     // 5. base pass
@@ -176,8 +176,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-            context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-            context.SetGraphicsDynamicConstantBufferView(2, inputResource.pShadowData, sizeof(ShadowData));
+            context.SetGraphicsDynamicConstantBufferView(1, frameData);
+            context.SetGraphicsDynamicConstantBufferView(2, *inputResource.pShadowData);
 
             context.BindResourceTable(3, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
             context.BindResource(4, 2, inputResource.pLightBuffer->GetSRV());
@@ -194,7 +194,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
                         objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
 						objectData.VertexBuffer = b.VertexBufferDescriptor;
-                        context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+                        context.SetGraphicsDynamicConstantBufferView(0, objectData);
 					    context.SetIndexBuffer(b.pMesh->IndicesLocation);
 						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
                     }
@@ -268,7 +268,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Graphic
             context.SetPipelineState(m_pVisualizeLightsPSO);
             context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
 
-            context.SetComputeDynamicConstantBufferView(0, &constantData, sizeof(Data));
+            context.SetComputeDynamicConstantBufferView(0, constantData);
 
             context.BindResource(1, 0, pTarget->GetSRV());
             context.BindResource(1, 1, pDepth->GetSRV());

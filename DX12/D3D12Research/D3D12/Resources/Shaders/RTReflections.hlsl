@@ -11,10 +11,12 @@
 GlobalRootSignature GlobalRootSig = 
 {
     "CBV(b0, visibility=SHADER_VISIBILITY_ALL),"
+    "CBV(b2, visibility=SHADER_VISIBILITY_ALL),"
     "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),"
     "DescriptorTable(SRV(t5, numDescriptors=6), visibility=SHADER_VISIBILITY_ALL),"
     GLOBAL_BINDLESS_TABLE
     "staticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
+    "staticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility=SHADER_VISIBILITY_ALL)"
 };
 
 struct ViewData
@@ -151,8 +153,8 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 
     float4 baseColor = diffuseSample;
     float3 sampledNormal = normalSample.xyz;
-    float metalness = roughnessMetalnessSample.g;
-    float roughness = roughnessMetalnessSample.b;
+    float metalness = roughnessMetalnessSample.b;
+    float roughness = roughnessMetalnessSample.g;
     float specular = 0.5f;
 
     float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
@@ -176,6 +178,8 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
         {
             L = 1000 * -light.Direction;
         }
+
+        attenuation *= LightTextureMask(light, light.ShadowIndex, wPos);
 
     #if SECONDARY_SHADOW_RAY
         ShadowRayPayload shadowRay = CastShadowRay(wPos + normalize(L) * 0.001f, L);

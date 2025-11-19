@@ -213,7 +213,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, GraphicsT
 							drawData.TextureIndex = textureData.pTexture->GetGraphics()->RegisterBindlessResource(textureData.pTexture);
 							drawData.TextureType = textureData.pTexture->GetDesc().Dimension;
 						}
-						context.SetGraphicsDynamicConstantBufferView(0, &drawData, sizeof(Data));
+						context.SetGraphicsDynamicConstantBufferView(0, drawData);
 						context.BindResourceTable(1, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 						context.DrawIndexed(pCmd->ElemCount, indexOffset, 0);
 					}
