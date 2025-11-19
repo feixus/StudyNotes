@@ -35,9 +35,10 @@ struct SubMeshInstance
 
 struct Material
 {
-	GraphicsTexture* pDiffuseTexture{ nullptr };
-	GraphicsTexture* pNormalTexture{ nullptr };
-	GraphicsTexture* pRoughnessMetalnessTexture{ nullptr };
+	GraphicsTexture* pDiffuseTexture{nullptr};
+	GraphicsTexture* pNormalTexture{nullptr};
+	GraphicsTexture* pRoughnessMetalnessTexture{nullptr};
+	GraphicsTexture* pEmissiveTexture{nullptr};
 	bool IsTransparent;
 };
 

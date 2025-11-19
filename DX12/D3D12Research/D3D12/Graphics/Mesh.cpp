@@ -190,6 +190,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		m.pDiffuseTexture = loadTexture(pMaterial, aiTextureType_DIFFUSE, true);
 		m.pNormalTexture = loadTexture(pMaterial, aiTextureType_NORMALS, false);
 		m.pRoughnessMetalnessTexture = loadTexture(pMaterial, aiTextureType_UNKNOWN, false);
+		m.pEmissiveTexture = loadTexture(pMaterial, aiTextureType_EMISSIVE, false);
 		aiString p;
 		m.IsTransparent = pMaterial->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 	}

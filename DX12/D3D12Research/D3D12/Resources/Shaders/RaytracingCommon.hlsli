@@ -1,6 +1,9 @@
 #ifndef __INCLUDE_RAYTRACING_COMMON__
 #define __INCLUDE_RAYTRACING_COMMON__
 
+#define RAY_BIAS 1.0e-4f
+#define RAY_MAX_T 1.0e38f
+
 struct RayCone
 {
     float Width;
@@ -30,7 +33,7 @@ float ComputeRayConeMip(RayCone cone, float3 vertexNormal, float2 vertexUVs[3], 
     float uvArea = 0.5f * length(cross(float3(duv0, 0), float3(duv1, 0)));;
 
     float triangleLODConstant = 0.5f * log2(uvArea * invWorldArea);
-    
+
     float lambda = triangleLODConstant;
     lambda += log2(abs(cone.Width));
     lambda += 0.5f * log2(textureDimensions.x * textureDimensions.y);

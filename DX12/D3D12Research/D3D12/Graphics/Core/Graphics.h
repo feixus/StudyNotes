@@ -48,9 +48,10 @@ enum class DefaultTexture
 
 struct MaterialData
 {
-	int Diffuse{ 0 };
-	int Normal{ 0 };
+	int Diffuse{0};
+	int Normal{0};
 	int RoughnessMetalness{0};
+	int Emissive;
 };
 
 struct Batch

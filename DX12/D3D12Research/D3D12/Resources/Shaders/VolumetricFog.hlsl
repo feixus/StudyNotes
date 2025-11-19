@@ -78,9 +78,12 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     float3 reprojWorldPosition = WorldPositionFromFroxel(threadId, 0.5f);
     float4 reprojNDC = mul(float4(reprojWorldPosition, 1), cData.PrevViewProjection);
     reprojNDC.xyz /= reprojNDC.w;
+
     float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
     reprojUV.z = LinearizeDepth(reprojUV.z, cData.NearZ, cData.FarZ);
     reprojUV.z = sqrt((reprojUV.z - cData.FarZ) / (cData.NearZ - cData.FarZ));
+    
+    float4 prevScattering = tLightScattering.SampleLevel(sVolumeSampler, reprojUV, 0);
 
     float3 cellAbsorption = 0.0f;
 
@@ -141,7 +144,6 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     float4 newScattering = float4(lightScattering * totalScattering, cellDensity);
     if (blendFactor < 1.0f)
     {
-        float4 prevScattering = tLightScattering.SampleLevel(sVolumeSampler, reprojUV, 0);
         newScattering = lerp(prevScattering, newScattering, blendFactor);
     }
 
