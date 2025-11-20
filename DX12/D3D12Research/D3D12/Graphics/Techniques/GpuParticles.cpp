@@ -265,7 +265,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 		    parameters.ViewProjection = camera.GetViewProjection();
             parameters.DimensionsInv.x = 1.0f / pSourceDepth->GetWidth();
             parameters.DimensionsInv.y = 1.0f / pSourceDepth->GetHeight();
-            parameters.ViewProjectionInv = camera.GetProjectionInverse() * camera.GetViewInverse();
+            parameters.ViewProjectionInv = camera.GetViewProjectionInverse();
 		    parameters.Near = camera.GetNear();
 		    parameters.Far = camera.GetFar();
 

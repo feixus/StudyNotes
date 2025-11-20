@@ -15,8 +15,8 @@ GlobalRootSignature GlobalRootSig =
     "DescriptorTable(UAV(u0, numDescriptors=1), visibility=SHADER_VISIBILITY_ALL),"
     "DescriptorTable(SRV(t5, numDescriptors=6), visibility=SHADER_VISIBILITY_ALL),"
     GLOBAL_BINDLESS_TABLE
-    "staticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL)"
-    "staticSampler(s1, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_ALL)"
+    "staticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), "
+    "staticSampler(s1, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_ALL), "
     "staticSampler(s2, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL, comparisonFunc = COMPARISON_GREATER)"
 };
 
@@ -66,7 +66,7 @@ struct ShadingData
     float3 WorldPos;
     float3 V;
     float3 N;
-    float3 UV;
+    float2 UV;
 
     float3 Diffuse;
     float3 Specular;
@@ -89,7 +89,7 @@ float CastShadowRay(float3 origin, float3 direction)
     ray.TMin = RAY_BIAS;
     ray.TMax = len;
 
-    ShadowRayPayload shadowRay = (ShadowRayPayload)0;
+    ShadowRayPayload shadowRay = {0};
 
     TraceRay(
         tTLASTable[cViewData.TLASIndex],                                         // Acceleration structure
@@ -227,7 +227,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
         return result;
     }
 
-    LightResult result = DefaultLitBxDF(shadingData.Specular, shadingData.Roughness, shadingData.Diffuse, shadingData.N, shadingData.V, L, attenuation);
+    result = DefaultLitBxDF(shadingData.Specular, shadingData.Roughness, shadingData.Diffuse, shadingData.N, shadingData.V, L, attenuation);
     float4 color = light.GetColor();
     result.Diffuse *= color.rgb * light.Intensity;
     result.Specular *= color.rgb * light.Intensity;
@@ -239,14 +239,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 {
     payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
-#if RAY_CONE_TEXTURE_LOD
-    float2 texCoords[3] = {v0.texCoord, v1.texCoord, v2.texCoord};
-    float2 textureDimensions;
-    tTexture2DTable[cHitData.Diffuse].GetDimensions(textureDimensions.x, textureDimensions.y);
-    float mipLevel = ComputeRayConeMip(payload.rayCone, N, texCoords, textureDimensions);
-#else
     float mipLevel = 2.0f;
-#endif
 
     ShadingData shadingData = GetShadingData(attrib, WorldRayOrigin(), mipLevel);
 
@@ -281,11 +274,12 @@ void RayGen()
     float2 texCoord = (float2)launchIndex * dimInv;
 
     float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
+    float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
+    float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
+    
     float3 view = ViewFromDepth(texCoord, depth, cViewData.ProjectionInverse);
     float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;
 
-    float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
-    float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
     float3 N = reflectionSample.rgb;
     float reflectivity = reflectionSample.a;
     if (depth > 0 && reflectivity > 0.1f)

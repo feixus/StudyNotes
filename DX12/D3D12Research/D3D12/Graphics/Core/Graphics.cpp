@@ -2262,7 +2262,7 @@ void Graphics::UpdateTLAS(CommandContext& context)
 	memcpy(allocation.pMappedMemory, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
-		.DestAccelerationStructureData = isUpdate ? m_pTLAS->GetGpuHandle() : 0,
+		.DestAccelerationStructureData = m_pTLAS->GetGpuHandle(),
 		.Inputs = {
 			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
 			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE |
