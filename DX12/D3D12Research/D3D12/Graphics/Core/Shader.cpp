@@ -240,18 +240,21 @@ namespace ShaderCompiler
 		CompileResult result;
 
 		ComPtr<ID3DBlob> pErrorBlob;
-		D3DCompile(pShaderSource, shaderSourceSize, pIdentifier, 
+		if (SUCCEEDED((pShaderSource, shaderSourceSize, pIdentifier, 
 			       shaderDefines.data(), nullptr, pEntryPoint, 
 				   pTarget, compileFlags, 0, 
-				   (ID3DBlob**)result.pBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
-		if (pErrorBlob != nullptr)
+				   (ID3DBlob**)result.pBlob.GetAddressOf(), pErrorBlob.GetAddressOf())))
+		{
+			result.Success = true;
+			D3DReflect(result.pBlob->GetBufferPointer(), result.pBlob->GetBufferSize(), IID_PPV_ARGS(result.pReflection.GetAddressOf()));
+		}
+		else if (pErrorBlob != nullptr)
 		{
 			result.Success = false;
 			result.ErrorMsg = (char*)pErrorBlob->GetBufferPointer();
 			return result;
 		}
 
-		result.Success = true;
 		return result;
 	}
 

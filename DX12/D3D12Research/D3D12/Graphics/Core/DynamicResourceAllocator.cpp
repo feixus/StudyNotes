@@ -3,7 +3,7 @@
 #include "Graphics.h"
 #include "GraphicsBuffer.h"
 
-constexpr static uint64_t PAGE_SIZE = Math::FromMegabytes * 2;
+constexpr static uint64_t PAGE_SIZE = Math::MegabytesToBytes * 2;
 
 DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPageManager)
 	: m_pPageManager(pPageManager)

@@ -8,16 +8,16 @@ namespace Math
     constexpr float PIDIV2 = 1.57079632679489661923f;
     constexpr float PIDIV4 = 0.78539816339744830962f;
 
-    constexpr float ToDegrees = 180.0f / PI;
-    constexpr float ToRadians = PI / 180.0f;
+    constexpr float RadiansToDegrees = 180.0f / PI;
+    constexpr float DegreesToRadians = PI / 180.0f;
 
-	constexpr float ToKiloBytes = 1.0f / (1 << 10);
-	constexpr float ToMegaBytes = 1.0f / (1 << 20);
-	constexpr float ToGigaBytes = 1.0f / (1 << 30);
+	constexpr float BytesToKiloBytes = 1.0f / (1 << 10);
+	constexpr float BytesToMegaBytes = 1.0f / (1 << 20);
+	constexpr float BytesToGigaBytes = 1.0f / (1 << 30);
 
-	constexpr uint32_t FromKilobytes = 1 << 10;
-	constexpr uint32_t FromMegabytes = 1 << 20;
-	constexpr uint32_t FromGigabytes = 1 << 30;
+	constexpr uint32_t KilobytesToBytes = 1 << 10;
+	constexpr uint32_t MegabytesToBytes = 1 << 20;
+	constexpr uint32_t GigabytesToBytes = 1 << 30;
 
     template<typename T>
     T AlignUp(T value, T alignment)
@@ -139,22 +139,23 @@ namespace Math
 	inline Color DecodeColor(uint32_t color)
 	{
 		Color output;
+        constexpr float rcp_255 = 1.0f / 255.0f;
 		// unsigned int layout: RRRR GGGG BBBB AAAA
-		output.x = ((color >> 24) & 0xFF) / 255.0f;
-		output.y = ((color >> 16) & 0xFF) / 255.0f;;
-		output.z = ((color >> 8) & 0xFF) / 255.0f;;
-		output.w = ((color >> 0) & 0xFF) / 255.0f;;
+		output.x = ((color >> 24) & 0xFF) * rcp_255;
+		output.y = ((color >> 16) & 0xFF) * rcp_255;
+		output.z = ((color >> 8) & 0xFF) * rcp_255;
+		output.w = ((color >> 0) & 0xFF) * rcp_255;
 		return output;
 	}
 
     inline int32_t RoundUp(float value)
     {
-        return (int32_t)ceil(value);
+        return (int32_t)ceilf(value);
     }
 
 	inline uint32_t DivideAndRoundUp(uint32_t nominator, uint32_t denominator)
 	{
-		return (uint32_t)ceil((float)nominator / denominator);
+		return (uint32_t)ceilf((float)nominator / denominator);
 	}
 
     Color MakeFromColorTemperature(float Temp);

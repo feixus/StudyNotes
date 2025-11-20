@@ -20,6 +20,15 @@ Mesh::~Mesh()
 
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {
+	struct Vertex
+	{
+		Vector3 Position;
+		Vector2 TexCoord;
+		Vector3 Normal;
+		Vector3 Tangent;
+		Vector3 Bitangent;
+	};
+
 	Assimp::Importer importer;
 	importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
 	const aiScene* pScene = importer.ReadFile(pFilePath,
@@ -29,6 +38,12 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		aiProcess_CalcTangentSpace |
 		aiProcess_GlobalScale);
 
+	if (!pScene)
+	{
+		E_LOG(Warning, "failed to load mesh '%s'", pFilePath);
+		return false;
+	}
+
 	uint32_t vertexCount = 0;
 	uint32_t indexCount = 0;
 	for (uint32_t i = 0; i < pScene->mNumMeshes; ++i)
@@ -36,15 +51,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		vertexCount += pScene->mMeshes[i]->mNumVertices;
 		indexCount += pScene->mMeshes[i]->mNumFaces * 3;
 	}
-
-	struct Vertex
-	{
-		Vector3 Position;
-		Vector2 TexCoord;
-		Vector3 Normal;
-		Vector3 Tangent;
-		Vector3 Bitangent;
-	};
 
 	// SubAllocated buffers need to be 16 byte aligned.
 	static constexpr uint64_t sBufferAlignment = 16;
