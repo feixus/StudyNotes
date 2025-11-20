@@ -3,6 +3,7 @@
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
+#include "assimp/pbrmaterial.h"
 #include "Core/Paths.h"
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/GraphicsBuffer.h"
@@ -20,6 +21,7 @@ Mesh::~Mesh()
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {
 	Assimp::Importer importer;
+	importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
 	const aiScene* pScene = importer.ReadFile(pFilePath,
 		aiProcess_Triangulate |
 		aiProcess_ConvertToLeftHanded |
@@ -147,10 +149,10 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	std::map<StringHash, GraphicsTexture*> textureMap;
 
-	auto loadTexture = [&](const aiMaterial* pMaterial, aiTextureType type, bool srgb)
+	auto loadTexture = [&](const aiMaterial* pMaterial, aiTextureType type, int index, bool srgb)
 	{
 		aiString path;
-		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
+		aiReturn ret = pMaterial->GetTexture(type, index, &path);
 		bool success = ret == aiReturn_SUCCESS;
 
 		if (success)
@@ -185,14 +187,27 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32_t i = 0; i < pScene->mNumMaterials; ++i)
 	{
+		const aiMaterial* pSceneMaterial = pScene->mMaterials[i];
 		Material& m = m_Materials[i];
-		const aiMaterial* pMaterial = pScene->mMaterials[i];
-		m.pDiffuseTexture = loadTexture(pMaterial, aiTextureType_DIFFUSE, true);
-		m.pNormalTexture = loadTexture(pMaterial, aiTextureType_NORMALS, false);
-		m.pRoughnessMetalnessTexture = loadTexture(pMaterial, aiTextureType_UNKNOWN, false);
-		m.pEmissiveTexture = loadTexture(pMaterial, aiTextureType_EMISSIVE, false);
-		aiString p;
-		m.IsTransparent = pMaterial->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
+		m.pDiffuseTexture = loadTexture(pSceneMaterial, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, true);
+		m.pNormalTexture = loadTexture(pSceneMaterial, aiTextureType_NORMALS, 0, false);
+		m.pRoughnessMetalnessTexture = loadTexture(pSceneMaterial, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, false);
+		m.pEmissiveTexture = loadTexture(pSceneMaterial, aiTextureType_EMISSIVE, 0, false);
+
+		if (!m.pDiffuseTexture)
+		{
+			m.pDiffuseTexture = loadTexture(pSceneMaterial, aiTextureType_DIFFUSE, 0, true);
+		}
+
+		aiString alphaMode;
+		if (pSceneMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == aiReturn_SUCCESS)
+		{
+			m.IsTransparent = strcmp(alphaMode.C_Str(), "OPAQUE") != 0;
+		}
+		else
+		{
+			m.IsTransparent = pSceneMaterial->GetTexture(aiTextureType_OPACITY, 0, &alphaMode) == aiReturn_SUCCESS;
+		}
 	}
 
 	GenerateBLAS(pGraphics, pContext);
@@ -213,10 +228,15 @@ void Mesh::GenerateBLAS(Graphics* pGraphics, CommandContext* pContext)
 	for (size_t i = 0; i < GetMeshCount(); i++)
 	{
 		SubMesh& subMesh = m_Meshes[i];
+		const Material& material = m_Materials[subMesh.MaterialId];
 
 		D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-		geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+		geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+		if (!material.IsTransparent)
+		{
+			geometryDesc.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+		}
 		geometryDesc.Triangles.IndexBuffer = subMesh.IndicesLocation.Location;
 		geometryDesc.Triangles.IndexCount = subMesh.IndicesLocation.Elements;
 		geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;

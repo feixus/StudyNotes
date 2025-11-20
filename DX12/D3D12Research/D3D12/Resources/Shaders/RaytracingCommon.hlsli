@@ -1,7 +1,9 @@
 #ifndef __INCLUDE_RAYTRACING_COMMON__
 #define __INCLUDE_RAYTRACING_COMMON__
 
-#define RAY_BIAS 1.0e-4f
+#include "SkyCommon.hlsli"
+
+#define RAY_BIAS 1.0e-2f
 #define RAY_MAX_T 1.0e10f
 
 struct RayCone
@@ -39,6 +41,11 @@ float ComputeRayConeMip(RayCone cone, float3 vertexNormal, float2 vertexUVs[3], 
     lambda += 0.5f * log2(textureDimensions.x * textureDimensions.y);
     lambda -= log2(abs(dot(WorldRayDirection(), triangleNormal)));
     return lambda;
+}
+
+float3 DefaultSkyBackground()
+{
+    return CIESky(WorldRayDirection(), -tLights[0].Direction);
 }
 
 #endif

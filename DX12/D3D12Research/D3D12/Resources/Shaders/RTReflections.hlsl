@@ -68,6 +68,7 @@ struct ShadingData
     float3 N;
     float2 UV;
 
+    float Opacity;
     float3 Diffuse;
     float3 Specular;
     float Roughness;
@@ -124,7 +125,7 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 
     TraceRay(
         tTLASTable[cViewData.TLASIndex],
-        RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE,
+        RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
         0xFF,
         0,
         0,
@@ -176,13 +177,14 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 
     ShadingData outData = (ShadingData)0;
     outData.WorldPos = v.position;
-    outData.V = normalize(v.position - cameraLocation);
+    outData.V = -WorldRayDirection();
     outData.N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
     outData.UV = v.texCoord;
     outData.Diffuse = diffuseSample.rgb;
     outData.Specular = ComputeF0(specular, outData.Diffuse, roughnessMetalnessSample.b);
     outData.Roughness = roughnessMetalnessSample.g;
     outData.Emissive = emissiveSample.rgb;
+    outData.Opacity = diffuseSample.a;
     return outData;
 }
 
@@ -211,7 +213,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
     lightPos.y = lightPos.y * -0.5f + 0.5f;
     attenuation *= LightTextureMask(light, shadowIndex, shadingData.WorldPos);
 
-    if (lightPos.x >= 0 && lightPos.x <= 1 && lightPos.y >= 0 && lightPos.y < 1.0f)
+    if (lightPos.x >= 0 && lightPos.x <= 1 && lightPos.y >= 0 && lightPos.y <= 1.0f && lightPos.z >= 0 && lightPos.z <= 1.0f)
     {
         Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowIndex)];
         attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
@@ -240,7 +242,6 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
     payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
     float mipLevel = 2.0f;
-
     ShadingData shadingData = GetShadingData(attrib, WorldRayOrigin(), mipLevel);
 
     LightResult totalResult = (LightResult)0;
@@ -252,6 +253,16 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
         totalResult.Specular += result.Specular;
     }
     payload.output += shadingData.Emissive + totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(shadingData.Diffuse, 1.0f, 0.1f);
+}
+
+[shader("anyhit")]
+void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
+{
+    ShadingData shadingData = GetShadingData(attrib, WorldRayOrigin(), 2);
+    if (shadingData.Opacity < 0.5f)
+    {
+        IgnoreHit();
+    }
 }
 
 [shader("miss")]
@@ -276,19 +287,19 @@ void RayGen()
     float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
     float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
     float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
-    
+
     float3 view = ViewFromDepth(texCoord, depth, cViewData.ProjectionInverse);
     float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;
 
     float3 N = reflectionSample.rgb;
     float reflectivity = reflectionSample.a;
-    if (depth > 0 && reflectivity > 0.1f)
+    if (depth > 0 && reflectivity > 0.0f)
     {
         float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
         float3 R = reflect(V, N);
 
         ReflectionRayPayload payload = CastReflectionRay(world, R, depth);
-        colorSample += float4(reflectivity * payload.output, 0);
+        colorSample += reflectivity * float4(payload.output, 0);
     }
 
     uOutput[launchIndex] = colorSample;

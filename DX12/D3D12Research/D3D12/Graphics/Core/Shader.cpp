@@ -23,6 +23,44 @@ namespace ShaderCompiler
 		ComPtr<IUnknown> pReflection;
 	};
 
+	class CompileArguments
+	{
+	public:
+		void AddArgument(const char* pArgument, const char* pValue = nullptr)
+		{
+			auto it = argumentStrings.insert(MULTIBYTE_TO_UNICODE(pArgument));
+			pArguments.push_back(it.first->c_str());
+			if (pValue)
+			{
+				it = argumentStrings.insert(MULTIBYTE_TO_UNICODE(pValue));
+				pArguments.push_back(it.first->c_str());
+			}
+		}
+
+		void AddArgument(const wchar_t* pArgument, const wchar_t* pValue = nullptr)
+		{
+			auto it = argumentStrings.insert(pArgument);
+			pArguments.push_back(it.first->c_str());
+			if (pValue)
+			{
+				it = argumentStrings.insert(pValue);
+				pArguments.push_back(it.first->c_str());
+			}
+		}
+
+		void AddDefine(const char* pDefine)
+		{
+			AddArgument(Sprintf("-D %s", pDefine).c_str());
+		}
+
+		const wchar_t** GetArguments() { return pArguments.data(); }
+		size_t GetNumArguments() const { return argumentStrings.size(); }
+
+	private:
+		std::vector<const wchar_t*> pArguments;
+		std::unordered_set<std::wstring> argumentStrings;
+	};
+
 	constexpr const char* GetShaderTarget(ShaderType t)
 	{
 		switch (t)
@@ -52,48 +90,44 @@ namespace ShaderCompiler
 		}
 
 		ComPtr<IDxcBlobEncoding> pSource;
-		VERIFY_HR(pUtils->CreateBlob(pShaderSource, shaderSourceSize, CP_UTF8, pSource.GetAddressOf()));
+		VERIFY_HR(pUtils->CreateBlobFromPinned(pShaderSource, shaderSourceSize, CP_UTF8, pSource.GetAddressOf()));
 
 		bool debugShaders = CommandLine::GetBool("debugshaders");
+		bool shaderSymbols = CommandLine::GetBool("shadersymbols");
 
-		std::vector<std::wstring> wDefines;
-		for (const std::string& define : defines)
+		CompileArguments arguments;
+		arguments.AddArgument(pIdentifier);
+		arguments.AddArgument("-E", pEntryPoint);
+		arguments.AddArgument("-T", pTarget);
+		arguments.AddArgument(DXC_ARG_ALL_RESOURCES_BOUND);
+
+		if (debugShaders || shaderSymbols)
 		{
-			wDefines.push_back(MULTIBYTE_TO_UNICODE(define.c_str()));
-		}
-
-		std::vector<LPCWSTR> arguments;
-		arguments.reserve(20);
-
-		arguments.push_back(L"-E");
-		arguments.push_back(MULTIBYTE_TO_UNICODE(pEntryPoint));
-
-		arguments.push_back(L"-T");
-		arguments.push_back(MULTIBYTE_TO_UNICODE(pTarget));
-		arguments.push_back(DXC_ARG_ALL_RESOURCES_BOUND);
-
-		if (debugShaders)
-		{
-			arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
-			arguments.push_back(DXC_ARG_DEBUG);
-			arguments.push_back(L"-Qembed_debug");
+			arguments.AddArgument(L"-Qembed_debug");
+			arguments.AddArgument(DXC_ARG_DEBUG);
 		}
 		else
 		{
-			arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
-			arguments.push_back(L"-Qstrip_debug");
-			arguments.push_back(L"/Fd");
-			arguments.push_back(MULTIBYTE_TO_UNICODE(pShaderSymbolsPath));
-			arguments.push_back(L"-Qstrip_reflect");
+			arguments.AddArgument("-Qstrip_debug");
+			arguments.AddArgument("-Fd", pShaderSymbolsPath);
+			arguments.AddArgument("-Qstrip_reflect");
 		}
 
-		arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS);
-		arguments.push_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
-
-		for (size_t i = 0; i < wDefines.size(); ++i)
+		if (debugShaders)
 		{
-			arguments.push_back(L"-D");
-			arguments.push_back(wDefines[i].c_str());
+			arguments.AddArgument(DXC_ARG_SKIP_OPTIMIZATIONS);
+		}
+		else
+		{
+			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
+		}
+
+		arguments.AddArgument(DXC_ARG_WARNINGS_ARE_ERRORS);
+		arguments.AddArgument(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
+
+		for (const std::string& define : defines)
+		{
+			arguments.AddArgument(define.c_str());
 		}
 
 		DxcBuffer sourceBuffer;
@@ -102,7 +136,7 @@ namespace ShaderCompiler
 		sourceBuffer.Encoding = 0;
 
 		ComPtr<IDxcResult> pCompileResult;
-		VERIFY_HR(pCompiler->Compile(&sourceBuffer, arguments.data(), (uint32_t)arguments.size(), nullptr, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
+		VERIFY_HR(pCompiler->Compile(&sourceBuffer, arguments.GetArguments(), (uint32_t)arguments.GetNumArguments(), nullptr, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
 
 		CompileResult result;
 

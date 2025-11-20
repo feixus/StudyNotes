@@ -1,7 +1,7 @@
 #include "RNG.hlsli"
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
-#incidence "RaytracingCommon.hlsli"
+#include "RaytracingCommon.hlsli"
 
 GlobalRootSignature GlobalRootSig = 
 {
@@ -85,8 +85,7 @@ void RayGen()
 
     float depth = tSceneDepth.SampleLevel(sSceneSampler, texCoord, 0).r;
     float3 world = WorldFromDepth(texCoord, depth, cData.ViewProjectionInverse);
-    float3 normal = NormalFromDepth(tSceneDepth, sSceneSampler, texCoord, dimInv, cData.ProjectionInverse);
-    normal = mul(normal, (float3x3)cData.ViewInverse);
+    float3 normal = NormalFromDepth(tSceneDepth, sSceneSampler, texCoord, dimInv, cData.ViewProjectionInverse);
 
     uint randSeed = SeedThread(launchIndexId + cData.FrameIndex * launchDim.x * launchDim.y);
     float accumulateAo = 0;

@@ -49,7 +49,7 @@ struct Light
 			.Enabled = Intensity > 0,
 			.Direction = Direction,
 			.Type = Type,
-			.SpotlightAngles = Vector2(cos(PenumbraAngle * 0.5f * Math::PI / 180.0f), cos(UmbraAngle * 0.5f * Math::PI / 180.0f)),
+			.SpotlightAngles = Vector2(cos(PenumbraAngle * 0.5f * Math::ToRadians), cos(UmbraAngle * 0.5f * Math::ToRadians)),
 			.Colour = Math::EncodeColor(Colour),
 			.Intensity = Intensity,
 			.Range = Range,

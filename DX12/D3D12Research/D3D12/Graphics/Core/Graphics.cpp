@@ -71,7 +71,7 @@ namespace Tweakables
 
 	// reflections
 	bool g_RaytracedReflections = false;
-	int g_SsrSamples = 16;
+	int g_SsrSamples = 8;
 	
 	// Misc
 	bool g_DumpRenderGraph = false;
@@ -94,13 +94,15 @@ void Graphics::Initialize(HWND hWnd)
 	m_pCamera->SetPosition(Vector3(0, 100, -15));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4, 0));
 	m_pCamera->SetNearPlane(300.f);
-	m_pCamera->SetFarPlane(10.f);
+	m_pCamera->SetFarPlane(1.f);
 
 	InitD3D();
 	InitializePipelines();
 
 	CommandContext* pContext = AllocateCommandContext();
 	InitializeAssets(*pContext);
+	SetupScene(*pContext);
+	UpdateTLAS(*pContext);
 	pContext->Execute(true);
 
 	m_pDynamicAllocationManager->CollectGrabage();
@@ -568,8 +570,6 @@ void Graphics::Update()
 			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
-
-			UpdateTLAS(renderContext);
 		});
 
 	// depth prepass
@@ -1675,7 +1675,10 @@ void Graphics::InitializeAssets(CommandContext& context)
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/noise.png", false);
 	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<GraphicsTexture>(this, "Blue Noise 512px");
 	m_DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise512.png", false);
+}
 
+void Graphics::SetupScene(CommandContext& context)
+{
 	m_pLightCookie = std::make_unique<GraphicsTexture>(this, "Light Cookie");
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
@@ -1713,8 +1716,6 @@ void Graphics::InitializeAssets(CommandContext& context)
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 		}
 	}
-
-	UpdateTLAS(context);
 
 	{
 		Vector3 position(-150, 160, -10);

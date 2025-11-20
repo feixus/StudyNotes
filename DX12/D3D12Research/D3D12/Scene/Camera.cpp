@@ -150,6 +150,7 @@ void Camera::UpdateMatrices() const
         m_Projection = Math::CreateOrthographicMatrix(m_OrthographicSize * aspect, m_OrthographicSize, m_NearPlane, m_FarPlane);
     }
 
+#if 0
 	constexpr Math::HaltonSequence<8, 2> x;
     constexpr Math::HaltonSequence<8, 3> y;
 
@@ -157,6 +158,7 @@ void Camera::UpdateMatrices() const
 	m_Jitter.y = m_JitterWeight * y[m_JitterIndex];
 	m_Projection.m[3][0] += (m_Jitter.x * 2 - 1) / m_Viewport.GetWidth();
 	m_Projection.m[3][1] += (m_Jitter.y * 2 - 1) / m_Viewport.GetHeight();
+#endif
 
     m_Projection.Invert(m_ProjectionInverse);
     m_ViewProjection = m_View * m_Projection;
@@ -202,7 +204,7 @@ void FreeCamera::Update()
         movement = Vector3::Transform(movement, m_Rotation);
 	}
 
-    m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.1f);
+    m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.2f);
 	m_Position += m_Velocity * Time::DeltaTime() * 40.0f;
 
     // update camera matrices

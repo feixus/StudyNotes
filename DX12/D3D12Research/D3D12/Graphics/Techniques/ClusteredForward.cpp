@@ -672,10 +672,10 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
         psoDesc.SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
         psoDesc.SetDepthWrite(false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);  // mark cluster must need GREATER_EQUAL on reverse-Z depth
-        psoDesc.SetName("Mark Unique Clusters");
+        psoDesc.SetName("Mark Unique Opaque Clusters");
         m_pMarkUniqueClustersOpaquePSO = pGraphics->CreatePipeline(psoDesc);
 
-		psoDesc.SetName("Mark Unique Clusters");
+		psoDesc.SetName("Mark Unique Transparent Clusters");
 		m_pMarkUniqueClustersTransparentPSO = pGraphics->CreatePipeline(psoDesc);
     }
 

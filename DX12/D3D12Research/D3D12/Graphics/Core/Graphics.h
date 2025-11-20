@@ -226,6 +226,7 @@ private:
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void CreateSwapchain();
+	void SetupScene(CommandContext& context);
 
 	void UpdateImGui();
 	void UpdateTLAS(CommandContext& context);
