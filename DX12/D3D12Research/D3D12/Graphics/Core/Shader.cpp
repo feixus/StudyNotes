@@ -77,7 +77,7 @@ namespace ShaderCompiler
 		}
 	}
 
-	CompileResult CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32_t shaderSourceSize, const char* pEntryPoint, const char* pTarget, const std::vector<std::string>& defines)
+	CompileResult CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32_t shaderSourceSize, const char* pEntryPoint, const char* pTarget, uint8_t majVersion, uint8_t minVersion, const std::vector<std::string>& defines)
 	{
 		static ComPtr<IDxcUtils> pUtils;
 		static ComPtr<IDxcCompiler3> pCompiler;
@@ -95,11 +95,24 @@ namespace ShaderCompiler
 		bool debugShaders = CommandLine::GetBool("debugshaders");
 		bool shaderSymbols = CommandLine::GetBool("shadersymbols");
 
+		std::string target = Sprintf("%s_%d_%d", pTarget, majVersion, minVersion);
+
 		CompileArguments arguments;
 		arguments.AddArgument(pIdentifier);
 		arguments.AddArgument("-E", pEntryPoint);
-		arguments.AddArgument("-T", pTarget);
+		arguments.AddArgument("-T", target.c_str());
 		arguments.AddArgument(DXC_ARG_ALL_RESOURCES_BOUND);
+
+		// payload access qualifiers
+		if (majVersion >= 6 && minVersion >= 6)
+		{
+			arguments.AddArgument("-enable-payload-qualifiers");
+			arguments.AddArgument("_PAYLOAD_QUALIFIERS = 1");
+		}
+		else
+		{
+			arguments.AddArgument("_PAYLOAD_QUALIFIERS = 0");
+		}
 
 		if (debugShaders || shaderSymbols)
 		{
@@ -202,7 +215,7 @@ namespace ShaderCompiler
 		return result;
 	}
 
-	CompileResult CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32_t shaderSourceSize, const char* pEntryPoint, const char* pTarget, const std::vector<std::string>& defines)
+	CompileResult CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32_t shaderSourceSize, const char* pEntryPoint, const char* pTarget, uint8_t majVersion, uint8_t minVersion, const std::vector<std::string>& defines)
 	{
 		bool debugShaders = CommandLine::GetBool("debugshaders");
 
@@ -240,10 +253,11 @@ namespace ShaderCompiler
 		CompileResult result;
 
 		ComPtr<ID3DBlob> pErrorBlob;
-		if (SUCCEEDED((pShaderSource, shaderSourceSize, pIdentifier, 
-			       shaderDefines.data(), nullptr, pEntryPoint, 
-				   pTarget, compileFlags, 0, 
-				   (ID3DBlob**)result.pBlob.GetAddressOf(), pErrorBlob.GetAddressOf())))
+		std::string target = Sprintf("%s_%d_%d", pTarget, majVersion, minVersion);
+		if (SUCCEEDED(D3DCompile(pShaderSource, shaderSourceSize, pIdentifier, 
+					shaderDefines.data(), nullptr, pEntryPoint, 
+					target.c_str(), compileFlags, 0,
+				   (ID3DBlob**)result.pBlob.GetAddressOf(), pErrorBlob.GetAddressOf())) != S_OK)
 		{
 			result.Success = true;
 			D3DReflect(result.pBlob->GetBufferPointer(), result.pBlob->GetBufferSize(), IID_PPV_ARGS(result.pReflection.GetAddressOf()));
@@ -260,18 +274,9 @@ namespace ShaderCompiler
 
 	CompileResult Compile(const char* pIdentifier, const char* pShaderSource, 
 						  uint32_t shaderSourceSize, const char* pTarget, 
-						  const char* pEntryPoint, uint32_t majVersion, 
-						  uint32_t minVersion, const std::vector<ShaderDefine>& defines)
+						  const char* pEntryPoint, uint8_t majVersion, 
+						  uint8_t minVersion, const std::vector<ShaderDefine>& defines)
 	{
-		char target[16];
-		size_t i = strlen(pTarget);
-		memcpy(target, pTarget, i);
-		target[i++] = '_';
-		target[i++] = '0' + (char)majVersion;
-		target[i++] = '_';
-		target[i++] = '0' + (char)minVersion;
-		target[i++] = 0;
-
 		std::vector<std::string> definesActual;
 		for (const ShaderDefine& define : defines)
 		{
@@ -288,11 +293,11 @@ namespace ShaderCompiler
 		if (majVersion < 6)
 		{
 			definesActual.emplace_back("_FXC=1");
-			return CompileFxc(pIdentifier, pShaderSource, shaderSourceSize, pEntryPoint, target, definesActual);
+			return CompileFxc(pIdentifier, pShaderSource, shaderSourceSize, pEntryPoint, pTarget, majVersion, minVersion, definesActual);
 		}
 
 		definesActual.emplace_back("_DXC=1");
-		return CompileDxc(pIdentifier, pShaderSource, shaderSourceSize, pEntryPoint, target, definesActual);
+		return CompileDxc(pIdentifier, pShaderSource, shaderSourceSize, pEntryPoint, pTarget, majVersion, minVersion, definesActual);
 	}
 }
 

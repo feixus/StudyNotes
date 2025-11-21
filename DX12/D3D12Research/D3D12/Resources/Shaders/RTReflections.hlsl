@@ -34,7 +34,6 @@ struct ViewData
 
 struct HitData
 {
-    float4x4 WorldMatrix;
     int Diffuse;
     int Normal;
     int RoughnessMetalness;
@@ -52,15 +51,15 @@ struct Vertex
     float3 bitangent;
 };
 
-struct ReflectionRayPayload
+struct RAYPAYLOAD ReflectionRayPayload
 {
-    float3 output;
-    RayCone rayCone;
+    float3 output RAYQUALIFIER(read(caller) : write(caller, closesthit, miss));
+    RayCone rayCone RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit));
 };
 
-struct ShadowRayPayload
+struct RAYPAYLOAD ShadowRayPayload
 {
-    float hit;
+    float hit RAYQUALIFIER(read(caller) : write(caller, miss));
 };
 
 struct ShadingData
@@ -158,10 +157,11 @@ Vertex GetVertexAttributes(float3 barycentrics)
         vertexOut.tangent += v.tangent * barycentrics[i];
         vertexOut.bitangent += v.bitangent * barycentrics[i];
     }
-    vertexOut.position = mul(float4(vertexOut.position, 1), hitData.WorldMatrix).xyz;
-    vertexOut.normal = mul(vertexOut.normal, (float3x3)hitData.WorldMatrix);
-    vertexOut.tangent = mul(vertexOut.tangent, (float3x3)hitData.WorldMatrix);
-    vertexOut.bitangent = mul(vertexOut.bitangent, (float3x3)hitData.WorldMatrix);
+    float4x3 worldMatrix = ObjectToWorld4x3();
+    vertexOut.position = mul(float4(vertexOut.position, 1), worldMatrix).xyz;
+    vertexOut.normal = normalize(mul(vertexOut.normal, (float3x3)worldMatrix));
+    vertexOut.tangent = normalize(mul(vertexOut.tangent, (float3x3)worldMatrix));
+    vertexOut.bitangent = normalize(mul(vertexOut.bitangent, (float3x3)worldMatrix));
     return vertexOut;
 }
 
@@ -218,7 +218,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
 
     if (all(lightPos >= 0) && all(lightPos.xy <= 1.0f))
     {
-        Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowIndex)];
+        Texture2D shadowTexture = tTexture2DTable[cShadowData.ShadowMapOffset + shadowIndex];
         attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
     }
     else

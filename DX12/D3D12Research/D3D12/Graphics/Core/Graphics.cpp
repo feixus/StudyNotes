@@ -71,12 +71,14 @@ namespace Tweakables
 
 	// reflections
 	bool g_RaytracedReflections = false;
+	float g_TLASBoundsThreshold = 5.0f * Math::DegreesToRadians;
 	int g_SsrSamples = 8;
 	
 	// Misc
 	bool g_DumpRenderGraph = false;
 	bool g_Screenshot = false;
 	bool g_EnableUI = true;
+	bool g_RenderObjectBounds = false;
 }
 
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount) :
@@ -205,6 +207,7 @@ void Graphics::Update()
 	for (Batch& b : m_SceneData.Batches)
 	{
 		b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
+		b.Radius = Vector3(b.Bounds.Extents).Length();
 	}
 
 	EditTransform(*m_pCamera, spotMatrix);
@@ -238,6 +241,15 @@ void Graphics::Update()
 		}
 		return a.BlendMode < b.BlendMode;
 	});
+
+	if (Tweakables::g_RenderObjectBounds)
+	{
+		for (const Batch& b : m_SceneData.Batches)
+		{
+			DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(0.2f, 0.2f, 0.9f, 1.0f));
+			DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 6, 6, Color(0.2f, 0.6f, 0.2f, 1.0f));
+		}
+	}
 
 	if (Tweakables::g_VisualizeLights)
 	{
@@ -538,12 +550,13 @@ void Graphics::Update()
 
 				SYSTEMTIME time;
 				GetSystemTime(&time);
-				char stringTarget[128];
-				GetTimeFormat(LOCALE_INVARIANT, TIME_FORCE24HOURFORMAT, &time, "hh_mm_ss", stringTarget, 128);
-
-				char filePath[256];
 				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-				sprintf_s(filePath, "%sScreenshot_%1s.jpg", Paths::ScreenshotDir().c_str(), stringTarget);
+
+				char filePath[128];
+				sprintf_s(filePath, "%sScreenshot_%d_%02d_%02d__%02d_%02d_%2d.jpg",
+								Paths::ScreenshotDir().c_str(),
+								time.wYear, time.wMonth, time.wDay,
+								time.wMonth, time.wMinute, time.wSecond);
 				img.Save(filePath);
 
 				m_pScreenshotBuffer.reset();
@@ -570,6 +583,8 @@ void Graphics::Update()
 			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
+
+			UpdateTLAS(renderContext);
 		});
 
 	// depth prepass
@@ -1278,6 +1293,7 @@ void Graphics::InitD3D()
 			// turn on auto-breadcrumbs and page fault reporting
 			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			E_LOG(Info, "DRED Enabled");
 		}
 	}
@@ -2166,11 +2182,13 @@ void Graphics::UpdateImGui()
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
 	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
+	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds);
 
 	if (SupportsRaytracing())
 	{
 		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
 		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
+		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold, 0, 40);
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
@@ -2231,6 +2249,15 @@ void Graphics::UpdateTLAS(CommandContext& context)
 	for (uint32_t instanceIndex = 0; instanceIndex < (uint32_t)m_SceneData.Batches.size(); ++instanceIndex)
 	{
 		const Batch& batch = m_SceneData.Batches[instanceIndex];
+
+		// cull object that are small to the viewer
+		Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
+		float angle = tanf(batch.Radius / cameraVec.Length());
+		if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
+		{
+			continue;
+		}
+
 		const SubMesh& subMesh = *batch.pMesh;
 		D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
 		instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();

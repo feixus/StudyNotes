@@ -69,6 +69,7 @@ struct Batch
 	Matrix WorldMatrix;
 	BoundingBox LocalBounds;
 	BoundingBox Bounds;
+	float Radius{0};
 	int VertexBufferDescriptor{-1};
 	int IndexBufferDescriptor{-1};
 };
@@ -101,7 +102,7 @@ struct SceneData
 	ShadowData* pShadowData{ nullptr };
 	int SceneTLAS{0};
 	int FrameIndex{ 0 };
-	BitField<256> VisibilityMask;
+	BitField<2048> VisibilityMask;
 };
 
 enum class RenderPath
