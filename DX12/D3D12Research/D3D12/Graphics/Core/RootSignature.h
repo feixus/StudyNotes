@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/Bitfield.h"
 #include "GraphicsResource.h"
 
 /*

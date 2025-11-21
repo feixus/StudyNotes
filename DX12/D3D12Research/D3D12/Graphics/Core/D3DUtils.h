@@ -1,5 +1,7 @@
 #pragma once
 
+#include <DXProgrammableCapture.h>
+
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
 
@@ -201,28 +203,34 @@ namespace D3D
 		ID3D12DeviceRemovedExtendedData1* pDred = nullptr;
 		if (SUCCEEDED(pDevice->QueryInterface(IID_PPV_ARGS(&pDred))))
 		{
-			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT dredAutoBreadcrumbsOutput;
-			if (SUCCEEDED(pDred->GetAutoBreadcrumbsOutput(&dredAutoBreadcrumbsOutput)))
+			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 dredAutoBreadcrumbsOutput;
+			if (SUCCEEDED(pDred->GetAutoBreadcrumbsOutput1(&dredAutoBreadcrumbsOutput)))
 			{
 				E_LOG(Warning, "[DRED] last tracked GPU operation:");
 
-				const D3D12_AUTO_BREADCRUMB_NODE* node = dredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
-				while (node)
+				const D3D12_AUTO_BREADCRUMB_NODE1* pNode = dredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
+				while (pNode)
 				{
-					int32_t lastCompletedOp = *node->pLastBreadcrumbValue;
+					int32_t lastCompletedOp = *pNode->pLastBreadcrumbValue;
 
-					E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", node->pCommandListDebugNameW, node->pCommandQueueDebugNameW, lastCompletedOp, node->BreadcrumbCount);
-					
+					E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", pNode->pCommandListDebugNameW, pNode->pCommandQueueDebugNameW, lastCompletedOp, pNode->BreadcrumbCount);
+
 					int32_t firstOp = Math::Max(lastCompletedOp - 5, 0);
-					int32_t lastOp = Math::Min(lastCompletedOp + 5, int32_t(node->BreadcrumbCount) - 1);
+					int32_t lastOp = Math::Min(lastCompletedOp + 5, int32_t(pNode->BreadcrumbCount) - 1);
+
+					for (uint32_t breadcrumbContext = firstOp; breadcrumbContext < pNode->BreadcrumbContextsCount; breadcrumbContext++)
+					{
+						const D3D12_DRED_BREADCRUMB_CONTEXT& context = pNode->pBreadcrumbContexts[breadcrumbContext];
+						E_LOG(Warning, "\tBreadcrumb %d: %s", context.BreadcrumbIndex, UNICODE_TO_MULTIBYTE(context.pContextString));
+					}
 
 					for (int32_t op = firstOp; op <= lastOp; op++)
 					{
-						D3D12_AUTO_BREADCRUMB_OP breadcrumbOp = node->pCommandHistory[op];
+						D3D12_AUTO_BREADCRUMB_OP breadcrumbOp = pNode->pCommandHistory[op];
 						const TCHAR* opName = (breadcrumbOp < std::size(OpNames)) ? OpNames[breadcrumbOp] : TEXT("Unknown Op");
 						E_LOG(Warning, "\tOp: %d, %s%s", op, opName, (op + 1 == lastCompletedOp) ? TEXT(" - Last completed") : TEXT(""));
 					}
-					node = node->pNext;
+					pNode = pNode->pNext;
 				}
 			}
 

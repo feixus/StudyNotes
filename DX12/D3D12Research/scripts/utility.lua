@@ -40,15 +40,10 @@ function AddOptick()
 	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Optick\\bin\\OptickCore.dll\" \"$(OutDir)\"") }
 end
 
-newaction {
-	trigger     = "clean",
-	description = "Remove all binaries and generated files",
-
-	execute = function()
-		os.rmdir("../Build")
-		os.rmdir("../ipch")
-		os.rmdir("../.vs")
-		os.remove("../*.sln")
-		os.remove(SOURCE_DIR .. "*.vcxproj.*")
-	end
-}
+-- D3D12
+function AddD3D12SDK()
+	includedirs (ROOT .. "D3D12/External/D3D12/include")
+	includedirs (ROOT .. "D3D12/External/D3D12/include/d3dx12")
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\D3D12Core.dll\" \"$(OutDir)\\D3D12\\\"") }
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\d3d12SDKLayers.dll\" \"$(OutDir)\\D3D12\\\"") }
+end

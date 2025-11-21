@@ -64,18 +64,18 @@ namespace Math
     Matrix CreateOrthographicMatrix(float width, float height, float nearZ, float farZ)
     {
 #if WORLD_RIGHT_HANDLED
-        return XMMatrixOrthographicRH(width, height, nearZ, farZ);
+        return DirectX::XMMatrixOrthographicRH(width, height, nearZ, farZ);
 #else
-        return XMMatrixOrthographicLH(width, height, nearZ, farZ);
+        return DirectX::XMMatrixOrthographicLH(width, height, nearZ, farZ);
 #endif
     }
 
     Matrix CreateOrthographicOffCenterMatrix(float left, float right, float bottom, float top, float nearZ, float farZ)
     {
 #if WORLD_RIGHT_HANDLED
-        return XMMatrixOrthographicOffCenterRH(left, right, bottom, top, nearZ, farZ);
+        return DirectX::XMMatrixOrthographicOffCenterRH(left, right, bottom, top, nearZ, farZ);
 #else
-        return XMMatrixOrthographicOffCenterLH(left, right, bottom, top, nearZ, farZ);
+        return DirectX::XMMatrixOrthographicOffCenterLH(left, right, bottom, top, nearZ, farZ);
 #endif
     }
 
@@ -173,7 +173,7 @@ namespace Math
 
     Vector3 RandVector()
     {
-        Matrix randomMatrix = XMMatrixRotationRollPitchYaw(RandomRange(-PI, PI), RandomRange(-PI, PI), RandomRange(-PI, PI));
+        Matrix randomMatrix = DirectX::XMMatrixRotationRollPitchYaw(RandomRange(-PI, PI), RandomRange(-PI, PI), RandomRange(-PI, PI));
         return Vector3::Transform(Vector3(1, 0, 0), randomMatrix);
     }
 

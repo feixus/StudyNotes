@@ -46,6 +46,9 @@ project (ENGINE_NAME)
     pchheader "stdafx.h"
     pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
     includedirs { "$(ProjectDir)" }
+	
+	includedirs (ROOT .. "D3D12/External/d3dx12")
+	includedirs (ROOT .. "D3D12/External/imgui")
 
 	SetPlatformDefines()
 
@@ -88,6 +91,7 @@ project (ENGINE_NAME)
 		AddPix()
 		AddDxc()
 		AddOptick()
+		AddD3D12SDK()
 		
 newaction {
 	trigger     = "clean",
