@@ -53,7 +53,6 @@ bool ConeInSphere(float3 conePos, float3 coneDir, float coneRange, float2 coneAn
 struct CS_Input
 {
     uint3 GroupID : SV_GroupID;
-    uint3 GroupThreadID : SV_GroupThreadID;
     uint3 DispatchThreadID : SV_DispatchThreadID;
     uint GroupIndex : SV_GroupIndex;
 };

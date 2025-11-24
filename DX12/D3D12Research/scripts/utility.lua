@@ -15,6 +15,11 @@ end
 function AddD3D12()
 	filter {}
 	links {	"d3d12.lib", "dxgi", "d3dcompiler", "dxguid" }
+	
+	includedirs (ROOT .. "D3D12/External/D3D12/include")
+	includedirs (ROOT .. "D3D12/External/D3D12/include/d3dx12")
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\D3D12Core.dll\" \"$(OutDir)\\D3D12\\\"") }
+	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\d3d12SDKLayers.dll\" \"$(OutDir)\\D3D12\\\"") }
 end
 
 function AddAssimp()
@@ -38,12 +43,4 @@ function AddOptick()
 	includedirs (ROOT .. "D3D12/External/Optick/include")
 	libdirs	(ROOT .. "D3D12/External/Optick/lib")
 	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Optick\\bin\\OptickCore.dll\" \"$(OutDir)\"") }
-end
-
--- D3D12
-function AddD3D12SDK()
-	includedirs (ROOT .. "D3D12/External/D3D12/include")
-	includedirs (ROOT .. "D3D12/External/D3D12/include/d3dx12")
-	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\D3D12Core.dll\" \"$(OutDir)\\D3D12\\\"") }
-	postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\d3d12SDKLayers.dll\" \"$(OutDir)\\D3D12\\\"") }
 end

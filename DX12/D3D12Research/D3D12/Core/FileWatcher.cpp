@@ -102,6 +102,7 @@ int FileWatcher::ThreadFunction()
 
 				FileEvent newEvent;
 				newEvent.Path = outString;
+				std::replace(newEvent.Path.begin(), newEvent.Path.end(), '\\', '/');
 
 				switch (pRecord->Action)
                 {

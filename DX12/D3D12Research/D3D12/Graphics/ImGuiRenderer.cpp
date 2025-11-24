@@ -31,6 +31,7 @@ void ImGuiRenderer::NewFrame(uint32_t width, uint32_t height)
 	
 	io.MouseDown[0] = Input::Instance().IsMouseDown(VK_LBUTTON);  // left button
 	io.MouseDown[1] = Input::Instance().IsMouseDown(VK_RBUTTON);	 // right button
+	io.MouseDown[2] = Input::Instance().IsMouseDown(VK_MBUTTON);	 // middle button
 	io.MouseWheel = Input::Instance().GetMouseWheelDelta();
 
 	Vector2 mousePos = Input::Instance().GetMousePosition();

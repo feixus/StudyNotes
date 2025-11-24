@@ -71,7 +71,7 @@ public:
 
 	void Release();
 	void SetName(const char* pName);
-	std::string GetName() const;
+	const std::string& GetName() { return m_Name;};
 
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
 	inline D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
@@ -88,6 +88,7 @@ public:
 	void PrintRefCount(std::string_view prefix);
 
 protected:
+	std::string m_Name;
 	ID3D12Resource* m_pResource{nullptr};	// when use ComPtr, the render target created from swap chain, reference counter is confusing
 	void* m_pMappedData{nullptr};
 	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;	

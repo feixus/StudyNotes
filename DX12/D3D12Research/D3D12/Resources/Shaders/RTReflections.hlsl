@@ -34,10 +34,7 @@ struct ViewData
 
 struct HitData
 {
-    int Diffuse;
-    int Normal;
-    int RoughnessMetalness;
-    int Emissive;
+    MaterialData Material;
     uint VertexBuffer;
     uint IndexBuffer;
 };
@@ -90,7 +87,8 @@ float CastShadowRay(float3 origin, float3 direction)
     ray.TMin = RAY_BIAS;
     ray.TMax = len;
 
-    ShadowRayPayload shadowRay = {0};
+    ShadowRayPayload shadowRay;
+    shadowRay.hit = 0.0f;
 
     TraceRay(
         tTLASTable[cViewData.TLASIndex],                                         // Acceleration structure
@@ -171,17 +169,18 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
     float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
     Vertex v = GetVertexAttributes(barycentrics);
 
-    float4 diffuseSample = tTexture2DTable[hitData.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-    float4 normalSample = tTexture2DTable[hitData.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-    float4 roughnessMetalnessSample = tTexture2DTable[hitData.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-    float4 emissiveSample = tTexture2DTable[hitData.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float4 diffuseSample = tTexture2DTable[hitData.Material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float4 normalSample = tTexture2DTable[hitData.Material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float4 roughnessMetalnessSample = tTexture2DTable[hitData.Material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float4 emissiveSample = tTexture2DTable[hitData.Material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
     float specular = 0.5f;
     float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
-
+	float3 N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
+	
     ShadingData outData = (ShadingData)0;
     outData.WorldPos = v.position;
     outData.V = -WorldRayDirection();
-    outData.N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
+	outData.N = N;
     outData.UV = v.texCoord;
     outData.Diffuse = diffuseSample.rgb;
     outData.Specular = ComputeF0(specular, outData.Diffuse, roughnessMetalnessSample.b);

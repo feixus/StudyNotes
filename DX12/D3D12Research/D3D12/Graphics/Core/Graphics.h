@@ -117,6 +117,8 @@ enum class ShowGraph
 	AO,
 };
 
+void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes);
+
 class Graphics
 {
 public:
@@ -216,7 +218,7 @@ public:
 	static const uint32_t SHADOW_MAP_SIZE = 4096;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 	static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 private:

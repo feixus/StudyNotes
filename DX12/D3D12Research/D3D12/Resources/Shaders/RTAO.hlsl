@@ -91,7 +91,8 @@ void RayGen()
     float accumulateAo = 0;
     for (int i = 0; i < cData.Samples; i++)
     {
-        RayPayload payload = {1.0f};
+        RayPayload payload;
+        payload.hit = 1.0f;
         float3 randomDirection = GetCosHemisphereSample(randSeed, normal);
 
         RayDesc ray;

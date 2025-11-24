@@ -210,6 +210,35 @@ void Graphics::Update()
 		b.Radius = Vector3(b.Bounds.Extents).Length();
 	}
 
+	/*static int selectedBatch = -1;
+	Ray camRay = m_pCamera->GetMouseRay(m_WindowWidth, m_WindowHeight);
+	float minDist = FLT_MAX;
+
+	if (Input::Instance().IsMousePressed(VK_LBUTTON) && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
+	{
+		selectedBatch = -1;
+		for (Batch& b : m_SceneData.Batches)
+		{
+			float distance = 0;
+			if (!b.Bounds.Contains(camRay.position) && camRay.Intersects(b.Bounds, distance))
+			{
+				distance = Vector3::Distance(camRay.position + distance * camRay.direction, b.Bounds.Center);
+				if (distance < minDist)
+				{
+					selectedBatch = b.Index;
+					minDist = distance;
+				}
+			}
+		}
+	}
+
+	if (selectedBatch >= 0)
+	{
+		Batch& b = m_SceneData.Batches[selectedBatch];
+		EditTransform(*m_pCamera, b.WorldMatrix);
+		DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(1, 0, 1, 1));
+	}*/
+
 	EditTransform(*m_pCamera, spotMatrix);
 	Vector3 scale, position;
 	Quaternion rotation;
@@ -227,20 +256,6 @@ void Graphics::Update()
 	m_Lights[0].Direction = -Vector3(costheta * sinphi, cosphi, sintheta * sinphi);
 	m_Lights[0].Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
 	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
-
-	std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), [this](const Batch& a, const Batch& b) {
-		if (a.BlendMode == b.BlendMode)
-		{
-			float aDist = Vector3::DistanceSquared(a.pMesh->Bounds.Center, m_pCamera->GetPosition());
-			float bDist = Vector3::DistanceSquared(b.pMesh->Bounds.Center, m_pCamera->GetPosition());
-			if (a.BlendMode == Batch::Blending::AlphaBlend)
-			{
-				return aDist > bDist;
-			}
-			return aDist < bDist;
-		}
-		return a.BlendMode < b.BlendMode;
-	});
 
 	if (Tweakables::g_RenderObjectBounds)
 	{
@@ -569,6 +584,12 @@ void Graphics::Update()
 		}
 	}
 
+	RGPassBuilder updateTLAS = graph.AddPass("Update TLAS");
+	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+		{
+			UpdateTLAS(renderContext);
+		});
+
 	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
 	sceneData.DepthStencil = setupLights.Write(sceneData.DepthStencil);
 	setupLights.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
@@ -583,8 +604,6 @@ void Graphics::Update()
 			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
-
-			UpdateTLAS(renderContext);
 		});
 
 	// depth prepass
@@ -614,38 +633,15 @@ void Graphics::Update()
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
 			renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
 			
-			auto DrawBatches = [&](Batch::Blending blendMode)
-			{
-				struct PerObjectData
-				{
-					Matrix World;
-					MaterialData Material;
-					uint32_t VertexBuffer;
-				} objectData;
-
-				for (const Batch& b : m_SceneData.Batches)
-				{
-					if (Any(b.BlendMode, blendMode) && m_SceneData.VisibilityMask.GetBit(b.Index))
-					{
-						objectData.World = b.WorldMatrix;
-						objectData.Material = b.Material;
-						objectData.VertexBuffer = b.VertexBufferDescriptor;
-						renderContext.SetGraphicsDynamicConstantBufferView(0, objectData);
-						renderContext.SetIndexBuffer(b.pMesh->IndicesLocation);
-						renderContext.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
-					}
-				}
-			};
-
 			{
 				GPU_PROFILE_SCOPE("Opaque", &renderContext);
 				renderContext.SetPipelineState(m_pDepthPrepassOpaquePSO);
-				DrawBatches(Batch::Blending::Opaque);
+				DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
 			}
 			{
 				GPU_PROFILE_SCOPE("Masked", &renderContext);
 				renderContext.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
-				DrawBatches(Batch::Blending::AlphaMask);
+				DrawScene(renderContext, m_SceneData, Batch::Blending::AlphaMask);
 			}
 
 			renderContext.EndRenderPass();
@@ -832,31 +828,15 @@ void Graphics::Update()
 						uint32_t VertexBuffer;
 					} objectData;
 
-					auto DrawBatches = [&](const Batch::Blending blendModes)
-					{
-						for (const Batch& b : m_SceneData.Batches)
-						{
-							if (Any(b.BlendMode, blendModes) && m_SceneData.VisibilityMask.GetBit(b.Index))
-							{
-								objectData.World = b.WorldMatrix;
-								objectData.Material = b.Material;
-								objectData.VertexBuffer = b.VertexBufferDescriptor;
-								context.SetGraphicsDynamicConstantBufferView(0, objectData);
-								context.SetIndexBuffer(b.pMesh->IndicesLocation);
-								context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
-							}
-						}
-					};
-
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pShadowOpaquePSO);
-						DrawBatches(Batch::Blending::Opaque);
+						DrawScene(context, m_SceneData, Batch::Blending::Opaque);
 					}
 					{
 						GPU_PROFILE_SCOPE("Masked", &context);
 						context.SetPipelineState(m_pShadowAlphaMaskPSO);
-						DrawBatches(Batch::Blending::AlphaMask);
+						DrawScene(context, m_SceneData, Batch::Blending::AlphaMask);
 					}
 					context.EndRenderPass();
 				}
@@ -1260,8 +1240,8 @@ void Graphics::EndFrame(uint64_t fenceValue)
 void Graphics::InitD3D()
 {
 	E_LOG(Info, "Graphics::InitD3D");
-	UINT dxgiFactoryFlags = 0;
 
+	UINT dxgiFactoryFlags = 0;
 	bool debugD3D = CommandLine::GetBool("d3ddebug") || D3D_VALIDATION;
 	bool gpuValidation = CommandLine::GetBool("gpuvalidation") || GPU_VALIDATION;
 	if (debugD3D)
@@ -2519,4 +2499,41 @@ int Graphics::RegisterBindlessResource(ResourceView* pResourceView, ResourceView
 	}
 
 	return pFallback ? RegisterBindlessResource(pFallback) : 0;
+}
+
+void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes)
+{
+	std::vector<const Batch*> meshes;
+	for (const Batch& b : scene.Batches)
+	{
+		if (Any(b.BlendMode, blendModes) && scene.VisibilityMask.GetBit(b.Index))
+		{
+			meshes.push_back(&b);
+		}
+	}
+
+	auto CompareSort = [&scene, blendModes](const Batch* a, const Batch* b)
+		{
+			float aDist = Vector3::DistanceSquared(a->pMesh->Bounds.Center, scene.pCamera->GetPosition());
+			float bDist = Vector3::DistanceSquared(b->pMesh->Bounds.Center, scene.pCamera->GetPosition());
+			return Any(blendModes, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
+		};
+	std::sort(meshes.begin(), meshes.end(), CompareSort);
+
+	struct PerObjectData
+	{
+		Matrix World;
+		MaterialData Material;
+		uint32_t VertexBuffer;
+	} objectData;
+
+	for (const Batch* b : meshes)
+	{
+		objectData.World = b->WorldMatrix;
+		objectData.Material = b->Material;
+		objectData.VertexBuffer = b->VertexBufferDescriptor;
+		context.SetGraphicsDynamicConstantBufferView(0, objectData);
+		context.SetIndexBuffer(b->pMesh->IndicesLocation);
+		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
+	}
 }

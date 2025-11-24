@@ -1,12 +1,5 @@
 #pragma once
-
-enum KeyState
-{
-	None,
-	Down,
-	Pressed,
-	DownAndPressed = Down | Pressed,
-};
+#include "Bitfield.h"
 
 class Input
 {
@@ -33,9 +26,10 @@ public:
 	float GetMouseWheelDelta() const { return m_MouseWheel; }
 
 private:
-
-	std::array<KeyState, 256> m_KeyStates{};
-	std::array<KeyState, 5> m_MouseStates{};
+	BitField<256> m_PersistentKeyStates{};
+	BitField<256> m_CurrentKeyStates{};
+	BitField<16> m_PersistentMouseStates{};
+	BitField<16> m_CurrentMouseStates{};
 
 	Input() = default;
 

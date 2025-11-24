@@ -1,16 +1,19 @@
 #include "stdafx.h"
 #include "Core/Input.h"
 #include "Graphics/Core/Graphics.h"
+#include "Core/Console.h"
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
+#include <filesystem>
+#include <shlobj.h>
 
+#ifdef _DEBUG
 // maps memory functions to debug versions, to help track memory allocations and find memory leaks
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
 #include <crtdbg.h>
+#endif
 
-#include <filesystem>
-#include <shlobj.h>
 
 #define BREAK_ON_ALLOC 0
 
@@ -23,18 +26,33 @@ class ViewWrapper
 public:
 	int Run(HINSTANCE hInstance, const char* lpCmdLine)
 	{
-		Thread::SetMainThread();
-
-		CommandLine::Parse(lpCmdLine);
-		
+#ifdef _DEBUG
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#endif
 
 #if BREAK_ON_ALLOC > 0
 		_CrtSetBreakAlloc(BREAK_ON_ALLOC);
 #endif
 
+		Thread::SetMainThread();
+		CommandLine::Parse(lpCmdLine);
 		Console::Initialize();
+
 		E_LOG(Info, "Startup hello dx12");
+
+		// Check to see if a copy of WinPixGpuCapturer.dll has already been injected into the application.
+		// This may happen if the application is launched through the PIX UI. 
+		if (CommandLine::GetBool("pix") && GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
+		{
+			std::string pixPath;
+			if (D3D::GetLatestWinPixGpuCapturePath(pixPath))
+			{
+				if (LoadLibraryA(pixPath.c_str()))
+				{
+					E_LOG(Warning, "Dynamically loaded PIX ('%s')", pixPath.c_str());
+				}
+			}
+		}
 
 		TaskQueue::Initialize(std::thread::hardware_concurrency());
 
@@ -75,6 +93,7 @@ public:
 		delete m_pGraphics;
 
 		TaskQueue::Shutdown();
+		DestroyWindow(hInstance, window);
 
 		OPTICK_SHUTDOWN();
 		return 0;
@@ -93,12 +112,9 @@ private:
 		wc.lpfnWndProc = WndProcStatic;
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		wc.lpszClassName = TEXT("wndClass");
-		wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+		wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
 
-		if (!RegisterClassEx(&wc))
-		{
-			return nullptr;
-		}
+		check(RegisterClassExA(&wc));
 
 		int displayWidth = GetSystemMetrics(SM_CXSCREEN);
 		int displayHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -128,13 +144,9 @@ private:
 			this
 		);
 
-		if (!window)
-		{
-			return nullptr;
-		}
-
+		check(window);
 		ShowWindow(window, SW_SHOWDEFAULT);
-
+		UpdateWindow(window);
 		return window;
 	}
 
@@ -404,7 +416,15 @@ private:
 			return pThis->WndProc(hWnd, message, wParam, lParam);
 		}
 		
-		return DefWindowProc(hWnd, message, wParam, lParam);
+		return DefWindowProcA(hWnd, message, wParam, lParam);
+	}
+
+	void DestroyWindow(HINSTANCE hInstance, HWND hwnd)
+	{
+		CloseWindow(hwnd);
+		char className[256];
+		GetClassNameA(hwnd, className, 256);
+		UnregisterClassA(className, hInstance);
 	}
 
 private:
@@ -416,46 +436,9 @@ private:
 	Graphics* m_pGraphics{nullptr};
 };
 
-static std::wstring GetLatestWinPixGpuCapturerPath()
-{
-	LPWSTR programFilesPath = nullptr;
-	SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, NULL, &programFilesPath);
-
-	std::filesystem::path pixInstallationPath = programFilesPath;
-	pixInstallationPath /= "Microsoft PIX";
-
-	std::wstring newestVersionFound;
-
-	for (auto const& directory_entry : std::filesystem::directory_iterator(pixInstallationPath))
-	{
-		if (directory_entry.is_directory())
-		{
-			if (newestVersionFound.empty() || newestVersionFound < directory_entry.path().filename().c_str())
-			{
-				newestVersionFound = directory_entry.path().filename().c_str();
-			}
-		}
-	}
-
-	if (newestVersionFound.empty())
-	{
-		// TODO: Error, no PIX installation found
-	}
-
-	return pixInstallationPath / newestVersionFound / L"WinPixGpuCapturer.dll";
-}
-
 //int main()
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-	// Check to see if a copy of WinPixGpuCapturer.dll has already been injected into the application.
-	// This may happen if the application is launched through the PIX UI. 
-	// if (GetModuleHandle("WinPixGpuCapturer.dll") == 0)
-	// {
-	// 	std::wstring aa = GetLatestWinPixGpuCapturerPath();
-	// 	LoadLibrary(UNICODE_TO_MULTIBYTE(aa.c_str()));
-	// }
-
 	ViewWrapper vw;
 	return vw.Run(hInstance, lpCmdLine);
 }

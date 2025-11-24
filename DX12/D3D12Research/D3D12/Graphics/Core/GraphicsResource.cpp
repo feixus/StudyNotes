@@ -48,19 +48,8 @@ void GraphicsResource::UnMap(uint32_t subResource /*= 0*/, uint64_t writeFrom /*
 void GraphicsResource::SetName(const char* pName)
 {
 	D3D_SETNAME(m_pResource, pName);
-}
 
-std::string GraphicsResource::GetName() const
-{
-	if (m_pResource)
-	{
-		uint32_t size = 0;
-		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, nullptr);
-		std::string str(size, '\0');
-		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, str.data());
-		return str;
-	}
-	return "";
+	m_Name = pName;
 }
 
 void GraphicsResource::PrintRefCount(std::string_view prefix)

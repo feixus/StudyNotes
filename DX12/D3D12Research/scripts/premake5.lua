@@ -91,7 +91,6 @@ project (ENGINE_NAME)
 		AddPix()
 		AddDxc()
 		AddOptick()
-		AddD3D12SDK()
 		
 newaction {
 	trigger     = "clean",
