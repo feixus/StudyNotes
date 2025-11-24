@@ -3,6 +3,56 @@
 #include "Shader.h"
 #include "Graphics.h"
 
+VertexElementLayout::VertexElementLayout(const VertexElementLayout& rhs)
+    : m_ElementDesc(rhs.m_ElementDesc), m_SemanticNames(rhs.m_SemanticNames)
+{
+    FixupString();
+}
+
+VertexElementLayout& VertexElementLayout::operator=(const VertexElementLayout& rhs)
+{
+    m_ElementDesc = rhs.m_ElementDesc;
+    m_SemanticNames = rhs.m_SemanticNames;
+    FixupString();
+    return *this;
+}
+
+void VertexElementLayout::AddVertexElement(const char* pSemantic, DXGI_FORMAT format, uint32_t semanticIndex, uint32_t byteOffset, uint32_t inputSlot)
+{
+    m_SemanticNames.push_back(pSemantic);
+    m_ElementDesc.resize(m_ElementDesc.size() + 1);
+    D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc.back();
+    element.AlignedByteOffset = byteOffset;
+    element.Format = format;
+    element.InputSlot = inputSlot;
+    element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    element.InstanceDataStepRate = 0;
+    element.SemanticIndex = semanticIndex;
+    FixupString();
+}
+
+void VertexElementLayout::AddInstanceElement(const char* pSemantic, DXGI_FORMAT format, uint32_t semanticIndex, uint32_t byteOffset, uint32_t inputSlot, uint32_t stepRate)
+{
+    m_SemanticNames.push_back(pSemantic);
+    m_ElementDesc.resize(m_ElementDesc.size() + 1);
+    D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc.back();
+    element.AlignedByteOffset = byteOffset;
+    element.Format = format;
+    element.InputSlot = inputSlot;
+    element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
+    element.InstanceDataStepRate = stepRate;
+    element.SemanticIndex = semanticIndex;
+    FixupString();
+}
+
+void VertexElementLayout::FixupString()
+{
+    for (size_t i = 0; i < m_ElementDesc.size(); i++)
+    {
+        m_ElementDesc[i].SemanticName = m_SemanticNames[i].c_str();
+    }
+}
+
 PipelineStateInitializer::PipelineStateInitializer()
 {
     m_pSubobjectLocations.fill(-1);
@@ -195,19 +245,12 @@ void PipelineStateInitializer::SetDepthBias(int depthBias, float depthBiasClamp,
     rsDesc.DepthBiasClamp = depthBiasClamp;
 }
 
-void PipelineStateInitializer::SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32_t count)
+void PipelineStateInitializer::SetInputLayout(const VertexElementLayout& layout)
 {
     D3D12_INPUT_LAYOUT_DESC& ilDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
-    m_InputLayoutSemanticNames.resize(count);
-	m_InputLayout.resize(count);
-    for (uint32_t i = 0; i < count; i++)
-    {
-        m_InputLayoutSemanticNames[i] = pElements[i].SemanticName;
-        m_InputLayout[i] = pElements[i];
-        m_InputLayout[i].SemanticName = m_InputLayoutSemanticNames[i].c_str();
-    }
-    ilDesc.NumElements = count;
-    ilDesc.pInputElementDescs = m_InputLayout.data();
+    m_InputLayout = layout;
+    ilDesc.NumElements = (uint32_t)m_InputLayout.GetDesc().size();
+    ilDesc.pInputElementDescs = m_InputLayout.GetDesc().data();
 }
 
 void PipelineStateInitializer::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology)
@@ -318,14 +361,9 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 
     m_Desc = initializer;
 
-    // messy hack to fixup the IL on reloads
     D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
-    ilDesc.pInputElementDescs = m_Desc.m_InputLayout.data();
-    ilDesc.NumElements = (UINT)m_Desc.m_InputLayout.size();
-    for (uint32_t i = 0; i < m_Desc.m_InputLayout.size(); i++)
-    {
-        m_Desc.m_InputLayout[i].SemanticName = m_Desc.m_InputLayoutSemanticNames[i].c_str();
-    }
+    ilDesc.NumElements = (uint32_t)m_Desc.m_InputLayout.GetDesc().size();
+    ilDesc.pInputElementDescs = m_Desc.m_InputLayout.GetDesc().data();
 
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc();
     VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetGraphics()->GetDevice());

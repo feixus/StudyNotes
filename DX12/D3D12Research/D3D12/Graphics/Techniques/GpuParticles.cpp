@@ -130,7 +130,6 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 		psoDesc.SetPixelShader(pPixelShader);
 		psoDesc.SetRootSignature(m_pParticleRenderRS->GetRootSignature());
         psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-        psoDesc.SetInputLayout(nullptr, 0);
         psoDesc.SetBlendMode(BlendMode::Alpha, false);
         psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
         psoDesc.SetDepthWrite(false);

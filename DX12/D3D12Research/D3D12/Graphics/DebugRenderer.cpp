@@ -42,10 +42,9 @@ DebugRenderer* DebugRenderer::Get()
 
 void DebugRenderer::Initialize(Graphics* pGraphics)
 {
-	CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-        CD3DX12_INPUT_ELEMENT_DESC{ "POSITION", DXGI_FORMAT_R32G32B32_FLOAT },
-        CD3DX12_INPUT_ELEMENT_DESC{ "COLOR", DXGI_FORMAT_R32_UINT }
-	};
+    VertexElementLayout inputLayout;
+    inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
+    inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
 	// shaders
 	Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
@@ -57,7 +56,7 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 
 	// opaque
     PipelineStateInitializer psoDesc;
-	psoDesc.SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+	psoDesc.SetInputLayout(inputLayout);
 	psoDesc.SetRootSignature(m_pRS->GetRootSignature());
 	psoDesc.SetVertexShader(pVertexShader);
 	psoDesc.SetPixelShader(pPixelShader);

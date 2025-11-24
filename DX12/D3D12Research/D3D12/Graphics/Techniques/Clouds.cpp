@@ -88,15 +88,14 @@ void Clouds::Initialize(Graphics *pGraphics)
 		m_pCloudsRS = std::make_unique<RootSignature>(pGraphics);
 		m_pCloudsRS->FinalizeFromShader("Clouds RS", pvVertexShader);
 
-		D3D12_INPUT_ELEMENT_DESC quadIL[] = {
-			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
+		VertexElementLayout inputLayout;
+		inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
+		inputLayout.AddVertexElement("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetVertexShader(pvVertexShader);
 		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetInputLayout(quadIL, std::size(quadIL));
+		psoDesc.SetInputLayout(inputLayout);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnable(false);
 		psoDesc.SetDepthWrite(false);
