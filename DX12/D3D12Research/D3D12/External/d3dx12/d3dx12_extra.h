@@ -114,6 +114,8 @@ static std::string DebugPrint(const D3D12_STATE_OBJECT_DESC* desc)
                 wstr << L"| [2]: Intersection Shader Import: " << (pHitGroupDesc->IntersectionShaderImport ? pHitGroupDesc->IntersectionShaderImport : L"[none]") << L"\n";
                 break;
             }
+			default:
+			break;
         }
         wstr << L"----------------------------------------------------------\n";
     }

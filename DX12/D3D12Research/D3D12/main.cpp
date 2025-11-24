@@ -28,10 +28,10 @@ public:
 	{
 #ifdef _DEBUG
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-#endif
-
+		
 #if BREAK_ON_ALLOC > 0
 		_CrtSetBreakAlloc(BREAK_ON_ALLOC);
+#endif
 #endif
 
 		Thread::SetMainThread();
@@ -89,7 +89,6 @@ public:
 			Input::Instance().Update();
 		}
 
-		m_pGraphics->Shutdown();
 		delete m_pGraphics;
 
 		TaskQueue::Shutdown();

@@ -3,6 +3,7 @@
 
 class Buffer;
 class CommandContext;
+class Swapchain;
 
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
 #define GPU_PROFILE_END(cmdlist) Profiler::Get()->End(cmdlist);
@@ -107,8 +108,8 @@ public:
 	bool HashChild(const char* pName);
 	ProfileNode* GetChild(const char* pName, int i = -1);
 	ProfileNode* GetParent() const { return m_pParent; }
-	size_t GetChildCount() const { return m_Children.size(); }
-	const ProfileNode* GetChild(int index) const { return m_Children[index].get(); }
+	uint32_t GetChildCount() const { return (uint32_t)m_Children.size(); }
+	const ProfileNode* GetChild(uint32_t index) const { return m_Children[index].get(); }
 
 private:
 	void RenderNodeImGui(int frameIndex);
@@ -137,7 +138,7 @@ public:
 	void Begin(const char* pName, CommandContext* context = nullptr);
 	void End(CommandContext* context = nullptr);
 	
-	void Resolve(Graphics* pGraphics, int frameIndex);
+	void Resolve(Swapchain* pSwapchain, Graphics* pGraphics, int frameIndex);
 
 	float GetGpuTime(const uint64_t* pReadbackData, int timerIndex) const;
 	void StartGpuTimer(CommandContext* pContext, int timerIndex);

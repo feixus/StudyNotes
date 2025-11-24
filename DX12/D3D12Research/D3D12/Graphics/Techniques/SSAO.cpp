@@ -88,7 +88,7 @@ void SSAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 	blurSSAO.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
 		{
 			renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 			renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
 			renderContext.SetPipelineState(m_pSSAOBlurPSO);

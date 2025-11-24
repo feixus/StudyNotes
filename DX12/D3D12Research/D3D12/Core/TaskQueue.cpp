@@ -129,7 +129,7 @@ void TaskQueue::Distribute(TaskContext& context, const AsyncDistributeDelegate& 
         {
             AsyncTask task;
             task.pCounter = &context;
-            task.Action = AsyncTaskDelegate::CreateLambda([action, i, count, jobs, groupSize](int threadIndex)
+            task.Action = AsyncTaskDelegate::CreateLambda([action, i, count, groupSize](int threadIndex)
                 {
                     uint32_t start = i * groupSize;
                     uint32_t end = Math::Min(start + groupSize, count);

@@ -352,6 +352,8 @@ void ShaderManager::ConditionallyReloadShaders()
 			case FileWatcher::FileEvent::Type::Renamed:
 				RecompileFromFileChange(fileEvent.Path);
 				break;
+			case FileWatcher::FileEvent::Type::Removed:
+				break;
 		}
 	}
 }

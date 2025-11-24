@@ -246,7 +246,7 @@ namespace D3D
 					E_LOG(Warning, "[DRED] active objects with VS ranges that match the faulting VA:");
 					while(node)
 					{
-						int32_t alloc_type_index = node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
+						uint32_t alloc_type_index = node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
 						const TCHAR* allocTypeName = (alloc_type_index < std::size(AllocTypeNames)) ? AllocTypeNames[alloc_type_index] : TEXT("Unknown Alloc");
 						E_LOG(Warning, "\tName: %s (Type: %s)", node->ObjectNameW, allocTypeName);
 						node = node->pNext;
@@ -259,7 +259,7 @@ namespace D3D
 					E_LOG(Warning, "[DRED] recent freed objects with VA ranges that match the faulting VA:");
 					while(node)
 					{
-						int32_t alloc_type_index = node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
+						uint32_t alloc_type_index = node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
 						const TCHAR* allocTypeName = (alloc_type_index < std::size(AllocTypeNames)) ? AllocTypeNames[alloc_type_index] : TEXT("Unknown Alloc");
 						E_LOG(Warning, "\tName: %s (Type: %s)", node->ObjectNameW, allocTypeName);
 						node = node->pNext;

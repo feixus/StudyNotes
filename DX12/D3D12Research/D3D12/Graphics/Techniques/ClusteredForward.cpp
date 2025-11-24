@@ -222,7 +222,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             context.InsertResourceBarrier(m_pAabbBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            context.InsertResourceBarrier(inputResource.pLightBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            context.InsertResourceBarrier(inputResource.pLightBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
             context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
             context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());

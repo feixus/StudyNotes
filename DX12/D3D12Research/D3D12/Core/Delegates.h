@@ -707,9 +707,10 @@ public:
         return Remove(handle);
     }
 
-    DelegateHandle operator+=(void(*pCallback)(Args...))
+    template<typename T>
+    DelegateHandle operator+=(T&& callback)
     {
-        return Add(DelegateT::CreateStatic(pCallback));
+        return Add(DelegateT::CreateLambda(std::move(callback)));
     }
 
     inline DelegateHandle Add(DelegateT&& handler) noexcept

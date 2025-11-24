@@ -117,6 +117,32 @@ enum class ShowGraph
 	AO,
 };
 
+class Graphics;
+
+class Swapchain
+{
+public:
+	Swapchain(Graphics* pGraphics, IDXGIFactory6* pFactory, void* pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync);
+	void Destroy();
+	void OnResize(uint32_t width, uint32_t height);
+	void Present();
+
+	void SetVsync(bool vsync) { m_Vsync = vsync; }
+	IDXGISwapChain4* GetSwapchain() const { return m_pSwapchain.Get(); }
+	GraphicsTexture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage].get(); }
+	GraphicsTexture* GetBackBuffer(uint32_t index) const { return m_Backbuffers[index].get(); }
+	uint32_t GetBackbufferIndex() const { return m_CurrentImage; }
+	DXGI_FORMAT GetFormat() const { return m_Format; }
+
+private:
+	std::vector<std::unique_ptr<GraphicsTexture>> m_Backbuffers;
+	ComPtr<IDXGISwapChain4> m_pSwapchain;
+	DXGI_FORMAT m_Format;
+	uint32_t m_CurrentImage;
+	bool m_Vsync;
+};
+
+
 void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes);
 
 class Graphics
@@ -127,7 +153,6 @@ public:
 
 	void Initialize(HWND hWnd);
 	void Update();
-	void Shutdown();
 
 	void OnResize(int width, int height);
 
@@ -136,7 +161,7 @@ public:
 
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
-	IDXGISwapChain3* GetSwapchain() const { return m_pSwapchain.Get(); }
+	IDXGISwapChain4* GetSwapchain() const { return m_pSwapchain->GetSwapchain(); }
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
 
@@ -204,7 +229,7 @@ public:
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_pResolveDepthStencil.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
-	GraphicsTexture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
+	GraphicsTexture* GetCurrentBackbuffer() const { return m_pSwapchain->GetBackBuffer(); }
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
@@ -223,7 +248,7 @@ public:
 
 private:
 	void BeginFrame();
-	void EndFrame(uint64_t fenceValue);
+	void EndFrame();
 
 	void InitD3D();
 	void InitializePipelines();
@@ -258,9 +283,7 @@ private:
 	HWND m_pWindow{};
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
-	uint32_t m_CurrentBackBufferIndex{ 0 };
-	std::array<std::unique_ptr<GraphicsTexture>, FRAME_COUNT> m_Backbuffers;
-	ComPtr<IDXGISwapChain3> m_pSwapchain;
+	std::unique_ptr<Swapchain> m_pSwapchain;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 

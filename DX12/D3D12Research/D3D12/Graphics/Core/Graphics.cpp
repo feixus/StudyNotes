@@ -81,12 +81,100 @@ namespace Tweakables
 	bool g_RenderObjectBounds = false;
 }
 
+Swapchain::Swapchain(Graphics* pGraphics, IDXGIFactory6* pFactory, void* pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync)
+	: m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
+{
+	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
+	swapchainDesc.Width = width;
+	swapchainDesc.Height = height;
+	swapchainDesc.Format = format;
+	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	swapchainDesc.BufferCount = numFrames;
+	swapchainDesc.Scaling = DXGI_SCALING_NONE;
+	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	swapchainDesc.SampleDesc.Count = 1;  // must set for msaa >= 1, not 0
+	swapchainDesc.SampleDesc.Quality = 0;
+	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+	swapchainDesc.Stereo = false;
+	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+	
+	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
+	fsDesc.RefreshRate.Denominator = 60;
+	fsDesc.RefreshRate.Numerator = 1;
+	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+	fsDesc.Windowed = true;
+	
+	CommandQueue* pPresentQueue = pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	ComPtr<IDXGISwapChain1> pSwapChain = nullptr;
+	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
+		pPresentQueue->GetCommandQueue(),
+		(HWND)pNativeWindow,
+		&swapchainDesc,
+		&fsDesc,
+		nullptr,
+		pSwapChain.GetAddressOf()));
+
+	m_pSwapchain.Reset();
+	pSwapChain.As(&m_pSwapchain);
+
+	m_Backbuffers.resize(numFrames);
+	for (uint32_t i = 0; i < numFrames; i++)
+	{
+		m_Backbuffers[i] = std::make_unique<GraphicsTexture>(pGraphics, "Render Target");
+	}
+}
+
+void Swapchain::Destroy()
+{
+	m_pSwapchain->SetFullscreenState(false, nullptr);
+}
+
+void Swapchain::OnResize(uint32_t width, uint32_t height)
+{
+	for (size_t i = 0; i < m_Backbuffers.size(); i++)
+	{
+		m_Backbuffers[i]->Release();
+	}
+
+	// resize the buffers
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	m_pSwapchain->GetDesc1(&desc);
+	VERIFY_HR(m_pSwapchain->ResizeBuffers(
+		(uint32_t)m_Backbuffers.size(),
+		width,
+		height,
+		desc.Format,
+		desc.Flags));
+
+	m_CurrentImage = 0;
+
+	// recreate the render target views
+	for (uint32_t i = 0; i < (uint32_t)m_Backbuffers.size(); i++)
+	{
+		ID3D12Resource* pResource = nullptr;
+		VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+		m_Backbuffers[i]->CreateForSwapChain(pResource);
+	}
+}
+
+void Swapchain::Present()
+{
+	m_pSwapchain->Present(m_Vsync, m_Vsync ? 0 : DXGI_PRESENT_ALLOW_TEARING);
+	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
+}
+
 Graphics::Graphics(uint32_t width, uint32_t height, int sampleCount) :
 	m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {}
 
 Graphics::~Graphics()
-{}
+{
+	// wait for all the GPU work to finish
+	IdleGPU();
+	//UnregisterWait(m_DeviceRemovedEvent);
+
+	m_pSwapchain->Destroy();
+}
 
 void Graphics::Initialize(HWND hWnd)
 {
@@ -181,6 +269,8 @@ void EditTransform(const Camera& camera, Matrix& matrix)
 	case ImGuizmo::SCALE:
 		ImGui::InputFloat("Scale Snap", &scaleSnap);
 		pSnapValue = &scaleSnap;
+		break;
+	default:
 		break;
 	}
 
@@ -456,7 +546,7 @@ void Graphics::Update()
 		}
 	}
 
-	if (shadowIndex > m_ShadowMaps.size())
+	if (shadowIndex > (int)m_ShadowMaps.size())
 	{
 		m_ShadowMaps.resize(shadowIndex);
 		int i = 0;
@@ -1199,7 +1289,7 @@ void Graphics::Update()
 	//  - set fence for the currently queued frame
 	//  - present the frame buffer
 	//  - wait for the next frame to be finished to start queueing work for it
-	EndFrame(nextFenceValue);
+	EndFrame();
 
 	if (m_CapturePix)
 	{
@@ -1208,32 +1298,16 @@ void Graphics::Update()
 	}
 }
 
-void Graphics::Shutdown()
-{
-	// wait for all the GPU work to finish
-	IdleGPU();
-	//UnregisterWait(m_DeviceRemovedEvent);
-
-	m_pSwapchain->SetFullscreenState(false, nullptr);
-}
-
 void Graphics::BeginFrame()
 {
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
 }
 
-void Graphics::EndFrame(uint64_t fenceValue)
+void Graphics::EndFrame()
 {
-	Profiler::Get()->Resolve(this, m_Frame);
+	Profiler::Get()->Resolve(m_pSwapchain.get(), this, m_Frame);
 
-	// the top third(triple buffer) is not need wait, just record the every frame fenceValue.
-	// the 'm_CurrentBackBufferIndex' is always in the new buffer frame
-	// we present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame
-
-	//m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
-	m_pSwapchain->Present(1, 0);
-	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
-	//WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
+	m_pSwapchain->Present();
 	++m_Frame;
 }
 
@@ -1486,14 +1560,8 @@ void Graphics::InitD3D()
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
-	// swap chain
-	CreateSwapchain();
+	m_pSwapchain = std::make_unique<Swapchain>(this, m_pFactory.Get(), m_pWindow, SWAPCHAIN_FORMAT, m_WindowWidth, m_WindowHeight, FRAME_COUNT, true);
 
-	// create the textures but don't create the resources themselves yet. 
-	for (int i = 0; i < FRAME_COUNT; i++)
-	{
-		m_Backbuffers[i] = std::make_unique<GraphicsTexture>(this, "Render Target");
-	}
 	m_pDepthStencil = std::make_unique<GraphicsTexture>(this, "Depth Stencil");
 	m_pResolveDepthStencil = std::make_unique<GraphicsTexture>(this, "Resolved Depth Stencil");
 
@@ -1532,43 +1600,6 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 }
 
-void Graphics::CreateSwapchain()
-{
-	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
-	swapchainDesc.Width = m_WindowWidth;
-	swapchainDesc.Height = m_WindowHeight;
-	swapchainDesc.Format = SWAPCHAIN_FORMAT;
-	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapchainDesc.BufferCount = FRAME_COUNT;
-	swapchainDesc.Scaling = DXGI_SCALING_NONE;
-	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	swapchainDesc.Flags = 0;
-	swapchainDesc.SampleDesc.Count = 1;  // must set for msaa >= 1, not 0
-	swapchainDesc.SampleDesc.Quality = 0;
-	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-	swapchainDesc.Stereo = false;
-	swapchainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-
-	ComPtr<IDXGISwapChain1> pSwapChain = nullptr;
-
-	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
-	fsDesc.RefreshRate.Denominator = 60;
-	fsDesc.RefreshRate.Numerator = 1;
-	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	fsDesc.Windowed = true;
-
-	VERIFY_HR(m_pFactory->CreateSwapChainForHwnd(
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-		m_pWindow,
-		&swapchainDesc,
-		&fsDesc,
-		nullptr,
-		pSwapChain.GetAddressOf()));
-
-	m_pSwapchain.Reset();
-	pSwapChain.As(&m_pSwapchain);
-}
-
 void Graphics::OnResize(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
@@ -1577,31 +1608,9 @@ void Graphics::OnResize(int width, int height)
 
 	IdleGPU();
 
-	for (int i = 0; i < FRAME_COUNT; i++)
-	{
-		m_Backbuffers[i]->Release();
-	}
 	m_pDepthStencil->Release();
 
-	// resize the buffers
-	DXGI_SWAP_CHAIN_DESC1 desc{};
-	m_pSwapchain->GetDesc1(&desc);
-	VERIFY_HR_EX(m_pSwapchain->ResizeBuffers(
-		FRAME_COUNT,
-		m_WindowWidth,
-		m_WindowHeight,
-		desc.Format,
-		desc.Flags), GetDevice());
-
-	m_CurrentBackBufferIndex = 0;
-
-	// recreate the render target views
-	for (int i = 0; i < FRAME_COUNT; i++)
-	{
-		ID3D12Resource* pResource = nullptr;
-		VERIFY_HR_EX(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)), GetDevice());
-		m_Backbuffers[i]->CreateForSwapChain(pResource);
-	}
+	m_pSwapchain->OnResize(width, height);
 
 	m_pDepthStencil->Create(TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	m_pResolveDepthStencil->Create(TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
