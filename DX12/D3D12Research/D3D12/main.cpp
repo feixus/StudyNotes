@@ -24,7 +24,7 @@ const int gMsaaSampleCount = 1;
 class ViewWrapper
 {
 public:
-	int Run(HINSTANCE hInstance, const char* lpCmdLine)
+	int Run(HINSTANCE hInstance)
 	{
 #ifdef _DEBUG
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -35,7 +35,7 @@ public:
 #endif
 
 		Thread::SetMainThread();
-		CommandLine::Parse(lpCmdLine);
+		CommandLine::Parse(GetCommandLineA());
 		Console::Initialize();
 
 		E_LOG(Info, "Startup hello dx12");
@@ -54,6 +54,13 @@ public:
 			}
 		}
 
+		// attach to RenderDoc
+		/*HMODULE mod = LoadLibraryA("C:\\Program Files\\RenderDoc\\renderdoc.dll");
+		if (!mod)
+		{
+			printf("RenderDoc DLL not found\n");
+		}*/
+
 		TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 		m_DisplayWidth = gWindowWidth;
@@ -62,8 +69,7 @@ public:
 		HWND window = MakeWindow(hInstance);
 		Input::Instance().SetWindow(window);
 
-		m_pGraphics = new Graphics(m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
-		m_pGraphics->Initialize(window);
+		m_pGraphics = new Graphics(window, m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
 
 		Time::Reset();
 
@@ -439,5 +445,5 @@ private:
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	ViewWrapper vw;
-	return vw.Run(hInstance, lpCmdLine);
+	return vw.Run(hInstance);
 }

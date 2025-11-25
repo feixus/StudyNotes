@@ -13,12 +13,12 @@
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
 
-RTReflections::RTReflections(Graphics* pGraphics)
+RTReflections::RTReflections(GraphicsDevice* pGraphicsDevice)
 {
-    if (pGraphics->SupportsRaytracing())
+    if (pGraphicsDevice->SupportsRaytracing())
     {
-        SetupResources(pGraphics);
-        SetupPipelines(pGraphics);
+        SetupResources(pGraphicsDevice);
+        SetupPipelines(pGraphicsDevice);
     }
 }
 
@@ -107,21 +107,22 @@ void RTReflections::OnResize(uint32_t width, uint32_t height)
 	}
 }
 
-void RTReflections::SetupResources(Graphics* pGraphics)
+void RTReflections::SetupResources(GraphicsDevice* pGraphicsDevice)
 {
-    m_pSceneColor = std::make_unique<GraphicsTexture>(pGraphics, "RTReflections Test Output");
+    m_pSceneColor = std::make_unique<GraphicsTexture>(pGraphicsDevice, "RTReflections Test Output");
 }
 
-void RTReflections::SetupPipelines(Graphics* pGraphics)
+void RTReflections::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 {
+	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
     // raytracing pipeline
     {
-        ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTReflections.hlsl");
+        ShaderLibrary* pShaderLibrary = pShaderManager->GetLibrary("RTReflections.hlsl");
 
-        m_pHitRS = std::make_unique<RootSignature>(pGraphics);
+        m_pHitRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pHitRS->Finalize("Hit RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
-        m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
+        m_pGlobalRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pGlobalRS->FinalizeFromShader("Global RS", pShaderLibrary);
 
         StateObjectInitializer stateDesc;
@@ -136,6 +137,6 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
         stateDesc.MaxRecursion = 2;
         stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
         stateDesc.RayGenShader = "RayGen";
-        m_pRtSO = pGraphics->CreateStateObject(stateDesc);
+        m_pRtSO = pGraphicsDevice->CreateStateObject(stateDesc);
     }
 }

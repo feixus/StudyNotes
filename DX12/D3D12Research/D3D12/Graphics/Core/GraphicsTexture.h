@@ -2,7 +2,6 @@
 #include "GraphicsResource.h"
 
 class CommandContext;
-class Graphics;
 class UnorderedAccessView;
 class ShaderResourceView;
 class ResourceView;
@@ -214,7 +213,7 @@ struct TextureDesc
 class GraphicsTexture : public GraphicsResource
 {
 public:
-	GraphicsTexture(Graphics* pGraphics, const char* pName = "");
+	GraphicsTexture(GraphicsDevice* pParent, const char* pName = "");
 	~GraphicsTexture();
 
 	int GetWidth() const { return m_Desc.Width; }

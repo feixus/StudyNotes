@@ -1,6 +1,7 @@
 #pragma once
 
-class Graphics;
+class GraphicsDevice;
+class ShaderManager;
 class RootSignature;
 class PipelineState;
 class RGGraph;
@@ -49,7 +50,7 @@ private:
 public:
     static DebugRenderer* Get();
 
-    void Initialize(Graphics* pGraphics);
+    void Initialize(GraphicsDevice* pParent);
     void Render(RGGraph& graph, const Matrix& viewProjection, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
 
     void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);

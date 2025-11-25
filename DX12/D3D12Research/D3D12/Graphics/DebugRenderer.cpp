@@ -40,18 +40,19 @@ DebugRenderer* DebugRenderer::Get()
     return &instance;
 }
 
-void DebugRenderer::Initialize(Graphics* pGraphics)
+void DebugRenderer::Initialize(GraphicsDevice* pParent)
 {
+	ShaderManager* pShaderManager = pParent->GetShaderManager();
     VertexElementLayout inputLayout;
     inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
     inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
 	// shaders
-	Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pShaderManager->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pShaderManager->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
 
 	// root signature
-	m_pRS = std::make_unique<RootSignature>(pGraphics);
+	m_pRS = std::make_unique<RootSignature>(pParent);
 	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 	// opaque
@@ -63,13 +64,13 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 	psoDesc.SetDepthWrite(true);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-	psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+	psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pParent->GetMultiSampleCount());
 	psoDesc.SetName("Triangles DebugRenderer PSO");
-	m_pTrianglesPSO = pGraphics->CreatePipeline(psoDesc);
+	m_pTrianglesPSO = pParent->CreatePipeline(psoDesc);
 
     psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
     psoDesc.SetName("Lines DebugRenderer PSO");
-    m_pLinesPSO = pGraphics->CreatePipeline(psoDesc);
+    m_pLinesPSO = pParent->CreatePipeline(psoDesc);
 }
 
 void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, GraphicsTexture* pTarget, GraphicsTexture* pDepth)

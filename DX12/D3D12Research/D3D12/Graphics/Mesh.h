@@ -1,7 +1,6 @@
 #pragma once
 #include "Core/GraphicsBuffer.h"
 
-class Graphics;
 class GraphicsBuffer;
 class GraphicsTexture;
 class Buffer;
@@ -46,7 +45,7 @@ class Mesh
 {
 public:
     ~Mesh();
-    bool Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext, float scale = 1.0f);
+    bool Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, float scale = 1.0f);
     int GetMeshCount() const { return (int)m_Meshes.size();  }
 	const SubMesh& GetMesh(int index) const { return m_Meshes[index]; }
     const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
@@ -54,7 +53,7 @@ public:
     Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
-    void GenerateBLAS(Graphics* pGraphics, CommandContext* pContext);
+    void GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext);
 
     std::vector<Material> m_Materials;
     std::unique_ptr<Buffer> m_pGeometryData;

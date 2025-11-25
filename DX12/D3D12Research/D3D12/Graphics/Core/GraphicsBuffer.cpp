@@ -5,11 +5,11 @@
 #include "GraphicsTexture.h"
 #include "ResourceViews.h"
 
-Buffer::Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
+Buffer::Buffer(GraphicsDevice* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
 	: GraphicsResource(pGraphics, pResource, state)
 {}
 
-Buffer::Buffer(Graphics* pGraphics, const char* pName) 
+Buffer::Buffer(GraphicsDevice* pGraphics, const char* pName)
 	: GraphicsResource(pGraphics), m_Name(pName)
 {}
 

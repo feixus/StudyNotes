@@ -1,6 +1,6 @@
 #pragma once
 
-class Graphics;
+class GraphicsDevice;
 class GraphicsTexture;
 struct TextureDesc;
 
@@ -8,13 +8,13 @@ struct TextureDesc;
 class RGResourceAllocator
 {
 public:
-	RGResourceAllocator(Graphics* pGraphics) : m_pGraphics(pGraphics) {}
+	RGResourceAllocator(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pGraphicsDevice) {}
 
 	GraphicsTexture* CreateTexture(const TextureDesc& desc);
 	void ReleaseTexture(GraphicsTexture* pTexture);
 
 private:
-	Graphics* m_pGraphics;
+	GraphicsDevice* m_pGraphicsDevice;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_Textures;
 	std::vector<GraphicsTexture*> m_TextureCache;
 };

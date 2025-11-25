@@ -1,7 +1,8 @@
 #pragma once
 
 class Mesh;
-class Graphics;
+class GraphicsDevice;
+class ShaderManager;
 class RootSignature;
 class GraphicsTexture;
 class Camera;
@@ -14,13 +15,13 @@ struct SceneData;
 class RTAO
 {
 public:
-    RTAO(Graphics* pGraphics);
+    RTAO(GraphicsDevice* pGraphicsDevice);
 
     void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, const SceneData& sceneData, Camera& camera);
 
 private:
-    void SetupResources(Graphics* pGraphics);
-    void SetupPipelines(Graphics* pGraphics);
+    void SetupResources(GraphicsDevice* pGraphicsDevice);
+    void SetupPipelines(GraphicsDevice* pGraphicsDevice);
 
     std::unique_ptr<RootSignature> m_pGlobalRS;
     StateObject* m_pStateObject;

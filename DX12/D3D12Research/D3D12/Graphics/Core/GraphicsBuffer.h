@@ -2,7 +2,7 @@
 #include "GraphicsResource.h"
 
 class CommandContext;
-class Graphics;
+class GraphicsDevice;
 class Buffer;
 class ShaderResourceView;
 class UnorderedAccessView;
@@ -126,8 +126,8 @@ struct BufferDesc
 class Buffer : public GraphicsResource
 {
 public:
-	Buffer(Graphics* pGraphics, const char* pName = "");
-	Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+	Buffer(GraphicsDevice* pGraphics, const char* pName = "");
+	Buffer(GraphicsDevice* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 	~Buffer();
 
 	void Create(const BufferDesc& desc);

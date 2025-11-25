@@ -5,7 +5,6 @@
 #include "RootSignature.h"
 
 class CommandContext;
-class Graphics;
 enum class CommandListContext;
 
 struct DescriptorHeapBlock
@@ -23,7 +22,7 @@ struct DescriptorHeapBlock
 class GlobalOnlineDescriptorHeap : public GraphicsObject
 {
 public:
-    GlobalOnlineDescriptorHeap(Graphics* pGraphics, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t blockSize, uint32_t numDescriptors);
+    GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t blockSize, uint32_t numDescriptors);
 
     DescriptorHeapBlock* AllocateBlock();
     void FreeBlock(uint64_t fenceValue, DescriptorHeapBlock* pBlock);

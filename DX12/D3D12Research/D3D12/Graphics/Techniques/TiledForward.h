@@ -2,7 +2,8 @@
 
 #include "Graphics/RenderGraph/RenderGraphDefinition.h"
 
-class Graphics;
+class GraphicsDevice;
+class ShaderManager;
 class RootSignature;
 class CommandContext;
 class PipelineState;
@@ -19,17 +20,15 @@ struct SceneData;
 class TiledForward
 {
 public:
-	TiledForward(Graphics* pGraphics);
+	TiledForward(GraphicsDevice* pGraphicsDevice);
 
-    void OnSwapchainCreated(int windowWidth, int windowHeight);
+    void OnSwapChainCreated(int windowWidth, int windowHeight);
     void Execute(RGGraph& graph, const SceneData& inputResource);
-	void VisualizeLightDensity(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pGraphicsDevice,  Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
 
 private:
-	void SetupResources(Graphics* pGraphics);
-    void SetupPipelines(Graphics* pGraphics);
-
-	Graphics* m_pGraphics;
+	void SetupResources(GraphicsDevice* pGraphicsDevice);
+    void SetupPipelines(GraphicsDevice* pGraphicsDevice);
 
 	// light culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;

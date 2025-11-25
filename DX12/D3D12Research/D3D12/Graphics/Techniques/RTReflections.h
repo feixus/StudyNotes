@@ -1,6 +1,7 @@
 #pragma once
 class Mesh;
-class Graphics;
+class GraphicsDevice;
+class ShaderManager;
 class RootSignature;
 class GraphicsTexture;
 class Camera;
@@ -13,14 +14,14 @@ class StateObject;
 class RTReflections
 {
 public:
-    RTReflections(Graphics* pGraphics);
+    RTReflections(GraphicsDevice* pGraphicsDevice);
 
     void Execute(RGGraph& graph, const SceneData& sceneData);
     void OnResize(uint32_t width, uint32_t height);
 
 private:
-    void SetupResources(Graphics* pGraphics);
-    void SetupPipelines(Graphics* pGraphics);
+    void SetupResources(GraphicsDevice* pGraphicsDevice);
+    void SetupPipelines(GraphicsDevice* pGraphicsDevice);
 
     StateObject* m_pRtSO{nullptr};
 

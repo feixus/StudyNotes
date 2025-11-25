@@ -6,8 +6,8 @@
 #include "OfflineDescriptorAllocator.h"
 #include "ResourceViews.h"
 
-GraphicsTexture::GraphicsTexture(Graphics* pGraphics, const char* pName)
-	: GraphicsResource(pGraphics), m_Name(pName)
+GraphicsTexture::GraphicsTexture(GraphicsDevice* pParent, const char* pName)
+	: GraphicsResource(pParent), m_Name(pName)
 {}
 
 GraphicsTexture::~GraphicsTexture()

@@ -10,13 +10,13 @@
 #include "Graphics/Core/Shader.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 
-SSAO::SSAO(Graphics* pGraphics)
+SSAO::SSAO(GraphicsDevice* pGraphicsDevice)
 {
-	SetupResources(pGraphics);
-	SetupPipelines(pGraphics);
+	SetupResources(pGraphicsDevice);
+	SetupPipelines(pGraphicsDevice);
 }
 
-void SSAO::OnSwapchainCreated(int widowWidth, int windowHeight)
+void SSAO::OnSwapChainCreated(int widowWidth, int windowHeight)
 {
 	m_pAmbientOcclusionIntermediate->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(widowWidth, 2), Math::DivideAndRoundUp(windowHeight, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 }
@@ -128,38 +128,39 @@ void SSAO::Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDe
 		});
 }
 
-void SSAO::SetupResources(Graphics* pGraphics)
+void SSAO::SetupResources(GraphicsDevice* pGraphicsDevice)
 {
-	m_pAmbientOcclusionIntermediate = std::make_unique<GraphicsTexture>(pGraphics, "SSAO Blurred");
+	m_pAmbientOcclusionIntermediate = std::make_unique<GraphicsTexture>(pGraphicsDevice, "SSAO Blurred");
 }
 
-void SSAO::SetupPipelines(Graphics* pGraphics)
+void SSAO::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 {
+	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
 	// SSAO
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pShaderManager->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pSSAORS = std::make_unique<RootSignature>(pGraphics);
+		m_pSSAORS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pSSAORS->FinalizeFromShader("SSAO RS", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSSAORS->GetRootSignature());
 		psoDesc.SetName("SSAO PSO");
-		m_pSSAOPSO = pGraphics->CreatePipeline(psoDesc);
+		m_pSSAOPSO = pGraphicsDevice->CreatePipeline(psoDesc);
 	}
 
 	// SSAO Blur
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pShaderManager->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pSSAOBlurRS = std::make_unique<RootSignature>(pGraphics);
+		m_pSSAOBlurRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur RS", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
 		psoDesc.SetName("SSAO Blur PSO");
-		m_pSSAOBlurPSO = pGraphics->CreatePipeline(psoDesc);
+		m_pSSAOBlurPSO = pGraphicsDevice->CreatePipeline(psoDesc);
 	}
 }

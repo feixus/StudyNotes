@@ -1,6 +1,6 @@
 #pragma once
 
-class Graphics;
+class GraphicsDevice;
 class ResourceView;
 
 constexpr D3D12_RESOURCE_STATES D3D12_RESOURCE_STATE_UNKNOWN = (D3D12_RESOURCE_STATES) - 1;
@@ -48,12 +48,12 @@ private:
 class GraphicsObject
 {
 public:
-	GraphicsObject(Graphics* pParent = nullptr) : m_pGraphics(pParent) {}
+	GraphicsObject(GraphicsDevice* pParent = nullptr) : m_pGraphics(pParent) {}
 
-	Graphics* GetGraphics() const { return m_pGraphics; }
+	GraphicsDevice* GetGraphics() const { return m_pGraphics; }
 
 protected:
-	Graphics* m_pGraphics;
+	GraphicsDevice* m_pGraphics;
 };
 
 class GraphicsResource : public GraphicsObject
@@ -61,8 +61,8 @@ class GraphicsResource : public GraphicsObject
 	friend class CommandContext;
 
 public:
-	GraphicsResource(Graphics* pParent);
-	GraphicsResource(Graphics* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+	GraphicsResource(GraphicsDevice* pParent);
+	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 	virtual ~GraphicsResource();
 
 	void* Map(uint32_t subResource = 0, uint64_t readFrom = 0, uint64_t readTo = 0);

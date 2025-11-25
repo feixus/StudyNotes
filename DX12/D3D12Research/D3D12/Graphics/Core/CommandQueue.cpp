@@ -5,8 +5,8 @@
 
 #include "pix3.h"
 
-CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
-	: GraphicsObject(pGraphics),
+CommandQueue::CommandQueue(GraphicsDevice* pGraphicsDevice, D3D12_COMMAND_LIST_TYPE type)
+	: GraphicsObject(pGraphicsDevice),
 	m_NextFenceValue((uint64_t)type << 56 | 1),			// set the command list type nested in fence value
 	m_LastCompletedFenceValue((uint64_t)type << 56),
 	m_Type(type)
@@ -17,9 +17,9 @@ CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
 	desc.Type = type;
 
-	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), GetGraphics()->GetDevice());
+	VERIFY_HR_EX(pGraphicsDevice->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), GetGraphics()->GetDevice());
 	D3D::SetObjectName(m_pCommandQueue.Get(), Sprintf("CommandQueue - %s", D3D::CommandlistTypeToString(m_Type)).c_str());
-	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), GetGraphics()->GetDevice());
+	VERIFY_HR_EX(pGraphicsDevice->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), GetGraphics()->GetDevice());
 	D3D::SetObjectName(m_pFence.Get(), Sprintf("CommandQueue Fence - %s", D3D::CommandlistTypeToString(m_Type)).c_str());
 	m_pFenceEventHandle = CreateEventExA(nullptr, "CommandQueue Fence", 0, EVENT_ALL_ACCESS);
 

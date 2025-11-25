@@ -2,11 +2,11 @@
 #include "LinearAllocator.h"
 #include "Graphics.h"
 
-LinearAllocator::LinearAllocator(Graphics* pGraphics)
+LinearAllocator::LinearAllocator(GraphicsDevice* pGraphicsDevice)
 {
 	m_PagesManagers.reserve(2);
-	m_PagesManagers[0] = std::make_unique<LinearAllocatorPageManager>(pGraphics, LinearAllocationType::GpuExclusive);
-	m_PagesManagers[1] = std::make_unique<LinearAllocatorPageManager>(pGraphics, LinearAllocationType::CpuWrite);
+	m_PagesManagers[0] = std::make_unique<LinearAllocatorPageManager>(pGraphicsDevice, LinearAllocationType::GpuExclusive);
+	m_PagesManagers[1] = std::make_unique<LinearAllocatorPageManager>(pGraphicsDevice, LinearAllocationType::CpuWrite);
 }
 
 LinearAllocator::~LinearAllocator()
@@ -96,7 +96,7 @@ LinearAllocationPage* LinearAllocatorPageManager::CreateNewPage(const size_t siz
 	}
 
 	ID3D12Resource* pResource = nullptr;
-	m_pGraphics->GetDevice()->CreateCommittedResource(
+	m_pGraphicsDevice->GetDevice()->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
@@ -106,5 +106,5 @@ LinearAllocationPage* LinearAllocatorPageManager::CreateNewPage(const size_t siz
 
 	pResource->SetName(L"Linear Allocator Page");
 
-	return new LinearAllocationPage(m_pGraphics, pResource, (size_t)resourceDesc.Width, usage);
+	return new LinearAllocationPage(m_pGraphicsDevice, pResource, (size_t)resourceDesc.Width, usage);
 }

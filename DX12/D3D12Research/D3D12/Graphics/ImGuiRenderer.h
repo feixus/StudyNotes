@@ -3,11 +3,12 @@
 #include "Graphics/Core/DescriptorHandle.h"
 
 class CommandContext;
-class Graphics;
+class GraphicsDevice;
 class RootSignature;
 class PipelineState;
 class GraphicsTexture;
 class RGGraph;
+class ShaderManager;
 struct SceneData;
 
 DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
@@ -15,7 +16,7 @@ DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
 class ImGuiRenderer
 {
 public:
-	ImGuiRenderer(Graphics* pDevice);
+	ImGuiRenderer(GraphicsDevice* pParent);
 	~ImGuiRenderer();
 
 	void NewFrame(uint32_t width, uint32_t height);
@@ -28,8 +29,8 @@ private:
 	static const uint32_t m_WindowWidth{ 1240 };
 	static const uint32_t m_WindowHeight{ 720 };
 
-	void CreatePipeline(Graphics* pGraphics);
-	void InitializeImGui(Graphics* pGraphics);
+	void CreatePipeline(GraphicsDevice* pParent);
+	void InitializeImGui(GraphicsDevice* pParent);
 		
 	ImGuiCallback m_UpdateCallback;
 

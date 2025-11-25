@@ -348,9 +348,9 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc()
     return streamDesc;
 }
 
-PipelineState::PipelineState(Graphics* pParent) : GraphicsObject(pParent)
+PipelineState::PipelineState(ShaderManager* pShaderManager, GraphicsDevice* pParent) : GraphicsObject(pParent)
 {
-	m_ReloadHandle = pParent->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
+	m_ReloadHandle = pShaderManager->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
 }
 
 void PipelineState::Create(const PipelineStateInitializer& initializer)

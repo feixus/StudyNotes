@@ -19,8 +19,8 @@ struct DynamicAllocation
 class LinearAllocationPage : public GraphicsResource
 {
 public:
-	LinearAllocationPage(Graphics* pGraphics, ID3D12Resource* pResource, const size_t size, D3D12_RESOURCE_STATES usageState) :
-		GraphicsResource(pGraphics, pResource, usageState), m_Size(size)
+	LinearAllocationPage(GraphicsDevice* pParnet, ID3D12Resource* pResource, const size_t size, D3D12_RESOURCE_STATES usageState) :
+		GraphicsResource(pParnet, pResource, usageState), m_Size(size)
 	{
 		//m_pResource.Attach(pResource);
 		m_pGpuAddress = pResource->GetGPUVirtualAddress();
@@ -60,15 +60,15 @@ enum class LinearAllocationType
 class LinearAllocatorPageManager
 {
 public:
-	LinearAllocatorPageManager(Graphics* pGraphics, const LinearAllocationType allocationType) :
-			m_pGraphics(pGraphics), m_Type(allocationType)
+	LinearAllocatorPageManager(GraphicsDevice* pGraphicsDevice, const LinearAllocationType allocationType) :
+		m_pGraphicsDevice(pGraphicsDevice), m_Type(allocationType)
 	{}
 
 	LinearAllocationPage* RequestPage();
 	LinearAllocationPage* CreateNewPage(const size_t size);
 
 private:
-	Graphics* m_pGraphics;
+	GraphicsDevice* m_pGraphicsDevice;
 
 	static const int CPU_PAGE_SIZE = 0x10000;
 	static const int GPU_PAGE_SIZE = 0x20000;
@@ -84,7 +84,7 @@ private:
 class LinearAllocator
 {
 public:
-	LinearAllocator(Graphics* pGraphics);
+	LinearAllocator(GraphicsDevice* pGraphicsDevice);
 	~LinearAllocator();
 
 	DynamicAllocation Allocate(const LinearAllocationType type, size_t size, const size_t alignment = 0);

@@ -18,7 +18,7 @@ Mesh::~Mesh()
 	}
 }
 
-bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext, float scale)
+bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, float scale)
 {
 	struct Vertex
 	{
@@ -56,7 +56,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	static constexpr uint64_t sBufferAlignment = 16;
 	uint64_t bufferSize = vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32_t) + pScene->mNumMeshes * sBufferAlignment;
 
-	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
+	m_pGeometryData = std::make_unique<Buffer>(pGraphicDevice, "Mesh VertexBuffer");
 	m_pGeometryData->Create(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress));
 
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
@@ -178,7 +178,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 				return it->second;
 			}
 
-			std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphics, pathStr.c_str());
+			std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphicDevice, pathStr.c_str());
 			success = pTex->Create(pContext, pathStr.c_str(), srgb);
 			if (success)
 			{
@@ -216,14 +216,14 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		}
 	}
 
-	GenerateBLAS(pGraphics, pContext);
+	GenerateBLAS(pGraphicDevice, pContext);
 
 	return true;
 }
 
-void Mesh::GenerateBLAS(Graphics* pGraphics, CommandContext* pContext)
+void Mesh::GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext)
 {
-	if (!pGraphics->SupportsRaytracing())
+	if (!pGraphicDevice->SupportsRaytracing())
 	{
 		return;
 	}
@@ -262,11 +262,11 @@ void Mesh::GenerateBLAS(Graphics* pGraphics, CommandContext* pContext)
 		};
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-		pGraphics->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+		pGraphicDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-		subMesh.pBLASScratch = new Buffer(pGraphics, "BLAS Scratch Buffer");
+		subMesh.pBLASScratch = new Buffer(pGraphicDevice, "BLAS Scratch Buffer");
 		subMesh.pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-		subMesh.pBLAS = new Buffer(pGraphics, "BLAS");
+		subMesh.pBLAS = new Buffer(pGraphicDevice, "BLAS");
 		subMesh.pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {

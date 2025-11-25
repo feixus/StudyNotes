@@ -4,9 +4,9 @@
 #include "RootSignature.h"
 #include "Graphics.h"
 
-StateObject::StateObject(Graphics* pGraphics) : GraphicsObject(pGraphics)
+StateObject::StateObject(ShaderManager* pShaderManager, GraphicsDevice* pParent) : GraphicsObject(pParent)
 {
-	m_ReloadHandle = pGraphics->GetShaderManager()->OnLibraryRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
+	m_ReloadHandle = pShaderManager->OnLibraryRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }
 
 void StateObject::Create(const StateObjectInitializer& initializer)

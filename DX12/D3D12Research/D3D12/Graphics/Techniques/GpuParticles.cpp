@@ -37,92 +37,95 @@ GpuParticles::GpuParticles(Graphics* pGraphics)
 
 void GpuParticles::Initialize(Graphics* pGraphics)
 {
-    CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	GraphicsDevice* pGraphicsDevice = pGraphics->GetDevice();
+	ShaderManager* pShaderManager = pGraphics->GetShaderManager();
 
-    m_pCounterBuffer = std::make_unique<Buffer>(pGraphics, "GpuParticle CounterBuffer");
+    CommandContext* pContext = pGraphicsDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+    m_pCounterBuffer = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle CounterBuffer");
     m_pCounterBuffer->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));
     uint32_t aliveCount = cMaxParticleCount;
     m_pCounterBuffer->SetData(pContext, &aliveCount, sizeof(uint32_t), 0);
 
     BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32_t));
-    m_pAliveList1 = std::make_unique<Buffer>(pGraphics, "GpuParticle AliveList1");
+    m_pAliveList1 = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle AliveList1");
     m_pAliveList1->Create(particleBufferDesc);
-    m_pAliveList2 = std::make_unique<Buffer>(pGraphics, "GpuParticle AliveList2");
+    m_pAliveList2 = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle AliveList2");
     m_pAliveList2->Create(particleBufferDesc);
 
-    m_pDeadList = std::make_unique<Buffer>(pGraphics, "GpuParticle DeadList");
+    m_pDeadList = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle DeadList");
     m_pDeadList->Create(particleBufferDesc);
     std::vector<uint32_t> deadList(cMaxParticleCount);
     std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
     m_pDeadList->SetData(pContext, deadList.data(), sizeof(uint32_t) * deadList.size());
     
-    m_pParticleBuffer = std::make_unique<Buffer>(pGraphics, "GpuParticle ParticleBuffer");
+    m_pParticleBuffer = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle ParticleBuffer");
     m_pParticleBuffer->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)));
     
-    m_pEmitArguments = std::make_unique<Buffer>(pGraphics, "GpuParticle EmitArgs");
+    m_pEmitArguments = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle EmitArgs");
     m_pEmitArguments->Create(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)));
-    m_pSimulateArguments = std::make_unique<Buffer>(pGraphics, "GpuParticle SimulateArgs");
+    m_pSimulateArguments = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle SimulateArgs");
     m_pSimulateArguments->Create(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)));
-    m_pDrawArguments = std::make_unique<Buffer>(pGraphics, "GpuParticle RenderArgs");
+    m_pDrawArguments = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle RenderArgs");
     m_pDrawArguments->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));
 
     pContext->Execute(true);
 
-    m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>(pGraphics);
+    m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>(pGraphicsDevice);
     m_pSimpleDispatchCommandSignature->AddDispatch();
     m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch");
 
-    m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>(pGraphics);
+    m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>(pGraphicsDevice);
     m_pSimpleDrawCommandSignature->AddDraw();
     m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
     {
-        Shader* pComputerShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
-        m_pSimulateRS = std::make_unique<RootSignature>(pGraphics);
+        Shader* pComputerShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+        m_pSimulateRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", pComputerShader);
     }
 
     {
-        Shader* pComputerShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+        Shader* pComputerShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pComputerShader);
         psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
         psoDesc.SetName("Prepare Particle Arguments PSO");
-        m_pPrepareArgumentsPSO = pGraphics->CreatePipeline(psoDesc);
+        m_pPrepareArgumentsPSO = pGraphicsDevice->CreatePipeline(psoDesc);
     }
 
     {
-        Shader* pComputerShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Emit");
+        Shader* pComputerShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Emit");
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pComputerShader);
         psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
         psoDesc.SetName("Particles Emit PSO");
-        m_pEmitPSO = pGraphics->CreatePipeline(psoDesc);
+        m_pEmitPSO = pGraphicsDevice->CreatePipeline(psoDesc);
     }
 
     {
-        Shader* pSimulateShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Simulate");
+        Shader* pSimulateShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Simulate");
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pSimulateShader);
         psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
         psoDesc.SetName("Particles Simulate PSO");        
-        m_pSimulatePSO = pGraphics->CreatePipeline(psoDesc);
+        m_pSimulatePSO = pGraphicsDevice->CreatePipeline(psoDesc);
     }
 
     {
-        Shader* pSimulateShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "SimulateEnd");
+        Shader* pSimulateShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "SimulateEnd");
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pSimulateShader);
         psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
         psoDesc.SetName("Particles Simulate End PSO");
-        m_pSimulateEndPSO = pGraphics->CreatePipeline(psoDesc);
+        m_pSimulateEndPSO = pGraphicsDevice->CreatePipeline(psoDesc);
     }
 
     {
-		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = pShaderManager->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pShaderManager->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
-		m_pParticleRenderRS = std::make_unique<RootSignature>(pGraphics);
+		m_pParticleRenderRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pParticleRenderRS->FinalizeFromShader("Particles Render RS", pVertexShader);
         
         PipelineStateInitializer psoDesc;
@@ -134,9 +137,9 @@ void GpuParticles::Initialize(Graphics* pGraphics)
         psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
         psoDesc.SetDepthWrite(false);
         psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-        psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+        psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
         psoDesc.SetName("Particles Render PSO");		
-		m_pParticleRenderPSO = pGraphics->CreatePipeline(psoDesc);
+		m_pParticleRenderPSO = pGraphicsDevice->CreatePipeline(psoDesc);
     }
 
     pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {

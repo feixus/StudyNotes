@@ -2,6 +2,8 @@
 #include "GraphicsResource.h"
 #include "Shader.h"
 
+class ShaderManager;
+
 enum class BlendMode : uint8_t
 {
 	Replace = 0,
@@ -166,7 +168,7 @@ private:
 class PipelineState : public GraphicsObject
 {
 public:
-	PipelineState(Graphics* pParent);
+	PipelineState(ShaderManager* pShaderManager, GraphicsDevice* pParent);
 	PipelineState(const PipelineState& other) = delete;
 	PipelineState& operator=(const PipelineState& other) = delete;
 	~PipelineState() = default;

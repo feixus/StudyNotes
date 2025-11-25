@@ -61,8 +61,8 @@ void DynamicResourceAllocator::Free(uint64_t fenceValue)
 }
 
 
-DynamicAllocationManager::DynamicAllocationManager(Graphics* pGraphics, BufferFlag bufferFlags)
-	: GraphicsObject(pGraphics), m_BufferFlags(bufferFlags)
+DynamicAllocationManager::DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags)
+	: GraphicsObject(pParent), m_BufferFlags(bufferFlags)
 {
 }
 

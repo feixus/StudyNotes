@@ -46,8 +46,11 @@ Clouds::Clouds(Graphics* pGraphics)
 	Initialize(pGraphics);
 }
 
-void Clouds::Initialize(Graphics *pGraphics)
+void Clouds::Initialize(Graphics* pGraphics)
 {
+	GraphicsDevice* pGraphicsDevice = pGraphics->GetDevice();
+	ShaderManager* pShaderManager = pGraphics->GetShaderManager();
+
 	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([this]() {
 		ImGui::Begin("Parameters");
 		ImGui::Text("Clouds");
@@ -65,9 +68,9 @@ void Clouds::Initialize(Graphics *pGraphics)
 	}));
 
 	{
-		Shader* pShader = pGraphics->GetShaderManager()->GetShader("WorleyNoise.hlsl", ShaderType::Compute, "WorleyNoiseCS");
+		Shader* pShader = pShaderManager->GetShader("WorleyNoise.hlsl", ShaderType::Compute, "WorleyNoiseCS");
 		
-		m_pWorleyNoiseRS = std::make_unique<RootSignature>(pGraphics);
+		m_pWorleyNoiseRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pWorleyNoiseRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pWorleyNoiseRS->Finalize("Worley Noise RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);
@@ -76,16 +79,16 @@ void Clouds::Initialize(Graphics *pGraphics)
 		psoDesc.SetComputeShader(pShader);
 		psoDesc.SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
 		psoDesc.SetName("Worley Noise PS");
-		m_pWorleyNoisePS = pGraphics->CreatePipeline(psoDesc);
+		m_pWorleyNoisePS = pGraphicsDevice->CreatePipeline(psoDesc);
 
-		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>(pGraphics, "Worley Noise");
+		m_pWorleyNoiseTexture = std::make_unique<GraphicsTexture>(pGraphicsDevice, "Worley Noise");
 		m_pWorleyNoiseTexture->Create(TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{
-		Shader* pvVertexShader = pGraphics->GetShaderManager()->GetShader("Clouds.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("Clouds.hlsl", ShaderType::Pixel, "PSMain");
-		m_pCloudsRS = std::make_unique<RootSignature>(pGraphics);
+		Shader* pvVertexShader = pShaderManager->GetShader("Clouds.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pShaderManager->GetShader("Clouds.hlsl", ShaderType::Pixel, "PSMain");
+		m_pCloudsRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pCloudsRS->FinalizeFromShader("Clouds RS", pvVertexShader);
 
 		VertexElementLayout inputLayout;
@@ -99,13 +102,13 @@ void Clouds::Initialize(Graphics *pGraphics)
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnable(false);
 		psoDesc.SetDepthWrite(false);
-		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
 		psoDesc.SetRootSignature(m_pCloudsRS->GetRootSignature());
 		psoDesc.SetName("Clouds PS");
-		m_pCloudsPS = pGraphics->CreatePipeline(psoDesc);
+		m_pCloudsPS = pGraphicsDevice->CreatePipeline(psoDesc);
 	}
 
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pGraphicsDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
 		struct Vertex
 		{
@@ -122,14 +125,14 @@ void Clouds::Initialize(Graphics *pGraphics)
 			{ Vector3(1, -1, 2), Vector2(1, 1) },
 		};
 
-		m_pQuadVertexBuffer = std::make_unique<Buffer>(pGraphics, "Quad Vertex Buffer");
+		m_pQuadVertexBuffer = std::make_unique<Buffer>(pGraphicsDevice, "Quad Vertex Buffer");
 		m_pQuadVertexBuffer->Create(BufferDesc::CreateVertexBuffer(6, sizeof(Vertex)));
 		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
 
-		m_pIntermediateColor = std::make_unique<GraphicsTexture>(pGraphics, "Cloud Intermediate Color");
+		m_pIntermediateColor = std::make_unique<GraphicsTexture>(pGraphicsDevice, "Cloud Intermediate Color");
 	}
 
-	m_pVerticalDensityTexture = std::make_unique<GraphicsTexture>(pGraphics, "Vertical Density Texture");
+	m_pVerticalDensityTexture = std::make_unique<GraphicsTexture>(pGraphicsDevice, "Vertical Density Texture");
 	m_pVerticalDensityTexture->Create(pContext, "Resources/textures/CloudVerticalDensity.png");
 
 	pContext->Execute(true);

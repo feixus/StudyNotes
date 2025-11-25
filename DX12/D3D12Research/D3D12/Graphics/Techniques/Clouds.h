@@ -5,6 +5,7 @@ class RootSignature;
 class GraphicsTexture;
 class Buffer;
 class Graphics;
+class ShaderManager;
 class Camera;
 class CommandContext;
 class RGGraph;

@@ -5,7 +5,6 @@
 
 #define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_, __COUNTER__)(name, graph)
 
-class Graphics;
 class CommandContext;
 class RGGraph;
 class RGPass;
@@ -190,7 +189,7 @@ class RGGraph
     };
 
 public:
-    explicit RGGraph(Graphics* pAllocator, uint64_t allocatorSize = 0xFFFF);
+    explicit RGGraph(GraphicsDevice* pGraphicsDevice, uint64_t allocatorSize = 0xFFFF);
     ~RGGraph();
 
     RGGraph(const RGGraph& other) = delete;
@@ -299,7 +298,7 @@ private:
     std::vector<ProfileEvent> m_Events;
     int m_EventStackSize{0};
 
-    Graphics* m_pGraphics;
+    GraphicsDevice* m_pGraphicsDevice;
     Allocator m_Allocator;
     uint64_t m_LastFenceValue{0};
     bool m_ImmediateMode{false};

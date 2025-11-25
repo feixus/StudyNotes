@@ -7,7 +7,8 @@ class Buffer;
 class GraphicsTexture;
 class Camera;
 class CommandSignature;
-class Graphics;
+class GraphicsDevice;
+class ShaderManager;
 class CommandContext;
 class UnorderedAccessView;
 class RGGraph;
@@ -19,19 +20,17 @@ struct SceneData;
 class ClusteredForward
 {
 public:
-    ClusteredForward(Graphics* pGraphics);
+    ClusteredForward(GraphicsDevice* pGraphicsDevice);
     ~ClusteredForward() = default;
 
-    void OnSwapchainCreated(int windowWidth, int windowHeight);
+    void OnSwapChainCreated(int windowWidth, int windowHeight);
 
     void Execute(RGGraph& graph, const SceneData& inputResource);
-    void VisualizeLightDensity(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
+    void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pGraphicsDevice, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
     
 private:
-    void SetupResources(Graphics* pGraphics);
-    void SetupPipelines(Graphics* pGraphics);
-
-    Graphics* m_pGraphics;
+    void SetupResources(GraphicsDevice* pGraphicsDevice);
+    void SetupPipelines(GraphicsDevice* pGraphicsDevice);
 
 	/* based on screen resolutions(eg.1080P), depth complexity(16~32 slices) and GPU performance tradeoff.
     depth axis is sliced logarithmically or exponentially to account for non-linear depth distribution.

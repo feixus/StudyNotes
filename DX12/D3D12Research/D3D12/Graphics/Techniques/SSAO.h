@@ -1,6 +1,7 @@
 #pragma once
 
-class Graphics;
+class GraphicsDevice;
+class ShaderManager;
 class RootSignature;
 class GraphicsTexture;
 class Camera;
@@ -10,15 +11,15 @@ class RGGraph;
 class SSAO
 {
 public:
-	SSAO(Graphics* pGraphics);
+	SSAO(GraphicsDevice* pGraphicsDevice);
 
-	void OnSwapchainCreated(int widowWidth, int windowHeight);
+	void OnSwapChainCreated(int widowWidth, int windowHeight);
 
 	void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera);
 
 private:
-	void SetupResources(Graphics* pGraphics);
-	void SetupPipelines(Graphics* pGraphics);
+	void SetupResources(GraphicsDevice* pGraphicsDevice);
+	void SetupPipelines(GraphicsDevice* pGraphicsDevice);
 	
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusionIntermediate;
 

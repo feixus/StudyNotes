@@ -3,7 +3,7 @@
 
 class Buffer;
 class CommandContext;
-class Swapchain;
+class SwapChain;
 
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
 #define GPU_PROFILE_END(cmdlist) Profiler::Get()->End(cmdlist);
@@ -133,12 +133,12 @@ class Profiler
 public:
 	static Profiler* Get();
 
-	void Initialize(Graphics* pGraphics);
+	void Initialize(GraphicsDevice* pGraphicsDevice);
 
 	void Begin(const char* pName, CommandContext* context = nullptr);
 	void End(CommandContext* context = nullptr);
 	
-	void Resolve(Swapchain* pSwapchain, Graphics* pGraphics, int frameIndex);
+	void Resolve(SwapChain* pSwapchain, GraphicsDevice* pGraphicsDevice, int frameIndex);
 
 	float GetGpuTime(const uint64_t* pReadbackData, int timerIndex) const;
 	void StartGpuTimer(CommandContext* pContext, int timerIndex);
