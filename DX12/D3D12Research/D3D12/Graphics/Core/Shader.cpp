@@ -473,7 +473,7 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 	std::stringstream shaderSource;
 	std::vector<ShaderStringHash> includes;
 	char filePath[1024];
-	sprintf_s(filePath, "%s%s", m_ShaderSourcePath, pShaderPath);
+	stbsp_sprintf(filePath, "%s%s", m_ShaderSourcePath, pShaderPath);
 	if (!ProcessSource(filePath, filePath, shaderSource, includes))
 	{
 		return nullptr;
@@ -515,7 +515,7 @@ ShaderLibrary* ShaderManager::LoadLibrary(const char* pShaderPath, const std::ve
 	std::stringstream shaderSource;
 	std::vector<ShaderStringHash> includes;
 	char filePath[1024];
-	sprintf_s(filePath, "%s%s", m_ShaderSourcePath, pShaderPath);
+	stbsp_sprintf(filePath, "%s%s", m_ShaderSourcePath, pShaderPath);
 	if (!ProcessSource(filePath, filePath, shaderSource, includes))
 	{
 		return nullptr;

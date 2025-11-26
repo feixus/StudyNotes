@@ -49,6 +49,7 @@ project (ENGINE_NAME)
 	
 	includedirs (ROOT .. "D3D12/External/d3dx12")
 	includedirs (ROOT .. "D3D12/External/imgui")
+	includedirs (ROOT .. "D3D12/External")
 
 	SetPlatformDefines()
 

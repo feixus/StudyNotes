@@ -110,7 +110,7 @@ void Console::Log(const char* message, LogType type)
     }
 
     char messageBuffer[4096];
-    sprintf_s(messageBuffer, "%s %s\n", pVerbosityMessage, message);
+    stbsp_sprintf(messageBuffer, "%s %s\n", pVerbosityMessage, message);
     printf("%s %s\n", pVerbosityMessage, message);
 	// send msg to the vs debugger(Output)
     OutputDebugStringA(messageBuffer);

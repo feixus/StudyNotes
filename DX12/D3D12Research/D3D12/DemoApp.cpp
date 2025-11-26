@@ -748,7 +748,7 @@ void DemoApp::Update()
 				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
 
 				char filePath[128];
-				sprintf_s(filePath, "%sScreenshot_%d_%02d_%02d__%02d_%02d_%2d.jpg",
+				stbsp_sprintf(filePath, "%sScreenshot_%d_%02d_%02d__%02d_%02d_%2d.jpg",
 								Paths::ScreenshotDir().c_str(),
 								time.wYear, time.wMonth, time.wDay,
 								time.wMonth, time.wMinute, time.wSecond);
@@ -1348,7 +1348,7 @@ void DemoApp::Update()
 		for (size_t i = 0; i < std::size(DEBUG_COLORS); ++i)
 		{
 			char number[16];
-			sprintf_s(number, "%d", (int)i);
+			stbsp_sprintf(number, "%d", (int)i);
 			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
 			ImGui::Button(number, ImVec2(40, 20));
 			ImGui::PopStyleColor();
