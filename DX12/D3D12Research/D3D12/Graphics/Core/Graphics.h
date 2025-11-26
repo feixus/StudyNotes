@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Shader.h"
+#include "DescriptorHandle.h"
+
 class CommandQueue;
 class CommandContext;
 class OfflineDescriptorAllocator;
@@ -15,13 +18,7 @@ class StateObject;
 class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
 class ResourceView;
-
 class SwapChain;
-
-struct Configuration
-{
-	int SampleCount{1};
-};
 
 enum class GraphicsInstanceFlags
 {
@@ -62,9 +59,10 @@ public:
 
 	void SetMultiSampleCount(uint32_t cnt) { m_SampleCount = cnt; }
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
-	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
+	DescriptorHandle GetViewHeapHandle() const;
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
+	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -113,6 +111,9 @@ public:
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
+
+	Shader* GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
+	ShaderLibrary* GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
 
 private:
 	ComPtr<ID3D12Device> m_pDevice;

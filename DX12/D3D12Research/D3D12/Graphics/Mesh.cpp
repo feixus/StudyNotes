@@ -231,7 +231,7 @@ void Mesh::GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext
 	ID3D12GraphicsCommandList4* pCmd = pContext->GetRaytracingCommandList();
 
 	// bottom level acceleration structure
-	for (uint32_t i = 0; i < GetMeshCount(); i++)
+	for (uint32_t i = 0; i < (uint32_t)GetMeshCount(); i++)
 	{
 		SubMesh& subMesh = m_Meshes[i];
 		const Material& material = m_Materials[subMesh.MaterialId];

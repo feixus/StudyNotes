@@ -88,8 +88,7 @@ void RTAO::SetupResources(GraphicsDevice* pGraphicsDevice)
 
 void RTAO::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 {
-	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
-    ShaderLibrary* pShaderLibrary = pShaderManager->GetLibrary("RTAO.hlsl");
+    ShaderLibrary* pShaderLibrary = pGraphicsDevice->GetLibrary("RTAO.hlsl");
 
     m_pGlobalRS = std::make_unique<RootSignature>(pGraphicsDevice);
     m_pGlobalRS->FinalizeFromShader("Global RS", pShaderLibrary);

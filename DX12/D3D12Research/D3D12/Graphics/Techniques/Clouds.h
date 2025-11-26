@@ -9,13 +9,13 @@ class Camera;
 class CommandContext;
 class RGGraph;
 struct Light;
-class DemoApp;
+class GraphicsDevice;
 
 class Clouds
 {
 public:
-	Clouds(DemoApp* pGraphics);
-	void Initialize(DemoApp* pGraphics);
+	Clouds(GraphicsDevice* pGraphicsDevice);
+	void Initialize(GraphicsDevice* pGraphicsDevice);
 	void Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera, const Light& sunLight);
 	GraphicsTexture* GetNoiseTexture() const { return m_pWorleyNoiseTexture.get(); }
 

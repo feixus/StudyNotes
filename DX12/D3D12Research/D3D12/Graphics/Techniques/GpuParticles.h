@@ -1,28 +1,26 @@
 #pragma once
 
-class DemoApp;
+class GraphicsDevice;
 class Buffer;
-class Buffer;
-class CommandSignature;
-class PipelineState;
-class PipelineState;
-class RootSignature;
-class CommandContext;
-class RGGraph;
 class GraphicsTexture;
+class CommandSignature;
+class CommandContext;
+class RootSignature;
+class PipelineState;
+class RGGraph;
 class Camera;
 
 class GpuParticles
 {
 public:
-    GpuParticles(DemoApp* pGraphics);
+    GpuParticles(GraphicsDevice* pGraphicsDevice);
     ~GpuParticles() = default;
 
     void Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const Camera& camera);
     void Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera);
 
 private:
-    void Initialize(DemoApp* pGraphics);
+    void Initialize(GraphicsDevice* pGraphicsDevice);
 
     std::unique_ptr<Buffer> m_pAliveList1;
     std::unique_ptr<Buffer> m_pAliveList2;

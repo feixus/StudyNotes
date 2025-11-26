@@ -609,10 +609,9 @@ void ClusteredForward::SetupResources(GraphicsDevice* pGraphicsDevice)
 
 void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 {
-	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
     // AABB
     {
-        Shader* pComputeShader = pShaderManager->GetShader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs");
+        Shader* pComputeShader = pGraphicsDevice->GetShader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs");
 
         m_pCreateAabbRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pCreateAabbRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
@@ -628,8 +627,8 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 
     // mark unique clusters
     {
-        Shader* pVertexShader = pShaderManager->GetShader("ClusterMarking.hlsl", ShaderType::Vertex, "MarkClusters_VS");
-		Shader* pPixelShaderOpaque = pShaderManager->GetShader("ClusterMarking.hlsl", ShaderType::Pixel, "MarkClusters_PS");
+        Shader* pVertexShader = pGraphicsDevice->GetShader("ClusterMarking.hlsl", ShaderType::Vertex, "MarkClusters_VS");
+		Shader* pPixelShaderOpaque = pGraphicsDevice->GetShader("ClusterMarking.hlsl", ShaderType::Pixel, "MarkClusters_PS");
 
         m_pMarkUniqueClustersRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", pVertexShader);
@@ -651,7 +650,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 
 	// compact cluster list
 	{
-		Shader* pComputeShader = pShaderManager->GetShader("ClusterCompaction.hlsl", ShaderType::Compute, "CompactClusters");
+		Shader* pComputeShader = pGraphicsDevice->GetShader("ClusterCompaction.hlsl", ShaderType::Compute, "CompactClusters");
 
 		m_pCompactClusterListRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pCompactClusterListRS->FinalizeFromShader("Compact Cluster List", pComputeShader);
@@ -665,7 +664,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 
 	// prepare indirect dispatch buffer
 	{
-		Shader* pComputeShader = pShaderManager->GetShader("ClusterLightCullingArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
+		Shader* pComputeShader = pGraphicsDevice->GetShader("ClusterLightCullingArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
 
 		m_pUpdateIndirectArgumentsRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pUpdateIndirectArgumentsRS->FinalizeFromShader("Update Indirect Dispatch Buffer", pComputeShader);
@@ -679,7 +678,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 
 	// light culling
 	{
-		Shader* pComputeShader = pShaderManager->GetShader("ClusterLightCulling.hlsl", ShaderType::Compute, "LightCulling");
+		Shader* pComputeShader = pGraphicsDevice->GetShader("ClusterLightCulling.hlsl", ShaderType::Compute, "LightCulling");
 
 		m_pLightCullingRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pLightCullingRS->FinalizeFromShader("Light Culling", pComputeShader);
@@ -697,8 +696,8 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 
 	// diffuse
 	{
-		Shader* pVertexShader = pShaderManager->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
-		Shader* pPixelShader = pShaderManager->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
+		Shader* pVertexShader = pGraphicsDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
+		Shader* pPixelShader = pGraphicsDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
 
 		m_pDiffuseRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
@@ -726,7 +725,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 
 	// cluster debug rendering
 	{
-		Shader* pPixelShader = pShaderManager->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pPixelShader = pGraphicsDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pDebugClusterRS = std::make_unique<RootSignature>(pGraphicsDevice);
 
@@ -739,7 +738,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 
 		if (pGraphicsDevice->SupportMeshShaders())
         {
-            Shader* pMeshShader = pShaderManager->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Mesh, "MSMain");
+            Shader* pMeshShader = pGraphicsDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Mesh, "MSMain");
             
 		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", pMeshShader);
             
@@ -749,8 +748,8 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
         }
         else
         {
-            Shader* pVertexShader = pShaderManager->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Vertex, "VSMain");
-            Shader* pGeometryShader = pShaderManager->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Geometry, "GSMain");
+            Shader* pVertexShader = pGraphicsDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Vertex, "VSMain");
+            Shader* pGeometryShader = pGraphicsDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Geometry, "GSMain");
             
 		    m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", pVertexShader);
             
@@ -766,7 +765,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
     }
 
     {
-        Shader* pComputeShader = pShaderManager->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
+        Shader* pComputeShader = pGraphicsDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
 
         m_pVisualizeLightsRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pVisualizeLightsRS->FinalizeFromShader("Visualize Light Density RS", pComputeShader);
@@ -779,7 +778,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
     }
 
 	{
-		Shader* pComputeShader = pShaderManager->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "InjectFogLightingCS", {});
+		Shader* pComputeShader = pGraphicsDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "InjectFogLightingCS", {});
 
 		m_pVolumetricLightingRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pVolumetricLightingRS->FinalizeFromShader("Inject Fog Lighting", pComputeShader);
@@ -793,7 +792,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 		}
 
 		{
-			Shader* pAccumulateComputeShader = pShaderManager->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "AccumulateFogCS", {});
+			Shader* pAccumulateComputeShader = pGraphicsDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "AccumulateFogCS", {});
 			PipelineStateInitializer psoDesc;
 			psoDesc.SetComputeShader(pAccumulateComputeShader);
 			psoDesc.SetRootSignature(m_pVolumetricLightingRS->GetRootSignature());
@@ -802,4 +801,3 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 		}
 	}
 }
-

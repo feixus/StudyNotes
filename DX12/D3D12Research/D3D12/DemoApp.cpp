@@ -248,15 +248,15 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	m_pRTAO = std::make_unique<RTAO>(m_pDevice.get());
 	m_pSSAO = std::make_unique<SSAO>(m_pDevice.get());
 	m_pRTReflections = std::make_unique<RTReflections>(m_pDevice.get());
-	m_pClouds = std::make_unique<Clouds>(this);
-	m_pGpuParticles = std::make_unique<GpuParticles>(this);
+	m_pClouds = std::make_unique<Clouds>(m_pDevice.get());
+	m_pGpuParticles = std::make_unique<GpuParticles>(m_pDevice.get());
 
 	Profiler::Get()->Initialize(m_pDevice.get(), FRAME_COUNT);
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
-	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &DemoApp::UpdateImGui));
+    ImGui::RegisterCallback(ImGui::OnImGuiRenderDelegate::CreateRaw(this, &DemoApp::UpdateImGui));
 
-	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetGlobalViewHeap()->GetStartHandle();
+	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetViewHeapHandle();
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
@@ -380,7 +380,6 @@ void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
-	m_pImGuiRenderer->Update();
 
 	PROFILE_BEGIN("UpdateGameState");
 	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
@@ -1453,8 +1452,8 @@ void DemoApp::InitializePipelines()
 	// shadow mapping
 	// vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
-		Shader* pVertexShader = m_pDevice->GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pAlphaClipPixelShader = m_pDevice->GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pAlphaClipPixelShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 		// root signature
 		m_pShadowRS = std::make_unique<RootSignature>(GetDevice());
@@ -1479,8 +1478,8 @@ void DemoApp::InitializePipelines()
 	// depth prepass
 	// simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader* pVertexShader = m_pDevice->GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pixelShader = m_pDevice->GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pixelShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 		// root signature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>(GetDevice());
@@ -1502,7 +1501,7 @@ void DemoApp::InitializePipelines()
 
 	// luminance histogram
 	{
-		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("Tonemap/LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShader("Tonemap/LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
 
 		// root signature
 		m_pLuminanceHistogramRS = std::make_unique<RootSignature>(GetDevice());
@@ -1523,7 +1522,7 @@ void DemoApp::InitializePipelines()
 
 	// draw histogram
 	{
-		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("Tonemap/DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram");
+		Shader* pComputeShader = m_pDevice->GetShader("Tonemap/DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram");
 		m_pDrawHistogramRS = std::make_unique<RootSignature>(GetDevice());
 		m_pDrawHistogramRS->FinalizeFromShader("Draw Histogram RS", pComputeShader);
 
@@ -1536,7 +1535,7 @@ void DemoApp::InitializePipelines()
 
 	// average luminance
 	{
-		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("Tonemap/AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShader("Tonemap/AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
 
 		// root signature
 		m_pAverageLuminanceRS = std::make_unique<RootSignature>(GetDevice());
@@ -1552,7 +1551,7 @@ void DemoApp::InitializePipelines()
 
 	// camera motion
 	{
-		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pCameraMotionRS = std::make_unique<RootSignature>(GetDevice());
 		m_pCameraMotionRS->FinalizeFromShader("Camera Motion RS", pComputeShader);
@@ -1566,7 +1565,7 @@ void DemoApp::InitializePipelines()
 
 	// tonemapping
 	{
-		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("Tonemap/Tonemapping.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShader("Tonemap/Tonemapping.hlsl", ShaderType::Compute, "CSMain");
 
 		// rootSignature
 		m_pToneMapRS = std::make_unique<RootSignature>(GetDevice());
@@ -1584,7 +1583,7 @@ void DemoApp::InitializePipelines()
 	// resolves a multisampled buffer to a normal depth buffer
 	// only required when the sample count > 1
 	{
-		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pResolveDepthRS = std::make_unique<RootSignature>(GetDevice());
 		m_pResolveDepthRS->FinalizeFromShader("Resolve Depth RS", pComputeShader);
@@ -1598,9 +1597,9 @@ void DemoApp::InitializePipelines()
 
 	// depth reduce
 	{
-		Shader* pPrepareReduceShader = m_pDevice->GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth");
-		Shader* pPrepareReduceShaderMSAA = m_pDevice->GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
-		Shader* pReduceShader = m_pDevice->GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "ReduceDepth");
+		Shader* pPrepareReduceShader = m_pDevice->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth");
+		Shader* pPrepareReduceShaderMSAA = m_pDevice->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
+		Shader* pReduceShader = m_pDevice->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "ReduceDepth");
 
 		m_pReduceDepthRS = std::make_unique<RootSignature>(GetDevice());
 		m_pReduceDepthRS->FinalizeFromShader("Reduce Depth RS", pReduceShader);
@@ -1622,7 +1621,7 @@ void DemoApp::InitializePipelines()
 
 	//TAA
 	{
-		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
 		
 		m_pTemporalResolveRS = std::make_unique<RootSignature>(GetDevice());
 		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve RS", pComputeShader);
@@ -1636,7 +1635,7 @@ void DemoApp::InitializePipelines()
 
 	// mip generation
 	{
-		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pGenerateMipsRS = std::make_unique<RootSignature>(GetDevice());
 		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips RS", pComputeShader);
@@ -1650,8 +1649,8 @@ void DemoApp::InitializePipelines()
 
 	// sky
 	{
-		Shader* pVertexShader = m_pDevice->GetShaderManager()->GetShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = m_pDevice->GetShaderManager()->GetShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
 		// root signature
 		m_pSkyboxRS = std::make_unique<RootSignature>(GetDevice());

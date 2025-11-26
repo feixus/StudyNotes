@@ -215,7 +215,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist - %d", m_CommandLists.size()).c_str());
 			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap.get(), m_pDynamicAllocationManager.get(), pAllocator));
 			pContext = m_CommandListPool[typeIndex].back().get();
 		}
 	}
@@ -312,6 +312,11 @@ bool GraphicsDevice::SupportsRenderPasses() const
 	return m_RenderPassTier >= D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
 }
 
+DescriptorHandle GraphicsDevice::GetViewHeapHandle() const
+{
+	return m_pGlobalViewHeap->GetStartHandle();
+}
+
 void GraphicsDevice::IdleGPU()
 {
 	for (auto& pCommandQueue : m_CommandQueues)
@@ -355,6 +360,15 @@ StateObject* GraphicsDevice::CreateStateObject(const StateObjectInitializer& sta
 	return m_StateObjects.back().get();
 }
 
+Shader* GraphicsDevice::GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines)
+{
+	return m_pShaderManager->GetShader(shaderPath, shaderType, entryPoint, defines);
+}
+
+ShaderLibrary* GraphicsDevice::GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines)
+{
+	return m_pShaderManager->GetLibrary(shaderPath, defines);
+}
 
 GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 {

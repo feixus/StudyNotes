@@ -1,5 +1,10 @@
 #pragma once
 
+#include <cstdlib>
+#include <vector>
+#include <memory>
+#include <tuple>
+
 #ifndef DELEGATE_ASSERT
 #include <assert.h>
 #define DELEGATE_ASSERT(expression, ...) assert(expression)

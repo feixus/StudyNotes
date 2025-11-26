@@ -115,10 +115,9 @@ void RTReflections::SetupResources(GraphicsDevice* pGraphicsDevice)
 
 void RTReflections::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 {
-	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
     // raytracing pipeline
     {
-        ShaderLibrary* pShaderLibrary = pShaderManager->GetLibrary("RTReflections.hlsl");
+        ShaderLibrary* pShaderLibrary = pGraphicsDevice->GetLibrary("RTReflections.hlsl");
 
         m_pHitRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pHitRS->Finalize("Hit RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);

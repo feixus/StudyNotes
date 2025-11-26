@@ -13,11 +13,13 @@
 #include "ShaderBindingTable.h"		
 #include "StateObject.h"
 
-CommandContext::CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
+CommandContext::CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList,
+								D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap,
+								DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator)
 	: GraphicsObject(pParent), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator),
-		m_ShaderResourceDescriptorAllocator(pParent->GetGlobalViewHeap())
+		m_ShaderResourceDescriptorAllocator(pDescriptorHeap)
 {
-	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pParent->GetAllocationManager());
+	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pDynamicMemoryManager);
 
 	m_pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
 	m_pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));

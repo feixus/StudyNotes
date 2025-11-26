@@ -40,19 +40,18 @@ DebugRenderer* DebugRenderer::Get()
     return &instance;
 }
 
-void DebugRenderer::Initialize(GraphicsDevice* pParent)
+void DebugRenderer::Initialize(GraphicsDevice* pGraphicsDevice)
 {
-	ShaderManager* pShaderManager = pParent->GetShaderManager();
     VertexElementLayout inputLayout;
     inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
     inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
 	// shaders
-	Shader* pVertexShader = pShaderManager->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pShaderManager->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pGraphicsDevice->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pGraphicsDevice->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
 
 	// root signature
-	m_pRS = std::make_unique<RootSignature>(pParent);
+	m_pRS = std::make_unique<RootSignature>(pGraphicsDevice);
 	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 	// opaque
@@ -64,13 +63,13 @@ void DebugRenderer::Initialize(GraphicsDevice* pParent)
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 	psoDesc.SetDepthWrite(true);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-	psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, pParent->GetMultiSampleCount());
+	psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
 	psoDesc.SetName("Triangles DebugRenderer PSO");
-	m_pTrianglesPSO = pParent->CreatePipeline(psoDesc);
+	m_pTrianglesPSO = pGraphicsDevice->CreatePipeline(psoDesc);
 
     psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
     psoDesc.SetName("Lines DebugRenderer PSO");
-    m_pLinesPSO = pParent->CreatePipeline(psoDesc);
+    m_pLinesPSO = pGraphicsDevice->CreatePipeline(psoDesc);
 }
 
 void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, GraphicsTexture* pTarget, GraphicsTexture* pDepth)

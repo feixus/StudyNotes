@@ -85,6 +85,7 @@ bool CommandLine::GetInt(const std::string& name, int& value, int defaultValue)
 		value = std::stoi(it->second);
 		return true;
 	}
+	return false;
 }
 
 bool CommandLine::GetBool(const std::string& parameter)

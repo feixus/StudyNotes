@@ -31,16 +31,13 @@ struct ParticleData
     float Size;
 };
 
-GpuParticles::GpuParticles(DemoApp* pGraphics)
+GpuParticles::GpuParticles(GraphicsDevice* pGraphicsDevice)
 {
-    Initialize(pGraphics);
+    Initialize(pGraphicsDevice);
 }
 
-void GpuParticles::Initialize(DemoApp* pGraphics)
+void GpuParticles::Initialize(GraphicsDevice* pGraphicsDevice)
 {
-	GraphicsDevice* pGraphicsDevice = pGraphics->GetDevice();
-	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
-
     CommandContext* pContext = pGraphicsDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
     m_pCounterBuffer = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle CounterBuffer");
@@ -81,13 +78,13 @@ void GpuParticles::Initialize(DemoApp* pGraphics)
     m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
     {
-        Shader* pComputerShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+        Shader* pComputerShader = pGraphicsDevice->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
         m_pSimulateRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", pComputerShader);
     }
 
     {
-        Shader* pComputerShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+        Shader* pComputerShader = pGraphicsDevice->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pComputerShader);
         psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
@@ -96,7 +93,7 @@ void GpuParticles::Initialize(DemoApp* pGraphics)
     }
 
     {
-        Shader* pComputerShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Emit");
+        Shader* pComputerShader = pGraphicsDevice->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Emit");
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pComputerShader);
         psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
@@ -105,7 +102,7 @@ void GpuParticles::Initialize(DemoApp* pGraphics)
     }
 
     {
-        Shader* pSimulateShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Simulate");
+        Shader* pSimulateShader = pGraphicsDevice->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "Simulate");
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pSimulateShader);
         psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
@@ -114,7 +111,7 @@ void GpuParticles::Initialize(DemoApp* pGraphics)
     }
 
     {
-        Shader* pSimulateShader = pShaderManager->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "SimulateEnd");
+        Shader* pSimulateShader = pGraphicsDevice->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "SimulateEnd");
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pSimulateShader);
         psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
@@ -123,8 +120,8 @@ void GpuParticles::Initialize(DemoApp* pGraphics)
     }
 
     {
-		Shader* pVertexShader = pShaderManager->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = pShaderManager->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = pGraphicsDevice->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pGraphicsDevice->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pParticleRenderRS = std::make_unique<RootSignature>(pGraphicsDevice);
         m_pParticleRenderRS->FinalizeFromShader("Particles Render RS", pVertexShader);
@@ -143,7 +140,7 @@ void GpuParticles::Initialize(DemoApp* pGraphics)
 		m_pParticleRenderPSO = pGraphicsDevice->CreatePipeline(psoDesc);
     }
 
-    pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
+    ImGui::RegisterCallback(ImGui::OnImGuiRenderDelegate::CreateLambda([]() {
         ImGui::Begin("Parameters");
         ImGui::Text("Particles");
         ImGui::Checkbox("Enabled", &g_Enable);

@@ -39,20 +39,19 @@ struct CloudParameters
 
 static CloudParameters sCloudParameters;
 
-Clouds::Clouds(DemoApp* pGraphics)
+Clouds::Clouds(GraphicsDevice* pGraphicsDevice)
 {
 	m_CloudBounds.Center = Vector3(0, 200, 0);
 	m_CloudBounds.Extents = Vector3(300, 20, 300);
 
-	Initialize(pGraphics);
+	Initialize(pGraphicsDevice);
 }
 
-void Clouds::Initialize(DemoApp* pGraphics)
+void Clouds::Initialize(GraphicsDevice* pGraphicsDevice)
 {
-	GraphicsDevice* pGraphicsDevice = pGraphics->GetDevice();
 	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
 
-	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([this]() {
+	ImGui::RegisterCallback(ImGui::OnImGuiRenderDelegate::CreateLambda([this]() {
 		ImGui::Begin("Parameters");
 		ImGui::Text("Clouds");
 		ImGui::SliderFloat3("Position", reinterpret_cast<float*>(&m_CloudBounds.Center), 0.f, 500.f);

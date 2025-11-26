@@ -11,8 +11,6 @@ class RGGraph;
 class ShaderManager;
 struct SceneData;
 
-DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
-
 class ImGuiRenderer
 {
 public:
@@ -21,9 +19,6 @@ public:
 
 	void NewFrame(uint32_t width, uint32_t height);
 	void Render(RGGraph& graph, const SceneData& sceneData, GraphicsTexture* pRenderTarget);
-	void Update();
-	DelegateHandle AddUpdateCallback(ImGuiCallbackDelegate&& callback);
-	void RemoveUpdateCallback(DelegateHandle handle);
 
 private:
 	static const uint32_t m_WindowWidth{ 1240 };
@@ -32,8 +27,6 @@ private:
 	void CreatePipeline(GraphicsDevice* pParent);
 	void InitializeImGui(GraphicsDevice* pParent);
 		
-	ImGuiCallback m_UpdateCallback;
-
 	PipelineState* m_pPipelineStateObject{nullptr};
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsTexture> m_pFontTexture;
