@@ -7,7 +7,7 @@ FileWatcher::~FileWatcher()
     StopWatching();
 }
 
-bool FileWatcher::StartWatching(const std::string& directory, const bool recursiveWatch)
+bool FileWatcher::StartWatching(const char* directory, const bool recursiveWatch)
 {
     if (!m_Exiting)
     {
@@ -15,7 +15,7 @@ bool FileWatcher::StartWatching(const std::string& directory, const bool recursi
     }
 
     QueryPerformanceFrequency(&m_TimeFrequency);
-    m_FileHandle = CreateFileA(directory.c_str(),
+    m_FileHandle = CreateFileA(directory,
                         FILE_LIST_DIRECTORY,
                         FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
                         nullptr,

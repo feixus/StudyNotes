@@ -312,30 +312,6 @@ private:
 	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubresourceParameters{};
 };
 
-class ScopedBarrier
-{
-public:
-	ScopedBarrier(CommandContext& context, GraphicsResource* pResource, D3D12_RESOURCE_STATES newState, uint32_t subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
-		: m_Context(context), m_pResource(pResource), m_SubResource(subResource)
-	{
-		m_BeforeState = context.GetResourceStateWithFallback(pResource, subResource);
-
-		context.InsertResourceBarrier(pResource, newState, subResource);
-	}
-
-	~ScopedBarrier()
-	{
-		m_Context.InsertResourceBarrier(m_pResource, m_BeforeState, m_SubResource);
-	}
-
-private:
-	CommandContext& m_Context;
-	GraphicsResource* m_pResource;
-	uint32_t m_SubResource;
-	D3D12_RESOURCE_STATES m_BeforeState{D3D12_RESOURCE_STATE_UNKNOWN};
-};
-
-
 class CommandSignature : public GraphicsObject
 {
 public:

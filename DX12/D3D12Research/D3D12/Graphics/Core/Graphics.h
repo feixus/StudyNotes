@@ -19,6 +19,7 @@ class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
 class ResourceView;
 class SwapChain;
+class GraphicsDevice;
 
 enum class GraphicsInstanceFlags
 {
@@ -30,6 +31,47 @@ enum class GraphicsInstanceFlags
 	RenderDoc = 1 << 4,
 };
 DECLARE_BITMASK_TYPE(GraphicsInstanceFlags);
+
+class GraphicsInstance
+{
+public:
+	GraphicsInstance(GraphicsInstanceFlags createFlags);
+
+	std::unique_ptr<SwapChain> CreateSwapChain(GraphicsDevice* pDevice, HWND pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync);
+	ComPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
+	std::unique_ptr<GraphicsDevice> CreateDevice(ComPtr<IDXGIAdapter4> pAdapter);
+
+	static std::unique_ptr<GraphicsInstance> CreateInstance(GraphicsInstanceFlags createFlags = GraphicsInstanceFlags::None);
+
+	bool AllowTearing() const { return m_AllowTearing; }
+
+private:
+	ComPtr<IDXGIFactory6> m_pFactory;
+	bool m_AllowTearing{ false };
+};
+
+class SwapChain
+{
+public:
+	SwapChain(GraphicsDevice* pGraphicsDevice, IDXGIFactory6* pFactory, HWND pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync);
+	void Destroy();
+	void OnResize(uint32_t width, uint32_t height);
+	void Present();
+
+	void SetVsync(bool vsync) { m_Vsync = vsync; }
+	IDXGISwapChain4* GetSwapChain() const { return m_pSwapChain.Get(); }
+	GraphicsTexture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage].get(); }
+	GraphicsTexture* GetBackBuffer(uint32_t index) const { return m_Backbuffers[index].get(); }
+	uint32_t GetBackbufferIndex() const { return m_CurrentImage; }
+	DXGI_FORMAT GetFormat() const { return m_Format; }
+
+private:
+	std::vector<std::unique_ptr<GraphicsTexture>> m_Backbuffers;
+	ComPtr<IDXGISwapChain4> m_pSwapChain;
+	DXGI_FORMAT m_Format;
+	uint32_t m_CurrentImage;
+	bool m_Vsync;
+};
 
 class GraphicsDevice
 {
@@ -112,8 +154,8 @@ public:
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 
-	Shader* GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
-	ShaderLibrary* GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
+	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
 
 private:
 	ComPtr<ID3D12Device> m_pDevice;
@@ -151,45 +193,4 @@ private:
 	int m_SampleCount{1};
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-};
-
-class GraphicsInstance
-{
-public:
-	GraphicsInstance(GraphicsInstanceFlags createFlags);
-
-	std::unique_ptr<SwapChain> CreateSwapChain(GraphicsDevice* pDevice, HWND pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync);
-	ComPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
-	std::unique_ptr<GraphicsDevice> CreateDevice(ComPtr<IDXGIAdapter4> pAdapter);
-
-	static std::unique_ptr<GraphicsInstance> CreateInstance(GraphicsInstanceFlags createFlags = GraphicsInstanceFlags::None);
-
-	bool AllowTearing() const { return m_AllowTearing; }
-
-private:
-	ComPtr<IDXGIFactory6> m_pFactory;
-	bool m_AllowTearing{false};
-};
-
-class SwapChain
-{
-public:
-	SwapChain(GraphicsDevice* pGraphicsDevice, IDXGIFactory6* pFactory, HWND pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync);
-	void Destroy();
-	void OnResize(uint32_t width, uint32_t height);
-	void Present();
-
-	void SetVsync(bool vsync) { m_Vsync = vsync; }
-	IDXGISwapChain4* GetSwapChain() const { return m_pSwapChain.Get(); }
-	GraphicsTexture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage].get(); }
-	GraphicsTexture* GetBackBuffer(uint32_t index) const { return m_Backbuffers[index].get(); }
-	uint32_t GetBackbufferIndex() const { return m_CurrentImage; }
-	DXGI_FORMAT GetFormat() const { return m_Format; }
-
-private:
-	std::vector<std::unique_ptr<GraphicsTexture>> m_Backbuffers;
-	ComPtr<IDXGISwapChain4> m_pSwapChain;
-	DXGI_FORMAT m_Format;
-	uint32_t m_CurrentImage;
-	bool m_Vsync;
 };

@@ -14,8 +14,6 @@
 #include "External/ImGuizmo/ImGuizmo.h"
 #include "DemoApp.h"
 
-ImGui::OnImGuiRender ImGui::RenderCallbacks;
-
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pGraphicsDevice)
 {
 	CreatePipeline(pGraphicsDevice);
@@ -160,7 +158,6 @@ void ImGuiRenderer::CreatePipeline(GraphicsDevice* pGraphicsDevice)
 
 void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, GraphicsTexture* pRenderTarget)
 {
-	ImGui::ExecuteCallbacks();
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
 	if (pDrawData->CmdListsCount == 0)

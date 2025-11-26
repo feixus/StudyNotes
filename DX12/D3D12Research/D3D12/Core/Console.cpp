@@ -2,57 +2,75 @@
 #include "Console.h"
 #include "CommandLine.h"
 
-static HANDLE sConsoleHandle = nullptr;
+namespace Win32Console
+{
+    static HANDLE Open()
+    {
+        HANDLE handle = NULL;
+        if (AllocConsole())
+        {
+            // redirect the CRT standard input, output, and error handles to the console
+            FILE* pCout;
+            freopen_s(&pCout, "CONIN$", "r", stdin);
+            freopen_s(&pCout, "CONOUT$", "w", stdout);
+            freopen_s(&pCout, "CONOUT$", "w", stderr);
 
+            // clear the error state for each of the C++ standard stream objects.
+            // we need to do this, as attempts to access the standard streams before they refer to a valid target will cause the iostream objects to enter an error state. 
+            //In the error state, they will refuse to perform any input or output operations.
+            std::wcout.clear();
+            std::cout.clear();
+            std::cerr.clear();
+            std::wcerr.clear();
+            std::wcin.clear();
+            std::cin.clear();
+
+            handle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+            // disable close-button
+            HWND hwnd = GetConsoleWindow();
+            if (hwnd != nullptr)
+            {
+                HMENU hMenu = GetSystemMenu(hwnd, FALSE);
+                if (hMenu != nullptr)
+                {
+                    DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
+                }
+            }
+        }
+        return handle;
+    }
+
+    static void Close(HANDLE handle)
+    {
+        if (handle)
+        {
+            CloseHandle(handle);
+        }
+    }
+};
+
+static HANDLE sConsoleHandle = nullptr;
 std::mutex sLogMutex;
 static std::queue<Console::LogEntry> sMessageQueue;
 static LogType sVerbosity;
 static std::deque<Console::LogEntry> sHistory;
-
-void InitializeConsoleWindow()
-{
-    if (AllocConsole())
-    {
-        // redirect the CRT standard input, output, and error handles to the console
-        FILE* pCout;
-        freopen_s(&pCout, "CONIN$", "r", stdin);
-        freopen_s(&pCout, "CONOUT$", "w", stdout);
-        freopen_s(&pCout, "CONOUT$", "w", stderr);
-
-        // clear the error state for each of the C++ standard stream objects.
-        // we need to do this, as attempts to access the standard streams before they refer to a valid target will cause the iostream objects to enter an error state. 
-        //In the error state, they will refuse to perform any input or output operations.
-        std::wcout.clear();
-        std::cout.clear();
-        std::cerr.clear();
-        std::wcerr.clear();
-        std::wcin.clear();
-        std::cin.clear();
-
-        // set consoleHandle
-        sConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-
-        // disable close-button
-        HWND hwnd = GetConsoleWindow();
-        if (hwnd != nullptr)
-        {
-            HMENU hMenu = GetSystemMenu(hwnd, FALSE);
-            if (hMenu != nullptr)
-            {
-                DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
-            }
-        }
-    }
-}
 
 void Console::Initialize()
 {
 #if WITH_CONSOLE
     if (!CommandLine::GetBool("noconsole"))
     {
-        InitializeConsoleWindow();
+        sConsoleHandle = Win32Console::Open();
     }
+
+    E_LOG(Info, "Startup Console");
 #endif
+}
+
+void Console::Shutdown()
+{
+    Win32Console::Close(sConsoleHandle);
 }
 
 void Console::Log(const char* message, LogType type)
@@ -62,7 +80,7 @@ void Console::Log(const char* message, LogType type)
         return;
     }
 
-    std::stringstream stream;
+    const char* pVerbosityMessage = "";
     switch(type)
     {
         case LogType::Info:
@@ -70,14 +88,14 @@ void Console::Log(const char* message, LogType type)
             {
                 SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
             }
-            stream << "[Info] ";
+            pVerbosityMessage = "[Info] ";
             break;
         case LogType::Warning:
             if (sConsoleHandle)
             {
                 SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
             }
-            stream << "[Warning] ";
+            pVerbosityMessage = "[Warning] ";
             break;
         case LogType::Error:
         case LogType::FatalError:
@@ -85,16 +103,17 @@ void Console::Log(const char* message, LogType type)
             {
                 SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_INTENSITY);
             }
-            stream << "[Error] ";
+            pVerbosityMessage = "[Error] ";
             break;
         default:
             break;
     }
 
-    stream << message << "\n";
-    const std::string output = stream.str();
-    printf("%s", output.c_str());
-    OutputDebugStringA(output.c_str());
+    char messageBuffer[4096];
+    sprintf_s(messageBuffer, "%s %s\n", pVerbosityMessage, message);
+    printf("%s %s\n", pVerbosityMessage, message);
+	// send msg to the vs debugger(Output)
+    OutputDebugStringA(messageBuffer);
 
     if (sConsoleHandle)
     {
@@ -113,7 +132,7 @@ void Console::Log(const char* message, LogType type)
             }
         }
 
-        sHistory.push_back({ message, type });
+        sHistory.push_back(LogEntry(message, type));
         if (sHistory.size() > 50)
         {
             sHistory.pop_front();
@@ -137,10 +156,10 @@ void Console::Log(const char* message, LogType type)
 
 void Console::LogFormat(LogType type, const char* format, ...)
 {
-    static char sConvertBuffer[8196 * 2];
+    static char sConvertBuffer[8196];
     va_list args;
     va_start(args, format);
-    vsnprintf_s(sConvertBuffer, 8196 * 2, format, args);
+    vsnprintf_s(sConvertBuffer, 8196, format, args);
     va_end(args);
     Log(sConvertBuffer, type);
 }

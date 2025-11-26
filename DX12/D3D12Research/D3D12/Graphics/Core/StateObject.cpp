@@ -4,6 +4,48 @@
 #include "RootSignature.h"
 #include "Graphics.h"
 
+class StateObjectStream
+{
+    friend class StateObjectInitializer;
+
+public:
+    D3D12_STATE_OBJECT_DESC Desc{};
+
+private:
+    template<size_t SIZE>
+    struct DataAllocator
+    {   
+    public:
+        template<typename T>
+        T* Allocate(uint32_t count = 1)
+        {
+            checkf(m_Offset + count * sizeof(T) <= SIZE, "make allocator size larger");
+            T* pData = reinterpret_cast<T*>(m_Data.data() + m_Offset);
+            m_Offset += count * sizeof(T);
+            return pData;
+        }
+
+        void Reset() { m_Offset = 0; }
+        const void* GetData() const { return m_Data.data(); }
+        size_t Size() const { return m_Offset; }
+
+    private:
+        size_t m_Offset{0};
+        std::array<std::byte, SIZE> m_Data{};
+    };
+
+    wchar_t* GetUnicode(const std::string& text)
+    {
+        size_t len = text.length();
+        wchar_t* pData = m_ContentData.Allocate<wchar_t>((int)len + 1);
+        MultiByteToWideChar(0, 0, text.c_str(), (int)len, pData, (int)len);
+        return pData;
+    }
+
+    DataAllocator<1 << 8> m_StateObjectData{};
+    DataAllocator<1 << 10> m_ContentData{};
+};
+
 StateObject::StateObject(ShaderManager* pShaderManager, GraphicsDevice* pParent) : GraphicsObject(pParent)
 {
 	m_ReloadHandle = pShaderManager->OnLibraryRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
@@ -13,7 +55,7 @@ void StateObject::Create(const StateObjectInitializer& initializer)
 {
     m_Desc = initializer;
 
-    StateObjectInitializer::StateObjectStream stateObjectStream;
+    StateObjectStream stateObjectStream;
     m_Desc.CreateStateObjectStream(stateObjectStream);
     VERIFY_HR(GetGraphics()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
     D3D::SetObjectName(m_pStateObject.Get(), m_Desc.Name.c_str());

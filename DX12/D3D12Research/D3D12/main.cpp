@@ -98,10 +98,11 @@ public:
 
 		delete m_pGraphics;
 
-		TaskQueue::Shutdown();
 		DestroyWindow(hInstance, window);
-
+		TaskQueue::Shutdown();
+		Console::Shutdown();
 		OPTICK_SHUTDOWN();
+
 		return 0;
 	}
 

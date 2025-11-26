@@ -48,16 +48,16 @@ protected:
 class Shader : public ShaderBase
 {
 public:
-	Shader(const ShaderBlob& shaderBlob, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines)
-		: ShaderBase(shaderBlob, defines), m_Type(shaderType), m_EntryPoint(entryPoint)
+	Shader(const ShaderBlob& shaderBlob, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines)
+		: ShaderBase(shaderBlob, defines), m_Type(shaderType), m_pEntryPoint(pEntryPoint)
 	{}
 
 	inline ShaderType GetType() const { return m_Type; }
-	inline const std::string& GetEntryPoint() const { return m_EntryPoint; }
+	inline const char* GetEntryPoint() const { return m_pEntryPoint; }
 	
 private:
 	ShaderType m_Type;
-	std::string m_EntryPoint;
+	const char* m_pEntryPoint;
 };
 
 class ShaderLibrary : public ShaderBase
@@ -69,13 +69,13 @@ public:
 class ShaderManager
 {
 public:
-	ShaderManager(const std::string& shaderSourcePath, uint8_t shaderModelMajor, uint8_t shaderModelMinor);
+	ShaderManager(const char* pShaderSourcePath, uint8_t shaderModelMajor, uint8_t shaderModelMinor);
 	~ShaderManager();
 
 	void ConditionallyReloadShaders();
 
-	Shader* GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
-	ShaderLibrary* GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
+	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines = {});
+	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
 
 	DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader*, Shader*);
 	OnShaderRecompiled& OnShaderRecompiledEvent() { return m_OnShaderRecompiledEvent; }
@@ -89,9 +89,9 @@ private:
 	using ShaderStringHash = StringHash;
 #endif
 
-	ShaderStringHash GetEntryPointHash(const std::string& entryPoint, const std::vector<ShaderDefine>& defines);
-	Shader* LoadShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
-	ShaderLibrary* LoadLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
+	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, const std::vector<ShaderDefine>& defines);
+	Shader* LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines = {});
+	ShaderLibrary* LoadLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
 
 	void RecompileFromFileChange(const std::string& filePath);
 
@@ -115,7 +115,7 @@ private:
 	};
 	std::unordered_map<ShaderStringHash, ShadersInFileMap> m_FilepathToObjectMap;
 
-	std::string m_ShaderSourcePath;
+	const char* m_ShaderSourcePath;
 	uint8_t m_ShaderModelMajor;
 	uint8_t m_ShaderModelMinor;
 

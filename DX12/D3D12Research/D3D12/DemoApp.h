@@ -208,6 +208,7 @@ private:
 	PipelineState* m_pDrawHistogramPSO{nullptr};
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
 	std::unique_ptr<Buffer> m_pAverageLuminance;
+	std::unique_ptr<GraphicsTexture> m_pDebugHistogramTexture;
 
 	// SSAO
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusion;

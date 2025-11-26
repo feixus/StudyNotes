@@ -21,7 +21,7 @@ public:
     FileWatcher() = default;
     virtual ~FileWatcher();
 
-    bool StartWatching(const std::string& directory, const bool recursiveWatch = true);
+    bool StartWatching(const char* directory, const bool recursiveWatch = true);
     void StopWatching();
     bool GetNextChange(FileEvent& fileEvent);
 

@@ -29,6 +29,8 @@ enum class PipelineStateType
 class VertexElementLayout
 {
 public:
+	static const int MAX_INPUT_ELEMENTS = 16;
+
 	VertexElementLayout() = default;
 	VertexElementLayout(const VertexElementLayout& rhs);
 	VertexElementLayout& operator=(const VertexElementLayout& rhs);
@@ -36,13 +38,15 @@ public:
 	void AddVertexElement(const char* pSemantic, DXGI_FORMAT format, uint32_t semanticIndex = 0, uint32_t byteOffset = D3D12_APPEND_ALIGNED_ELEMENT, uint32_t inputSlot = 0);
 	void AddInstanceElement(const char* pSemantic, DXGI_FORMAT format, uint32_t semanticIndex, uint32_t byteOffset, uint32_t inputSlot, uint32_t stepRate);
 	
-	const std::vector<D3D12_INPUT_ELEMENT_DESC>& GetDesc() const { return m_ElementDesc; }
+	const D3D12_INPUT_ELEMENT_DESC* GetElements() const { return m_ElementDesc.data(); }
+	const uint32_t GetNumElements() const { return m_NumElements; }
 
 private:
 	void FixupString();
 
-	std::vector<D3D12_INPUT_ELEMENT_DESC> m_ElementDesc;
-	std::vector<std::string> m_SemanticNames;
+	std::array<D3D12_INPUT_ELEMENT_DESC, MAX_INPUT_ELEMENTS> m_ElementDesc{};
+	std::array<char[64], MAX_INPUT_ELEMENTS> m_SemanticNames{};
+	uint32_t m_NumElements{0};
 };
 
 class PipelineStateInitializer
@@ -154,7 +158,7 @@ private:
 		return pObj->ObjectData;
 	}
 
-	std::string m_Name;
+	const char* m_pName;
 	VertexElementLayout m_InputLayout;
 	PipelineStateType m_Type{PipelineStateType::MAX};
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};

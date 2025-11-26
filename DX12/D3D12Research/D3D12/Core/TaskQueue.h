@@ -41,5 +41,5 @@ public:
 private:
     static void Distribute(TaskContext& context, const AsyncDistributeDelegate& action, uint32_t count, int32_t groupSize = -1);
     static void AddWorkItem(const AsyncTaskDelegate& action, TaskContext& context);
-    static void CreateThreads(size_t count);
+    static void CreateThreads(uint32_t count);
 };

@@ -105,8 +105,8 @@ bool Thread::IsMainThread(uint32_t threadId)
     return threadId == m_MainThread;
 }
 
-void Thread::SetName(const std::string& name)
+void Thread::SetName(const char* name)
 {
-    SetThreadDescription((HANDLE)m_pHandle, MULTIBYTE_TO_UNICODE(name.c_str()));
+    SetThreadDescription((HANDLE)m_pHandle, MULTIBYTE_TO_UNICODE(name));
 }
 

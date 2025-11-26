@@ -254,8 +254,6 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	Profiler::Get()->Initialize(m_pDevice.get(), FRAME_COUNT);
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
-    ImGui::RegisterCallback(ImGui::OnImGuiRenderDelegate::CreateRaw(this, &DemoApp::UpdateImGui));
-
 	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetViewHeapHandle();
 
 	OnResize(m_WindowWidth, m_WindowHeight);
@@ -380,6 +378,8 @@ void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
+
+	UpdateImGui();
 
 	PROFILE_BEGIN("UpdateGameState");
 	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
@@ -1276,32 +1276,42 @@ void DemoApp::Update()
 
 		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram)
 		{
+			if (!m_pDebugHistogramTexture)
+			{
+				m_pDebugHistogramTexture = std::make_unique<GraphicsTexture>(m_pDevice.get(), "Debug Histogram Texture");
+				m_pDebugHistogramTexture->Create(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+			}
+
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResource& resources)
 				{
 					context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					context.InsertResourceBarrier(m_pDebugHistogramTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					context.SetPipelineState(m_pDrawHistogramPSO);
 					context.SetComputeRootSignature(m_pDrawHistogramRS.get());
 
 					struct AverageParameters
 					{
-						float MinLogLuminance{ 0 };
-						float InverseLogLuminanceRange{ 0 };
+						float MinLogLuminance{0};
+						float InverseLogLuminanceRange{0};
+						Vector2 InvTextureDimensions;
 					} parameters;
 
 					parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
 					parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
+					parameters.InvTextureDimensions = Vector2(1.0f / m_pDebugHistogramTexture->GetWidth(), 1.0f / m_pDebugHistogramTexture->GetHeight());
 
 					context.SetComputeDynamicConstantBufferView(0, parameters);
-					context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
+					context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
 					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
-
+					context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
+
+			ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
 		}
 	}
 
@@ -1883,17 +1893,8 @@ void DemoApp::UpdateImGui()
 		ImGui::Begin(tabName.c_str());
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
 
-		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
-		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
-		float width = windowSize.x;
-		float height = windowSize.x * image.y / image.x;
-		if (image.x / windowSize.x < image.y / windowSize.y)
-		{
-			width = image.x / image.y * windowSize.y;
-			height = windowSize.y;
-		}
+		ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
 
-		ImGui::Image(m_pVisualizeTexture, ImVec2(width, height));
 		ImGui::End();
 	}
 
