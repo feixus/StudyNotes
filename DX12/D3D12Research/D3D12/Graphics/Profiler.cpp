@@ -194,7 +194,7 @@ Profiler* Profiler::Get()
 	return &profiler;
 }
 
-void Profiler::Initialize(GraphicsDevice* pGraphicsDevice)
+void Profiler::Initialize(GraphicsDevice* pGraphicsDevice, uint32_t numBackbuffers)
 {
 	D3D12_QUERY_HEAP_DESC desc{}; 
 	desc.Count = HEAP_SIZE;
@@ -203,8 +203,9 @@ void Profiler::Initialize(GraphicsDevice* pGraphicsDevice)
 	VERIFY_HR_EX(pGraphicsDevice->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pGraphicsDevice->GetDevice());
 	D3D::SetObjectName(m_pQueryHeap.Get(), "Profiler Timestamp Query Heap");
 
+	m_FenceValues.resize(numBackbuffers);
 	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphicsDevice, "Profiling Readback Buffer");
-	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64_t) * Graphics::FRAME_COUNT * HEAP_SIZE));
+	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64_t) * numBackbuffers * HEAP_SIZE));
 	m_pReadBackBuffer->Map();
 
 	{
@@ -272,15 +273,16 @@ void Profiler::Resolve(SwapChain* pSwapChain, GraphicsDevice* pGraphicsDevice, i
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, m_CurrentTimer * QUERY_PAIR_NUM, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64_t));
 	m_FenceValues[m_CurrentReadbackFrame] = pContext->Execute(false);
 
-	if (frameIndex >= Graphics::FRAME_COUNT)
+	int numFrames = (int)m_FenceValues.size();
+	if (frameIndex >= numFrames)
 	{
 		// make sure the resolve from 2 frames ago is finished before we read
-		uint32_t readFromIndex = (m_CurrentReadbackFrame + Graphics::FRAME_COUNT - 1) % Graphics::FRAME_COUNT;
+		uint32_t readFromIndex = (m_CurrentReadbackFrame + numFrames - 1) % numFrames;
 		pGraphicsDevice->WaitForFence(m_FenceValues[readFromIndex]);
 
 		m_pCurrentBlock->PopulateTimes((const uint64_t*)m_pReadBackBuffer->GetMappedData(), frameIndex - 2);
 	}
-	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % Graphics::FRAME_COUNT;
+	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % numFrames;
 
 	m_pPreviousBlock = nullptr;
 	m_pCurrentBlock->StartTimer(nullptr);

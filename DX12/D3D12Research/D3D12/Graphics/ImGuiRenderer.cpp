@@ -12,6 +12,7 @@
 #include "Graphics/Core/OfflineDescriptorAllocator.h"
 #include "Graphics/Core/GraphicsTexture.h"
 #include "External/ImGuizmo/ImGuizmo.h"
+#include "DemoApp.h"
 
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pParent)
 {

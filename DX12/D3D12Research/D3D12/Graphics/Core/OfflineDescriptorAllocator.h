@@ -31,7 +31,7 @@ public:
 private:
     void AllocateNewHeap();
 
-    std::vector<std::unique_ptr<Heap>> m_Heaps;
+    std::vector<std::unique_ptr<Heap>> m_Heaps{};
     std::list<int> m_FreeHeaps;
     int m_NumAllocateDescriptors{0};
     int m_NumDescriptors{0};

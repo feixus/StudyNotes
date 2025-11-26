@@ -2,7 +2,6 @@
 #include "GraphicsResource.h"
 
 class Buffer;
-class Graphics;
 class GraphicsTexture;
 class GraphicsResource;
 

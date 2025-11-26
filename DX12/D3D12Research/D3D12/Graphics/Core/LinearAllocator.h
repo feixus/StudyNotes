@@ -1,8 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class Graphics;
-
 struct DynamicAllocation
 {
 	DynamicAllocation(ID3D12Resource* pResource, size_t offset, size_t size):

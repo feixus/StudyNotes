@@ -12,6 +12,7 @@
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
+#include "DemoApp.h"
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
@@ -308,13 +309,13 @@ void TiledForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 		m_pDiffuseRS->FinalizeFromShader("Diffuse PBR RS", pVertexShader);
 
 		{
-			DXGI_FORMAT formats[] = { Graphics::RENDER_TARGET_FORMAT, DXGI_FORMAT_R16G16B16A16_FLOAT };
+			DXGI_FORMAT formats[] = { GraphicsDevice::RENDER_TARGET_FORMAT, DXGI_FORMAT_R16G16B16A16_FLOAT };
 			// opaque
             PipelineStateInitializer psoDesc;
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetRenderTargetFormats(formats, std::size(formats), Graphics::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
+			psoDesc.SetRenderTargetFormats(formats, std::size(formats), GraphicsDevice::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetName("Diffuse PBR Pipeline");

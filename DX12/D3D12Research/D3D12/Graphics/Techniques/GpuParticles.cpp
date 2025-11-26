@@ -14,6 +14,7 @@
 #include "Graphics/Core/OnlineDescriptorAllocator.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
+#include "DemoApp.h"
 
 static bool g_Enable = true;
 static int32_t g_EmitCount = 30;
@@ -30,15 +31,15 @@ struct ParticleData
     float Size;
 };
 
-GpuParticles::GpuParticles(Graphics* pGraphics)
+GpuParticles::GpuParticles(DemoApp* pGraphics)
 {
     Initialize(pGraphics);
 }
 
-void GpuParticles::Initialize(Graphics* pGraphics)
+void GpuParticles::Initialize(DemoApp* pGraphics)
 {
 	GraphicsDevice* pGraphicsDevice = pGraphics->GetDevice();
-	ShaderManager* pShaderManager = pGraphics->GetShaderManager();
+	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
 
     CommandContext* pContext = pGraphicsDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -137,7 +138,7 @@ void GpuParticles::Initialize(Graphics* pGraphics)
         psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
         psoDesc.SetDepthWrite(false);
         psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-        psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
+        psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
         psoDesc.SetName("Particles Render PSO");		
 		m_pParticleRenderPSO = pGraphicsDevice->CreatePipeline(psoDesc);
     }

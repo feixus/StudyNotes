@@ -12,6 +12,7 @@
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/ShaderBindingTable.h"
+#include "DemoApp.h"
 
 RTAO::RTAO(GraphicsDevice* pGraphicsDevice)
 {

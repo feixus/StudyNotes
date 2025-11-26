@@ -133,7 +133,7 @@ class Profiler
 public:
 	static Profiler* Get();
 
-	void Initialize(GraphicsDevice* pGraphicsDevice);
+	void Initialize(GraphicsDevice* pGraphicsDevice, uint32_t numBackbuffers);
 
 	void Begin(const char* pName, CommandContext* context = nullptr);
 	void End(CommandContext* context = nullptr);
@@ -157,7 +157,7 @@ private:
 	constexpr static int QUERY_PAIR_NUM = 2;
 	constexpr static int HEAP_SIZE = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM;
 
-	std::array<uint64_t, Graphics::FRAME_COUNT> m_FenceValues{};
+	std::vector<uint64_t> m_FenceValues;
 
 	float m_SecondsPerGpuTick{ 0.f };
 	float m_SecondsPerCpuTick{ 0.f };

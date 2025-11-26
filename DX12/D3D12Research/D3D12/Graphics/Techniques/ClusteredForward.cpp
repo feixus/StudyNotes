@@ -11,6 +11,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
+#include "DemoApp.h"
 
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClusterNumZ = 32;
@@ -638,7 +639,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
         psoDesc.SetPixelShader(pPixelShaderOpaque);
         psoDesc.SetBlendMode(BlendMode::Replace, false);
         psoDesc.SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
-        psoDesc.SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
+        psoDesc.SetRenderTargetFormats(nullptr, 0, GraphicsDevice::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);  // mark cluster must need GREATER_EQUAL on reverse-Z depth
 		psoDesc.SetName("Mark Unique Opaque Clusters");
@@ -702,7 +703,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 		m_pDiffuseRS = std::make_unique<RootSignature>(pGraphicsDevice);
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
 
-		DXGI_FORMAT formats[] = { Graphics::RENDER_TARGET_FORMAT, DXGI_FORMAT_R16G16B16A16_FLOAT };
+		DXGI_FORMAT formats[] = { GraphicsDevice::RENDER_TARGET_FORMAT, DXGI_FORMAT_R16G16B16A16_FLOAT };
 
 		// opaque
 		PipelineStateInitializer psoDesc;
@@ -710,7 +711,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 		psoDesc.SetPixelShader(pPixelShader);
 		psoDesc.SetBlendMode(BlendMode::Replace, false);
 		psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
-		psoDesc.SetRenderTargetFormats(formats, std::size(formats), Graphics::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
+		psoDesc.SetRenderTargetFormats(formats, std::size(formats), GraphicsDevice::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetName("Diffuse (Opaque)");
@@ -733,7 +734,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
+		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
 		psoDesc.SetBlendMode(BlendMode::Add, false);
 
 		if (pGraphicsDevice->SupportMeshShaders())

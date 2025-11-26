@@ -1,7 +1,6 @@
 #pragma once
 
 class GraphicsDevice;
-class ShaderManager;
 class RootSignature;
 class PipelineState;
 class RGGraph;
@@ -11,7 +10,7 @@ class GraphicsTexture;
 struct IntColor
 {
 	IntColor(const Color& color) : Color(Math::EncodeColor(color)) {}
-	IntColor(uint32_t color = 0) : Color(Color) {}
+	IntColor(uint32_t color = 0) : Color(color) {}
 	operator uint32_t() const { return Color; }
 
 	uint32_t Color;

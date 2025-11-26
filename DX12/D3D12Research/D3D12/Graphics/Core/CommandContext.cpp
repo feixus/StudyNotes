@@ -323,7 +323,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	};
 
 #if D3D12_USE_RENDERPASSES
-	if (GetGraphics()->UseRenderPasses() && m_pRaytracingCommandList)
+	if (GetGraphics()->SupportsRenderPasses() && m_pRaytracingCommandList)
 	{
 		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{};
 		renderPassDepthStencilDesc.DepthBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access);
@@ -480,7 +480,7 @@ void CommandContext::EndRenderPass()
 	};
 
 #if D3D12_USE_RENDERPASSES
-	if (GetGraphics()->UseRenderPasses() && m_pRaytracingCommandList)
+	if (GetGraphics()->SupportsRenderPasses() && m_pRaytracingCommandList)
 	{
 		m_pRaytracingCommandList->EndRenderPass();
 

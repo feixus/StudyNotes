@@ -12,6 +12,7 @@
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
+#include "DemoApp.h"
 
 RTReflections::RTReflections(GraphicsDevice* pGraphicsDevice)
 {
@@ -42,9 +43,9 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
                 Matrix View;
                 Matrix ViewInverse;
                 Matrix ProjectionInverse;
-                uint32_t NumLights;
-                float ViewPixelSpreadAngle;
-                uint32_t TLASIndex;
+                uint32_t NumLights{0};
+                float ViewPixelSpreadAngle{0};
+                uint32_t TLASIndex{0};
             } parameters;
 
             parameters.View = sceneData.pCamera->GetView();
@@ -103,7 +104,7 @@ void RTReflections::OnResize(uint32_t width, uint32_t height)
 {
 	if (m_pSceneColor != nullptr)
 	{
-		m_pSceneColor->Create(TextureDesc::Create2D(width, height, Graphics::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
+		m_pSceneColor->Create(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
 	}
 }
 

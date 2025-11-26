@@ -64,7 +64,7 @@ void DebugRenderer::Initialize(GraphicsDevice* pParent)
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 	psoDesc.SetDepthWrite(true);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-	psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pParent->GetMultiSampleCount());
+	psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, pParent->GetMultiSampleCount());
 	psoDesc.SetName("Triangles DebugRenderer PSO");
 	m_pTrianglesPSO = pParent->CreatePipeline(psoDesc);
 

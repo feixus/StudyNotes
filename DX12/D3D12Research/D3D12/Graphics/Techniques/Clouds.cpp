@@ -11,6 +11,7 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
+#include "DemoApp.h"
 
 static const int Resolution = 128;
 static const int MaxPoints = 1024;
@@ -38,7 +39,7 @@ struct CloudParameters
 
 static CloudParameters sCloudParameters;
 
-Clouds::Clouds(Graphics* pGraphics)
+Clouds::Clouds(DemoApp* pGraphics)
 {
 	m_CloudBounds.Center = Vector3(0, 200, 0);
 	m_CloudBounds.Extents = Vector3(300, 20, 300);
@@ -46,10 +47,10 @@ Clouds::Clouds(Graphics* pGraphics)
 	Initialize(pGraphics);
 }
 
-void Clouds::Initialize(Graphics* pGraphics)
+void Clouds::Initialize(DemoApp* pGraphics)
 {
 	GraphicsDevice* pGraphicsDevice = pGraphics->GetDevice();
-	ShaderManager* pShaderManager = pGraphics->GetShaderManager();
+	ShaderManager* pShaderManager = pGraphicsDevice->GetShaderManager();
 
 	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([this]() {
 		ImGui::Begin("Parameters");
@@ -102,7 +103,7 @@ void Clouds::Initialize(Graphics* pGraphics)
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnable(false);
 		psoDesc.SetDepthWrite(false);
-		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
+		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
 		psoDesc.SetRootSignature(m_pCloudsRS->GetRootSignature());
 		psoDesc.SetName("Clouds PS");
 		m_pCloudsPS = pGraphicsDevice->CreatePipeline(psoDesc);

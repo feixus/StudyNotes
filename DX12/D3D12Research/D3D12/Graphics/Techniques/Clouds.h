@@ -4,18 +4,18 @@ class PipelineState;
 class RootSignature;
 class GraphicsTexture;
 class Buffer;
-class Graphics;
 class ShaderManager;
 class Camera;
 class CommandContext;
 class RGGraph;
 struct Light;
+class DemoApp;
 
 class Clouds
 {
 public:
-	Clouds(Graphics* pGraphics);
-	void Initialize(Graphics* pGraphics);
+	Clouds(DemoApp* pGraphics);
+	void Initialize(DemoApp* pGraphics);
 	void Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera, const Light& sunLight);
 	GraphicsTexture* GetNoiseTexture() const { return m_pWorleyNoiseTexture.get(); }
 

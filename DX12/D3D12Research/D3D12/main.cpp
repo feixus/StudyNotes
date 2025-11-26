@@ -6,6 +6,7 @@
 #include "Core/TaskQueue.h"
 #include <filesystem>
 #include <shlobj.h>
+#include "DemoApp.h"
 
 #ifdef _DEBUG
 // maps memory functions to debug versions, to help track memory allocations and find memory leaks
@@ -69,7 +70,7 @@ public:
 		HWND window = MakeWindow(hInstance);
 		Input::Instance().SetWindow(window);
 
-		m_pGraphics = new Graphics(window, m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
+		m_pGraphics = new DemoApp(window, IntVector2(m_DisplayWidth, m_DisplayHeight), gMsaaSampleCount);
 
 		Time::Reset();
 
@@ -438,7 +439,7 @@ private:
 	int m_DisplayWidth = 1240;
 	int m_DisplayHeight = 720;
 	bool m_IsResizing = false;
-	Graphics* m_pGraphics{nullptr};
+	DemoApp* m_pGraphics{nullptr};
 };
 
 //int main()

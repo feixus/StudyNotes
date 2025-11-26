@@ -1,6 +1,6 @@
 #pragma once
 
-class Graphics;
+class DemoApp;
 class Buffer;
 class Buffer;
 class CommandSignature;
@@ -15,14 +15,14 @@ class Camera;
 class GpuParticles
 {
 public:
-    GpuParticles(Graphics* pGraphics);
+    GpuParticles(DemoApp* pGraphics);
     ~GpuParticles() = default;
 
     void Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const Camera& camera);
     void Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera);
 
 private:
-    void Initialize(Graphics* pGraphics);
+    void Initialize(DemoApp* pGraphics);
 
     std::unique_ptr<Buffer> m_pAliveList1;
     std::unique_ptr<Buffer> m_pAliveList2;

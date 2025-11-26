@@ -24,5 +24,5 @@ private:
     void SetupPipelines(GraphicsDevice* pGraphicsDevice);
 
     std::unique_ptr<RootSignature> m_pGlobalRS;
-    StateObject* m_pStateObject;
+    StateObject* m_pStateObject{nullptr};
 };
