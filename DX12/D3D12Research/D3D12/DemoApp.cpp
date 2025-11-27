@@ -29,9 +29,10 @@
 #include "Graphics/RenderGraph/Blackboard.h"
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
-#include "Content/image.h"
+#include "Core/ConsoleVariables.h"
 #include "Core/Paths.h"
-#include "External/ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo/ImGuizmo.h"
+#include "Content/image.h"
 
 static const uint32_t FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -199,9 +200,38 @@ namespace Tweakables
 	bool g_RenderObjectBounds = false;
 }
 
+struct Object
+{
+	static void SetPosition(const Vector3& v)
+	{
+		E_LOG(Info, "Set position %f, %f, %f", v.x, v.y, v.z);
+	}
+
+	static void SetPosition(float x, float y, float z)
+	{
+		E_LOG(Info, "set position %f, %f, %f", x, y, z);
+	}
+};
+
+void Log(const char* pMsg)
+{
+	E_LOG(Info, "%s", pMsg);
+}
+
+ConsoleVariableRef gShadow("vis.histogram", Tweakables::g_DrawHistogram);
+ConsoleVariableRef gTonemapper("r.tonemapper", Tweakables::g_ToneMapper);
+
+ConsoleCommand gLog("log", Log);
+
+
 DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	m_WindowWidth(windowRect.x), m_WindowHeight(windowRect.y), m_SampleCount(sampleCount)
 {
+	const char* pArgs[5];
+	char buffer[1024];
+
+	CharConv::SplitString("a,b,cc", buffer, &pArgs[0], ',');
+
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetPosition(Vector3(-50, 60, 0));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV2, Math::PIDIV4 * 0.5f, 0));
@@ -1781,42 +1811,8 @@ void DemoApp::UpdateImGui()
 
 	ImGui::End();
 
-	static bool showOutputLog = false;
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::SetNextWindowPos(ImVec2(300, (float)m_WindowHeight), 0, ImVec2(0, 1));
-	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 300 * 2.0f, 250));
-	ImGui::SetNextWindowCollapsed(!showOutputLog);
-
-	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	if (showOutputLog)
-	{
-		for (const Console::LogEntry& entry : Console::GetHistory())
-		{
-			switch (entry.Type)
-			{
-			case LogType::VeryVerbose:
-			case LogType::Verbose:
-			case LogType::Info:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
-				ImGui::TextWrapped("[Info] %s", entry.Message.c_str());
-				break;
-			case LogType::Warning:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
-				ImGui::TextWrapped("[Warning] %s", entry.Message.c_str());
-				break;
-			case LogType::Error:
-			case LogType::FatalError:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
-				ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
-				break;
-			}
-			ImGui::PopStyleColor();
-		}
-		ImGui::SetScrollHereY(0.0f);
-	}
-	
-	ImGui::PopStyleVar();
-	ImGui::End();
+	static ImGuiConsole console;
+	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
 
 	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
