@@ -1,36 +1,35 @@
 #pragma once
 #include "CharConv.h"
 
-extern class CVarManager gConsoleManager;
-
 class IConsoleObject;
 
 class CVarManager
 {
 public:
-	void RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
-	{
-		m_CvarMap[pName] = pObject;
-	}
+    static CVarManager& Get();
+	void Initialize();
 
-	IConsoleObject* GetConsoleObject(const char* pName)
+	void RegisterConsoleObject(const char* pName, IConsoleObject* pObject);
+    bool Execute(const char* pCommand);
+
+	IConsoleObject* FindConsoleObject(const char* pName)
 	{
-		return m_CvarMap[pName];
+        auto it = m_Map.find(pName);
+		return it != m_Map.end() ? it->second : nullptr;
 	}
 
 	template<typename T>
 	void ForEachCvar(T&& callback) const
 	{
-		for (const auto& cvar : m_CvarMap)
+		for (const auto& cvar : m_Objects)
 		{
-			callback(cvar.second);
+			callback(cvar);
 		}
 	}
 
-	bool ExecuteCommand(const char* pCommand, const char* pArguments);
-
 private:
-	std::unordered_map<StringHash, IConsoleObject*> m_CvarMap;
+	std::unordered_map<StringHash, IConsoleObject*> m_Map;
+    std::vector<IConsoleObject*> m_Objects;
 };
 
 class IConsoleObject
@@ -38,7 +37,7 @@ class IConsoleObject
 public:
 	IConsoleObject(const char* pName) : m_pName(pName)
 	{
-		gConsoleManager.RegisterConsoleObject(pName, this);
+		CVarManager::Get().RegisterConsoleObject(pName, this);
 	}
 
 	virtual ~IConsoleObject() = default;
@@ -50,12 +49,32 @@ private:
 	const char* m_pName;
 };
 
+template<typename T, bool = std::is_pointer_v<T>>
+struct DecayNonPointer {};
+
+template<typename T>
+struct DecayNonPointer<T, 0>
+{
+    using Type = std::remove_const_t<std::remove_reference_t<T>>;
+};
+
+template<typename T>
+struct DecayNonPointer<T, 1>
+{
+    using Type = T;
+};
+
 template<typename... Args>
 class DelegateConsoleCommand : public IConsoleObject
 {
 public:
 	DelegateConsoleCommand(const char* pName, Delegate<void, Args...>&& delegate)
 		: IConsoleObject(pName), m_Callback(std::move(delegate))
+	{}
+
+	template<typename T>
+	DelegateConsoleCommand(const char* pName, T&& callback)
+		: IConsoleObject(pName), m_Callback(Delegate<void, Args...>::CreateLambda(std::move(callback)))
 	{}
 
 	virtual bool Execute(const char** pArgs, uint32_t numArgs) override
@@ -76,7 +95,7 @@ private:
 	bool ExecuteInternal(const char** pArgs, uint32_t numArgs, std::index_sequence<Is...>)
 	{
 		int failIndex = -1;
-		std::tuple<std::decay_t<Args>...> arguments = CharConv::TupleFromArguments<std::decay_t<Args>...>(pArgs, &failIndex);
+		std::tuple<typename DecayNonPointer<Args>::Type...> arguments = CharConv::TupleFromArguments<DecayNonPointer<Args>::Type...>(pArgs, &failIndex);
 		if (failIndex >= 0)
 		{
 			E_LOG(Warning, "failed to convert argument '%s'", pArgs[failIndex]);
@@ -117,7 +136,7 @@ private:
 	bool ExecuteInternal(const char** pArgs, uint32_t numArgs, std::index_sequence<Is...>)
 	{
 		int failIndex = -1;
-		std::tuple<std::decay_t<Args>...> arguments = CharConv::TupleFromArguments<std::decay_t<Args>...>(pArgs, &failIndex);
+		std::tuple<typename DecayNonPointer<Args>::Type...> arguments = CharConv::TupleFromArguments<typename DecayNonPointer<Args>::Type...>(pArgs, &failIndex);
 		if (failIndex >= 0)
 		{
 			E_LOG(Warning, "failed to convert argument '%s'", pArgs[failIndex]);
@@ -139,22 +158,41 @@ public:
 		: IConsoleObject(pName), m_Value(defaultValue), m_OnModified(onModified)
 	{}
 
-	void SetValue(const T& value) { m_Value = value; }
+	void SetValue(const T& value)
+    {
+        m_Value = value;
+        m_OnModified.ExecuteIfBound(this);
+    }
+
+    ConsoleVariable& operator=(const T& value)
+    {
+        SetValue(value);
+        return *this;
+    }
 
 	virtual bool Execute(const char** pArgs, uint32_t numArgs) override
 	{
-		if (numArgs > 0)
-		{
-			T val;
-			if (CharConv::StrConvert(pArgs[0], val))
-			{
-				SetValue(val);
-				m_OnModified.ExecuteIfBound(this);
-				return true;
-			}
-		}
+        if (numArgs <= 0)
+        {
+            std::string val;
+            CharConv::ToString(m_Value, &val);
+            E_LOG(Info, "'%s' = %s", GetName(), val.c_str());
+            return false;
+        }
+
+        T val;
+        if (CharConv::FromString(pArgs[0], val))
+        {
+            SetValue(val);
+            E_LOG(Info, "'%s' = %s", GetName(), pArgs[0]);
+            return true;
+        }
+		
 		return false;
 	}
+
+    operator const T&() const { return m_Value; }
+    T* operator&() { return &m_Value; }
 
 	T& Get() { return m_Value; }
 	const T& Get() const { return m_Value; }
@@ -177,7 +215,7 @@ public:
 		if (numArgs > 0)
 		{
 			T val;
-			if (CharConv::StrConvert(pArgs[0], val))
+			if (CharConv::FromString(pArgs[0], val))
 			{
 				m_Value = val;
 				m_OnModified.ExecuteIfBound(this);
@@ -209,131 +247,15 @@ public:
     void Update(const ImVec2& position, const ImVec2& size);
     
 private:
-    int InputCallback(ImGuiInputTextCallbackData* pCallbackData)
-    {
-        auto BuildSuggestions = [this, pCallbackData]() {
-            m_Suggestions.clear();
-            if (strlen(pCallbackData->Buf) > 0)
-            {
-                gConsoleManager.ForEachCvar([this, pCallbackData](IConsoleObject* pObject) {
-                    if (_strnicmp(pObject->GetName(), pCallbackData->Buf, strlen(pCallbackData->Buf)) == 0)
-                    {
-                        m_Suggestions.push_back(pObject->GetName());
-                    }
-                });
-            }
-        };
-
-        switch (pCallbackData->EventFlag)
-		{
-		case ImGuiInputTextFlags_CallbackAlways:
-		{
-			if (m_AutoCompleted)
-			{
-				pCallbackData->CursorPos = pCallbackData->BufTextLen;
-				m_AutoCompleted = false;
-			}
-			break;
-		}
-        case ImGuiInputTextFlags_CallbackEdit:
-		{
-			BuildSuggestions();
-			break;
-		}
-        case ImGuiInputTextFlags_CallbackCompletion:
-		{
-			const char* pWordEnd = pCallbackData->Buf + pCallbackData->CursorPos;
-			const char* pWordStart = pWordEnd;
-			while (pWordStart > pCallbackData->Buf)
-			{
-				const char c = pWordStart[-1];
-				if (c == ' ' || c == '\t' || c == ',' || c == ';')
-					break;
-				pWordStart--;
-			}
-
-			if (!m_Suggestions.empty())
-			{
-				m_SuggestionPos = Math::Clamp(m_SuggestionPos, 0, (int)m_Suggestions.size() - 1);
-
-				pCallbackData->DeleteChars((int)(pWordStart - pCallbackData->Buf), (int)(pWordEnd - pWordStart));
-				pCallbackData->InsertChars(pCallbackData->CursorPos, m_Suggestions[m_SuggestionPos]);
-				pCallbackData->InsertChars(pCallbackData->CursorPos, " ");
-				BuildSuggestions();
-			}
-		}
-		break;
-        case ImGuiInputTextFlags_CallbackHistory:
-		{
-			if (m_Suggestions.empty())
-			{
-				const int prev_history_pos = m_HistoryPos;
-				if (pCallbackData->EventKey == ImGuiKey_UpArrow)
-				{
-					if (m_HistoryPos == -1)
-						m_HistoryPos = (int)m_History.size() - 1;
-					else if (m_HistoryPos > 0)
-						m_HistoryPos--;
-				}
-				else if (pCallbackData->EventKey == ImGuiKey_DownArrow)
-				{
-					if (m_HistoryPos != -1)
-						if (++m_HistoryPos >= m_History.size())
-							m_HistoryPos = -1;
-				}
-
-				if (prev_history_pos != m_HistoryPos)
-				{
-					const char* pHistoryStr = (m_HistoryPos >= 0) ? m_History[m_HistoryPos].c_str() : "";
-					pCallbackData->DeleteChars(0, pCallbackData->BufTextLen);
-					pCallbackData->InsertChars(0, pHistoryStr);
-				}
-			}
-			else
-			{
-				const int prevSuggestionPos = m_SuggestionPos;
-				if (pCallbackData->EventKey == ImGuiKey_UpArrow)
-				{
-					if (m_SuggestionPos == -1)
-						m_SuggestionPos = (int)m_Suggestions.size() - 1;
-					else if (m_SuggestionPos > 0)
-						m_SuggestionPos--;
-				}
-				else if (pCallbackData->EventKey == ImGuiKey_DownArrow)
-				{
-					if (m_SuggestionPos != -1)
-						if (++m_SuggestionPos >= m_Suggestions.size())
-							m_SuggestionPos = -1;
-				}
-
-				if (prevSuggestionPos != m_SuggestionPos)
-				{
-					const char* pSuggestionStr = (m_SuggestionPos >= 0) ? m_Suggestions[m_SuggestionPos] : "";
-					pCallbackData->DeleteChars(0, pCallbackData->BufTextLen);
-					pCallbackData->InsertChars(0, pSuggestionStr);
-				}
-			}
-		}
-		break;
-        case ImGuiInputTextFlags_CallbackCharFilter:
-		{
-			if (pCallbackData->EventChar == '`')
-			{
-				return 1;
-			}
-		}
-		break;
-		}
-		return 0;
-    }
+    int InputCallback(ImGuiInputTextCallbackData* pCallbackData);
 
     std::vector<std::string> m_History;
     std::vector<const char*> m_Suggestions;
+    std::array<char, 1024> m_Input{};
     int m_HistoryPos{-1};
     int m_SuggestionPos{-1};
 
     bool m_ShowConsole{false};
     bool m_FocusConsole{true};
     bool m_AutoCompleted{false};
-    char m_Input[1024];
 };

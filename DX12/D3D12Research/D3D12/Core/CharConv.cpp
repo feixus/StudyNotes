@@ -24,8 +24,7 @@ namespace CharConv
 		return *pStrA == *pStrB;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, int& out)
+	bool FromString(const char* pStr, int& out)
 	{
 		if (!pStr || *pStr == '\0')
 		{
@@ -39,8 +38,7 @@ namespace CharConv
 		return result.ec == std::errc() && result.ptr == end;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, uint32_t& out)
+	bool FromString(const char* pStr, uint32_t& out)
 	{
 		if (!pStr || *pStr == '\0')
 		{
@@ -54,8 +52,7 @@ namespace CharConv
 		return result.ec == std::errc() && result.ptr == end;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, float& out)
+	bool FromString(const char* pStr, float& out)
 	{
 		if (!pStr || *pStr == '\0')
 		{
@@ -69,8 +66,7 @@ namespace CharConv
 		return result.ec == std::errc() && result.ptr == end;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, double& out)
+	bool FromString(const char* pStr, double& out)
 	{
 		if (!pStr || *pStr == '\0')
 		{
@@ -84,22 +80,19 @@ namespace CharConv
 		return result.ec == std::errc() && result.ptr == end;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, char& out)
+	bool FromString(const char* pStr, char& out)
 	{
 		out = pStr[0];
 		return true;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, const char*& pOut)
+	bool FromString(const char* pStr, const char*& pOut)
 	{
 		pOut = pStr;
 		return true;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, bool& out)
+	bool FromString(const char* pStr, bool& out)
 	{
 		if (*pStr == '0' || StrCmp(pStr, "false", false))
 		{

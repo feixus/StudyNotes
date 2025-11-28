@@ -12,6 +12,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "DemoApp.h"
+#include "Core/ConsoleVariables.h"
 
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClusterNumZ = 32;
@@ -21,7 +22,7 @@ static constexpr int gVolumetricNumZSlices =128;
 
 namespace Tweakables
 {
-    extern int g_SsrSamples;
+    extern ConsoleVariable<int> g_SsrSamples;
 }
 
 bool g_VisualizeClusters = false;

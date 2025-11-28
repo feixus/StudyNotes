@@ -4,6 +4,7 @@
 #include "Core/Console.h"
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
+#include "Core/ConsoleVariables.h"
 #include <filesystem>
 #include <shlobj.h>
 #include "DemoApp.h"
@@ -38,6 +39,8 @@ public:
 		Thread::SetMainThread();
 		CommandLine::Parse(GetCommandLineA());
 		Console::Initialize();
+		CVarManager::Get().Initialize();
+		TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 		E_LOG(Info, "Startup hello dx12");
 
@@ -61,8 +64,6 @@ public:
 		{
 			printf("RenderDoc DLL not found\n");
 		}*/
-
-		TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 		m_DisplayWidth = gWindowWidth;
 		m_DisplayHeight = gWindowHeight;

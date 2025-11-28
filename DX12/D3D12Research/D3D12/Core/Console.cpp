@@ -110,7 +110,7 @@ void Console::Log(const char* message, LogType type)
     }
 
     char messageBuffer[4096];
-    stbsp_sprintf(messageBuffer, "%s %s\n", pVerbosityMessage, message);
+	FormatString(messageBuffer, std::size(messageBuffer), "%s %s\n", pVerbosityMessage, message);
     printf("%s %s\n", pVerbosityMessage, message);
 	// send msg to the vs debugger(Output)
     OutputDebugStringA(messageBuffer);
@@ -159,7 +159,7 @@ void Console::LogFormat(LogType type, const char* format, ...)
     static char sConvertBuffer[8196];
     va_list args;
     va_start(args, format);
-    vsnprintf_s(sConvertBuffer, 8196, format, args);
+    FormatStringVars(sConvertBuffer, std::size(sConvertBuffer), format, args);
     va_end(args);
     Log(sConvertBuffer, type);
 }

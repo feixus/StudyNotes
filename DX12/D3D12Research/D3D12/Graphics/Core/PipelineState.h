@@ -39,7 +39,7 @@ public:
 	void AddInstanceElement(const char* pSemantic, DXGI_FORMAT format, uint32_t semanticIndex, uint32_t byteOffset, uint32_t inputSlot, uint32_t stepRate);
 	
 	const D3D12_INPUT_ELEMENT_DESC* GetElements() const { return m_ElementDesc.data(); }
-	const uint32_t GetNumElements() const { return m_NumElements; }
+	uint32_t GetNumElements() const { return m_NumElements; }
 
 private:
 	void FixupString();

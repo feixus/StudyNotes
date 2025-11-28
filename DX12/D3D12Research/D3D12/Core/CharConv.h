@@ -1,11 +1,109 @@
+#pragma once
+#include "stb/stb_sprintf.h"
+
+inline int FormatString(char* pBuffer, size_t bufferSize, const char* pFormat, ...)
+{
+    va_list args;
+    va_start(args, pFormat);
+    int result = stbsp_vsnprintf(pBuffer, (int)bufferSize, pFormat, args);
+    va_end(args);
+    
+    if (pBuffer == nullptr)
+        return result;
+
+    if (result == -1 || result >= bufferSize)
+        result = bufferSize - 1;
+        
+    pBuffer[result] = 0;
+    return result;
+}
+
+inline int FormatStringVars(char* pBuffer, size_t bufferSize, const char* pFormat, va_list args)
+{
+    int result = stbsp_vsnprintf(pBuffer, (int)bufferSize, pFormat, args);
+    if (pBuffer == nullptr)
+        return result;
+    if (result == -1 || result >= bufferSize)
+        result = bufferSize - 1;
+        
+    pBuffer[result] = 0;
+    return result;
+}
+
+template<typename... Args>
+std::string Sprintf(const char* pFormat, Args... args)
+{
+    int length = FormatString(nullptr, 0, pFormat, args...);
+	std::string str;
+    str.resize(length);
+	FormatString(str.data(), length + 1, pFormat, args...);
+	return str;
+}
+
 namespace CharConv
 {
 	bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive);
 
+    inline void ToUpper(const char* pStr, char* pOut)
+    {
+        while(*pStr)
+        {
+            *pOut++ = (char)std::toupper(*pStr++);
+        }
+        *pOut = '\0';
+    }
+
+    inline void ToLower(const char* pStr, char* pOut)
+    {
+        while(*pStr)
+        {
+            *pOut++ = (char)std::tolower(*pStr++);
+        }
+        *pOut = '\0';
+    }
+
 	template<size_t I>
-	int SplitString(const char* pStr, char(&buffer)[I], const char** pOut, char delimiter = ' ')
+	int SplitString(const char* pStr, char(&buffer)[I], const char** pOut, int maxArgs, bool considerQuotes, char delimiter = ' ')
 	{
-		strcpy_s(buffer, pStr);
+		int num = 0;
+		bool delim = false;
+		bool quoted = false;
+		char* pData = buffer;
+		memset(pData, 0, I);
+
+		while (*pStr != '\0')
+		{
+			if (*pStr == '"' && considerQuotes)
+			{
+				quoted = !quoted;
+			}
+			else if (*pStr != delimiter || quoted)
+			{
+				*pData = *pStr;
+				if (delim == false)
+				{
+					delim = true;
+					if (num < maxArgs)
+					{
+						pOut[num] = pData;
+					}
+					++num;
+				}
+				++pData;
+			}
+			else
+			{
+				if (delim && !quoted)
+				{
+					*pData++ = '\0';
+					delim = false;
+				}
+			}
+			++pStr;
+		}
+		return num;
+
+		/*strcpy_s(buffer, pStr);
 
 		int count = 0;
 		char* p = buffer;
@@ -28,24 +126,18 @@ namespace CharConv
 		if (*token != '\0')
 			pOut[count++] = token;
 
-		return count;
+		return count;*/
 	}
 
-	template<typename T>
-	inline bool StrConvert(const char* pStr, T& out)
-	{
-		static_assert(false, "Not implemented.");
-	}
+	bool FromString(const char* pStr, char& out);
+	bool FromString(const char* pStr, int& out);
+	bool FromString(const char* pStr, uint32_t& out);
+	bool FromString(const char* pStr, float& out);
+	bool FromString(const char* pStr, double& out);
+	bool FromString(const char* pStr, const char*& pOut);
+	bool FromString(const char* pStr, bool& out);
 
-	template<> bool StrConvert(const char* pStr, char& out);
-	template<> bool StrConvert(const char* pStr, int& out);
-	template<> bool StrConvert(const char* pStr, uint32_t& out);
-	template<> bool StrConvert(const char* pStr, float& out);
-	template<> bool StrConvert(const char* pStr, double& out);
-	template<> bool StrConvert(const char* pStr, const char*& pOut);
-	template<> bool StrConvert(const char* pStr, bool& out);
-
-	template<typename T, size_t VALUES>
+	template<typename T, int VALUES>
 	bool StrArrayConvert(const char* pStr, T* pValue)
 	{
 		const char* pArgs[VALUES];
@@ -57,7 +149,7 @@ namespace CharConv
 		}
 		for (int i = 0; i < VALUES; ++i)
 		{
-			if (!StrConvert(pArgs[i], pValue[i]))
+			if (!FromString(pArgs[i], pValue[i]))
 			{
 				return false;
 			}
@@ -65,11 +157,19 @@ namespace CharConv
 		return true;
 	}
 
-	/*template<> bool StrConvert(const char* pStr, Vector4& out) { return StrArrayConvert<float, 4>(pStr, &out.x); }
-	template<> bool StrConvert(const char* pStr, Vector3& out) { return StrArrayConvert<float, 3>(pStr, &out.x); }
-	template<> bool StrConvert(const char* pStr, Vector2& out) { return StrArrayConvert<float, 2>(pStr, &out.x); }
-	template<> bool StrConvert(const char* pStr, IntVector2& out) { return StrArrayConvert<int, 2>(pStr, &out.x); }
-	template<> bool StrConvert(const char* pStr, IntVector3& out) { return StrArrayConvert<int, 3>(pStr, &out.x); }*/
+    inline void ToString(char val, std::string* pOut) { *pOut = Sprintf("%c", val); }
+	inline void ToString(int val, std::string* pOut) { *pOut = Sprintf("%d", val); }
+	inline void ToString(uint32_t val, std::string* pOut) { *pOut = Sprintf("%d", val); }
+	inline void ToString(float val, std::string* pOut) { *pOut = Sprintf("%.3f", val); }
+	inline void ToString(double val, std::string* pOut) { *pOut = Sprintf("%.3f", val); }
+	inline void ToString(const char* val, std::string* pOut) { *pOut = val; }
+	inline void ToString(bool val, std::string* pOut) { *pOut = Sprintf("%d", val ? "True" : "False"); }
+
+	/*template<> bool FromString(const char* pStr, Vector4& out) { return StrArrayConvert<float, 4>(pStr, &out.x); }
+	template<> bool FromString(const char* pStr, Vector3& out) { return StrArrayConvert<float, 3>(pStr, &out.x); }
+	template<> bool FromString(const char* pStr, Vector2& out) { return StrArrayConvert<float, 2>(pStr, &out.x); }
+	template<> bool FromString(const char* pStr, IntVector2& out) { return StrArrayConvert<int, 2>(pStr, &out.x); }
+	template<> bool FromString(const char* pStr, IntVector3& out) { return StrArrayConvert<int, 3>(pStr, &out.x); }*/
 
 	// namespace Private
 	// {
@@ -78,7 +178,7 @@ namespace CharConv
 	// 	{
 	// 		if (failIndex == -1)
 	// 		{
-	// 			if (!CharConv::StrConvert(pArgs[I], std::get<I>(t)))
+	// 			if (!CharConv::FromString(pArgs[I], std::get<I>(t)))
 	// 			{
 	// 				failIndex = I;
 	// 			}
@@ -113,7 +213,7 @@ namespace CharConv
 				(([&] {
 					if (*pFailIndex == -1)
 					{
-						if (!CharConv::StrConvert(pArgs[I], std::get<I>(result)))
+						if (!CharConv::FromString(pArgs[I], std::get<I>(result)))
 							*pFailIndex = I;
 					}
 				}()), ...);

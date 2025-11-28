@@ -4,6 +4,171 @@
 
 CVarManager gConsoleManager;
 
+CVarManager& CVarManager::Get()
+{
+    return gConsoleManager;
+}
+
+void CVarManager::Initialize()
+{
+	std::ifstream fs(Sprintf("%sConsoleVariables.ini", Paths::SavedDir().c_str()));
+	std::string line;
+	while (getline(fs, line))
+	{
+		Execute(line.c_str());
+	}
+}
+
+void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
+{
+    char lowerName[256];
+    CharConv::ToLower(pName, lowerName);
+    m_Map[lowerName] = pObject;
+    m_Objects.push_back(pObject);
+    std::sort(m_Objects.begin(), m_Objects.end(), [](IConsoleObject* pA, IConsoleObject* pB) {
+        return _stricmp(pA->GetName(), pB->GetName()) < 0;
+    });
+}
+
+bool CVarManager::Execute(const char* pCommand)
+{
+	char cmdLower[1024];
+	CharConv::ToLower(pCommand, cmdLower);
+
+	const char* argList[16];
+	char buffer[1024];
+	int numArgs = CharConv::SplitString(cmdLower, buffer, &argList[0], 16, true, ' ');
+	if (numArgs > 0)
+	{
+		auto it = m_Map.find(argList[0]);
+		if (it != m_Map.end())
+		{
+			return it->second->Execute(argList, numArgs);
+		}
+	}
+
+    E_LOG(Warning, "unknown command '%s'", pCommand);
+	return false;
+}
+
+int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
+{
+    auto BuildSuggestions = [this, pCallbackData]() {
+        m_Suggestions.clear();
+        if (strlen(pCallbackData->Buf) > 0)
+        {
+            CVarManager::Get().ForEachCvar([this, pCallbackData](IConsoleObject* pObject) {
+                if (_strnicmp(pObject->GetName(), pCallbackData->Buf, strlen(pCallbackData->Buf)) == 0 && m_Suggestions.size() < 10)
+                {
+                    m_Suggestions.push_back(pObject->GetName());
+                }
+            });
+        }
+    };
+
+    switch (pCallbackData->EventFlag)
+    {
+    case ImGuiInputTextFlags_CallbackAlways:
+    {
+        if (m_AutoCompleted)
+        {
+            pCallbackData->CursorPos = pCallbackData->BufTextLen;
+            m_AutoCompleted = false;
+        }
+        break;
+    }
+    case ImGuiInputTextFlags_CallbackEdit:
+    {
+        BuildSuggestions();
+        break;
+    }
+    case ImGuiInputTextFlags_CallbackCompletion:
+    {
+        const char* pWordEnd = pCallbackData->Buf + pCallbackData->CursorPos;
+        const char* pWordStart = pWordEnd;
+        while (pWordStart > pCallbackData->Buf)
+        {
+            const char c = pWordStart[-1];
+            if (c == ' ' || c == '\t' || c == ',' || c == ';')
+                break;
+            pWordStart--;
+        }
+
+        if (!m_Suggestions.empty())
+        {
+            m_SuggestionPos = Math::Clamp(m_SuggestionPos, 0, (int)m_Suggestions.size() - 1);
+
+            pCallbackData->DeleteChars((int)(pWordStart - pCallbackData->Buf), (int)(pWordEnd - pWordStart));
+            pCallbackData->InsertChars(pCallbackData->CursorPos, m_Suggestions[m_SuggestionPos]);
+            pCallbackData->InsertChars(pCallbackData->CursorPos, " ");
+            BuildSuggestions();
+        }
+    }
+    break;
+    case ImGuiInputTextFlags_CallbackHistory:
+    {
+        if (m_Suggestions.empty())
+        {
+            const int prev_history_pos = m_HistoryPos;
+            if (pCallbackData->EventKey == ImGuiKey_UpArrow)
+            {
+                if (m_HistoryPos == -1)
+                    m_HistoryPos = (int)m_History.size() - 1;
+                else if (m_HistoryPos > 0)
+                    m_HistoryPos--;
+            }
+            else if (pCallbackData->EventKey == ImGuiKey_DownArrow)
+            {
+                if (m_HistoryPos != -1)
+                    if (++m_HistoryPos >= m_History.size())
+                        m_HistoryPos = -1;
+            }
+
+            if (prev_history_pos != m_HistoryPos)
+            {
+                const char* pHistoryStr = (m_HistoryPos >= 0) ? m_History[m_HistoryPos].c_str() : "";
+                pCallbackData->DeleteChars(0, pCallbackData->BufTextLen);
+                pCallbackData->InsertChars(0, pHistoryStr);
+            }
+        }
+        else
+        {
+            const int prevSuggestionPos = m_SuggestionPos;
+            if (pCallbackData->EventKey == ImGuiKey_UpArrow)
+            {
+                if (m_SuggestionPos == -1)
+                    m_SuggestionPos = (int)m_Suggestions.size() - 1;
+                else if (m_SuggestionPos > 0)
+                    m_SuggestionPos--;
+            }
+            else if (pCallbackData->EventKey == ImGuiKey_DownArrow)
+            {
+                if (m_SuggestionPos != -1)
+                    if (++m_SuggestionPos >= m_Suggestions.size())
+                        m_SuggestionPos = -1;
+            }
+
+            if (prevSuggestionPos != m_SuggestionPos)
+            {
+                const char* pSuggestionStr = (m_SuggestionPos >= 0) ? m_Suggestions[m_SuggestionPos] : "";
+                pCallbackData->DeleteChars(0, pCallbackData->BufTextLen);
+                pCallbackData->InsertChars(0, pSuggestionStr);
+            }
+        }
+    }
+    break;
+    case ImGuiInputTextFlags_CallbackCharFilter:
+    {
+        if (pCallbackData->EventChar == '`')
+        {
+            return 1;
+        }
+    }
+    break;
+    }
+    return 0;
+}
+
 void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
@@ -50,12 +215,11 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
         };
 
         //ImGui::PushItemWidth(size.x);
-        ImGui::SetKeyboardFocusHere();
-		if (ImGui::InputText("##some thing", m_Input, 1024, inputFlags, inputCallback, this))
+		if (ImGui::InputText("##some thing", m_Input.data(), m_Input.size(), inputFlags, inputCallback, this))
 		{
-			if (*m_Input != '\0')
+			if (m_Input[0] != '\0')
 			{
-				if (strcmp(m_Input, "help") == 0)
+				if (strcmp(m_Input.data(), "help") == 0)
 				{
 					E_LOG(Info, "Available Commands:");
 					gConsoleManager.ForEachCvar([](IConsoleObject* pObject) {
@@ -64,24 +228,13 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 				}
 				else
 				{
-					char buffer[1024];
-					strncpy_s(buffer, &m_Input[0], 1024);
-					char* pArgs = strchr(buffer, ' ');
-					if (pArgs)
-					{
-						*pArgs = '\0';
-						pArgs++;
-					}
-					bool success = gConsoleManager.ExecuteCommand(buffer, pArgs ? pArgs : "");
+					CVarManager::Get().Execute(m_Input.data());
 					m_Suggestions.clear();
-					m_History.push_back(m_Input);
+					m_History.push_back(m_Input.data());
 					m_HistoryPos = -1;
-					if (!success)
-					{
-						E_LOG(Warning, "Unknow command '%s'", m_Input);
-					}
+                    m_SuggestionPos = -1;
+                    m_Input[0] = '\0';
 				}
-				m_Input[0] = '\0';
 			}
 		}
 
@@ -104,7 +257,7 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 					if (ImGui::Selectable(m_Suggestions[i], i == (uint32_t)m_SuggestionPos))
 					{
 						m_SuggestionPos = i;
-						strncpy_s(m_Input, std::size(m_Input), m_Suggestions[i], strlen(m_Suggestions[i]));
+						strncpy_s(m_Input.data(), std::size(m_Input), m_Suggestions[i], strlen(m_Suggestions[i]));
 						m_Suggestions.clear();
 						m_AutoCompleted = true;
 						ImGui::SetKeyboardFocusHere();
@@ -127,17 +280,4 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
         m_ShowConsole = !m_ShowConsole;
         m_FocusConsole = m_ShowConsole;
     }
-}
-
-bool CVarManager::ExecuteCommand(const char* pCommand, const char* pArguments)
-{
-	const char* argList[16];
-	char buffer[1024];
-	int numArgs = CharConv::SplitString(pArguments, buffer, &argList[0]);
-	auto it = m_CvarMap.find(pCommand);
-	if (it != m_CvarMap.end())
-	{
-		return it->second->Execute(argList, numArgs);
-	}
-	return false;
 }

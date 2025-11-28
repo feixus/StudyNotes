@@ -77,7 +77,7 @@ void TaskQueue::CreateThreads(uint32_t count)
         thread.RunThread(WorkFunction, reinterpret_cast<LPVOID>((size_t)i));
 
         char threadName[256];
-        stbsp_sprintf(threadName, "TaskQueue Thread %d", i);
+        FormatString(threadName, std::size(threadName), "TaskQueue Thread %d", i);
         thread.SetName(threadName);
     }
 }

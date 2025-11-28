@@ -162,42 +162,46 @@ void EditTransform(const Camera& camera, Matrix& matrix)
 namespace Tweakables
 {
 	// post processing
-	float g_WhitePoint = 1;
-	float g_MinLogLuminance = -10.0f;
-	float g_MaxLogLuminance = 20.0f;
-	float g_Tau = 2;
-	bool g_DrawHistogram = false;
-	uint32_t g_ToneMapper = 2;
-	bool g_TAA = true;
+	ConsoleVariable g_WhitePoint("r.Exposure.WhitePoint", 1.0f);
+	ConsoleVariable g_MinLogLuminance("r.Exposure.MinLogLuminance", -10.0f);
+	ConsoleVariable g_MaxLogLuminance("r.Exposure.MaxLogLuminance", 20.0f);
+	ConsoleVariable g_Tau("r.Exposure.Tau", 2.0f);
+	ConsoleVariable g_DrawHistogram("vis.Histogram", false);
+	ConsoleVariable g_ToneMapper("r.Tonemapper", 2);
+	ConsoleVariable g_TAA("r.Taa", true);
 
 	// shadows
-	bool g_ShowSDSM = false;
-	bool g_StabilizeCascases = true;
-	bool g_VisualizeShadowCascades = false;
-	int g_ShadowCascades = 4;
-	float g_PSSMFactor = 1.0f;
+	ConsoleVariable g_ShowSDSM("r.Shadows.SDSM", false);
+	ConsoleVariable g_StabilizeCascases("r.Shadows.StabilizeCascades", true);
+	ConsoleVariable g_VisualizeShadowCascades("vis.ShadowCascades", false);
+	ConsoleVariable g_ShadowCascades("r.Shadows.CascadeCount", 4);
+	ConsoleVariable g_PSSMFactor("r.Shadows.PSSMFactor", 1.0f);
 
 	// misc lighting
-	bool g_RaytracedAO = false;
-	bool g_VisualizeLights = false;
-	bool g_VisualizeLightDensity = false;
+	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
+	ConsoleVariable g_VisualizeLights("vis.Lights", false);
+	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
+
+	// reflections
+	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflection", false);
+	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 5.0f * Math::DegreesToRadians);
+	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
+	
+	// Misc
+	bool g_DumpRenderGraph = false;
+	DelegateConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
+	bool g_Screenshot = false;
+	DelegateConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = false; });
+
+	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
+
+	bool g_EnableUI = true;
 
 	// lighting
 	float g_SunInclination = 0.2f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5900.0f;
 	float g_SunIntensity = 3.0f;
-
-	// reflections
-	bool g_RaytracedReflections = false;
-	float g_TLASBoundsThreshold = 5.0f * Math::DegreesToRadians;
-	int g_SsrSamples = 8;
-	
-	// Misc
-	bool g_DumpRenderGraph = false;
-	bool g_Screenshot = false;
-	bool g_EnableUI = true;
-	bool g_RenderObjectBounds = false;
 }
 
 struct Object
@@ -213,25 +217,10 @@ struct Object
 	}
 };
 
-void Log(const char* pMsg)
-{
-	E_LOG(Info, "%s", pMsg);
-}
-
-ConsoleVariableRef gShadow("vis.histogram", Tweakables::g_DrawHistogram);
-ConsoleVariableRef gTonemapper("r.tonemapper", Tweakables::g_ToneMapper);
-
-ConsoleCommand gLog("log", Log);
-
 
 DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	m_WindowWidth(windowRect.x), m_WindowHeight(windowRect.y), m_SampleCount(sampleCount)
 {
-	const char* pArgs[5];
-	char buffer[1024];
-
-	CharConv::SplitString("a,b,cc", buffer, &pArgs[0], ',');
-
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetPosition(Vector3(-50, 60, 0));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV2, Math::PIDIV4 * 0.5f, 0));
@@ -467,7 +456,7 @@ void DemoApp::Update()
 	m_Lights[0].Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
 	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
 
-	if (Tweakables::g_RenderObjectBounds)
+	if (Tweakables::g_RenderObjectBounds.Get())
 	{
 		for (const Batch& b : m_SceneData.Batches)
 		{
@@ -476,7 +465,7 @@ void DemoApp::Update()
 		}
 	}
 
-	if (Tweakables::g_VisualizeLights)
+	if (Tweakables::g_VisualizeLights.Get())
 	{
 		for (const auto& light : m_Lights)
 		{
@@ -498,9 +487,9 @@ void DemoApp::Update()
 	constexpr uint32_t MAX_CASCADES = 4;
 	std::array<float, MAX_CASCADES> cascadeSplits{};
 
-	shadowData.NumCascades = Tweakables::g_ShadowCascades;
+	shadowData.NumCascades = Tweakables::g_ShadowCascades.Get();
 
-	if (Tweakables::g_ShowSDSM)
+	if (Tweakables::g_ShowSDSM.Get())
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
 		Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
@@ -518,12 +507,12 @@ void DemoApp::Update()
 	float minZ = nearPlane + minPoint * clipPlaneRange;
 	float maxZ = nearPlane + maxPoint * clipPlaneRange;
 
-	for (int i = 0; i < Tweakables::g_ShadowCascades; i++)
+	for (int i = 0; i < Tweakables::g_ShadowCascades.Get(); i++)
 	{
-		float p = (i + 1) / (float)Tweakables::g_ShadowCascades;
+		float p = (i + 1) / (float)Tweakables::g_ShadowCascades.Get();
 		float log = minZ * std::pow(maxZ / minZ, p);
 		float uniform = minZ + (maxZ - minZ) * p;
-		float d = Tweakables::g_PSSMFactor * (log - uniform) + uniform;
+		float d = Tweakables::g_PSSMFactor.Get() * (log - uniform) + uniform;
 		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 	}
 
@@ -538,7 +527,7 @@ void DemoApp::Update()
 		light.ShadowIndex = shadowIndex;
 		if (light.Type == LightType::Directional)
 		{
-			for (int cascadeIdx = 0; cascadeIdx < Tweakables::g_ShadowCascades; ++cascadeIdx)
+			for (int cascadeIdx = 0; cascadeIdx < Tweakables::g_ShadowCascades.Get(); ++cascadeIdx)
 			{
 				float previousCascadeSplit = cascadeIdx == 0 ? minPoint : cascadeSplits[cascadeIdx - 1];
 				float currentCascadeSplit = cascadeSplits[cascadeIdx];
@@ -585,7 +574,7 @@ void DemoApp::Update()
 				Vector3 maxExtents(-FLT_MAX);
 
 				// create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
-				if (Tweakables::g_StabilizeCascases)
+				if (Tweakables::g_StabilizeCascases.Get())
 				{
 					float radius = 0;
 					for (const Vector3& corner : frustumCorners)
@@ -613,7 +602,7 @@ void DemoApp::Update()
 				Matrix lightViewProjection = shadowView * projectionMatrix;
 
 				// snap projection to shadowmap texels to avoid flickering edges
-				if (Tweakables::g_StabilizeCascases)
+				if (Tweakables::g_StabilizeCascases.Get())
 				{
 					float shadowMapSize = 2048;
 					Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
@@ -692,7 +681,7 @@ void DemoApp::Update()
 	m_SceneData.pDepthBuffer = GetDepthStencil();
 	m_SceneData.pResolvedDepth = GetResolveDepthStencil();
 	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
-	m_SceneData.pResolvedTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
+	m_SceneData.pResolvedTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
@@ -778,7 +767,7 @@ void DemoApp::Update()
 				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
 
 				char filePath[128];
-				stbsp_sprintf(filePath, "%sScreenshot_%d_%02d_%02d__%02d_%02d_%2d.jpg",
+				FormatString(filePath, std::size(filePath), "%sScreenshot_%d_%02d_%02d__%02d_%02d_%2d.jpg",
 								Paths::ScreenshotDir().c_str(),
 								time.wYear, time.wMonth, time.wDay,
 								time.wMonth, time.wMinute, time.wSecond);
@@ -897,7 +886,7 @@ void DemoApp::Update()
 	}
 
 	// camera velocity
-	if (Tweakables::g_TAA)
+	if (Tweakables::g_TAA.Get())
 	{
 		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
 		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
@@ -944,7 +933,7 @@ void DemoApp::Update()
 
 	m_pGpuParticles->Simulate(graph, GetResolveDepthStencil(), *m_pCamera);
 
-	if (Tweakables::g_RaytracedAO)
+	if (Tweakables::g_RaytracedAO.Get())
 	{
 		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), m_SceneData, *m_pCamera);
 	}
@@ -957,7 +946,7 @@ void DemoApp::Update()
 	//  - renders the scene depth onto a separate depth buffer from the light's view
 	if (shadowIndex > 0)
 	{
-		if (Tweakables::g_ShowSDSM)
+		if (Tweakables::g_ShowSDSM.Get())
 		{
 			RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
 			sceneData.DepthStencil = depthReduce.Write(sceneData.DepthStencil);
@@ -1112,12 +1101,12 @@ void DemoApp::Update()
 			if (m_SampleCount > 1)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				GraphicsTexture* pTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
+				GraphicsTexture* pTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				context.ResolveResource(GetCurrentRenderTarget(), 0, pTarget, 0, GraphicsDevice::RENDER_TARGET_FORMAT);
 			}
 
-			if (!Tweakables::g_TAA)
+			if (!Tweakables::g_TAA.Get())
 			{
 				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			}
@@ -1127,12 +1116,12 @@ void DemoApp::Update()
 			}
 		});
 
-	if (Tweakables::g_RaytracedReflections)
+	if (Tweakables::g_RaytracedReflections.Get())
 	{
 		m_pRTReflections->Execute(graph, m_SceneData);
 	}
 
-	if (Tweakables::g_TAA)
+	if (Tweakables::g_TAA.Get())
 	{
 		// temporal resolve
 		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
@@ -1236,8 +1225,8 @@ void DemoApp::Update()
 
 				parameters.Width = pTonemapInput->GetWidth();
 				parameters.Height = pTonemapInput->GetHeight();
-				parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
-				parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
+				parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 
 				context.SetComputeDynamicConstantBufferView(0, parameters);
 				context.BindResource(1, 0, m_pLuminanceHistogram->GetUAV());
@@ -1266,10 +1255,10 @@ void DemoApp::Update()
 				} averageParameters;
 
 				averageParameters.PixelCount = pTonemapInput->GetWidth() * pTonemapInput->GetHeight();
-				averageParameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
-				averageParameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance;
+				averageParameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				averageParameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get();
 				averageParameters.TimeDelta = Time::DeltaTime();
-				averageParameters.Tau = Tweakables::g_Tau;
+				averageParameters.Tau = Tweakables::g_Tau.Get();
 
 				context.SetComputeDynamicConstantBufferView(0, averageParameters);
 				context.BindResource(1, 0, m_pAverageLuminance->GetUAV());
@@ -1286,8 +1275,8 @@ void DemoApp::Update()
 					float WhitePoint;
 					uint32_t ToneMapper;
 				} constBuffer;
-				constBuffer.WhitePoint = Tweakables::g_WhitePoint;
-				constBuffer.ToneMapper = Tweakables::g_ToneMapper;
+				constBuffer.WhitePoint = Tweakables::g_WhitePoint.Get();
+				constBuffer.ToneMapper = Tweakables::g_ToneMapper.Get();
 
 				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1304,7 +1293,7 @@ void DemoApp::Update()
 				context.Dispatch(Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16), Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16));
 			});
 
-		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram)
+		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram.Get())
 		{
 			if (!m_pDebugHistogramTexture)
 			{
@@ -1329,8 +1318,8 @@ void DemoApp::Update()
 						Vector2 InvTextureDimensions;
 					} parameters;
 
-					parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
-					parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
+					parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+					parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 					parameters.InvTextureDimensions = Vector2(1.0f / m_pDebugHistogramTexture->GetWidth(), 1.0f / m_pDebugHistogramTexture->GetHeight());
 
 					context.SetComputeDynamicConstantBufferView(0, parameters);
@@ -1345,7 +1334,7 @@ void DemoApp::Update()
 		}
 	}
 
-	if (Tweakables::g_VisualizeLightDensity)
+	if (Tweakables::g_VisualizeLightDensity.Get())
 	{
 		if (m_RenderPath == RenderPath::Tiled)
 		{
@@ -1378,7 +1367,7 @@ void DemoApp::Update()
 		for (size_t i = 0; i < std::size(DEBUG_COLORS); ++i)
 		{
 			char number[16];
-			stbsp_sprintf(number, "%d", (int)i);
+			FormatString(number, std::size(number), "%d", (int)i);
 			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
 			ImGui::Button(number, ImVec2(40, 20));
 			ImGui::PopStyleColor();
@@ -1825,18 +1814,18 @@ void DemoApp::UpdateImGui()
 	ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
 
 	ImGui::Text("Shadows");
-	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
-	ImGui::Checkbox("SDSM", &Tweakables::g_ShowSDSM);
-	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascases);
-	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor, 0, 1);
-	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades);
+	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades.Get(), 1, 4);
+	ImGui::Checkbox("SDSM", &Tweakables::g_ShowSDSM.Get());
+	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascases.Get());
+	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
+	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
 
 	ImGui::Text("Expose/Tonemapping");
-	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance, -100, 20);
-	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance, -50, 50);
-	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram);
-	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint, 0, 20);
-	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper, [](void* data, int index, const char** outText)
+	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance.Get(), -100, 20);
+	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance.Get(), -50, 50);
+	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
+	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
+	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* data, int index, const char** outText)
 		{
 			switch (index)
 			{
@@ -1861,24 +1850,24 @@ void DemoApp::UpdateImGui()
 			}
 			return true;
 		}, nullptr, 5);
-	ImGui::SliderFloat("Tau", &Tweakables::g_Tau, 0, 5);
+	ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
 
 	ImGui::Text("Misc");
-	ImGui::Checkbox("Debug Render Light", &Tweakables::g_VisualizeLights);
-	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity);
+	ImGui::Checkbox("Debug Render Light", &Tweakables::g_VisualizeLights.Get());
+	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
-	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds);
+	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
+	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 
 	if (m_pDevice->SupportsRaytracing())
 	{
-		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
-		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
-		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold, 0, 40);
+		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
+		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
+		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 	}
 
-	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
+	ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
 
 	ImGui::End();
 
@@ -1894,7 +1883,7 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
-	if (Tweakables::g_VisualizeShadowCascades && m_ShadowMaps.size() >= 4)
+	if (Tweakables::g_VisualizeShadowCascades.Get() && m_ShadowMaps.size() >= 4)
 	{
 		float imageSize = 230;
 		ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
@@ -1929,7 +1918,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 		// cull object that are small to the viewer
 		Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
 		float angle = tanf(batch.Radius / cameraVec.Length());
-		if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
+		if (angle < Tweakables::g_TLASBoundsThreshold.Get() && cameraVec.Length() > batch.Radius)
 		{
 			continue;
 		}
