@@ -74,6 +74,8 @@ struct ShadowData
 	uint32_t ShadowMapOffset{ 0 };
 };
 
+using VisibilityMask = BitField<2048>;
+
 struct SceneData
 {
 	GraphicsTexture* pDepthBuffer{ nullptr };
@@ -92,7 +94,7 @@ struct SceneData
 	ShadowData* pShadowData{ nullptr };
 	int SceneTLAS{ 0 };
 	int FrameIndex{ 0 };
-	BitField<2048> VisibilityMask;
+	VisibilityMask VisibilityMask;
 };
 
 enum class RenderPath
@@ -101,6 +103,7 @@ enum class RenderPath
 	Clustered,
 };
 
+void DrawScene(CommandContext& context, const SceneData& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
 void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes);
 
 class DemoApp

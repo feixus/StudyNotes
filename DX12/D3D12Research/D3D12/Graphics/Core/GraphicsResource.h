@@ -50,9 +50,9 @@ class GraphicsObject
 public:
 	GraphicsObject(GraphicsDevice* pParent = nullptr) : m_pGraphics(pParent) {}
 
-	GraphicsDevice* GetGraphics() const { return m_pGraphics; }
+	inline GraphicsDevice* GetGraphics() const { return m_pGraphics; }
 
-protected:
+private:
 	GraphicsDevice* m_pGraphics;
 };
 

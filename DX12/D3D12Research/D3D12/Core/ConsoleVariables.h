@@ -1,5 +1,5 @@
 #pragma once
-#include "CharConv.h"
+#include "CString.h"
 
 class IConsoleObject;
 
@@ -35,6 +35,10 @@ public:
 	virtual ~IConsoleObject() = default;
 	virtual bool Execute(const char** pArgs, uint32_t numArgs) = 0;
 
+	virtual int GetInt() const { return 0; }
+	virtual float GetFloat() const { return 0.0f; }
+	virtual bool GetBool() const { return false; }
+	virtual std::string GetString() const { return ""; }
 	const char* GetName() const { return m_pName; }
 
 private:
@@ -87,7 +91,7 @@ private:
 	bool ExecuteInternal(const char** pArgs, uint32_t numArgs, std::index_sequence<Is...>)
 	{
 		int failIndex = -1;
-		std::tuple<typename DecayNonPointer<Args>::Type...> arguments = CharConv::TupleFromArguments<DecayNonPointer<Args>::Type...>(pArgs, &failIndex);
+		std::tuple<typename DecayNonPointer<Args>::Type...> arguments = CString::TupleFromArguments<DecayNonPointer<Args>::Type...>(pArgs, &failIndex);
 		if (failIndex >= 0)
 		{
 			E_LOG(Warning, "failed to convert argument '%s'", pArgs[failIndex]);
@@ -128,7 +132,7 @@ private:
 	bool ExecuteInternal(const char** pArgs, uint32_t numArgs, std::index_sequence<Is...>)
 	{
 		int failIndex = -1;
-		std::tuple<typename DecayNonPointer<Args>::Type...> arguments = CharConv::TupleFromArguments<typename DecayNonPointer<Args>::Type...>(pArgs, &failIndex);
+		std::tuple<typename DecayNonPointer<Args>::Type...> arguments = CString::TupleFromArguments<typename DecayNonPointer<Args>::Type...>(pArgs, &failIndex);
 		if (failIndex >= 0)
 		{
 			E_LOG(Warning, "failed to convert argument '%s'", pArgs[failIndex]);
@@ -167,13 +171,13 @@ public:
         if (numArgs <= 0)
         {
             std::string val;
-            CharConv::ToString(m_Value, &val);
+            CString::ToString(m_Value, &val);
             E_LOG(Info, "'%s' = %s", GetName(), val.c_str());
             return false;
         }
 
         std::remove_reference_t<T> val;
-        if (CharConv::FromString(pArgs[0], val))
+        if (CString::FromString(pArgs[0], val))
         {
             SetValue(val);
             E_LOG(Info, "'%s' = %s", GetName(), pArgs[0]);
@@ -184,6 +188,11 @@ public:
 	}
 
     operator const T&() const { return m_Value; }
+
+	virtual int GetInt() const override;
+	virtual float GetFloat() const override;
+	virtual bool GetBool() const override;
+	virtual std::string GetString() const override;
 
 	T& Get() { return m_Value; }
 	const T& Get() const { return m_Value; }

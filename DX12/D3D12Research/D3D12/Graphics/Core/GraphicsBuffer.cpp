@@ -10,7 +10,7 @@ Buffer::Buffer(GraphicsDevice* pGraphics, ID3D12Resource* pResource, D3D12_RESOU
 {}
 
 Buffer::Buffer(GraphicsDevice* pGraphics, const char* pName)
-	: GraphicsResource(pGraphics), m_Name(pName)
+	: GraphicsResource(pGraphics)
 {}
 
 Buffer::~Buffer()

@@ -40,10 +40,15 @@ static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 
 void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes)
 {
+	DrawScene(context, scene, scene.VisibilityMask, blendModes);
+}
+
+void DrawScene(CommandContext& context, const SceneData& scene, const VisibilityMask& visibility, Batch::Blending blendModes)
+{
 	std::vector<const Batch*> meshes;
 	for (const Batch& b : scene.Batches)
 	{
-		if (Any(b.BlendMode, blendModes) && scene.VisibilityMask.GetBit(b.Index))
+		if (Any(b.BlendMode, blendModes) && visibility.GetBit(b.Index))
 		{
 			meshes.push_back(&b);
 		}
@@ -74,6 +79,7 @@ void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending 
 		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
 	}
 }
+
 
 void EditTransform(const Camera& camera, Matrix& matrix)
 {
@@ -802,7 +808,7 @@ void DemoApp::Update()
 			} viewData{};
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
 			renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
-			
+
 			{
 				GPU_PROFILE_SCOPE("Opaque", &renderContext);
 				renderContext.SetPipelineState(m_pDepthPrepassOpaquePSO);
@@ -998,15 +1004,17 @@ void DemoApp::Update()
 						uint32_t VertexBuffer;
 					} objectData;
 
+					VisibilityMask mask;
+					mask.SetAll();
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pShadowOpaquePSO);
-						DrawScene(context, m_SceneData, Batch::Blending::Opaque);
+						DrawScene(context, m_SceneData, mask, Batch::Blending::Opaque);
 					}
 					{
 						GPU_PROFILE_SCOPE("Masked", &context);
 						context.SetPipelineState(m_pShadowAlphaMaskPSO);
-						DrawScene(context, m_SceneData, Batch::Blending::AlphaMask);
+						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask);
 					}
 					context.EndRenderPass();
 				}
@@ -1753,35 +1761,29 @@ void DemoApp::UpdateImGui()
 	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
 
 	ImGui::Text("Expose/Tonemapping");
-	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance.Get(), -100, 20);
-	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance.Get(), -50, 50);
+	ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
 	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
 	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
+
+	constexpr static const char* tonemappers[] =
+	{
+		"Reinhard",
+		"Reinhard Extended",
+		"ACES fast",
+		"Unreal 3",
+		"Uncharted2"
+	};
+
 	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* data, int index, const char** outText)
 		{
-			switch (index)
+			if (index < (int)std::size(tonemappers))
 			{
-			case 0:
-				*outText = "Reinhard";
-				break;
-			case 1:
-				*outText = "Reinhard Extended";
-				break;
-			case 2:
-				*outText = "ACES fast";
-				break;
-			case 3:
-				*outText = "Unreal 3";
-				break;
-			case 4:
-				*outText = "Uncharted2";
-				break;
-			default:
-				return false;
-				break;
+				*outText = tonemappers[index];
+				return true;
 			}
-			return true;
+			return false;
 		}, nullptr, 5);
+
 	ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
 
 	ImGui::Text("Misc");

@@ -3,9 +3,7 @@
 #include "Graphics/RenderGraph/RenderGraphDefinition.h"
 
 class GraphicsDevice;
-class ShaderManager;
 class RootSignature;
-class CommandContext;
 class PipelineState;
 class GraphicsBuffer;
 class GraphicsTexture;
@@ -13,8 +11,6 @@ class Buffer;
 class Camera;
 class UnorderedAccessView;
 class RGGraph;
-struct Batch;
-struct ShadowData;
 struct SceneData;
 
 class TiledForward

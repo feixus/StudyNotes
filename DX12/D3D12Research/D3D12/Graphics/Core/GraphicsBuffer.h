@@ -150,7 +150,6 @@ protected:
 	ShaderResourceView* m_pSrv{ nullptr };
 	std::unique_ptr<Buffer> m_pCounter;
 
-	std::string m_Name;
 	BufferDesc m_Desc;
 };
 

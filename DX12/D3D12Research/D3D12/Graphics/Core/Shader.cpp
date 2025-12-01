@@ -506,10 +506,11 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 
 ShaderLibrary* ShaderManager::LoadLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines)
 {
-	std::stringstream shaderSource;
 	std::vector<ShaderStringHash> includes;
 	char filePath[1024];
 	FormatString(filePath, std::size(filePath), "%s%s", m_ShaderSourcePath, pShaderPath);
+
+	std::stringstream shaderSource;
 	if (!ProcessSource(filePath, filePath, shaderSource, includes))
 	{
 		return nullptr;

@@ -1,9 +1,22 @@
 #include "stdafx.h"
-#include "CharConv.h"
+#include "CString.h"
 
-namespace CharConv
+namespace CString
 {
-    bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive)
+	void TrimSpaces(char* pStr)
+	{
+		char* pNewStart = pStr;
+		while (*pNewStart == ' ') { ++pNewStart; }
+		strcpy_s(pStr, INT_MAX, pNewStart);
+		char* pEnd = pStr + strlen(pStr);
+		while (pEnd > pStr && pEnd[-1] == ' ')
+		{
+			--pEnd;
+		}
+		*pEnd = '\0';
+	}
+
+	bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive)
 	{
 		if (caseSensitive)
 		{

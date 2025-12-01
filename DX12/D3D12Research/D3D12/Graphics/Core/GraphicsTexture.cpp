@@ -7,7 +7,7 @@
 #include "ResourceViews.h"
 
 GraphicsTexture::GraphicsTexture(GraphicsDevice* pParent, const char* pName)
-	: GraphicsResource(pParent), m_Name(pName)
+	: GraphicsResource(pParent)
 {}
 
 GraphicsTexture::~GraphicsTexture()

@@ -24,6 +24,164 @@
 #include "Core/Paths.h"
 #include "External/ImGuizmo/ImGuizmo.h"
 
+GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
+{
+	UINT flags = 0;
+	if (Any(createFlags, GraphicsInstanceFlags::DebugDevice))
+	{
+		flags |= DXGI_CREATE_FACTORY_DEBUG;
+	}
+	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(m_pFactory.GetAddressOf())));
+
+	bool allowTearing = true;
+	if (SUCCEEDED(m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing))))
+	{
+		m_AllowTearing = allowTearing;
+	}
+
+	if (Any(createFlags, GraphicsInstanceFlags::DRED))
+	{
+		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+		{
+			// turn on auto-breadcrumbs and page fault reporting
+			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			E_LOG(Info, "DRED Enabled");
+		}
+	}
+
+	if (Any(createFlags, GraphicsInstanceFlags::GpuValidation))
+	{
+		ComPtr<ID3D12Debug1> pDebugController;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		{
+			pDebugController->SetEnableGPUBasedValidation(true);
+		}
+	}
+
+	if (Any(createFlags, GraphicsInstanceFlags::Pix))
+	{
+		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
+		{
+			std::string pixPath;
+			if (D3D::GetLatestWinPixGpuCapturePath(pixPath))
+			{
+				if (LoadLibraryA(pixPath.c_str()))
+				{
+					E_LOG(Warning, "Dynamically loaded PIX ('%s')", pixPath.c_str());
+				}
+			}
+		}
+	}
+
+	// attach to RenderDoc
+	if (Any(createFlags, GraphicsInstanceFlags::RenderDoc))
+	{
+		if (GetModuleHandleA("C:\\Program Files\\RenderDoc\\renderdoc.dll") == 0)
+		{
+			if (LoadLibraryA("C:\\Program Files\\RenderDoc\\renderdoc.dll"))
+			{
+				E_LOG(Warning, "Dynamically loaded RenderDoc");
+			}
+		}
+	}
+}
+
+std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags)
+{
+	return std::make_unique<GraphicsInstance>(createFlags);
+}
+
+std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapChain(GraphicsDevice* pDevice, HWND pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync)
+{
+	return std::make_unique<SwapChain>(pDevice, m_pFactory.Get(), pNativeWindow, format, width, height, numFrames, vsync);
+}
+
+ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
+{
+	ComPtr<IDXGIAdapter4> pAdapter;
+	ComPtr<ID3D12Device> pDevice;
+
+	if (!useWarp)
+	{
+		uint32_t adapterIndex = 0;
+		E_LOG(Info, "Adapters:");
+		DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_UNSPECIFIED;
+		while (m_pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) == S_OK)
+		{
+			DXGI_ADAPTER_DESC3 desc;
+			pAdapter->GetDesc3(&desc);
+			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::BytesToGigaBytes);
+
+			uint32_t outputIndex = 0;
+			ComPtr<IDXGIOutput> pOutput;
+			while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
+			{
+				ComPtr<IDXGIOutput6> pOutput1;
+				pOutput.As(&pOutput1);
+				DXGI_OUTPUT_DESC1 outputDesc;
+				pOutput1->GetDesc1(&outputDesc);
+
+				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP",
+					outputIndex,
+					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
+					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
+					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
+					outputDesc.BitsPerColor);
+			}
+		}
+		m_pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf()));
+		DXGI_ADAPTER_DESC3 desc;
+		pAdapter->GetDesc3(&desc);
+		E_LOG(Info, "Using %s", UNICODE_TO_MULTIBYTE(desc.Description));
+
+		// device
+		constexpr D3D_FEATURE_LEVEL featureLevels[] =
+		{
+			D3D_FEATURE_LEVEL_12_2,
+			D3D_FEATURE_LEVEL_12_1,
+			D3D_FEATURE_LEVEL_12_0,
+			D3D_FEATURE_LEVEL_11_1,
+			D3D_FEATURE_LEVEL_11_0
+		};
+
+		auto GetFeatureLevelName = [](D3D_FEATURE_LEVEL featureLevel) {
+			switch (featureLevel)
+			{
+			case D3D_FEATURE_LEVEL_12_2: return "D3D_FEATURE_LEVEL_12_2";
+			case D3D_FEATURE_LEVEL_12_1: return "D3D_FEATURE_LEVEL_12_1";
+			case D3D_FEATURE_LEVEL_12_0: return "D3D_FEATURE_LEVEL_12_0";
+			case D3D_FEATURE_LEVEL_11_1: return "D3D_FEATURE_LEVEL_11_1";
+			case D3D_FEATURE_LEVEL_11_0: return "D3D_FEATURE_LEVEL_11_0";
+			default: noEntry(); return "";
+			}
+			};
+
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
+		D3D12_FEATURE_DATA_FEATURE_LEVELS caps = {
+			.NumFeatureLevels = std::size(featureLevels),
+			.pFeatureLevelsRequested = featureLevels,
+		};
+		VERIFY_HR(pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)));
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(pDevice.ReleaseAndGetAddressOf())));
+		E_LOG(Info, "D3D12 Device Created: %s", GetFeatureLevelName(caps.MaxSupportedFeatureLevel));
+	}
+
+	if (!pDevice)
+	{
+		E_LOG(Warning, "No D3D12 Adapter selected. Falling back to WARP");
+		m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
+	}
+	return pAdapter;
+}
+
+std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapter4> pAdapter)
+{
+	return std::make_unique<GraphicsDevice>(pAdapter.Get());
+}
+
 GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 {
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
@@ -369,165 +527,6 @@ ShaderLibrary* GraphicsDevice::GetLibrary(const char* pShaderPath, const std::ve
 {
 	return m_pShaderManager->GetLibrary(pShaderPath, defines);
 }
-
-GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
-{
-	UINT flags = 0;
-	if (Any(createFlags, GraphicsInstanceFlags::DebugDevice))
-	{
-		flags |= DXGI_CREATE_FACTORY_DEBUG;
-	}
-	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(m_pFactory.GetAddressOf())));
-
-	bool allowTearing = true;
-	if (SUCCEEDED(m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing))))
-	{
-		m_AllowTearing = allowTearing;
-	}
-
-	if (Any(createFlags, GraphicsInstanceFlags::DRED))
-	{
-		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
-		{
-			// turn on auto-breadcrumbs and page fault reporting
-			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-			pDredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-			E_LOG(Info, "DRED Enabled");
-		}
-	}
-
-	if (Any(createFlags, GraphicsInstanceFlags::GpuValidation))
-	{
-		ComPtr<ID3D12Debug1> pDebugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
-		{
-			pDebugController->SetEnableGPUBasedValidation(true);
-		}
-	}
-
-	if (Any(createFlags, GraphicsInstanceFlags::Pix))
-	{
-		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
-		{
-			std::string pixPath;
-			if (D3D::GetLatestWinPixGpuCapturePath(pixPath))
-			{
-				if (LoadLibraryA(pixPath.c_str()))
-				{
-					E_LOG(Warning, "Dynamically loaded PIX ('%s')", pixPath.c_str());
-				}
-			}
-		}
-	}
-
-	// attach to RenderDoc
-	if (Any(createFlags, GraphicsInstanceFlags::RenderDoc))
-	{
-		if (GetModuleHandleA("C:\\Program Files\\RenderDoc\\renderdoc.dll") == 0)
-		{
-			if (LoadLibraryA("C:\\Program Files\\RenderDoc\\renderdoc.dll"))
-			{
-				E_LOG(Warning, "Dynamically loaded RenderDoc");
-			}
-		}
-	}
-}
-
-std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags)
-{
-	return std::make_unique<GraphicsInstance>(createFlags);
-}
-
-std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapChain(GraphicsDevice* pDevice, HWND pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync)
-{
-	return std::make_unique<SwapChain>(pDevice, m_pFactory.Get(), pNativeWindow, format, width, height, numFrames, vsync);
-}
-
-ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
-{
-	ComPtr<IDXGIAdapter4> pAdapter;
-	ComPtr<ID3D12Device> pDevice;
-
-	if (!useWarp)
-	{
-		uint32_t adapterIndex = 0;
-		E_LOG(Info, "Adapters:");
-		DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_UNSPECIFIED;
-		while (m_pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) == S_OK)
-		{
-			DXGI_ADAPTER_DESC3 desc;
-			pAdapter->GetDesc3(&desc);
-			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::BytesToGigaBytes);
-
-			uint32_t outputIndex = 0;
-			ComPtr<IDXGIOutput> pOutput;
-			while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
-			{
-				ComPtr<IDXGIOutput6> pOutput1;
-				pOutput.As(&pOutput1);
-				DXGI_OUTPUT_DESC1 outputDesc;
-				pOutput1->GetDesc1(&outputDesc);
-
-				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP",
-					outputIndex,
-					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
-					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
-					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
-					outputDesc.BitsPerColor);
-			}
-		}
-		m_pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf()));
-		DXGI_ADAPTER_DESC3 desc;
-		pAdapter->GetDesc3(&desc);
-		E_LOG(Info, "Using %s", UNICODE_TO_MULTIBYTE(desc.Description));
-
-		// device
-		constexpr D3D_FEATURE_LEVEL featureLevels[] =
-		{
-			D3D_FEATURE_LEVEL_12_2,
-			D3D_FEATURE_LEVEL_12_1,
-			D3D_FEATURE_LEVEL_12_0,
-			D3D_FEATURE_LEVEL_11_1,
-			D3D_FEATURE_LEVEL_11_0
-		};
-
-		auto GetFeatureLevelName = [](D3D_FEATURE_LEVEL featureLevel) {
-			switch (featureLevel)
-			{
-			case D3D_FEATURE_LEVEL_12_2: return "D3D_FEATURE_LEVEL_12_2";
-			case D3D_FEATURE_LEVEL_12_1: return "D3D_FEATURE_LEVEL_12_1";
-			case D3D_FEATURE_LEVEL_12_0: return "D3D_FEATURE_LEVEL_12_0";
-			case D3D_FEATURE_LEVEL_11_1: return "D3D_FEATURE_LEVEL_11_1";
-			case D3D_FEATURE_LEVEL_11_0: return "D3D_FEATURE_LEVEL_11_0";
-			default: noEntry(); return "";
-			}
-			};
-
-		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
-		D3D12_FEATURE_DATA_FEATURE_LEVELS caps = {
-			.NumFeatureLevels = std::size(featureLevels),
-			.pFeatureLevelsRequested = featureLevels,
-		};
-		VERIFY_HR(pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)));
-		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(pDevice.ReleaseAndGetAddressOf())));
-		E_LOG(Info, "D3D12 Device Created: %s", GetFeatureLevelName(caps.MaxSupportedFeatureLevel));
-	}
-
-	if (!pDevice)
-	{
-		E_LOG(Warning, "No D3D12 Adapter selected. Falling back to WARP");
-		m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
-	}
-	return pAdapter;
-}
-
-std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapter4> pAdapter)
-{
-	return std::make_unique<GraphicsDevice>(pAdapter.Get());
-}
-
 
 SwapChain::SwapChain(GraphicsDevice* pGraphicsDevice, IDXGIFactory6* pFactory, HWND pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync)
 	: m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
