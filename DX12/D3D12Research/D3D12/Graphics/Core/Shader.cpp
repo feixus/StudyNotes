@@ -193,9 +193,7 @@ namespace ShaderCompiler
 			ComPtr<IDxcBlobUtf16> pDebugDataPath;
 			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(result.pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf())))
 			{
-				std::stringstream pathStream;
-				pathStream << pShaderSymbolsPath << UNICODE_TO_MULTIBYTE((wchar_t*)pDebugDataPath->GetBufferPointer());
-				result.DebugPath = pathStream.str();
+				result.DebugPath = std::string(pShaderSymbolsPath) + UNICODE_TO_MULTIBYTE((wchar_t*)pDebugDataPath->GetBufferPointer());
 			}
 		}
 
@@ -283,12 +281,8 @@ namespace ShaderCompiler
 			definesActual.push_back(define.Value);
 		}
 
-		std::stringstream str;
-		str << "_SM_MAJ=" << majVersion;
-		definesActual.push_back(str.str());
-		str = std::stringstream();
-		str << "_SM_MIN=" << minVersion;
-		definesActual.push_back(str.str());
+		definesActual.push_back(std::format("_SM_MAJ={}", majVersion));
+		definesActual.push_back(std::format("_SM_MIN={}", minVersion));
 
 		if (majVersion < 6)
 		{

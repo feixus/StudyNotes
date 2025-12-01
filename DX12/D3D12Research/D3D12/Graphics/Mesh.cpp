@@ -151,7 +151,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 	pContext->FlushResourceBarriers();
 
 	std::filesystem::path filePath(pFilePath);
-	std::filesystem::path basePath = filePath.parent_path();
+	std::string basePath = filePath.parent_path().string();
 
 	std::map<StringHash, GraphicsTexture*> textureMap;
 
@@ -163,14 +163,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 
 		if (success)
 		{
-			std::filesystem::path texturePath = path.C_Str();
-			if (texturePath.is_absolute() || texturePath.has_root_path())
-			{
-				texturePath = texturePath.relative_path();
-			}
-			texturePath = basePath / texturePath;
+			std::string pathStr;
+			pathStr += basePath + path.C_Str();
 
-			std::string pathStr = texturePath.string();
 			StringHash pathHash = StringHash(pathStr);
 			auto it = textureMap.find(pathHash);
 			if (it != textureMap.end())

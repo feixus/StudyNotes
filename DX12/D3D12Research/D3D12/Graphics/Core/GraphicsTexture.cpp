@@ -363,7 +363,7 @@ void GraphicsTexture::CreateForSwapChain(ID3D12Resource* pTexture)
 	m_Desc.Width = (uint32_t)desc.Width;
 	m_Desc.Height = (uint32_t)desc.Height;
 	m_Desc.Format = desc.Format;
-	m_Desc.ClearBindingValue = ClearBinding(Color(0, 0, 0, 1));
+	m_Desc.ClearBindingValue = ClearBinding(Colors::Black);
 	
 	if (m_Rtv.ptr == 0)
 	{

@@ -2,12 +2,9 @@
 #include "ConsoleVariables.h"
 #include "Core/Input.h"
 
-CVarManager gConsoleManager;
 
-CVarManager& CVarManager::Get()
-{
-    return gConsoleManager;
-}
+static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
+static std::vector<IConsoleObject*> gConsoleObjects;
 
 void CVarManager::Initialize()
 {
@@ -15,7 +12,7 @@ void CVarManager::Initialize()
 	std::string line;
 	while (getline(fs, line))
 	{
-		Execute(line.c_str());
+		Execute(line.c_str(), '=');
 	}
 }
 
@@ -23,32 +20,47 @@ void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObje
 {
     char lowerName[256];
     CharConv::ToLower(pName, lowerName);
-    m_Map[lowerName] = pObject;
-    m_Objects.push_back(pObject);
-    std::sort(m_Objects.begin(), m_Objects.end(), [](IConsoleObject* pA, IConsoleObject* pB) {
-        return _stricmp(pA->GetName(), pB->GetName()) < 0;
-    });
+    if (gCvarMap.find(lowerName) == gCvarMap.end())
+    {
+        gCvarMap[lowerName] = pObject;
+        gConsoleObjects.push_back(pObject);
+
+        std::sort(gConsoleObjects.begin(), gConsoleObjects.end(), [](IConsoleObject* pA, IConsoleObject* pB) {
+            return strcmp(pA->GetName(), pB->GetName()) < 0;
+        });
+    }
 }
 
-bool CVarManager::Execute(const char* pCommand)
+bool CVarManager::Execute(const char* pCommand, char delimiter)
 {
 	char cmdLower[1024];
 	CharConv::ToLower(pCommand, cmdLower);
 
 	const char* argList[16];
 	char buffer[1024];
-	int numArgs = CharConv::SplitString(cmdLower, buffer, &argList[0], 16, true, ' ');
+	int numArgs = CharConv::SplitString(cmdLower, buffer, &argList[0], delimiter);
 	if (numArgs > 0)
 	{
-		auto it = m_Map.find(argList[0]);
-		if (it != m_Map.end())
+		auto it = gCvarMap.find(argList[0]);
+		if (it != gCvarMap.end())
 		{
-			return it->second->Execute(argList, numArgs);
+			return it->second->Execute(argList + 1, numArgs - 1);
 		}
 	}
 
     E_LOG(Warning, "unknown command '%s'", pCommand);
 	return false;
+}
+
+IConsoleObject* CVarManager::FindConsoleObject(const char* pName)
+{
+    auto it = gCvarMap.find(pName);
+    return it != gCvarMap.end() ? it->second : nullptr;
+}
+
+const std::vector<IConsoleObject*>& CVarManager::GetObjects()
+{
+    return gConsoleObjects;
 }
 
 int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
@@ -57,7 +69,7 @@ int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
         m_Suggestions.clear();
         if (strlen(pCallbackData->Buf) > 0)
         {
-            CVarManager::Get().ForEachCvar([this, pCallbackData](IConsoleObject* pObject) {
+            CVarManager::ForEachCvar([this, pCallbackData](IConsoleObject* pObject) {
                 if (_strnicmp(pObject->GetName(), pCallbackData->Buf, strlen(pCallbackData->Buf)) == 0 && m_Suggestions.size() < 10)
                 {
                     m_Suggestions.push_back(pObject->GetName());
@@ -222,18 +234,19 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 				if (strcmp(m_Input.data(), "help") == 0)
 				{
 					E_LOG(Info, "Available Commands:");
-					gConsoleManager.ForEachCvar([](IConsoleObject* pObject) {
+					CVarManager::ForEachCvar([](IConsoleObject* pObject) {
 						E_LOG(Info, "\t- %s", pObject->GetName());
 					});
 				}
 				else
 				{
-					CVarManager::Get().Execute(m_Input.data());
+					CVarManager::Execute(m_Input.data());
 					m_Suggestions.clear();
 					m_History.push_back(m_Input.data());
 					m_HistoryPos = -1;
                     m_SuggestionPos = -1;
                     m_Input[0] = '\0';
+                    m_FocusConsole = false;
 				}
 			}
 		}

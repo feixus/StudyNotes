@@ -63,47 +63,9 @@ namespace CharConv
     }
 
 	template<size_t I>
-	int SplitString(const char* pStr, char(&buffer)[I], const char** pOut, int maxArgs, bool considerQuotes, char delimiter = ' ')
+	int SplitString(const char* pStr, char(&buffer)[I], const char** pOut, char delimiter = ' ')
 	{
-		int num = 0;
-		bool delim = false;
-		bool quoted = false;
-		char* pData = buffer;
-		memset(pData, 0, I);
-
-		while (*pStr != '\0')
-		{
-			if (*pStr == '"' && considerQuotes)
-			{
-				quoted = !quoted;
-			}
-			else if (*pStr != delimiter || quoted)
-			{
-				*pData = *pStr;
-				if (delim == false)
-				{
-					delim = true;
-					if (num < maxArgs)
-					{
-						pOut[num] = pData;
-					}
-					++num;
-				}
-				++pData;
-			}
-			else
-			{
-				if (delim && !quoted)
-				{
-					*pData++ = '\0';
-					delim = false;
-				}
-			}
-			++pStr;
-		}
-		return num;
-
-		/*strcpy_s(buffer, pStr);
+		strcpy_s(buffer, pStr);
 
 		int count = 0;
 		char* p = buffer;
@@ -126,7 +88,7 @@ namespace CharConv
 		if (*token != '\0')
 			pOut[count++] = token;
 
-		return count;*/
+		return count;
 	}
 
 	bool FromString(const char* pStr, char& out);

@@ -2,7 +2,7 @@
 
 class RGBlackboard final
 {
-#define RG_BLACKBOARD_DATA(clazz) constexpr static const char* Type() { return #clazz; }
+#define RG_BLACKBOARD_DATA(clazz) constexpr static StringHash Type() { return StringHash(#clazz); }
 
 public:
 	RGBlackboard() = default;
@@ -16,7 +16,7 @@ public:
 	{
 		RG_ASSERT(m_DataMap.find(T::Type()) == m_DataMap.end(), "Data type already exists in RGBlackboard");
 		T* pData = new T();
-		m_DataMap[StringHash(T::Type())] = pData;
+		m_DataMap[T::Type()] = pData;
 		return *pData;
 	}
 

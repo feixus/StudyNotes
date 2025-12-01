@@ -2,13 +2,11 @@
 
 #include "Graphics/Core/DescriptorHandle.h"
 
-class CommandContext;
 class GraphicsDevice;
 class RootSignature;
 class PipelineState;
 class GraphicsTexture;
 class RGGraph;
-class ShaderManager;
 struct SceneData;
 
 class ImGuiRenderer

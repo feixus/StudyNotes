@@ -4,21 +4,15 @@
 #include "Graphics/Core/DescriptorHandle.h"
 #include "Graphics/Core/Graphics.h"
 
-class CommandQueue;
 class CommandContext;
-class OfflineDescriptorAllocator;
-class DynamicAllocationManager;
 class ImGuiRenderer;
-class GraphicsBuffer;
 class RootSignature;
 class PipelineState;
 class GraphicsTexture;
 class Mesh;
 class Buffer;
 struct SubMesh;
-class GraphicsProfiler;
 class ClusteredForward;
-struct Material;
 class Camera;
 class UnorderedAccessView;
 class TiledForward;
@@ -26,12 +20,6 @@ class RTAO;
 class SSAO;
 class GpuParticles;
 class RTReflections;
-class ShaderManager;
-class PipelineStateInitializer;
-class StateObject;
-class StateObjectInitializer;
-class GlobalOnlineDescriptorHeap;
-class ResourceView;
 class SwapChain;
 
 enum class DefaultTexture
@@ -50,10 +38,10 @@ enum class DefaultTexture
 
 struct MaterialData
 {
-	int Diffuse{ 0 };
-	int Normal{ 0 };
-	int RoughnessMetalness{ 0 };
-	int Emissive;
+	int Diffuse{0};
+	int Normal{0};
+	int RoughnessMetalness{0};
+	int Emissive{0};
 };
 
 struct Batch

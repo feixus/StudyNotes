@@ -8,13 +8,8 @@ class GraphicsTexture;
 class Camera;
 class CommandSignature;
 class GraphicsDevice;
-class ShaderManager;
-class CommandContext;
 class UnorderedAccessView;
 class RGGraph;
-
-struct Batch;
-struct ShadowData;
 struct SceneData;
 
 class ClusteredForward

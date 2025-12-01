@@ -39,7 +39,7 @@ public:
 		Thread::SetMainThread();
 		CommandLine::Parse(GetCommandLineA());
 		Console::Initialize();
-		CVarManager::Get().Initialize();
+		CVarManager::Initialize();
 		TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 		E_LOG(Info, "Startup hello dx12");

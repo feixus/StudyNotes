@@ -33,7 +33,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN)
 	{
 		GraphicsDevice* pDevice = (GraphicsDevice*)pContext;
-		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pDevice	->GetDevice());
+		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pDevice->GetDevice());
 		E_LOG(Error, "%s", error.c_str());
 	};
 

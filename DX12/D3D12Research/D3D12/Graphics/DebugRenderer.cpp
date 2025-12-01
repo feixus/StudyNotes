@@ -301,9 +301,9 @@ void DebugRenderer::AddAxisSystem(const Matrix& transform, float lineLength)
     Vector3 y(Vector3::Transform(Vector3(0, lineLength, 0), newMatrix));
     Vector3 z(Vector3::Transform(Vector3(0, 0, lineLength), newMatrix));
 
-    AddLine(origin, x, Color(1, 0, 0, 1));
-    AddLine(origin, y, Color(0, 1, 0, 1));
-    AddLine(origin, z, Color(0, 0, 1, 1));
+    AddLine(origin, x, Colors::Red);
+    AddLine(origin, y, Colors::Green);
+    AddLine(origin, z, Colors::Blue);
 }
 
 void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const IntColor& color)
@@ -364,24 +364,24 @@ void DebugRenderer::AddBone(const Matrix& matrix, float length, const IntColor& 
     AddTriangle(c, tip, b, color, false);
 }
 
-void DebugRenderer::AddLight(const Light& light)
+void DebugRenderer::AddLight(const Light& light, const IntColor& color)
 {
     switch (light.Type)
     {
         case LightType::Directional:
         {
-            AddWireCylinder(light.Position, light.Direction, 30, 5.0f,10, Color(1, 1, 0, 1));
-            AddAxisSystem(Matrix::CreateWorld(light.Position, -light.Direction, Vector3::Up), 1.0f);
-            break;
-        }
-        case LightType::Point:
-        {
-            AddSphere(light.Position, light.Range, 8, 8, Color(1, 1, 0, 1), false);
-            break;
-        }
-        case LightType::Spot:
-        {
-            AddWireCone(light.Position, light.Direction, light.Range, light.UmbraAngleDegrees, 10, Color(1, 1, 0, 1));
+            AddWireCylinder(light.Position, light.Direction, 30, 5.0f,10, color);
+			AddAxisSystem(Matrix::CreateWorld(light.Position, -light.Direction, Vector3::Up), 1.0f);
+			break;
+		}
+		case LightType::Point:
+		{
+			AddSphere(light.Position, light.Range, 8, 8, color, false);
+			break;
+		}
+		case LightType::Spot:
+		{
+			AddWireCone(light.Position, light.Direction, light.Range, light.UmbraAngleDegrees, 10, color);
             break;
         }
     }

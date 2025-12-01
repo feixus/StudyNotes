@@ -43,7 +43,7 @@ struct Light
 	LightType Type{LightType::MAX};
 	float UmbraAngleDegrees{0};
 	float PenumbraAngleDegrees{0};
-	Color Colour = Color(1, 1, 1, 1);
+	Color Colour = Colors::White;
 	float Intensity{1};
 	float Range{1};
 	int ShadowIndex{-1};
@@ -95,7 +95,7 @@ struct Light
 		return data;
 	}
 
-	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
+	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Colors::White)
 	{
 		Light light{};
 		light.Position = position;
@@ -106,7 +106,7 @@ struct Light
 		return light;
 	}
 
-	static Light Point(const Vector3& position, float radius, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
+	static Light Point(const Vector3& position, float radius, float intensity = 1.0f, const Vector4& color = Colors::White)
 	{
 		Light light{};
 		light.Position = position;
@@ -117,7 +117,7 @@ struct Light
 		return light;
 	}
 
-	static Light Spot(const Vector3& position, float range, const Vector3& direction, float umbraAngleInDegrees = 60, float penumbraAngleInDegrees = 40, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
+	static Light Spot(const Vector3& position, float range, const Vector3& direction, float umbraAngleInDegrees = 60, float penumbraAngleInDegrees = 40, float intensity = 1.0f, const Vector4& color = Colors::White)
 	{
 		Light light{};
 		light.Position = position;

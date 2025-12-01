@@ -12,6 +12,7 @@ struct IntColor
 	IntColor(const Color& color) : Color(Math::EncodeColor(color)) {}
 	IntColor(uint32_t color = 0) : Color(color) {}
 	operator uint32_t() const { return Color; }
+	operator Color() const { return Math::DecodeColor(Color); }
 
 	uint32_t Color;
 };
@@ -65,7 +66,7 @@ public:
     void AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const IntColor& color);
     void AddWireCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color);
     void AddBone(const Matrix& matrix, float length, const IntColor& color);
-    void AddLight(const Light& light);
+    void AddLight(const Light& light, const IntColor& color = Colors::Yellow);
 
 private:
     DebugRenderer() = default;
