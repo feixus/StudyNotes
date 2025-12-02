@@ -16,7 +16,7 @@
 
 RTReflections::RTReflections(GraphicsDevice* pGraphicsDevice)
 {
-    if (pGraphicsDevice->SupportsRaytracing())
+    if (pGraphicsDevice->GetCapabilities().SupportsRaytracing())
     {
         SetupResources(pGraphicsDevice);
         SetupPipelines(pGraphicsDevice);

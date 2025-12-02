@@ -2,30 +2,50 @@
 #include "GraphicsResource.h"
 
 class CommandContext;
+class CommandQueue;
+
+class Fence : public GraphicsObject
+{
+public:
+	Fence(GraphicsDevice* pGraphicsDevice, uint64_t fenceValue, const char* pName);
+	~Fence();
+
+	// Signals on the GPU timeline, increments the current value and return the signaled value.
+	uint64_t Signal(CommandQueue* pQueue);
+
+	// Inserts a wait on the GPU timeline.
+	void GpuWait(CommandQueue* pQueue, uint64_t fenceValue);
+
+	// Stall CPU until fence value is signaled on the GPU.
+	void CpuWait(uint64_t fenceValue);
+
+	// Returns true if the fence value reached value or higher.
+	bool IsComplete(uint64_t fenceValue);
+
+	inline ID3D12Fence* GetFence() const { return m_pFence.Get(); }
+
+private:
+	ComPtr<ID3D12Fence> m_pFence;
+	std::mutex m_FenceWaitCS;
+	HANDLE m_CompleteEvent;
+	uint64_t m_CurrentValue{0};
+	uint64_t m_LastSignaled{0};
+	uint64_t m_LastCompleted{0};
+};
 
 class CommandQueue : public GraphicsObject
 {
 public:
 	CommandQueue(GraphicsDevice* pGraphicsDevice, D3D12_COMMAND_LIST_TYPE type);
-	~CommandQueue();
 
 	uint64_t ExecuteCommandList(CommandContext** pCommandContexts, uint32_t numContexts);
 	ID3D12CommandQueue* GetCommandQueue() const { return m_pCommandQueue.Get(); }
-
-	// inserts a stall/wait in the queue so it blocks the GPU
-	void InsertWaitForFence(uint64_t fenceValue);
-	void InsertWaitForQueue(CommandQueue* pCommandQueue);
 
 	// block on the CPU side
 	void WaitForFence(uint64_t fenceValue);
 	void WaitForIdle();
 
-	bool IsFenceComplete(uint64_t fenceValue);
-	uint64_t IncrementFence();
-
-	uint64_t GetLastCompletedFence() const { return m_LastCompletedFenceValue; }
-	uint64_t GetNextFenceValue() const { return m_NextFenceValue; }
-	ID3D12Fence* GetFence() const { return m_pFence.Get(); }
+	Fence* GetFence() const { return m_pFence.get(); }
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	ID3D12CommandAllocator* RequestAllocator();
@@ -40,13 +60,7 @@ private:
 
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 	std::mutex m_FenceMutex;
-	std::mutex m_EventMutex;
-
-	uint64_t m_NextFenceValue = 0;
-	uint64_t m_LastCompletedFenceValue = 0;
-
-	ComPtr<ID3D12Fence> m_pFence;
-	HANDLE m_pFenceEventHandle = nullptr;
+	std::unique_ptr<Fence> m_pFence;
 
 	D3D12_COMMAND_LIST_TYPE m_Type;
 };

@@ -16,7 +16,7 @@
 
 RTAO::RTAO(GraphicsDevice* pGraphicsDevice)
 {
-	if (!pGraphicsDevice->SupportsRaytracing())
+	if (!pGraphicsDevice->GetCapabilities().SupportsRaytracing())
 	{
 		return;
 	}

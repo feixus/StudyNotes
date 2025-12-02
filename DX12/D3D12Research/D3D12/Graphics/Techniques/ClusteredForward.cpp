@@ -737,7 +737,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pGraphicsDevice)
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, pGraphicsDevice->GetMultiSampleCount());
 		psoDesc.SetBlendMode(BlendMode::Add, false);
 
-		if (pGraphicsDevice->SupportMeshShaders())
+		if (pGraphicsDevice->GetCapabilities().SupportMeshShading())
         {
             Shader* pMeshShader = pGraphicsDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Mesh, "MSMain");
             

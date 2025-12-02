@@ -1794,7 +1794,7 @@ void DemoApp::UpdateImGui()
 	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
 	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 
-	if (m_pDevice->SupportsRaytracing())
+	if (m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
 		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
@@ -1834,7 +1834,7 @@ void DemoApp::UpdateImGui()
 
 void DemoApp::UpdateTLAS(CommandContext& context)
 {
-	if (!m_pDevice->SupportsRaytracing())
+	if (!m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		return;
 	}

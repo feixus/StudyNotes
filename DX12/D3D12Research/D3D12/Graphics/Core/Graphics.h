@@ -6,6 +6,7 @@
 class CommandQueue;
 class CommandContext;
 class OfflineDescriptorAllocator;
+class OnlineDescriptorAllocator;
 class DynamicAllocationManager;
 class GraphicsResource;
 class GraphicsTexture;
@@ -19,6 +20,7 @@ class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
 class ResourceView;
 class SwapChain;
+class Fence;
 class GraphicsDevice;
 
 enum class GraphicsInstanceFlags
@@ -31,6 +33,30 @@ enum class GraphicsInstanceFlags
 	RenderDoc = 1 << 4,
 };
 DECLARE_BITMASK_TYPE(GraphicsInstanceFlags);
+
+class GraphicsCapabilities
+{
+public:
+	void Initialize(GraphicsDevice* pDevice);
+
+	bool SupportsRaytracing() const { return RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
+	bool SupportMeshShading() const { return MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
+	bool SupportVSR() const { return VSRTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED; }
+	bool SupportsSamplerFeedback() const { return SamplerFeedbackSupport != D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED; }
+	void GetShaderModel(uint8_t& maj, uint8_t& min) const { maj = (uint8_t)(ShaderModel >> 0x4); min = (uint8_t)(ShaderModel & 0xF); }
+	bool CheckUAVSupport(DXGI_FORMAT format) const;
+
+	D3D12_RENDER_PASS_TIER RenderPassTier{ D3D12_RENDER_PASS_TIER_0 };
+	D3D12_RAYTRACING_TIER RayTracingTier{ D3D12_RAYTRACING_TIER_NOT_SUPPORTED };
+	D3D12_MESH_SHADER_TIER MeshShaderSupport{ D3D12_MESH_SHADER_TIER_NOT_SUPPORTED };
+	D3D12_SAMPLER_FEEDBACK_TIER SamplerFeedbackSupport{ D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED };
+	D3D12_VARIABLE_SHADING_RATE_TIER VSRTier{ D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED };
+	int VSRTileSize{-1};
+	uint16_t ShaderModel{(D3D_SHADER_MODEL)0};
+
+private:
+	GraphicsDevice* m_pDevice{nullptr};
+};
 
 class GraphicsInstance
 {
@@ -94,17 +120,13 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	bool SupportsTypedUAV(DXGI_FORMAT format) const;
-	bool SupportsRenderPasses() const;
-	bool SupportsRaytracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
-	bool SupportMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
-
 	void SetMultiSampleCount(uint32_t cnt) { m_SampleCount = cnt; }
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 	DescriptorHandle GetViewHeapHandle() const;
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
+	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -161,10 +183,10 @@ private:
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
-	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
 	HANDLE m_DeviceRemovedEvent{0};
+	std::unique_ptr<Fence> m_pDeviceRemovalFence;
 
-	std::unique_ptr<class OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
+	std::unique_ptr<OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
@@ -179,14 +201,7 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
-	D3D12_RENDER_PASS_TIER m_RenderPassTier{ D3D12_RENDER_PASS_TIER_0 };
-	D3D12_RAYTRACING_TIER m_RayTracingTier{ D3D12_RAYTRACING_TIER_NOT_SUPPORTED };
-	D3D12_MESH_SHADER_TIER m_MeshShaderSupport{ D3D12_MESH_SHADER_TIER_NOT_SUPPORTED };
-	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport{ D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED };
-	D3D12_VARIABLE_SHADING_RATE_TIER m_VSRTier{ D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED };
-	uint8_t m_ShaderModelMajor{0};
-	uint8_t m_ShaderModelMinor{0};
-	int m_VSRTileSize{-1};
+	GraphicsCapabilities m_Capabilities;
 
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
 

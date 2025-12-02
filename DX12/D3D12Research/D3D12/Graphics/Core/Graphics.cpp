@@ -188,6 +188,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pDevice.As(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
+	m_Capabilities.Initialize(this);
+
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN)
 	{
 		GraphicsDevice* pDevice = (GraphicsDevice*)pContext;
@@ -195,11 +197,10 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 		E_LOG(Error, "%s", error.c_str());
 	};
 
-	HANDLE deviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
-	VERIFY_HR(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pDeviceRemovalFence.GetAddressOf())));
-	D3D::SetObjectName(m_pDeviceRemovalFence.Get(), "Device Removal Fence");
-	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
-	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
+	m_pDeviceRemovalFence = std::make_unique<Fence>(this, UINT64_MAX, "Device Removal Fence");
+	m_DeviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
+	m_pDeviceRemovalFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_DeviceRemovedEvent);
+	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, m_DeviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 
 	ID3D12InfoQueue* pInfoQueue = nullptr;
 	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
@@ -244,49 +245,6 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 		m_pDevice->SetStablePowerState(TRUE);
 	}
 
-	// feature checks
-	{
-		D3D12_FEATURE_DATA_D3D12_OPTIONS caps0{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
-		{
-			// level for placing different types of resources in the same heap.
-			checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_1, "device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
-			checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3, "device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported");
-		}
-
-		D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
-		{
-			m_RenderPassTier = caps5.RenderPassesTier;
-			m_RayTracingTier = caps5.RaytracingTier;
-		}
-
-		D3D12_FEATURE_DATA_D3D12_OPTIONS6 caps6{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps6, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS6))))
-		{
-			m_VSRTier = caps6.VariableShadingRateTier;
-			m_VSRTileSize = caps6.ShadingRateImageTileSize;
-		}
-
-		D3D12_FEATURE_DATA_D3D12_OPTIONS7 caps7{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
-		{
-			m_MeshShaderSupport = caps7.MeshShaderTier;
-			m_SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
-		}
-
-		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
-			.HighestShaderModel = D3D_SHADER_MODEL_6_6
-		};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
-		{
-			m_ShaderModelMajor = (uint8_t)(shaderModelSupport.HighestShaderModel >> 0x4);
-			m_ShaderModelMinor = (uint8_t)(shaderModelSupport.HighestShaderModel & 0xF);
-
-			E_LOG(Info, "D3D12 Shader Model %d.%d", m_ShaderModelMajor, m_ShaderModelMinor);
-		}
-	}
-
 	// create all the required command queues
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
@@ -304,7 +262,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
-	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
+	uint8_t smMaj, smMin;
+	m_Capabilities.GetShaderModel(smMaj, smMin);
+	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);
 }
 
 void GraphicsDevice::Destroy()
@@ -384,7 +344,7 @@ bool GraphicsDevice::IsFenceComplete(uint64_t fenceValue)
 {
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
 	CommandQueue* pQueue = GetCommandQueue(type);
-	return pQueue->IsFenceComplete(fenceValue);
+	return pQueue->GetFence()->IsComplete(fenceValue);
 }
 
 void GraphicsDevice::WaitForFence(uint64_t fenceValue)
@@ -392,82 +352,6 @@ void GraphicsDevice::WaitForFence(uint64_t fenceValue)
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
 	CommandQueue* pQueue = GetCommandQueue(type);
 	pQueue->WaitForFence(fenceValue);
-}
-
-bool GraphicsDevice::SupportsTypedUAV(DXGI_FORMAT format) const
-{
-	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
-	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS)), GetDevice());
-
-	switch (format)
-	{
-	case DXGI_FORMAT_R32_FLOAT:
-	case DXGI_FORMAT_R32_UINT:
-	case DXGI_FORMAT_R32_SINT:
-		// Unconditionally supported.
-		return true;
-
-	case DXGI_FORMAT_R32G32B32A32_FLOAT:
-	case DXGI_FORMAT_R32G32B32A32_UINT:
-	case DXGI_FORMAT_R32G32B32A32_SINT:
-	case DXGI_FORMAT_R16G16B16A16_FLOAT:
-	case DXGI_FORMAT_R16G16B16A16_UINT:
-	case DXGI_FORMAT_R16G16B16A16_SINT:
-	case DXGI_FORMAT_R8G8B8A8_UNORM:
-	case DXGI_FORMAT_R8G8B8A8_UINT:
-	case DXGI_FORMAT_R8G8B8A8_SINT:
-	case DXGI_FORMAT_R16_FLOAT:
-	case DXGI_FORMAT_R16_UINT:
-	case DXGI_FORMAT_R16_SINT:
-	case DXGI_FORMAT_R8_UNORM:
-	case DXGI_FORMAT_R8_UINT:
-	case DXGI_FORMAT_R8_SINT:
-		// All these are supported if this optional feature is set.
-		return featureData.TypedUAVLoadAdditionalFormats;
-
-	case DXGI_FORMAT_R16G16B16A16_UNORM:
-	case DXGI_FORMAT_R16G16B16A16_SNORM:
-	case DXGI_FORMAT_R32G32_FLOAT:
-	case DXGI_FORMAT_R32G32_UINT:
-	case DXGI_FORMAT_R32G32_SINT:
-	case DXGI_FORMAT_R10G10B10A2_UNORM:
-	case DXGI_FORMAT_R10G10B10A2_UINT:
-	case DXGI_FORMAT_R11G11B10_FLOAT:
-	case DXGI_FORMAT_R8G8B8A8_SNORM:
-	case DXGI_FORMAT_R16G16_FLOAT:
-	case DXGI_FORMAT_R16G16_UNORM:
-	case DXGI_FORMAT_R16G16_UINT:
-	case DXGI_FORMAT_R16G16_SNORM:
-	case DXGI_FORMAT_R16G16_SINT:
-	case DXGI_FORMAT_R8G8_UNORM:
-	case DXGI_FORMAT_R8G8_UINT:
-	case DXGI_FORMAT_R8G8_SNORM:
-	case DXGI_FORMAT_R8G8_SINT:
-	case DXGI_FORMAT_R16_UNORM:
-	case DXGI_FORMAT_R16_SNORM:
-	case DXGI_FORMAT_R8_SNORM:
-	case DXGI_FORMAT_A8_UNORM:
-	case DXGI_FORMAT_B5G6R5_UNORM:
-	case DXGI_FORMAT_B5G5R5A1_UNORM:
-	case DXGI_FORMAT_B4G4R4A4_UNORM:
-		// Conditionally supported by specific pDevices.
-		if (featureData.TypedUAVLoadAdditionalFormats)
-		{
-			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
-			VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)), GetDevice());
-			const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
-			return ((formatSupport.Support2 & mask) == mask);
-		}
-		return false;
-
-	default:
-		return false;
-	}
-}
-
-bool GraphicsDevice::SupportsRenderPasses() const
-{
-	return m_RenderPassTier >= D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
 }
 
 DescriptorHandle GraphicsDevice::GetViewHeapHandle() const
@@ -608,4 +492,117 @@ void SwapChain::Present()
 {
 	m_pSwapChain->Present(m_Vsync, m_Vsync ? 0 : DXGI_PRESENT_ALLOW_TEARING);
 	m_CurrentImage = m_pSwapChain->GetCurrentBackBufferIndex();
+}
+
+void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
+{
+	m_pDevice = pDevice;
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS caps0{};
+	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
+	{
+		// level for placing different types of resources in the same heap.
+		checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_1, "device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
+		checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3, "device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported");
+	}
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
+	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
+	{
+		RenderPassTier = caps5.RenderPassesTier;
+		RayTracingTier = caps5.RaytracingTier;
+	}
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS6 caps6{};
+	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps6, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS6))))
+	{
+		VSRTier = caps6.VariableShadingRateTier;
+		VSRTileSize = caps6.ShadingRateImageTileSize;
+	}
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS7 caps7{};
+	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
+	{
+		MeshShaderSupport = caps7.MeshShaderTier;
+		SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
+	}
+
+	D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
+		.HighestShaderModel = D3D_SHADER_MODEL_6_6
+	};
+	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
+	{
+		ShaderModel = (uint16_t)shaderModelSupport.HighestShaderModel;
+	}
+}
+
+bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
+{
+	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
+	VERIFY_HR(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS)));
+
+	switch (format)
+	{
+	case DXGI_FORMAT_R32_FLOAT:
+	case DXGI_FORMAT_R32_UINT:
+	case DXGI_FORMAT_R32_SINT:
+		// Unconditionally supported.
+		return true;
+
+	case DXGI_FORMAT_R32G32B32A32_FLOAT:
+	case DXGI_FORMAT_R32G32B32A32_UINT:
+	case DXGI_FORMAT_R32G32B32A32_SINT:
+	case DXGI_FORMAT_R16G16B16A16_FLOAT:
+	case DXGI_FORMAT_R16G16B16A16_UINT:
+	case DXGI_FORMAT_R16G16B16A16_SINT:
+	case DXGI_FORMAT_R8G8B8A8_UNORM:
+	case DXGI_FORMAT_R8G8B8A8_UINT:
+	case DXGI_FORMAT_R8G8B8A8_SINT:
+	case DXGI_FORMAT_R16_FLOAT:
+	case DXGI_FORMAT_R16_UINT:
+	case DXGI_FORMAT_R16_SINT:
+	case DXGI_FORMAT_R8_UNORM:
+	case DXGI_FORMAT_R8_UINT:
+	case DXGI_FORMAT_R8_SINT:
+		// All these are supported if this optional feature is set.
+		return featureData.TypedUAVLoadAdditionalFormats;
+
+	case DXGI_FORMAT_R16G16B16A16_UNORM:
+	case DXGI_FORMAT_R16G16B16A16_SNORM:
+	case DXGI_FORMAT_R32G32_FLOAT:
+	case DXGI_FORMAT_R32G32_UINT:
+	case DXGI_FORMAT_R32G32_SINT:
+	case DXGI_FORMAT_R10G10B10A2_UNORM:
+	case DXGI_FORMAT_R10G10B10A2_UINT:
+	case DXGI_FORMAT_R11G11B10_FLOAT:
+	case DXGI_FORMAT_R8G8B8A8_SNORM:
+	case DXGI_FORMAT_R16G16_FLOAT:
+	case DXGI_FORMAT_R16G16_UNORM:
+	case DXGI_FORMAT_R16G16_UINT:
+	case DXGI_FORMAT_R16G16_SNORM:
+	case DXGI_FORMAT_R16G16_SINT:
+	case DXGI_FORMAT_R8G8_UNORM:
+	case DXGI_FORMAT_R8G8_UINT:
+	case DXGI_FORMAT_R8G8_SNORM:
+	case DXGI_FORMAT_R8G8_SINT:
+	case DXGI_FORMAT_R16_UNORM:
+	case DXGI_FORMAT_R16_SNORM:
+	case DXGI_FORMAT_R8_SNORM:
+	case DXGI_FORMAT_A8_UNORM:
+	case DXGI_FORMAT_B5G6R5_UNORM:
+	case DXGI_FORMAT_B5G5R5A1_UNORM:
+	case DXGI_FORMAT_B4G4R4A4_UNORM:
+		// Conditionally supported by specific pDevices.
+		if (featureData.TypedUAVLoadAdditionalFormats)
+		{
+			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
+			VERIFY_HR(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)));
+			const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
+			return ((formatSupport.Support2 & mask) == mask);
+		}
+		return false;
+
+	default:
+		return false;
+	}
 }

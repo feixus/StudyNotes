@@ -218,7 +218,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 
 void Mesh::GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext)
 {
-	if (!pGraphicDevice->SupportsRaytracing())
+	if (!pGraphicDevice->GetCapabilities().SupportsRaytracing())
 	{
 		return;
 	}
