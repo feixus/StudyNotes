@@ -279,14 +279,10 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 GraphicsDevice::~GraphicsDevice()
 {
-	m_pFrameFence->CpuWait(TickFrameFence());
-	GarbageCollect();
-}
+	m_IsTearingDown = true;
 
-void GraphicsDevice::Destroy()
-{
-	m_pFrameFence->CpuWait(TickFrameFence());
-	Profiler::Get()->Shutdown();
+	IdleGPU();
+	GarbageCollect();
 
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
 }
@@ -438,8 +434,14 @@ ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, 
 
 void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
 {
-	E_LOG(Info, "----%d", m_DeferredDeletionQueue.size());
-	m_DeferredDeletionQueue.emplace(std::pair<uint64_t, ID3D12Resource*>(m_pFrameFence->GetCurrentValue(), pResource));
+	if (m_IsTearingDown)
+	{
+		pResource->Release();
+	}
+	else
+	{
+		m_DeferredDeletionQueue.emplace(std::pair<uint64_t, ID3D12Resource*>(m_pFrameFence->GetCurrentValue(), pResource));
+	}
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
@@ -511,7 +513,7 @@ SwapChain::SwapChain(GraphicsDevice* pGraphicsDevice, IDXGIFactory6* pFactory, H
 	}
 }
 
-void SwapChain::Destroy()
+SwapChain::~SwapChain()
 {
 	m_pSwapChain->SetFullscreenState(false, nullptr);
 }

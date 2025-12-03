@@ -72,6 +72,11 @@ void DebugRenderer::Initialize(GraphicsDevice* pGraphicsDevice)
     m_pLinesPSO = pGraphicsDevice->CreatePipeline(psoDesc);
 }
 
+void DebugRenderer::Shutdown()
+{
+	m_pRS.reset();
+}
+
 void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, GraphicsTexture* pTarget, GraphicsTexture* pDepth)
 {
     int linePrimitives = (int)m_Lines.size() * 2;

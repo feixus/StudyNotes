@@ -286,8 +286,10 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 
 DemoApp::~DemoApp()
 {
-	m_pSwapChain->Destroy();
-	m_pDevice->Destroy();
+	m_pDevice->IdleGPU();
+	DebugRenderer::Get()->Shutdown();
+
+	Profiler::Get()->Shutdown();
 }
 
 void DemoApp::InitializeAssets(CommandContext& context)
@@ -624,8 +626,7 @@ void DemoApp::Update()
 			for (auto& pShadowMap : m_ShadowMaps)
 			{
 				int size = (i < 4) ? 2048 : 512;
-				pShadowMap = std::make_unique<GraphicsTexture>(GetDevice(), "Shadow Map");
-				pShadowMap->Create(TextureDesc::CreateDepth(size, size, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
+				pShadowMap = m_pDevice->CreateTexture(TextureDesc::CreateDepth(size, size, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), "Shadow Map");
 				++i;
 				m_pDevice->RegisterBindlessResource(pShadowMap.get());
 			}
@@ -1265,8 +1266,7 @@ void DemoApp::Update()
 		{
 			if (!m_pDebugHistogramTexture)
 			{
-				m_pDebugHistogramTexture = std::make_unique<GraphicsTexture>(m_pDevice.get(), "Debug Histogram Texture");
-				m_pDebugHistogramTexture->Create(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+				m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram Texture");
 			}
 
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");

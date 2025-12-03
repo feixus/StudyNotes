@@ -91,10 +91,9 @@ Buffer* DynamicAllocationManager::AllocatePage(size_t size)
 
 Buffer* DynamicAllocationManager::CreateNewPage(size_t size)
 {
-	Buffer* pNewPage = new Buffer(GetGraphics(), "Dynamic Allocation Buffer");
-	pNewPage->Create(BufferDesc::CreateBuffer((uint32_t)size, m_BufferFlags));
+	std::unique_ptr<Buffer> pNewPage = GetGraphics()->CreateBuffer(BufferDesc::CreateBuffer((uint32_t)size, m_BufferFlags), "Dynamic Allocation Buffer");
 	pNewPage->Map();
-	return pNewPage;
+	return pNewPage.release();
 }
 
 void DynamicAllocationManager::FreePages(uint64_t fenceValue, const std::vector<Buffer*> pPages)

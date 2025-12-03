@@ -83,7 +83,7 @@ class SwapChain
 {
 public:
 	SwapChain(GraphicsDevice* pGraphicsDevice, IDXGIFactory6* pFactory, HWND pNativeWindow, DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t numFrames, bool vsync);
-	void Destroy();
+	~SwapChain();
 	void OnResize(uint32_t width, uint32_t height);
 	void Present();
 
@@ -110,7 +110,6 @@ public:
 
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
 	~GraphicsDevice();
-	void Destroy();
 	void GarbageCollect();
 
 	bool IsFenceComplete(uint64_t fenceValue);
@@ -193,6 +192,7 @@ public:
 	Fence* GetFrameFence() const { return m_pFrameFence.get(); }
 
 private:
+	bool m_IsTearingDown{false};
 	GraphicsCapabilities m_Capabilities;
 
 	ComPtr<ID3D12Device> m_pDevice;

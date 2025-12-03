@@ -135,8 +135,8 @@ private:
 	uint32_t m_WindowWidth;
 	uint32_t m_WindowHeight;
 
-	std::unique_ptr<SwapChain> m_pSwapChain;
 	std::unique_ptr<GraphicsDevice> m_pDevice;
+	std::unique_ptr<SwapChain> m_pSwapChain;
 
 	int m_Frame{0};
 	std::array<float, 180> m_FrameTimes{};

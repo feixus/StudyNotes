@@ -258,21 +258,25 @@ void Mesh::GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 		pGraphicDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-		subMesh.pBLASScratch = new Buffer(pGraphicDevice, "BLAS Scratch Buffer");
-		subMesh.pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-		subMesh.pBLAS = new Buffer(pGraphicDevice, "BLAS");
-		subMesh.pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+		std::unique_ptr<Buffer> pBLASScratch = pGraphicDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None), "BLAS Scratch Buffer");
+		std::unique_ptr<Buffer> pBLAS = pGraphicDevice->CreateBuffer(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)), "BLAS");
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {
-			.DestAccelerationStructureData = subMesh.pBLAS->GetGpuHandle(),
+			.DestAccelerationStructureData = pBLAS->GetGpuHandle(),
 			.Inputs = prebuildInfo,
 			.SourceAccelerationStructureData = 0,
-			.ScratchAccelerationStructureData = subMesh.pBLASScratch->GetGpuHandle(),
+			.ScratchAccelerationStructureData = pBLASScratch->GetGpuHandle(),
 		};
 
 		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-		pContext->InsertUavBarrier(subMesh.pBLAS);
+		pContext->InsertUavBarrier(pBLAS.get());
 		pContext->FlushResourceBarriers();
+
+		subMesh.pBLAS = pBLAS.release();
+		if (0) // #todo: can delete scratch buffer if no upload is required
+		{
+			subMesh.pBLASScratch = pBLASScratch.release();
+		}
 	}
 }
 

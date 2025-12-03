@@ -17,9 +17,7 @@ GraphicsTexture::GraphicsTexture(GraphicsDevice* pParent, const TextureDesc& des
 }
 
 GraphicsTexture::~GraphicsTexture()
-{
-	E_LOG(Info, m_Name.c_str());
-}
+{}
 
 D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetRTV() const
 {
