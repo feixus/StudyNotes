@@ -23,6 +23,7 @@ public:
 	bool IsComplete(uint64_t fenceValue);
 
 	uint64_t GetCurrentValue() const { return m_CurrentValue; }
+	uint64_t GetLastSignaledValue() const { return m_LastSignaled; }
 
 	inline ID3D12Fence* GetFence() const { return m_pFence.Get(); }
 

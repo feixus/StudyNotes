@@ -183,14 +183,13 @@ std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapt
 }
 
 GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
+	: m_DeleteQueue(this)
 {
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
 	m_pDevice.As(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	m_Capabilities.Initialize(this);
-
-	m_pFrameFence = std::make_unique<Fence>(this, 0, "Frame Fence");
 
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN)
 	{
@@ -279,32 +278,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 GraphicsDevice::~GraphicsDevice()
 {
-	m_IsTearingDown = true;
-
 	IdleGPU();
-	GarbageCollect();
 
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
-}
-
-void GraphicsDevice::GarbageCollect()
-{
-	while (!m_DeferredDeletionQueue.empty())
-	{
-		auto& p = m_DeferredDeletionQueue.front();
-		if (p.second == nullptr)
-		{
-			m_DeferredDeletionQueue.pop();
-			continue;
-		}
-
-		if (!m_pFrameFence->IsComplete(p.first))
-		{
-			break;
-		}
-		p.second->Release();
-		m_DeferredDeletionQueue.pop();
-	}
 }
 
 int GraphicsDevice::RegisterBindlessResource(GraphicsTexture* pTexture, GraphicsTexture* pFallbackTexture)
@@ -336,12 +312,6 @@ CommandQueue* GraphicsDevice::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) cons
 	return m_CommandQueues.at(type).get();
 }
 
-void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
-{
-	std::lock_guard lockGuard(m_ContextAllocationMutex);
-	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
-}
-
 CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
 	int typeIndex = (int)type;
@@ -360,7 +330,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 			ComPtr<ID3D12CommandList> pCommandList;
 			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
-			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist - %d", m_CommandLists.size()).c_str());
+			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist-%d", m_CommandLists.size()).c_str());
 			m_CommandLists.push_back(std::move(pCommandList));
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap.get(), m_pDynamicAllocationManager.get(), pAllocator));
 			pContext = m_CommandListPool[typeIndex].back().get();
@@ -369,11 +339,15 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 	return pContext;
 }
 
-uint64_t GraphicsDevice::TickFrameFence()
+void GraphicsDevice::TickFrame()
 {
-	uint64_t signalledValue = m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
-	GarbageCollect();
-	return signalledValue;
+	m_DeleteQueue.Clean();
+}
+
+void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
+{
+	std::lock_guard lockGuard(m_ContextAllocationMutex);
+	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
 bool GraphicsDevice::IsFenceComplete(uint64_t fenceValue)
@@ -434,14 +408,7 @@ ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, 
 
 void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
 {
-	if (m_IsTearingDown)
-	{
-		pResource->Release();
-	}
-	else
-	{
-		m_DeferredDeletionQueue.emplace(std::pair<uint64_t, ID3D12Resource*>(m_pFrameFence->GetCurrentValue(), pResource));
-	}
+	m_DeleteQueue.EnqueueResource(pResource, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetFence());
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
@@ -662,5 +629,42 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 
 	default:
 		return false;
+	}
+}
+
+DeferredDeleteQueue::DeferredDeleteQueue(GraphicsDevice* pGraphicsDevice)
+	: GraphicsObject(pGraphicsDevice)
+{}
+
+DeferredDeleteQueue::~DeferredDeleteQueue()
+{
+	GetGraphics()->IdleGPU();
+	Clean();
+	check(m_DeletionQueue.empty());
+}
+
+void DeferredDeleteQueue::EnqueueResource(ID3D12Object* pResource, Fence* pFence)
+{
+	std::scoped_lock lock(m_QueueCS);
+	FenceObject object;
+	object.pFence = pFence;
+	object.FenceValue = pFence->GetCurrentValue();
+	object.pResource = pResource;
+	m_DeletionQueue.push(object);
+}
+
+void DeferredDeleteQueue::Clean()
+{
+	std::scoped_lock lock(m_QueueCS);
+	while (!m_DeletionQueue.empty())
+	{
+		const FenceObject& p = m_DeletionQueue.front();
+		if (!p.pFence->IsComplete(p.FenceValue))
+		{
+			break;
+		}
+
+		p.pResource->Release();
+		m_DeletionQueue.pop();
 	}
 }

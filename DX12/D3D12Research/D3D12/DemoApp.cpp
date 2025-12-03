@@ -280,8 +280,6 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	SetupScene(*pContext);
 	UpdateTLAS(*pContext);
 	pContext->Execute(true);
-
-	m_pDevice->GarbageCollect();
 }
 
 DemoApp::~DemoApp()
@@ -1378,7 +1376,7 @@ void DemoApp::Update()
 	//  - wait for the next frame to be finished to start queueing work for it
 	Profiler::Get()->Resolve(m_pSwapChain.get(), m_pDevice.get(), m_Frame);
 	m_pSwapChain->Present();
-	m_pDevice->TickFrameFence();
+	m_pDevice->TickFrame();
 	++m_Frame;
 
 	if (m_CapturePix)

@@ -2,6 +2,7 @@
 
 #include "Shader.h"
 #include "DescriptorHandle.h"
+#include "GraphicsResource.h"
 
 class CommandQueue;
 class CommandContext;
@@ -61,6 +62,29 @@ private:
 	GraphicsDevice* m_pDevice{nullptr};
 };
 
+class DeferredDeleteQueue : public GraphicsObject
+{
+private:
+	struct FenceObject
+	{
+		Fence* pFence;
+		uint64_t FenceValue;
+		ID3D12Object* pResource;
+	};
+
+public:
+	DeferredDeleteQueue(GraphicsDevice* pGraphicsDevice);
+	~DeferredDeleteQueue();
+
+	void EnqueueResource(ID3D12Object* pResource, Fence* pFence);
+
+	void Clean();
+
+private:
+	std::mutex m_QueueCS;
+	std::queue<FenceObject> m_DeletionQueue;
+};
+
 class GraphicsInstance
 {
 public:
@@ -110,11 +134,10 @@ public:
 
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
 	~GraphicsDevice();
-	void GarbageCollect();
 
 	bool IsFenceComplete(uint64_t fenceValue);
 	void WaitForFence(uint64_t fenceValue);
-	uint64_t TickFrameFence();
+	void TickFrame();
 	void IdleGPU();
 
 	int RegisterBindlessResource(GraphicsTexture* pTexture, GraphicsTexture* pFallback = nullptr);
@@ -189,7 +212,6 @@ public:
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
-	Fence* GetFrameFence() const { return m_pFrameFence.get(); }
 
 private:
 	bool m_IsTearingDown{false};
@@ -198,9 +220,15 @@ private:
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
+	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
+	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
+
+	DeferredDeleteQueue m_DeleteQueue;
+
 	HANDLE m_DeviceRemovedEvent{0};
 	std::unique_ptr<Fence> m_pDeviceRemovalFence;
-	std::unique_ptr<Fence> m_pFrameFence;
 
 	std::unique_ptr<OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
@@ -211,13 +239,7 @@ private:
 	std::vector<std::unique_ptr<PipelineState>> m_Pipelines;
 	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
-	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
-	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
-	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
-
-	std::queue<std::pair<uint64_t, ID3D12Resource*>> m_DeferredDeletionQueue;
 
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
 
