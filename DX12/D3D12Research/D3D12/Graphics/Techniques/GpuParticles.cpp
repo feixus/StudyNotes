@@ -32,50 +32,30 @@ struct ParticleData
 };
 
 GpuParticles::GpuParticles(GraphicsDevice* pGraphicsDevice)
-{
-    Initialize(pGraphicsDevice);
-}
-
-void GpuParticles::Initialize(GraphicsDevice* pGraphicsDevice)
+    : m_pGraphicsDevice(pGraphicsDevice)
 {
     CommandContext* pContext = pGraphicsDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-    m_pCounterBuffer = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle CounterBuffer");
-    m_pCounterBuffer->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));
+    m_pCounterBuffer = pGraphicsDevice->CreateBuffer(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)), "GpuParticle CounterBuffer");
     uint32_t aliveCount = cMaxParticleCount;
-    m_pCounterBuffer->SetData(pContext, &aliveCount, sizeof(uint32_t), 0);
+    pContext->InitializeBuffer(m_pCounterBuffer.get(), &aliveCount, sizeof(uint32_t), 0);
 
     BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32_t));
-    m_pAliveList1 = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle AliveList1");
-    m_pAliveList1->Create(particleBufferDesc);
-    m_pAliveList2 = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle AliveList2");
-    m_pAliveList2->Create(particleBufferDesc);
+    m_pAliveList1 = pGraphicsDevice->CreateBuffer(particleBufferDesc, "GpuParticle AliveList1");
+    m_pAliveList2 = pGraphicsDevice->CreateBuffer(particleBufferDesc, "GpuParticle AliveList2");
+    m_pDeadList = pGraphicsDevice->CreateBuffer(particleBufferDesc, "GpuParticle DeadList");
 
-    m_pDeadList = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle DeadList");
-    m_pDeadList->Create(particleBufferDesc);
     std::vector<uint32_t> deadList(cMaxParticleCount);
     std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
-    m_pDeadList->SetData(pContext, deadList.data(), sizeof(uint32_t) * deadList.size());
+    pContext->InitializeBuffer(m_pDeadList.get(), deadList.data(), sizeof(uint32_t) * deadList.size());
     
-    m_pParticleBuffer = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle ParticleBuffer");
-    m_pParticleBuffer->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)));
-    
-    m_pEmitArguments = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle EmitArgs");
-    m_pEmitArguments->Create(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)));
-    m_pSimulateArguments = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle SimulateArgs");
-    m_pSimulateArguments->Create(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)));
-    m_pDrawArguments = std::make_unique<Buffer>(pGraphicsDevice, "GpuParticle RenderArgs");
-    m_pDrawArguments->Create(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)));
+    m_pParticleBuffer = pGraphicsDevice->CreateBuffer(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)), "GpuParticle ParticleBuffer");
+
+    m_pEmitArguments = pGraphicsDevice->CreateBuffer(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)), "GpuParticle EmitArgs");
+    m_pSimulateArguments = pGraphicsDevice->CreateBuffer(BufferDesc::CreateByteAddress(3 * sizeof(uint32_t)), "GpuParticle SimulateArgs");
+    m_pDrawArguments = pGraphicsDevice->CreateBuffer(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)), "GpuParticle RenderArgs");
 
     pContext->Execute(true);
-
-    m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>(pGraphicsDevice);
-    m_pSimpleDispatchCommandSignature->AddDispatch();
-    m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch");
-
-    m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>(pGraphicsDevice);
-    m_pSimpleDrawCommandSignature->AddDraw();
-    m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
     {
         Shader* pComputerShader = pGraphicsDevice->GetShader("ParticleSimulate.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
@@ -235,7 +215,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
             parameters.Origin = Vector3(150, 3, 0);
 
 		    context.SetComputeDynamicConstantBufferView(0, parameters);
-		    context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), 1, m_pEmitArguments.get(), m_pEmitArguments.get());
+		    context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDispatchSignature(), 1, m_pEmitArguments.get(), m_pEmitArguments.get());
 		    context.InsertUavBarrier();
         });
 
@@ -268,7 +248,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 		    parameters.Far = camera.GetFar();
 
 		    context.SetComputeDynamicConstantBufferView(0, parameters);
-		    context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), 1, m_pSimulateArguments.get(), nullptr);
+		    context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDispatchSignature(), 1, m_pSimulateArguments.get(), nullptr);
 		    context.InsertUavBarrier();
         });
 
@@ -325,7 +305,7 @@ void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsText
 			context.BindResource(1, 0, m_pParticleBuffer->GetSRV());
 			context.BindResource(1, 1, m_pAliveList1->GetSRV());
 
-			context.ExecuteIndirect(m_pSimpleDrawCommandSignature.get(), 1, m_pDrawArguments.get(), nullptr);
+			context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDrawSignature(), 1, m_pDrawArguments.get(), nullptr);
 			context.EndRenderPass();
         });
 }

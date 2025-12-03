@@ -10,7 +10,7 @@ class OnlineDescriptorAllocator;
 class DynamicAllocationManager;
 class GraphicsResource;
 class GraphicsTexture;
-class GraphicsBuffer;
+class Buffer;
 class RootSignature;
 class PipelineState;
 class ShaderManager;
@@ -22,6 +22,9 @@ class ResourceView;
 class SwapChain;
 class Fence;
 class GraphicsDevice;
+class CommandSignature;
+struct TextureDesc;
+struct BufferDesc;
 
 enum class GraphicsInstanceFlags
 {
@@ -106,11 +109,13 @@ public:
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
+	~GraphicsDevice();
 	void Destroy();
 	void GarbageCollect();
 
 	bool IsFenceComplete(uint64_t fenceValue);
 	void WaitForFence(uint64_t fenceValue);
+	uint64_t TickFrameFence();
 	void IdleGPU();
 
 	int RegisterBindlessResource(GraphicsTexture* pTexture, GraphicsTexture* pFallback = nullptr);
@@ -169,22 +174,33 @@ public:
 		return m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
+	std::unique_ptr<GraphicsTexture> CreateTexture(const TextureDesc& desc, const char* pName);
+	std::unique_ptr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
+	void ReleaseResource(ID3D12Resource* pResource);
+
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
 
+	CommandSignature* GetIndirectDrawSignature() const { return m_pIndirectDrawSignature.get(); }
+	CommandSignature* GetIndirectDispatchSignature() const { return m_pIndirectDispatchSignature.get(); }
+
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
-
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
+	Fence* GetFrameFence() const { return m_pFrameFence.get(); }
 
 private:
+	GraphicsCapabilities m_Capabilities;
+
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
 	HANDLE m_DeviceRemovedEvent{0};
 	std::unique_ptr<Fence> m_pDeviceRemovalFence;
+	std::unique_ptr<Fence> m_pFrameFence;
 
 	std::unique_ptr<OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
@@ -201,11 +217,14 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
-	GraphicsCapabilities m_Capabilities;
+	std::queue<std::pair<uint64_t, ID3D12Resource*>> m_DeferredDeletionQueue;
 
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
 
 	int m_SampleCount{1};
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
+
+	std::unique_ptr<CommandSignature> m_pIndirectDrawSignature;
+	std::unique_ptr<CommandSignature> m_pIndirectDispatchSignature;
 };

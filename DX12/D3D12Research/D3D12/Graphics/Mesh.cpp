@@ -56,9 +56,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 	static constexpr uint64_t sBufferAlignment = 16;
 	uint64_t bufferSize = vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32_t) + pScene->mNumMeshes * sBufferAlignment;
 
-	m_pGeometryData = std::make_unique<Buffer>(pGraphicDevice, "Mesh VertexBuffer");
-	m_pGeometryData->Create(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress));
-
+	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh VertexBuffer");
+	
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
 	uint64_t dataOffset = 0;

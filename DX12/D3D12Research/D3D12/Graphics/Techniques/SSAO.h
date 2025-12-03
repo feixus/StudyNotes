@@ -13,13 +13,14 @@ class SSAO
 public:
 	SSAO(GraphicsDevice* pGraphicsDevice);
 
-	void OnSwapChainCreated(int widowWidth, int windowHeight);
+	void OnResize(int widowWidth, int windowHeight);
 
 	void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, Camera& camera);
 
 private:
-	void SetupResources(GraphicsDevice* pGraphicsDevice);
-	void SetupPipelines(GraphicsDevice* pGraphicsDevice);
+	void SetupPipelines();
+
+	GraphicsDevice* m_pGraphicsDevice;
 	
 	std::unique_ptr<GraphicsTexture> m_pAmbientOcclusionIntermediate;
 

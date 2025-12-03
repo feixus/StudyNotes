@@ -20,9 +20,10 @@ public:
     void OnResize(uint32_t width, uint32_t height);
 
 private:
-    void SetupResources(GraphicsDevice* pGraphicsDevice);
-    void SetupPipelines(GraphicsDevice* pGraphicsDevice);
+    void SetupPipelines();
 
+    GraphicsDevice* m_pGraphicsDevice;
+    
     StateObject* m_pRtSO{nullptr};
 
     std::unique_ptr<RootSignature> m_pHitRS;

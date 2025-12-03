@@ -1,9 +1,10 @@
 #include "stdafx.h"
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
+#include "Graphics.h"
 
-GraphicsResource::GraphicsResource(GraphicsDevice* pParent)
-	: GraphicsObject(pParent), m_pResource(nullptr), m_ResourceState(D3D12_RESOURCE_STATE_COMMON)
+GraphicsResource::GraphicsResource(GraphicsDevice* pParent, const char* pName)
+	: GraphicsObject(pParent), m_Name(pName), m_pResource(nullptr), m_ResourceState(D3D12_RESOURCE_STATE_COMMON)
 {
 }
 
@@ -19,11 +20,20 @@ GraphicsResource::~GraphicsResource()
 
 void GraphicsResource::Release()
 {
-	if (m_pResource)
+	if (m_pResource == nullptr)
+	{
+		return;
+	}
+
+	if (m_ImmediateDelete)
 	{
 		m_pResource->Release();
-		m_pResource = nullptr;
 	}
+	else
+	{
+		GetGraphics()->ReleaseResource(m_pResource);
+	}
+	m_pResource = nullptr;
 }
 
 void* GraphicsResource::Map(uint32_t subResource /*= 0*/, uint64_t readFrom /*= 0*/, uint64_t readTo /*= 0*/)

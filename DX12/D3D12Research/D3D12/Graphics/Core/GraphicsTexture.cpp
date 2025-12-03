@@ -7,11 +7,19 @@
 #include "ResourceViews.h"
 
 GraphicsTexture::GraphicsTexture(GraphicsDevice* pParent, const char* pName)
-	: GraphicsResource(pParent)
+	: GraphicsResource(pParent, pName)
 {}
 
+GraphicsTexture::GraphicsTexture(GraphicsDevice* pParent, const TextureDesc& desc, const char* pName)
+	: GraphicsTexture(pParent, pName)
+{
+	Create(desc);
+}
+
 GraphicsTexture::~GraphicsTexture()
-{}
+{
+	E_LOG(Info, m_Name.c_str());
+}
 
 D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetRTV() const
 {
@@ -355,6 +363,8 @@ void GraphicsTexture::CreateSRV(ShaderResourceView** pView, const TextureSRVDesc
 void GraphicsTexture::CreateForSwapChain(ID3D12Resource* pTexture)
 {
 	Release();
+	SetImmediateDelete(true);
+
 	D3D::SetObjectName(pTexture, "Backbuffer");
 	m_pResource = pTexture;
 	SetResourceState(D3D12_RESOURCE_STATE_PRESENT);

@@ -190,6 +190,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	m_Capabilities.Initialize(this);
 
+	m_pFrameFence = std::make_unique<Fence>(this, 0, "Frame Fence");
+
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN)
 	{
 		GraphicsDevice* pDevice = (GraphicsDevice*)pContext;
@@ -262,20 +264,51 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
+	m_pIndirectDispatchSignature = std::make_unique<CommandSignature>(this);
+	m_pIndirectDispatchSignature->AddDispatch();
+	m_pIndirectDispatchSignature->Finalize("Default Indirect Dispatch");
+
+	m_pIndirectDrawSignature = std::make_unique<CommandSignature>(this);
+	m_pIndirectDrawSignature->AddDraw();
+	m_pIndirectDrawSignature->Finalize("Default Indirect Draw");
+
 	uint8_t smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);
 }
 
+GraphicsDevice::~GraphicsDevice()
+{
+	m_pFrameFence->CpuWait(TickFrameFence());
+	GarbageCollect();
+}
+
 void GraphicsDevice::Destroy()
 {
-	IdleGPU();
+	m_pFrameFence->CpuWait(TickFrameFence());
+	Profiler::Get()->Shutdown();
+
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
 }
 
 void GraphicsDevice::GarbageCollect()
 {
-	m_pDynamicAllocationManager->CollectGrabage();
+	while (!m_DeferredDeletionQueue.empty())
+	{
+		auto& p = m_DeferredDeletionQueue.front();
+		if (p.second == nullptr)
+		{
+			m_DeferredDeletionQueue.pop();
+			continue;
+		}
+
+		if (!m_pFrameFence->IsComplete(p.first))
+		{
+			break;
+		}
+		p.second->Release();
+		m_DeferredDeletionQueue.pop();
+	}
 }
 
 int GraphicsDevice::RegisterBindlessResource(GraphicsTexture* pTexture, GraphicsTexture* pFallbackTexture)
@@ -340,6 +373,13 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 	return pContext;
 }
 
+uint64_t GraphicsDevice::TickFrameFence()
+{
+	uint64_t signalledValue = m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	GarbageCollect();
+	return signalledValue;
+}
+
 bool GraphicsDevice::IsFenceComplete(uint64_t fenceValue)
 {
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
@@ -370,6 +410,16 @@ void GraphicsDevice::IdleGPU()
 	}
 }
 
+std::unique_ptr<GraphicsTexture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName)
+{
+	return std::make_unique<GraphicsTexture>(this, desc, pName);
+}
+
+std::unique_ptr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName)
+{
+	return std::make_unique<Buffer>(this, desc, pName);
+}
+
 ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue)
 {
 	ID3D12Resource* pResource;
@@ -384,6 +434,12 @@ ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, 
 		IID_PPV_ARGS(&pResource)), GetDevice());
 
 	return pResource;
+}
+
+void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
+{
+	E_LOG(Info, "----%d", m_DeferredDeletionQueue.size());
+	m_DeferredDeletionQueue.emplace(std::pair<uint64_t, ID3D12Resource*>(m_pFrameFence->GetCurrentValue(), pResource));
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)

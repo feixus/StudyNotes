@@ -61,14 +61,15 @@ class GraphicsResource : public GraphicsObject
 	friend class CommandContext;
 
 public:
-	GraphicsResource(GraphicsDevice* pParent);
+	GraphicsResource(GraphicsDevice* pParent, const char* pName = "");
 	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 	virtual ~GraphicsResource();
 
 	void* Map(uint32_t subResource = 0, uint64_t readFrom = 0, uint64_t readTo = 0);
 	void UnMap(uint32_t subResource = 0, uint64_t writeFrom = 0, uint64_t writeTo = 0);
 	void* GetMappedData() const { return m_pMappedData; }
-
+	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
+	
 	void Release();
 	void SetName(const char* pName);
 	const std::string& GetName() { return m_Name;};
@@ -93,4 +94,5 @@ protected:
 	void* m_pMappedData{nullptr};
 	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;	
 	ResourceState m_ResourceState;
+	bool m_ImmediateDelete{false};
 };

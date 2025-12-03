@@ -246,24 +246,15 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	m_pDevice = pInstance->CreateDevice(pAdapter.Get());
 	m_pSwapChain = pInstance->CreateSwapChain(m_pDevice.get(), hWnd, SWAPCHAIN_FORMAT, m_WindowWidth, m_WindowHeight, FRAME_COUNT, true);
 
+	m_pDevice->SetMultiSampleCount(m_SampleCount);
+
 	m_pDepthStencil = std::make_unique<GraphicsTexture>(GetDevice(), "Depth Stencil");
 	m_pResolveDepthStencil = std::make_unique<GraphicsTexture>(GetDevice(), "Resolved Depth Stencil");
 
-	m_pDevice->SetMultiSampleCount(m_SampleCount);
 	if (m_SampleCount > 1)
 	{
 		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture>(GetDevice(), "MSAA Render Target");
 	}
-
-	m_pNormals = std::make_unique<GraphicsTexture>(GetDevice(), "MSAA Normals");
-	m_pResolvedNormals = std::make_unique<GraphicsTexture>(GetDevice(), "Resolved Normals");
-	m_pHDRRenderTarget = std::make_unique<GraphicsTexture>(GetDevice(), "HDR Render Target");
-	m_pPreviousColor = std::make_unique<GraphicsTexture>(GetDevice(), "Previous Color");
-	m_pTonemapTarget = std::make_unique<GraphicsTexture>(GetDevice(), "Tonemap Target");
-	m_pDownscaledColor = std::make_unique<GraphicsTexture>(GetDevice(), "Downscaled HDR Target");
-	m_pAmbientOcclusion = std::make_unique<GraphicsTexture>(GetDevice(), "SSAO Target");
-	m_pVelocity = std::make_unique<GraphicsTexture>(GetDevice(), "Velocity");
-	m_pTAASource = std::make_unique<GraphicsTexture>(GetDevice(), "TAA Target");
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get());
 
@@ -295,8 +286,8 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 
 DemoApp::~DemoApp()
 {
-	m_pDevice->Destroy();
 	m_pSwapChain->Destroy();
+	m_pDevice->Destroy();
 }
 
 void DemoApp::InitializeAssets(CommandContext& context)
@@ -392,8 +383,7 @@ void DemoApp::SetupScene(CommandContext& context)
 			m_Lights.push_back(spotLight);
 		}
 
-		m_pLightBuffer = std::make_unique<Buffer>(GetDevice(), "Lights");
-		m_pLightBuffer->Create(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource));
+		m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource), "Lights");
 	}
 }
 
@@ -708,8 +698,7 @@ void DemoApp::Update()
 				D3D12_RESOURCE_DESC desc = m_pTonemapTarget->GetResource()->GetDesc();
 				m_pDevice->GetDevice()->GetCopyableFootprints(&desc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 
-				m_pScreenshotBuffer = std::make_unique<Buffer>(GetDevice(), "Screenshot Texture");
-				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
+				m_pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Buffer");
 				m_pScreenshotBuffer->Map();
 
 				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -1317,11 +1306,11 @@ void DemoApp::Update()
 	{
 		if (m_RenderPath == RenderPath::Tiled)
 		{
-			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice.get(), *m_pCamera, m_pTonemapTarget.get(), GetResolveDepthStencil());
+			m_pTiledForward->VisualizeLightDensity(graph, *m_pCamera, m_pTonemapTarget.get(), GetResolveDepthStencil());
 		}
 		else if (m_RenderPath == RenderPath::Clustered)
 		{
-			m_pClusteredForward->VisualizeLightDensity(graph, m_pDevice.get(), *m_pCamera, m_pTonemapTarget.get(), GetResolveDepthStencil());
+			m_pClusteredForward->VisualizeLightDensity(graph, *m_pCamera, m_pTonemapTarget.get(), GetResolveDepthStencil());
 		}
 
 		// render color legend
@@ -1389,6 +1378,7 @@ void DemoApp::Update()
 	//  - wait for the next frame to be finished to start queueing work for it
 	Profiler::Get()->Resolve(m_pSwapChain.get(), m_pDevice.get(), m_Frame);
 	m_pSwapChain->Present();
+	m_pDevice->TickFrameFence();
 	++m_Frame;
 
 	if (m_CapturePix)
@@ -1405,35 +1395,31 @@ void DemoApp::OnResize(int width, int height)
 	m_WindowHeight = height;
 
 	m_pDevice->IdleGPU();
-	m_pDepthStencil->Release();
 
 	m_pSwapChain->OnResize(width, height);
 
-	m_pDepthStencil->Create(TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, GraphicsDevice::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
-	m_pResolveDepthStencil->Create(TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pDepthStencil = m_pDevice->CreateTexture(TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, GraphicsDevice::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)), "Depth Stencil");
+	m_pResolveDepthStencil = m_pDevice->CreateTexture(TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Resolved Depth Stencil");
 	if (m_SampleCount > 1)
 	{
-		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)));
+		m_pMultiSampleRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Target");
 	}
 
-	m_pNormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
-	m_pResolvedNormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget));
-	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
-	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
-	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
-	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
-	m_pVelocity->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-	m_pTAASource->Create(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
-	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount), "MSAA Normals");
+	m_pResolvedNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget), "Normals");
+	m_pHDRRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "HDR Target");
+	m_pPreviousColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource), "Previous Color");
+	m_pTonemapTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "Tonemap Target");
+	m_pDownscaledColor = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "Downscaled HDR Target");
+	m_pVelocity = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Velocity");
+	m_pTAASource = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "TAA Target");
+	m_pAmbientOcclusion = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "SSAO");
 
-	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
-	m_pCamera->SetDirty();
-
-	m_pClusteredForward->OnSwapChainCreated(width, height);
-	m_pTiledForward->OnSwapChainCreated(width, height);
-	m_pSSAO->OnSwapChainCreated(width, height);
+	m_pClusteredForward->OnResize(width, height);
+	m_pTiledForward->OnResize(width, height);
+	m_pSSAO->OnResize(width, height);
 	m_pRTReflections->OnResize(width, height);
-
+	
 	m_ReductionTargets.clear();
 	int w = width;
 	int h = height;
@@ -1441,18 +1427,18 @@ void DemoApp::OnResize(int width, int height)
 	{
 		w = Math::DivideAndRoundUp(w, 16);
 		h = Math::DivideAndRoundUp(h, 16);
-		std::unique_ptr<GraphicsTexture> pTexture = std::make_unique<GraphicsTexture>(GetDevice(), "SDSM Reduction Target");
-		pTexture->Create(TextureDesc::Create2D(w, h, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+		std::unique_ptr<GraphicsTexture> pTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(w, h, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "SDSM Reduction Target");
 		m_ReductionTargets.push_back(std::move(pTexture));
 	}
 
 	for (int i = 0; i < FRAME_COUNT; i++)
 	{
-		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(GetDevice(), "SDSM Reduction Readback Target");
-		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
+		std::unique_ptr<Buffer> pBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
 		pBuffer->Map();
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
+
+	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
 }
 
 void DemoApp::InitializePipelines()
@@ -1522,10 +1508,8 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Luminance Histogram PSO");
 		m_pLuminanceHistogramPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		m_pLuminanceHistogram = std::make_unique<Buffer>(GetDevice(), "Luminance Histogram");
-		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32_t) * 256));
-		m_pAverageLuminance = std::make_unique<Buffer>(GetDevice(), "Average Luminance");
-		m_pAverageLuminance->Create(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
+		m_pLuminanceHistogram = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32_t) * 256), "Luminance Histogram");
+		m_pAverageLuminance= m_pDevice->CreateBuffer(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "Average Luminance");
 	}
 
 	// draw histogram
@@ -1890,10 +1874,8 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 		m_pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-		m_pTLASScratch = std::make_unique<Buffer>(GetDevice(), "TLAS Scratch");
-		m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-		m_pTLAS = std::make_unique<Buffer>(GetDevice(), "TLAS");
-		m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+		m_pTLASScratch = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None),  "TLAS Scratch");
+		m_pTLAS = m_pDevice->CreateBuffer(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)), "TLAS");
 	}
 
 	DynamicAllocation allocation = context.AllocateTransientMemory(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));

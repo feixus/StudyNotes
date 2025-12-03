@@ -127,6 +127,7 @@ class Buffer : public GraphicsResource
 {
 public:
 	Buffer(GraphicsDevice* pGraphics, const char* pName = "");
+	Buffer(GraphicsDevice* pGraphics, const BufferDesc& desc, const char* pName = "");
 	Buffer(GraphicsDevice* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 	~Buffer();
 

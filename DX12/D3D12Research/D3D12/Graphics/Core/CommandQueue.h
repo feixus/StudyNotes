@@ -22,6 +22,8 @@ public:
 	// Returns true if the fence value reached value or higher.
 	bool IsComplete(uint64_t fenceValue);
 
+	uint64_t GetCurrentValue() const { return m_CurrentValue; }
+
 	inline ID3D12Fence* GetFence() const { return m_pFence.Get(); }
 
 private:

@@ -13,6 +13,12 @@ Buffer::Buffer(GraphicsDevice* pGraphics, const char* pName)
 	: GraphicsResource(pGraphics)
 {}
 
+Buffer::Buffer(GraphicsDevice* pGraphics, const BufferDesc& desc, const char* pName)
+	: Buffer(pGraphics, pName)
+{
+	Create(desc);
+}
+
 Buffer::~Buffer()
 {}
 

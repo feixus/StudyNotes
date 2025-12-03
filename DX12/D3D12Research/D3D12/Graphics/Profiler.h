@@ -134,6 +134,7 @@ public:
 	static Profiler* Get();
 
 	void Initialize(GraphicsDevice* pGraphicsDevice, uint32_t numBackbuffers);
+	void Shutdown();
 
 	void Begin(const char* pName, CommandContext* context = nullptr);
 	void End(CommandContext* context = nullptr);

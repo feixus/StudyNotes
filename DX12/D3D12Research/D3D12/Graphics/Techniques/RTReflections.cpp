@@ -14,12 +14,11 @@
 #include "Scene/Camera.h"
 #include "DemoApp.h"
 
-RTReflections::RTReflections(GraphicsDevice* pGraphicsDevice)
+RTReflections::RTReflections(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pGraphicsDevice)
 {
     if (pGraphicsDevice->GetCapabilities().SupportsRaytracing())
     {
-        SetupResources(pGraphicsDevice);
-        SetupPipelines(pGraphicsDevice);
+        SetupPipelines();
     }
 }
 
@@ -102,27 +101,19 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 void RTReflections::OnResize(uint32_t width, uint32_t height)
 {
-	if (m_pSceneColor != nullptr)
-	{
-		m_pSceneColor->Create(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
-	}
+    m_pSceneColor = m_pGraphicsDevice->CreateTexture(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1), "RTReflections Scene Color");
 }
 
-void RTReflections::SetupResources(GraphicsDevice* pGraphicsDevice)
-{
-    m_pSceneColor = std::make_unique<GraphicsTexture>(pGraphicsDevice, "RTReflections Test Output");
-}
-
-void RTReflections::SetupPipelines(GraphicsDevice* pGraphicsDevice)
+void RTReflections::SetupPipelines()
 {
     // raytracing pipeline
     {
-        ShaderLibrary* pShaderLibrary = pGraphicsDevice->GetLibrary("RTReflections.hlsl");
+        ShaderLibrary* pShaderLibrary = m_pGraphicsDevice->GetLibrary("RTReflections.hlsl");
 
-        m_pHitRS = std::make_unique<RootSignature>(pGraphicsDevice);
+        m_pHitRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
         m_pHitRS->Finalize("Hit RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
-        m_pGlobalRS = std::make_unique<RootSignature>(pGraphicsDevice);
+        m_pGlobalRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
         m_pGlobalRS->FinalizeFromShader("Global RS", pShaderLibrary);
 
         StateObjectInitializer stateDesc;
@@ -137,6 +128,6 @@ void RTReflections::SetupPipelines(GraphicsDevice* pGraphicsDevice)
         stateDesc.MaxRecursion = 2;
         stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
         stateDesc.RayGenShader = "RayGen";
-        m_pRtSO = pGraphicsDevice->CreateStateObject(stateDesc);
+        m_pRtSO = m_pGraphicsDevice->CreateStateObject(stateDesc);
     }
 }

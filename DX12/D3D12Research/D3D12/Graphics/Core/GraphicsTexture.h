@@ -214,6 +214,7 @@ class GraphicsTexture : public GraphicsResource
 {
 public:
 	GraphicsTexture(GraphicsDevice* pParent, const char* pName = "");
+	GraphicsTexture(GraphicsDevice* pParent, const TextureDesc& desc, const char* pName = "");
 	~GraphicsTexture();
 
 	int GetWidth() const { return m_Desc.Width; }

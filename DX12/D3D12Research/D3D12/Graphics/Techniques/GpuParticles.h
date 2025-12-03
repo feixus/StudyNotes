@@ -3,7 +3,6 @@
 class GraphicsDevice;
 class Buffer;
 class GraphicsTexture;
-class CommandSignature;
 class CommandContext;
 class RootSignature;
 class PipelineState;
@@ -20,7 +19,7 @@ public:
     void Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera);
 
 private:
-    void Initialize(GraphicsDevice* pGraphicsDevice);
+    GraphicsDevice* m_pGraphicsDevice;
 
     std::unique_ptr<Buffer> m_pAliveList1;
     std::unique_ptr<Buffer> m_pAliveList2;
@@ -39,9 +38,6 @@ private:
 
     PipelineState* m_pSimulateEndPSO{nullptr};
     std::unique_ptr<Buffer> m_pDrawArguments;
-
-    std::unique_ptr<CommandSignature> m_pSimpleDispatchCommandSignature;
-    std::unique_ptr<CommandSignature> m_pSimpleDrawCommandSignature;
 
     std::unique_ptr<RootSignature> m_pParticleRenderRS;
     PipelineState* m_pParticleRenderPSO{nullptr};
