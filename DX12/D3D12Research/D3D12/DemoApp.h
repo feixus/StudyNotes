@@ -42,6 +42,9 @@ struct MaterialData
 	int Normal{0};
 	int RoughnessMetalness{0};
 	int Emissive{0};
+	Color BaseColorFactor{1.0f, 1.0f, 1.0f, 1.0f};
+	float MetalnessFactor{1.0f};
+	float RoughnessFactor{1.0f};
 };
 
 struct Batch

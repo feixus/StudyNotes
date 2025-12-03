@@ -169,10 +169,13 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
     float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
     Vertex v = GetVertexAttributes(barycentrics);
 
-    float4 diffuseSample = tTexture2DTable[hitData.Material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-    float4 normalSample = tTexture2DTable[hitData.Material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-    float4 roughnessMetalnessSample = tTexture2DTable[hitData.Material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-    float4 emissiveSample = tTexture2DTable[hitData.Material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    MaterialData material = hitData.Material;
+    float4 diffuseSample = material.BaseColorFactor * tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float4 emissiveSample = tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float roughness = material.RoughnessFactor * roughnessMetalnessSample.g;
+    float metalness = material.MetalnessFactor * roughnessMetalnessSample.b;
     float specular = 0.5f;
     float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
 	float3 N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
@@ -183,8 +186,8 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 	outData.N = N;
     outData.UV = v.texCoord;
     outData.Diffuse = diffuseSample.rgb;
-    outData.Specular = ComputeF0(specular, outData.Diffuse, roughnessMetalnessSample.b);
-    outData.Roughness = roughnessMetalnessSample.g;
+    outData.Specular = ComputeF0(specular, outData.Diffuse, metalness);
+    outData.Roughness = roughness;
     outData.Emissive = emissiveSample.rgb;
     outData.Opacity = diffuseSample.a;
     return outData;

@@ -34,6 +34,9 @@ struct SubMeshInstance
 
 struct Material
 {
+    Color BaseColorFactor{1.0f, 1.0f, 1.0f, 1.0f};
+    float MetalnessFactor{1.0f};
+    float RoughnessFactor{1.0f};
 	GraphicsTexture* pDiffuseTexture{nullptr};
 	GraphicsTexture* pNormalTexture{nullptr};
 	GraphicsTexture* pRoughnessMetalnessTexture{nullptr};

@@ -9,9 +9,7 @@ OfflineDescriptorAllocator::OfflineDescriptorAllocator(GraphicsDevice* pParent, 
 }
 
 OfflineDescriptorAllocator::~OfflineDescriptorAllocator()
-{
-	E_LOG(Warning, "OfflineDescriptorAllocator::~OfflineDescriptorAllocator");
-}
+{}
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 {

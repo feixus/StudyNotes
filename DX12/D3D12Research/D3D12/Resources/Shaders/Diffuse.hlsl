@@ -275,12 +275,13 @@ void PSMain(PSInput input,
     float ambientOcclusion = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r; 
 
 // surface shader begin
-    float4 diffuseSample = tTexture2DTable[cObjectData.Material.Diffuse].Sample(sDiffuseSampler, input.texCoord);
-    float3 tangentNormal = tTexture2DTable[cObjectData.Material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-	float4 roughnessMetalness = tTexture2DTable[cObjectData.Material.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
-	float4 emissive = tTexture2DTable[cObjectData.Material.Emissive].Sample(sDiffuseSampler, input.texCoord);
-    float metalness = roughnessMetalness.b;
-    float roughness = roughnessMetalness.g;
+    MaterialData material = cObjectData.Material;
+    float4 diffuseSample = material.BaseColorFactor * tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+    float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+	float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
+	float4 emissive = tTexture2DTable[material.Emissive].Sample(sDiffuseSampler, input.texCoord);
+    float metalness = material.MetalnessFactor * roughnessMetalness.b;
+    float roughness = material.RoughnessFactor * roughnessMetalness.g;
     float3 specular = 0.5f;
 // surface shader end
 
@@ -309,6 +310,6 @@ void PSMain(PSInput input,
 
     outColor = float4(outRadiance, diffuseSample.a);
 
-    float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
+    float reflectivity = 0.2f * saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
     outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 }

@@ -208,6 +208,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		{
 			m.IsTransparent = pSceneMaterial->GetTexture(aiTextureType_OPACITY, 0, &alphaMode) == aiReturn_SUCCESS;
 		}
+
+		uint32_t max = 4;
+		aiReturn result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, &m.BaseColorFactor.x, &max);
+		result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, m.MetalnessFactor);
+		result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, m.RoughnessFactor);
 	}
 
 	GenerateBLAS(pGraphicDevice, pContext);

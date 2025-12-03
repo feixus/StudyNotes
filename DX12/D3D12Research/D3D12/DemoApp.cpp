@@ -361,6 +361,10 @@ void DemoApp::SetupScene(CommandContext& context)
 			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture, GetDefaultTexture(DefaultTexture::RoughnessMetalness));
 			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture, GetDefaultTexture(DefaultTexture::Black2D));
 
+			b.Material.BaseColorFactor = material.BaseColorFactor;
+			b.Material.MetalnessFactor = material.MetalnessFactor;
+			b.Material.RoughnessFactor = material.RoughnessFactor;
+
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 		}
 	}
