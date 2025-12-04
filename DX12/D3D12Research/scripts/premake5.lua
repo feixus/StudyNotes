@@ -47,8 +47,6 @@ project (ENGINE_NAME)
     pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
     includedirs { "$(ProjectDir)" }
 	
-	includedirs (ROOT .. "D3D12/External/d3dx12")
-	includedirs (ROOT .. "D3D12/External/imgui")
 	includedirs (ROOT .. "D3D12/External")
 
 	SetPlatformDefines()
@@ -86,7 +84,6 @@ project (ENGINE_NAME)
     postbuildcommands { "{COPY} \"$(ProjectDir)Resources\" \"$(OutDir)Resources\"" }
 
     ---- External libraries ----
-	AddAssimp()
 	filter "system:Windows"
 		AddD3D12()
 		AddPix()

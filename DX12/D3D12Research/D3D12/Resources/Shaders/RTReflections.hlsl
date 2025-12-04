@@ -173,7 +173,7 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
     float4 diffuseSample = material.BaseColorFactor * tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
     float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
     float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-    float4 emissiveSample = tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+    float4 emissiveSample = material.EmissiveFactor * tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
     float roughness = material.RoughnessFactor * roughnessMetalnessSample.g;
     float metalness = material.MetalnessFactor * roughnessMetalnessSample.b;
     float specular = 0.5f;

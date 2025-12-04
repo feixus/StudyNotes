@@ -33,6 +33,7 @@
 #include "Core/Paths.h"
 #include "ImGuizmo/ImGuizmo.h"
 #include "Content/image.h"
+#include <chrono>
 
 static const uint32_t FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -316,7 +317,7 @@ void DemoApp::InitializeAssets(CommandContext& context)
 	uint32_t BLACK_CUBE[6] = {};
 	RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
 
-	uint32_t DEFAULT_ROUGHNESS_METALNESS = 0xFF0080FF;
+	uint32_t DEFAULT_ROUGHNESS_METALNESS = 0xFFFF80FF;
 	RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
 
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<GraphicsTexture>(GetDevice(), "Color Noise 256px");
@@ -332,13 +333,14 @@ void DemoApp::SetupScene(CommandContext& context)
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/sponza/sponza.dae", m_pDevice.get(), &context);
+		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 10.0f);
 		m_Meshes.push_back(std::move(pMesh));
 	}
-
-	Matrix transforms[] = {
-		Matrix::CreateTranslation(0, 0, 0),
-	};
+	//{
+	//	std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+	//	pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context, 1.0f);
+	//	m_Meshes.push_back(std::move(pMesh));
+	//}
 
 	for (uint32_t j = 0; j < (uint32_t)m_Meshes.size(); j++)
 	{
@@ -352,18 +354,20 @@ void DemoApp::SetupScene(CommandContext& context)
 			b.Index = (int)m_SceneData.Batches.size() - 1;
 			b.LocalBounds = subMesh.Bounds;
 			b.pMesh = &subMesh;
-			b.WorldMatrix = transforms[j];
+			b.WorldMatrix = node.Transform;
 			b.VertexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
 			b.IndexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
 
-			b.Material.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::White2D));
-			b.Material.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
-			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture, GetDefaultTexture(DefaultTexture::RoughnessMetalness));
-			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture, GetDefaultTexture(DefaultTexture::Black2D));
+			b.Material.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture);
+			b.Material.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture);
+			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture);
+			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture);
 
 			b.Material.BaseColorFactor = material.BaseColorFactor;
 			b.Material.MetalnessFactor = material.MetalnessFactor;
 			b.Material.RoughnessFactor = material.RoughnessFactor;
+			b.Material.EmissiveFactor = material.EmissiveFactor;
+			b.Material.AlphaCutoff = material.AlphaCutoff;
 
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 		}

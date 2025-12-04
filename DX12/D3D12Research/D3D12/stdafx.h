@@ -35,9 +35,9 @@ extern "C" { _declspec(dllexport) inline const char* D3D12SDKPath = ".\\D3D12\\"
 #include <dxgi1_6.h>
 
 #define D3DX12_NO_STATE_OBJECT_HELPERS
-#include "d3dx12.h"
-#include "d3dx12_extra.h"
-#include "imgui.h"
+#include "d3dx12/d3dx12.h"
+#include "d3dx12/d3dx12_extra.h"
+#include "imgui/imgui.h"
 
 #define USE_PIX 1
 

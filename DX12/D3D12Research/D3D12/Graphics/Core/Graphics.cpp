@@ -304,7 +304,7 @@ int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, Resour
 		return handle.HeapIndex;
 	}
 
-	return pFallback ? RegisterBindlessResource(pFallback) : 0;
+	return pFallback ? RegisterBindlessResource(pFallback) : -1;
 }
 
 CommandQueue* GraphicsDevice::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

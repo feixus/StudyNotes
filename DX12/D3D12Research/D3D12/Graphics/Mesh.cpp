@@ -1,14 +1,30 @@
 #include "stdafx.h"
 #include "Mesh.h"
-#include "assimp/Importer.hpp"
-#include "assimp/scene.h"
-#include "assimp/postprocess.h"
-#include "assimp/pbrmaterial.h"
 #include "Core/Paths.h"
 #include "Graphics/Core/GraphicsTexture.h"
-#include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Graphics.h"
+
+#include "External/Stb/stb_image.h"
+#include "External/Stb/stb_image_write.h"
+#define TINYGLTF_NO_EXTERNAL_IMAGE 
+#define TINYGLTF_NO_INCLUDE_STB_IMAGE
+#define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
+#define TINYGLTF_IMPLEMENTATION
+
+#pragma warning(push)
+#pragma warning(disable: 4702) //unreachable code
+#include "External/tinygltf/tiny_gltf.h"
+#pragma warning(pop)
+
+struct Vertex
+{
+	Vector3 Position;
+	Vector2 TexCoord;
+	Vector3 Normal;
+	Vector3 Tangent;
+	Vector3 Bitangent;
+};
 
 Mesh::~Mesh()
 {
@@ -18,205 +34,383 @@ Mesh::~Mesh()
 	}
 }
 
-bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, float scale)
+namespace GltfCallbacks
 {
-	struct Vertex
+	bool FileExists(const std::string& abs_filename, void*)
 	{
-		Vector3 Position;
-		Vector2 TexCoord;
-		Vector3 Normal;
-		Vector3 Tangent;
-		Vector3 Bitangent;
-	};
+		return Paths::FileExists(abs_filename);
+	}
 
-	Assimp::Importer importer;
-	importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, scale);
-	const aiScene* pScene = importer.ReadFile(pFilePath,
-		aiProcess_Triangulate |
-		aiProcess_ConvertToLeftHanded |
-		aiProcess_GenUVCoords |
-		aiProcess_CalcTangentSpace |
-		aiProcess_GlobalScale);
-
-	if (!pScene)
+	std::string ExpandFilePath(const std::string& filePath, void*)
 	{
-		E_LOG(Warning, "failed to load mesh '%s'", pFilePath);
+		DWORD len = ExpandEnvironmentStringsA(filePath.c_str(), nullptr, 0);
+		char* str = new char[len];
+		ExpandEnvironmentStringsA(filePath.c_str(), str, len);
+		std::string result(str);
+		delete[] str;
+		return result;
+	}
+
+	bool ReadWholeFile(std::vector<unsigned char>* out, std::string* err, const std::string& filePath, void*)
+	{
+		std::ifstream s(filePath, std::ios::binary | std::ios::ate);
+		if (s.fail())
+		{
+			return false;
+		}
+		out->resize((size_t)s.tellg());
+		s.seekg(0);
+		s.read(reinterpret_cast<char*>(out->data()), out->size());
+		return true;
+	}
+
+	bool WriteWholeFile(std::string* err, const std::string& filePath, const std::vector<unsigned char>& data, void*)
+	{
+		std::ofstream s(filePath, std::ios::binary);
+		if (s.fail())
+		{
+			return false;
+		}
+		s.write(reinterpret_cast<const char*>(data.data()), data.size());
+		return true;
+	}
+}
+
+bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, float uniformScale)
+{
+	tinygltf::TinyGLTF loader;
+	std::string err, warn;
+
+	tinygltf::FsCallbacks callbacks;
+	callbacks.ReadWholeFile = GltfCallbacks::ReadWholeFile;
+	callbacks.WriteWholeFile = GltfCallbacks::WriteWholeFile;
+	callbacks.FileExists = GltfCallbacks::FileExists;
+	callbacks.ExpandFilePath = GltfCallbacks::ExpandFilePath;
+	loader.SetFsCallbacks(callbacks);
+
+	std::string extension = Paths::GetFileExtension(pFilePath);
+	tinygltf::Model model;
+	bool ret = extension == ".gltf" ? loader.LoadASCIIFromFile(&model, &err, &warn, pFilePath) : loader.LoadBinaryFromFile(&model, &err, &warn, pFilePath);
+	if (!ret)
+	{
+		E_LOG(Warning, "GLTF - failed to load '%s': '%s'", pFilePath, err.c_str());
 		return false;
 	}
-
-	uint32_t vertexCount = 0;
-	uint32_t indexCount = 0;
-	for (uint32_t i = 0; i < pScene->mNumMeshes; ++i)
+	if (warn.length() > 0)
 	{
-		vertexCount += pScene->mMeshes[i]->mNumVertices;
-		indexCount += pScene->mMeshes[i]->mNumFaces * 3;
+		E_LOG(Warning, "GLTF - warning while loading '%s': '%s'", pFilePath, warn.c_str());
 	}
 
-	// SubAllocated buffers need to be 16 byte aligned.
-	static constexpr uint64_t sBufferAlignment = 16;
-	uint64_t bufferSize = vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32_t) + pScene->mNumMeshes * sBufferAlignment;
+	std::map<StringHash, GraphicsTexture*> textureMap;
 
-	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh VertexBuffer");
-	
+	m_Materials.reserve(model.materials.size());
+	for (const tinygltf::Material& gltfMaterial : model.materials)
+	{
+		m_Materials.push_back(Material());
+		Material& material = m_Materials.back();
+
+		auto baseColorTexture = gltfMaterial.values.find("baseColorTexture");
+		auto metallicRoughnessTexture = gltfMaterial.values.find("metallicRoughnessTexture");
+		auto normalTexture = gltfMaterial.additionalValues.find("normalTexture");
+		auto emissiveTexture = gltfMaterial.additionalValues.find("emissiveTexture");
+		auto baseColorFactor = gltfMaterial.values.find("baseColorFactor");
+		auto metallicFactor = gltfMaterial.values.find("metallicFactor");
+		auto roughnessFactor = gltfMaterial.values.find("roughnessFactor");
+		auto emissiveFactor = gltfMaterial.additionalValues.find("emissiveFactor");
+		auto alphaCutoff = gltfMaterial.additionalValues.find("alphaCutoff");
+		auto alphaMode = gltfMaterial.additionalValues.find("alphaMode");
+
+		auto RetrieveTexture = [this, &textureMap, &model, pGraphicDevice, pContext, pFilePath](bool isValid, auto gltfParameter, GraphicsTexture** pTarget, bool srgb)
+		{
+			if (!isValid)
+				return;
+
+			int index = gltfParameter->second.TextureIndex();
+			if (index < 0 || index >= model.textures.size())
+				return;
+
+			const tinygltf::Texture& texture = model.textures[index];
+			const tinygltf::Image& image = model.images[texture.source];
+			StringHash pathHash = StringHash(image.uri.c_str());
+			pathHash.Combine((int)srgb);
+			auto it = textureMap.find(pathHash);
+			if (it != textureMap.end())
+			{
+				*pTarget = it->second;
+				return;
+			}
+
+			std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphicDevice, image.name.c_str());
+			bool success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), image.uri).c_str(), srgb);
+			if (success)
+			{
+				m_Textures.push_back(std::move(pTex));
+				textureMap[pathHash] = m_Textures.back().get();
+				*pTarget = m_Textures.back().get();
+			}
+		};
+
+		RetrieveTexture(baseColorTexture != gltfMaterial.values.end(), baseColorTexture, &material.pDiffuseTexture, true);
+		RetrieveTexture(metallicRoughnessTexture != gltfMaterial.values.end(), metallicRoughnessTexture, &material.pRoughnessMetalnessTexture, false);
+		RetrieveTexture(normalTexture != gltfMaterial.additionalValues.end(), normalTexture, &material.pNormalTexture, false);
+		RetrieveTexture(emissiveTexture != gltfMaterial.additionalValues.end(), emissiveTexture, &material.pEmissiveTexture, true);
+
+		if (baseColorFactor != gltfMaterial.values.end())
+		{
+			const auto& factor = baseColorFactor->second.ColorFactor();
+			material.BaseColorFactor = Color((float)factor[0], (float)factor[1], (float)factor[2], (float)factor[3]);
+		}
+		if (emissiveFactor != gltfMaterial.additionalValues.end())
+		{
+			const auto& factor = emissiveFactor->second.ColorFactor();
+			material.EmissiveFactor = Color((float)factor[0], (float)factor[1], (float)factor[2], 1.0f);
+		}
+		if (metallicFactor != gltfMaterial.values.end())
+		{
+			material.MetalnessFactor = (float)metallicFactor->second.Factor();
+		}
+		if (roughnessFactor != gltfMaterial.values.end())
+		{
+			material.RoughnessFactor = (float)roughnessFactor->second.Factor();
+		}
+		if (alphaCutoff != gltfMaterial.additionalValues.end())
+		{
+			material.AlphaCutoff = (float)alphaCutoff->second.Factor();
+		}
+		if (alphaMode != gltfMaterial.additionalValues.end())
+		{
+			material.IsTransparent = alphaMode->second.string_value != "OPAQUE";
+		}
+	}
+
+	std::vector<uint32_t> indices;
+	std::vector<Vertex> vertices;
+	struct MeshData
+	{
+		uint32_t NumIndices{0};
+		uint32_t IndexOffset{0};
+		uint32_t NumVertices{0};
+		uint32_t VertexOffset{0};
+		uint32_t MaterialIndex{0};
+	};
+	std::vector<MeshData> meshDatas;
+	std::vector<std::vector<int>> meshToPrimitives;
+	int primitiveIndex = 0;
+
+	for (const tinygltf::Mesh& mesh : model.meshes)
+	{
+		std::vector<int> primitives;
+		for (const tinygltf::Primitive& primitive : mesh.primitives)
+		{
+			primitives.push_back(primitiveIndex++);
+			MeshData meshData;
+			meshData.MaterialIndex = primitive.material;
+
+			uint32_t vertexOffset = (uint32_t)vertices.size();
+			meshData.VertexOffset = vertexOffset;
+
+			// Indices
+			{
+				const tinygltf::Accessor& accessor = model.accessors[primitive.indices];
+				const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+				const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+
+				int indexStride = accessor.ByteStride(bufferView);
+				size_t indexCount = accessor.count;
+				uint32_t indexOffset = (uint32_t)indices.size();
+				indices.resize(indexOffset + indexCount);
+
+				meshData.IndexOffset = indexOffset;
+				meshData.NumIndices = (uint32_t)indexCount;
+
+				const unsigned char* indexData = buffer.data.data() + accessor.byteOffset + bufferView.byteOffset;
+				if (indexStride == 4)
+				{
+					for (size_t i = 0; i < indexCount; ++i)
+					{
+						indices[indexOffset + i] = ((uint32_t*)indexData)[i];
+					}
+				}
+				else if (indexStride == 2)
+				{
+					for (size_t i = 0; i < indexCount; ++i)
+					{
+						indices[indexOffset + i] = ((uint16_t*)indexData)[i];
+					}
+				}
+				else
+				{
+					noEntry();
+				}
+			}
+
+			// Vertices
+			{
+				for (const auto& attribute : primitive.attributes)
+				{
+					const std::string name = attribute.first;
+					int index = attribute.second;
+
+					const tinygltf::Accessor& accessor = model.accessors[index];
+					const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+					const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+
+					int stride = accessor.ByteStride(bufferView);
+					const unsigned char* data = buffer.data.data() + accessor.byteOffset + bufferView.byteOffset;
+
+					if (meshData.NumVertices == 0)
+					{
+						vertices.resize(vertices.size() + accessor.count);
+						meshData.NumVertices = (uint32_t)accessor.count;
+					}
+
+					if (name == "POSITION")
+					{
+						check(stride == sizeof(Vector3));
+						for (size_t i = 0; i < accessor.count; ++i)
+						{
+							vertices[vertexOffset + i].Position = ((Vector3*)data)[i];
+						}
+					}
+					else if (name == "NORMAL")
+					{
+						check(stride == sizeof(Vector3));
+						for (size_t i = 0; i < accessor.count; ++i)
+						{
+							vertices[vertexOffset + i].Normal = ((Vector3*)data)[i];
+						}
+					}
+					else if (name == "TANGENT")
+					{
+						check(stride == sizeof(Vector4));
+						for (size_t i = 0; i < accessor.count; ++i)
+						{
+							vertices[vertexOffset + i].Tangent = Vector3(((Vector4*)data)[i]);
+							float sign = ((Vector4*)data)[i].w;
+							vertices[vertexOffset + i].Bitangent = Vector3(sign, sign, sign);
+						}
+					}
+					else if (name == "TEXCOORD_0")
+					{
+						check(stride == sizeof(Vector2));
+						for (size_t i = 0; i < accessor.count; ++i)
+						{
+							vertices[vertexOffset + i].TexCoord = ((Vector2*)data)[i];
+						}
+					}
+				}
+			}
+			meshDatas.push_back(meshData);
+		}
+		meshToPrimitives.push_back(primitives);
+	}
+
+	// generate bittangents
+	for (Vertex& v : vertices)
+	{
+		if (v.Normal == Vector3::Zero)
+			v.Normal = Vector3::Forward;
+		if (v.Tangent == Vector3::Zero)
+			v.Tangent = Vector3::Right;
+		if (v.Bitangent == Vector3::Zero)
+			v.Bitangent = Vector3::Up;
+		
+		v.Bitangent *= v.Normal.Cross(v.Tangent);
+		v.Bitangent.Normalize();
+	}
+
+	static constexpr uint64_t sBufferAlignment = 16;
+	uint64_t bufferSize = vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32_t) + meshDatas.size() * sBufferAlignment;
+	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh GeometryBuffer");
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
 	uint64_t dataOffset = 0;
-	auto CopyData = [this, &dataOffset, &pContext](void* pSource, uint64_t size)
+	auto CopyData = [&](void* pSource, uint64_t size)
 	{
 		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
 		dataOffset += size;
 		dataOffset = Math::AlignUp<uint64_t>(dataOffset, sBufferAlignment);
 	};
 
-	std::queue<aiNode*> nodesToProcess;
-	nodesToProcess.push(pScene->mRootNode);
-	while (!nodesToProcess.empty())
+	const tinygltf::Scene& gltfScene = model.scenes[Math::Max(0, model.defaultScene)];
+	for (size_t i = 0; i < gltfScene.nodes.size(); i++)
 	{
-		aiNode* pNode = nodesToProcess.front();
-		nodesToProcess.pop();
-		SubMeshInstance newNode;
-		aiMatrix4x4 t = pNode->mTransformation;
-		if (pNode->mParent)
+		int nodeIndex = gltfScene.nodes[i];
+		struct QueuedNode
 		{
-			t = pNode->mParent->mTransformation * t;
-		}
-		newNode.Transform = Matrix(&t.a1).Transpose();
-		for (uint32_t i = 0; i < pNode->mNumMeshes; ++i)
+			int Index;
+			Matrix Transform;
+		};
+		std::queue<QueuedNode> toProcess;
+		QueuedNode rootNode;
+		rootNode.Index = nodeIndex;
+		rootNode.Transform = Matrix::CreateScale(uniformScale);
+		toProcess.push(rootNode);
+		while (!toProcess.empty())
 		{
-			newNode.MeshIndex = pNode->mMeshes[i];
-			m_MeshInstances.push_back(newNode);
-		}
-		for (uint32_t i = 0; i < pNode->mNumChildren; ++i)
-		{
-			nodesToProcess.push(pNode->mChildren[i]);
+			QueuedNode currentNode = toProcess.front();
+			toProcess.pop();
+
+			const tinygltf::Node& node = model.nodes[currentNode.Index];
+			Vector3 scale = node.scale.size() == 0 ? Vector3::One : Vector3((float)node.scale[0], (float)node.scale[1], (float)node.scale[2]);
+			Quaternion rotation = node.rotation.size() == 0 ? Quaternion::Identity : Quaternion((float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3]);
+			Vector3 translation = node.translation.size() == 0 ? Vector3::Zero : Vector3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2]);
+
+			Matrix matrix = node.matrix.size() == 0 ? Matrix::Identity : Matrix(
+				(float)node.matrix[0], (float)node.matrix[4], (float)node.matrix[8], (float)node.matrix[12],
+				(float)node.matrix[1], (float)node.matrix[5], (float)node.matrix[9], (float)node.matrix[13],
+				(float)node.matrix[2], (float)node.matrix[6], (float)node.matrix[10], (float)node.matrix[14],
+				(float)node.matrix[3], (float)node.matrix[7], (float)node.matrix[11], (float)node.matrix[15]
+			);
+
+			SubMeshInstance newNode;
+			newNode.Transform = currentNode.Transform * matrix * Matrix::CreateFromQuaternion(rotation) * Matrix::CreateScale(scale) * Matrix::CreateTranslation(translation);
+			if (node.mesh >= 0)
+			{
+				for (int primitive : meshToPrimitives[node.mesh])
+				{
+					newNode.MeshIndex = primitive;
+					m_MeshInstances.push_back(newNode);
+				}
+			}
+
+			for (int child : node.children)
+			{
+				QueuedNode childNode;
+				childNode.Index = child;
+				childNode.Transform = newNode.Transform;
+				toProcess.push(childNode);
+			}
 		}
 	}
 
-	for (uint32_t i = 0; i < pScene->mNumMeshes; i++)
+	for (const MeshData& meshData : meshDatas)
 	{
-		const aiMesh* pMesh = pScene->mMeshes[i];
-		std::vector<Vertex> vertices(pMesh->mNumVertices);
-		
-		for (uint32_t j = 0; j < pMesh->mNumVertices; j++)
-		{
-			Vertex& vertex = vertices[j];
-			vertex.Position = *reinterpret_cast<Vector3*>(&pMesh->mVertices[j]);
-			if (pMesh->HasTextureCoords(0))
-			{
-				vertex.TexCoord = *reinterpret_cast<Vector2*>(&pMesh->mTextureCoords[0][j]);
-			}
-			vertex.Normal = *reinterpret_cast<Vector3*>(&pMesh->mNormals[j]);
-			if (pMesh->HasTangentsAndBitangents())
-			{
-				vertex.Tangent = *reinterpret_cast<Vector3*>(&pMesh->mTangents[j]);
-				vertex.Bitangent = *reinterpret_cast<Vector3*>(&pMesh->mBitangents[j]);
-			}
-		}
-		
-		std::vector<uint32_t> indices(pMesh->mNumFaces * 3);
-		for (uint32_t k = 0; k < pMesh->mNumFaces; k++)
-		{
-			const aiFace& face = pMesh->mFaces[k];
-			for (uint32_t m = 0; m < 3; m++)
-			{
-				check(face.mNumIndices == 3);
-				indices[k * 3 + m] = face.mIndices[m];
-			}
-		}
-
 		SubMesh subMesh;
-		BoundingBox::CreateFromPoints(subMesh.Bounds, vertices.size(), (Vector3*)&vertices[0], sizeof(Vertex));
-		subMesh.MaterialId = pMesh->mMaterialIndex;
+		BoundingBox::CreateFromPoints(subMesh.Bounds, meshData.NumVertices, (Vector3*)&vertices[meshData.VertexOffset], sizeof(Vertex));
+		subMesh.MaterialId = meshData.MaterialIndex;
 
-		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32_t)vertices.size(), sizeof(Vertex));
+		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(Vertex));
 		subMesh.VerticesLocation = vbv;
 		subMesh.pVertexSRV = new ShaderResourceView();
-		subMesh.pVertexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, (uint32_t)vertices.size() * sizeof(Vertex)));
-		CopyData(vertices.data(), sizeof(Vertex) * vertices.size());
+		subMesh.pVertexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(Vertex)));
+		CopyData(&vertices[meshData.VertexOffset], sizeof(Vertex) * meshData.NumVertices);
 
-		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32_t)indices.size(), false);
+		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, false);
 		subMesh.IndicesLocation = ibv;
-		subMesh.pIndexSRV =  new ShaderResourceView();
-		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, (uint32_t)indices.size() * sizeof(uint32_t)));
-		CopyData(indices.data(), sizeof(uint32_t) * indices.size());
+		subMesh.pIndexSRV = new ShaderResourceView();
+		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumIndices * sizeof(uint32_t)));
+		CopyData(&indices[meshData.IndexOffset], sizeof(uint32_t) * meshData.NumIndices);
 
 		subMesh.Stride = sizeof(Vertex);
 		subMesh.pParent = this;
-
 		m_Meshes.push_back(subMesh);
 	}
 
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COMMON);
 	pContext->FlushResourceBarriers();
 
-	std::filesystem::path filePath(pFilePath);
-	std::string basePath = filePath.parent_path().string();
-
-	std::map<StringHash, GraphicsTexture*> textureMap;
-
-	auto loadTexture = [&](const aiMaterial* pMaterial, aiTextureType type, int index, bool srgb)
-	{
-		aiString path;
-		aiReturn ret = pMaterial->GetTexture(type, index, &path);
-		bool success = ret == aiReturn_SUCCESS;
-
-		if (success)
-		{
-			std::string pathStr;
-			pathStr += basePath + path.C_Str();
-
-			StringHash pathHash = StringHash(pathStr);
-			auto it = textureMap.find(pathHash);
-			if (it != textureMap.end())
-			{
-				return it->second;
-			}
-
-			std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphicDevice, pathStr.c_str());
-			success = pTex->Create(pContext, pathStr.c_str(), srgb);
-			if (success)
-			{
-				m_Textures.push_back(std::move(pTex));
-				textureMap[pathHash] = m_Textures.back().get();
-				return m_Textures.back().get();
-			}
-		}
-		return (GraphicsTexture*)nullptr;
-	};
-
-	m_Materials.resize(pScene->mNumMaterials);
-	for (uint32_t i = 0; i < pScene->mNumMaterials; ++i)
-	{
-		const aiMaterial* pSceneMaterial = pScene->mMaterials[i];
-		Material& m = m_Materials[i];
-		m.pDiffuseTexture = loadTexture(pSceneMaterial, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, true);
-		m.pNormalTexture = loadTexture(pSceneMaterial, aiTextureType_NORMALS, 0, false);
-		m.pRoughnessMetalnessTexture = loadTexture(pSceneMaterial, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, false);
-		m.pEmissiveTexture = loadTexture(pSceneMaterial, aiTextureType_EMISSIVE, 0, false);
-
-		if (!m.pDiffuseTexture)
-		{
-			m.pDiffuseTexture = loadTexture(pSceneMaterial, aiTextureType_DIFFUSE, 0, true);
-		}
-
-		aiString alphaMode;
-		if (pSceneMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == aiReturn_SUCCESS)
-		{
-			m.IsTransparent = strcmp(alphaMode.C_Str(), "OPAQUE") != 0;
-		}
-		else
-		{
-			m.IsTransparent = pSceneMaterial->GetTexture(aiTextureType_OPACITY, 0, &alphaMode) == aiReturn_SUCCESS;
-		}
-
-		uint32_t max = 4;
-		aiReturn result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, &m.BaseColorFactor.x, &max);
-		result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, m.MetalnessFactor);
-		result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, m.RoughnessFactor);
-	}
-
 	GenerateBLAS(pGraphicDevice, pContext);
-
 	return true;
 }
 
