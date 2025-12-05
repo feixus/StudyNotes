@@ -3,6 +3,7 @@
 #include "Core/Bitfield.h"
 #include "Graphics/Core/DescriptorHandle.h"
 #include "Graphics/Core/Graphics.h"
+#include "ShaderCommon.h"
 
 class CommandContext;
 class ImGuiRenderer;
@@ -36,19 +37,6 @@ enum class DefaultTexture
 	MAX
 };
 
-struct MaterialData
-{
-	int Diffuse{0};
-	int Normal{0};
-	int RoughnessMetalness{0};
-	int Emissive{0};
-	Color BaseColorFactor{1.0f, 1.0f, 1.0f, 1.0f};
-	Color EmissiveFactor{0.0f, 0.0f, 0.0f, 1.0f};
-	float MetalnessFactor{1.0f};
-	float RoughnessFactor{1.0f};
-	float AlphaCutoff{1.0f};
-};
-
 struct Batch
 {
 	enum class Blending
@@ -57,27 +45,16 @@ struct Batch
 		AlphaMask = 2,
 		AlphaBlend = 4,
 	};
-	int Index{ 0 };
+	int Index{0};
 	Blending BlendMode{ Blending::Opaque };
 	const SubMesh* pMesh{};
-	MaterialData Material;
 	Matrix WorldMatrix;
 	BoundingBox LocalBounds;
 	BoundingBox Bounds;
-	float Radius{ 0 };
-	int VertexBufferDescriptor{ -1 };
-	int IndexBufferDescriptor{ -1 };
+	float Radius{0};
+	int Material{0};
 };
 DECLARE_BITMASK_TYPE(Batch::Blending);
-
-constexpr const int MAX_SHADOW_CASTERS = 32;
-struct ShadowData
-{
-	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
-	float CascadeDepths[4]{};
-	uint32_t NumCascades{ 0 };
-	uint32_t ShadowMapOffset{ 0 };
-};
 
 using VisibilityMask = BitField<2048>;
 
@@ -95,8 +72,10 @@ struct SceneData
 	std::vector<Batch> Batches;
 	DescriptorHandle GlobalSRVHeapHandle{};
 	Buffer* pLightBuffer{ nullptr };
+	Buffer* pMaterialBuffer{ nullptr };
+	Buffer* pMeshBuffer{ nullptr };
 	Camera* pCamera{ nullptr };
-	ShadowData* pShadowData{ nullptr };
+	ShaderInterop::ShadowData* pShadowData{ nullptr };
 	int SceneTLAS{ 0 };
 	int FrameIndex{ 0 };
 	VisibilityMask VisibilityMask;
@@ -234,6 +213,8 @@ private:
 	PipelineState* m_pSkyboxPSO{nullptr};
 
 	// light data
+	std::unique_ptr<Buffer> m_pMaterialBuffer;
+	std::unique_ptr<Buffer> m_pMeshBuffer;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
 

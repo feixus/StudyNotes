@@ -48,6 +48,7 @@ project (ENGINE_NAME)
     includedirs { "$(ProjectDir)" }
 	
 	includedirs (ROOT .. "D3D12/External")
+	includedirs (ROOT .. "D3D12/Resources/Shaders/Interop")
 
 	SetPlatformDefines()
 
@@ -66,6 +67,7 @@ project (ENGINE_NAME)
         SOURCE_DIR .. "**.c",
         SOURCE_DIR .. "**.natvis",
         SOURCE_DIR .. "**.editorconfig",
+		SOURCE_DIR .. "Resources/Shaders/Interop/**",
 		--SOURCE_DIR .. "**.hlsl*",
     }
 	
@@ -73,6 +75,7 @@ project (ENGINE_NAME)
 	{
 		--{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
 		--{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
+		{["Shaders/Interop"] = (SOURCE_DIR .. "**/Interop/**.h")}
 	}
 
     filter ("files:" .. SOURCE_DIR .. "External/**")

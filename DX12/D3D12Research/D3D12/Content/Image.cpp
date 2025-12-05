@@ -71,6 +71,7 @@ bool Image::SetSize(int x, int y, int components)
 	m_Pixels.clear();
 	m_Pixels.resize(m_Width * m_Height * m_Components);
 	m_Format = ImageFormat::RGBA;
+	m_BBP = sizeof(uint8_t) * 8 * m_Components;
 
 	return true;
 }

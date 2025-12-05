@@ -65,17 +65,15 @@ void DrawScene(CommandContext& context, const SceneData& scene, const Visibility
 
 	struct PerObjectData
 	{
-		Matrix World;
-		MaterialData Material;
-		uint32_t VertexBuffer;
+		uint32_t Mesh;
+		uint32_t Material;
 	} objectData;
 
 	for (const Batch* b : meshes)
 	{
-		objectData.World = b->WorldMatrix;
 		objectData.Material = b->Material;
-		objectData.VertexBuffer = b->VertexBufferDescriptor;
-		context.SetGraphicsDynamicConstantBufferView(0, objectData);
+		objectData.Mesh= b->Index;
+		context.SetGraphicsRootConstants(0, objectData);
 		context.SetIndexBuffer(b->pMesh->IndicesLocation);
 		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
 	}
@@ -336,42 +334,60 @@ void DemoApp::SetupScene(CommandContext& context)
 		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 10.0f);
 		m_Meshes.push_back(std::move(pMesh));
 	}
-	//{
-	//	std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-	//	pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context, 1.0f);
-	//	m_Meshes.push_back(std::move(pMesh));
-	//}
+	/*{
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+		pMesh->Load("Resources/apartment_floor_plan/scene.gltf", m_pDevice.get(), &context, 1.0f);
+		m_Meshes.push_back(std::move(pMesh));
+	}*/
 
-	for (uint32_t j = 0; j < (uint32_t)m_Meshes.size(); j++)
+	std::vector<ShaderInterop::MaterialData> materials;
+	std::vector<ShaderInterop::MeshData> meshes;
+
+	for (const auto& pMesh : m_Meshes)
 	{
-		auto& pMesh = m_Meshes[j];
 		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
 		{
 			const SubMesh& subMesh = pMesh->GetMesh(node.MeshIndex);
 			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
-			m_SceneData.Batches.push_back(Batch{});
-			Batch& b = m_SceneData.Batches.back();
-			b.Index = (int)m_SceneData.Batches.size() - 1;
+
+			Batch b;
+			b.Index = (int)m_SceneData.Batches.size();
 			b.LocalBounds = subMesh.Bounds;
 			b.pMesh = &subMesh;
 			b.WorldMatrix = node.Transform;
-			b.VertexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
-			b.IndexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
-
-			b.Material.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture);
-			b.Material.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture);
-			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture);
-			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture);
-
-			b.Material.BaseColorFactor = material.BaseColorFactor;
-			b.Material.MetalnessFactor = material.MetalnessFactor;
-			b.Material.RoughnessFactor = material.RoughnessFactor;
-			b.Material.EmissiveFactor = material.EmissiveFactor;
-			b.Material.AlphaCutoff = material.AlphaCutoff;
-
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			b.Material = (uint32_t)materials.size() + subMesh.MaterialId;
+			m_SceneData.Batches.push_back(b);
+
+			ShaderInterop::MeshData meshData;
+			meshData.VertexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
+			meshData.IndexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
+			meshData.Material = (uint32_t)materials.size() + subMesh.MaterialId;
+			meshData.World = node.Transform;
+			meshes.push_back(meshData);
+		}
+
+		for (const Material& material : pMesh->GetMaterials())
+		{
+			ShaderInterop::MaterialData materialData;
+			materialData.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture);
+			materialData.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture);
+			materialData.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture);
+			materialData.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture);
+			materialData.BaseColorFactor = material.BaseColorFactor;
+			materialData.MetalnessFactor = material.MetalnessFactor;
+			materialData.RoughnessFactor = material.RoughnessFactor;
+			materialData.EmissiveFactor = material.EmissiveFactor;
+			materialData.AlphaCutoff = material.AlphaCutoff;
+			materials.push_back(materialData);
 		}
 	}
+
+	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)meshes.size(), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
+	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
+	
+	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)materials.size(), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
+	m_pMeshBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
 	{
 		Vector3 position(-150, 160, -10);
@@ -391,7 +407,7 @@ void DemoApp::SetupScene(CommandContext& context)
 			m_Lights.push_back(spotLight);
 		}
 
-		m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(Light::RenderData), BufferFlag::ShaderResource), "Lights");
+		m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((uint32_t)m_Lights.size(), sizeof(ShaderInterop::Light), BufferFlag::ShaderResource), "Lights");
 	}
 }
 
@@ -456,7 +472,7 @@ void DemoApp::Update()
 	// shadow map partitioning
 	//////////////////////////////////
 
-	ShadowData shadowData;
+	ShaderInterop::ShadowData shadowData;
 	int shadowIndex = 0;
 
 	{

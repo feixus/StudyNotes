@@ -4,18 +4,19 @@
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Graphics.h"
+#include "Content/Image.h"
 
-#include "External/Stb/stb_image.h"
-#include "External/Stb/stb_image_write.h"
+#include "Stb/stb_image.h"
+#include "Stb/stb_image_write.h"
+#include "json/json.hpp"
+
+#define TINYGLTF_NO_INCLUDE_JSON
 #define TINYGLTF_NO_EXTERNAL_IMAGE 
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
 #define TINYGLTF_IMPLEMENTATION
 
-#pragma warning(push)
-#pragma warning(disable: 4702) //unreachable code
-#include "External/tinygltf/tiny_gltf.h"
-#pragma warning(pop)
+#include "tinygltf/tiny_gltf.h"
 
 struct Vertex
 {
@@ -141,7 +142,21 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 			}
 
 			std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphicDevice, image.name.c_str());
-			bool success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), image.uri).c_str(), srgb);
+			bool success = false;
+			if (image.uri.empty())
+			{
+				Image img;
+				img.SetSize(image.width, image.height, 4);
+				if (img.SetData(image.image.data()))
+				{
+					success = pTex->Create(pContext, img, srgb);
+				}
+			}
+			else
+			{
+				success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), image.uri).c_str(), srgb);
+			}
+
 			if (success)
 			{
 				m_Textures.push_back(std::move(pTex));
