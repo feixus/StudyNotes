@@ -113,13 +113,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& inputResource)
 				int padd;
             } frameData{};
 
-            struct PerObjectData
-            {
-                Matrix World;
-                MaterialData Material;
-				uint32_t VertexBuffer;
-            } objectData{};
-
             frameData.View = inputResource.pCamera->GetView();
             frameData.Projection = inputResource.pCamera->GetProjection();
             frameData.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();

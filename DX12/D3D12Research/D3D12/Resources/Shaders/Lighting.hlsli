@@ -32,7 +32,7 @@ float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
     float mask = 1.0f;
     if (light.LightTexture >= 0)
     {
-        float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjection[shadowMapIndex]);
+        float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjections[shadowMapIndex]);
         lightPos.xyz /= lightPos.w;
         lightPos.xy = (lightPos.xy + 1) * 0.5f;
         mask = tTexture2DTable[light.LightTexture].SampleLevel(sClampSampler, lightPos.xy, 0).r;
@@ -43,7 +43,7 @@ float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
 float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
     // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
-    float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjection[shadowMapIndex]);
+    float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjections[shadowMapIndex]);
     lightPos.xyz /= lightPos.w;
     lightPos.x = lightPos.x / 2.0f + 0.5f;
     lightPos.y = lightPos.y / -2.0f + 0.5f;
@@ -76,7 +76,7 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 
 float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
-    float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjection[shadowMapIndex]);
+    float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjections[shadowMapIndex]);
     lightPos.xyz /= lightPos.w;
     lightPos.x = lightPos.x / 2.0f + 0.5f;
     lightPos.y = lightPos.y / -2.0f + 0.5f;

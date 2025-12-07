@@ -53,7 +53,7 @@ namespace ShaderInterop
     };
 
     // todo: SM6.6 replace with unpack_u8u32
-    float4 UIntToColor(uint c)
+    inline float4 UIntToColor(uint c)
     {
         return float4((float)(((c >> 24) & 0xFF) / 255.0f),
                       (float)(((c >> 16) & 0xFF) / 255.0f),
@@ -80,7 +80,7 @@ namespace ShaderInterop
 		float2 SpotlightAngles;
 		float Intensity;
 		float Range;
-		uint ShadowIndex;
+		int ShadowIndex;
 		float InvShadowSize;
 		int LightTexture;
 
@@ -100,7 +100,7 @@ namespace ShaderInterop
     #define MAX_SHADOW_CASTERS 32
     struct ShadowData
     {
-        float4x4 LightViewProjection[MAX_SHADOW_CASTERS];
+        float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
         float4 CascadeDepths;
         uint NumCascades;
         uint ShadowMapOffset;

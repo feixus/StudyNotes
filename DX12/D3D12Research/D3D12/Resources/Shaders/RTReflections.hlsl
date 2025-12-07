@@ -14,8 +14,7 @@ GlobalRootSignature GlobalRootSig =
     "CBV(b0),"
     "CBV(b2),"
     "DescriptorTable(UAV(u0, numDescriptors=1)),"
-    "DescriptorTable(SRV(t5, numDescriptors=5)),"
-    "SRV(t10),"
+    "DescriptorTable(SRV(t5, numDescriptors=7)),"
     GLOBAL_BINDLESS_TABLE
     "staticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT), "
     "staticSampler(s1, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), "
@@ -30,13 +29,6 @@ struct ViewData
     uint NumLights;
     float ViewPixelSpreadAngle;
     uint TLASIndex;
-};
-
-struct HitData
-{
-    MaterialData Material;
-    uint VertexBuffer;
-    uint IndexBuffer;
 };
 
 struct Vertex
@@ -75,7 +67,6 @@ struct ShadingData
 
 RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<ViewData> cViewData : register(b0);
-StructuredBuffer<HitData> tHitGroupData : register(t10);
 
 float CastShadowRay(float3 origin, float3 direction)
 {
@@ -137,8 +128,8 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 
 Vertex GetVertexAttributes(float3 barycentrics)
 {
-    HitData hitData = tHitGroupData[InstanceID()];
-    uint3 indices = tBufferTable[hitData.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
+    MeshData mesh = tMeshes[InstanceID()];
+    uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
 
     Vertex vertexOut;
     vertexOut.position = 0;
@@ -148,7 +139,7 @@ Vertex GetVertexAttributes(float3 barycentrics)
     vertexOut.bitangent = 0;
     for (int i = 0; i < 3; i++)
     {
-        Vertex v = tBufferTable[hitData.VertexBuffer].Load<Vertex>(indices[i] * sizeof(Vertex));
+        Vertex v = tBufferTable[mesh.VertexBuffer].Load<Vertex>(indices[i] * sizeof(Vertex));
         vertexOut.position += v.position * barycentrics[i];
         vertexOut.texCoord += v.texCoord * barycentrics[i];
         vertexOut.normal += v.normal * barycentrics[i];
@@ -165,11 +156,11 @@ Vertex GetVertexAttributes(float3 barycentrics)
 
 ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 cameraLocation, float mipLevel)
 {
-    HitData hitData = tHitGroupData[InstanceID()];
+    MeshData mesh = tMeshes[InstanceID()];
     float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
     Vertex v = GetVertexAttributes(barycentrics);
 
-    MaterialData material = hitData.Material;
+    MaterialData material = tMaterials[mesh.Material];
     float4 diffuseSample = material.BaseColorFactor * tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
     float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
     float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
@@ -211,7 +202,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
     float3 viewPosition = mul(float4(shadingData.WorldPos, 1.0f), cViewData.View).xyz;
     float4 pos = float4(0, 0, 0, viewPosition.z);
     int shadowIndex = GetShadowIndex(light, pos, shadingData.WorldPos);
-    float4x4 lightViewProjection = cShadowData.LightViewProjection[shadowIndex];
+    float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
     float4 lightPos = mul(float4(shadingData.WorldPos, 1.0f), lightViewProjection);
     lightPos.xyz /= lightPos.w;
     lightPos.x = lightPos.x * 0.5f + 0.5f;

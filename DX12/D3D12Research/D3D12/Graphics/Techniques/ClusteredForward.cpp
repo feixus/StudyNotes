@@ -170,8 +170,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
             perFrameParameters.ViewProjection = inputResource.pCamera->GetViewProjection();
             
             context.SetGraphicsDynamicConstantBufferView(1, perFrameParameters);
-            context.BindResource(2, 0, m_pUniqueClusterBuffer->GetUAV());
-			context.BindResourceTable(3, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
+            context.BindResource(2, 0, inputResource.pMeshBuffer->GetSRV());
+            context.BindResource(3, 0, m_pUniqueClusterBuffer->GetUAV());
+			context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			{
                 GPU_PROFILE_SCOPE("Opaque", &context);
@@ -364,13 +365,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
     RGPassBuilder basePass = graph.AddPass("Base Pass");
     basePass.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
-			struct PerObjectData
-			{
-				Matrix World;
-                MaterialData Material;
-				uint32_t VertexBuffer;
-			} objectData;
-
 			struct PerFrameData
 			{
 				Matrix View;
@@ -466,6 +460,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 				inputResource.pAO->GetSRV()->GetDescriptor(),
 				inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
 				inputResource.pPreviousColor->GetSRV()->GetDescriptor(),
+                inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
+                inputResource.pMeshBuffer->GetSRV()->GetDescriptor()
+                
 			};
 			context.BindResources(4, 0, srvs, std::size(srvs));
 

@@ -612,7 +612,8 @@ void DemoApp::Update()
 						lightViewProjection = shadowView * projectionMatrix;
 					}
 
-					shadowData.CascadeDepths[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
+					float* values = &shadowData.CascadeDepths.x;
+					values[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
 					shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
 				}
 			}
@@ -681,6 +682,8 @@ void DemoApp::Update()
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
+	m_SceneData.pMaterialBuffer = m_pMaterialBuffer.get();
+	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
 	m_SceneData.pCamera = m_pCamera.get();
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.FrameIndex = m_Frame;
@@ -782,8 +785,8 @@ void DemoApp::Update()
 	sceneData.DepthStencil = setupLights.Write(sceneData.DepthStencil);
 	setupLights.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
 		{
-			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light::RenderData));
-			Light::RenderData* pTarget = (Light::RenderData*)allocation.pMappedMemory;
+			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(ShaderInterop::Light));
+			ShaderInterop::Light* pTarget = (ShaderInterop::Light*)allocation.pMappedMemory;
 			for (const Light& light : m_Lights)
 			{
 				*pTarget = light.GetData();
@@ -812,7 +815,13 @@ void DemoApp::Update()
 
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 			
-			renderContext.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
+			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+			};
+			renderContext.BindResources(2, 0, srvs, std::size(srvs));
+
+			renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			struct ViewData
 			{
@@ -1007,14 +1016,14 @@ void DemoApp::Update()
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetGraphicsDynamicConstantBufferView(1, viewData);
-					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
-					struct PerObjectData
-					{
-						Matrix World;
-						MaterialData Material;
-						uint32_t VertexBuffer;
-					} objectData;
+					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					};
+					context.BindResources(2, 0, srvs, std::size(srvs));
+
+					context.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 					VisibilityMask mask;
 					mask.SetAll();

@@ -16,6 +16,7 @@
 
 #define _INLINE_RT (_SM_MAJ >= 6 && _SM_MIN >= 5)
 
+#define _PAYLOAD_QUALIFIERS 1
 #if _PAYLOAD_QUALIFIERS
 #define RAYPAYLOAD [raypayload]
 #define RAYQUALIFIER(qualifiers) : qualifiers
