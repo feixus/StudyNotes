@@ -37,20 +37,18 @@ uint GetSliceFromDepth(float depth)
     return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
 }
 
-struct VSInput
+struct Vertex
 {
-    float3 position : POSITION;
-    float2 texcoord : TEXCOORD;
-    float3 normal : NORMAL;
-    float3 tangent : TANGENT;
-    float3 bitangent : TEXCOORD1;
+    float3 position;
+    float2 texcoord;
+    float3 normal;
+    float4 tangent;
 };
 
 struct PSInput
 {
     float4 position : SV_Position;
     float4 positionVS : TEXCOORD0;
-    float2 texcoord : TEXCOORD1;
 };
 
 [RootSignature(RootSig)]
@@ -58,11 +56,10 @@ PSInput MarkClusters_VS(uint VertexId : SV_VertexID)
 {
     PSInput output = (PSInput)0;
     MeshData mesh = tMeshes[cObjectData.Mesh];
-    VSInput input = tBufferTable[mesh.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+    Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
     float4 posWS = mul(float4(input.position, 1.0f), mesh.World);
     output.positionVS = mul(posWS, cViewData.View);
     output.position = mul(posWS, cViewData.ViewProjection);
-    output.texcoord = input.texcoord;
     return output;
 }
 

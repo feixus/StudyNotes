@@ -20,11 +20,10 @@
 
 struct Vertex
 {
-	Vector3 Position;
-	Vector2 TexCoord;
-	Vector3 Normal;
-	Vector3 Tangent;
-	Vector3 Bitangent;
+	Vector3 Position{Vector3::Zero};
+	Vector2 TexCoord{Vector2::Zero};
+	Vector3 Normal{Vector3::Forward};
+	Vector4 Tangent{1, 0, 0, 1};
 };
 
 Mesh::~Mesh()
@@ -303,9 +302,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 						const Vector4* pTangents = (Vector4*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].Tangent = Vector3(pTangents[i]);
-							float sign = pTangents[i].w;
-							vertices[vertexOffset + i].Bitangent = Vector3(sign, sign, sign);
+							vertices[vertexOffset + i].Tangent = pTangents[i];
 						}
 					}
 					else if (name == "TEXCOORD_0")
@@ -322,20 +319,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 			meshDatas.push_back(meshData);
 		}
 		meshToPrimitives.push_back(primitives);
-	}
-
-	// generate bittangents B = N x T * T.w
-	for (Vertex& v : vertices)
-	{
-		if (v.Normal == Vector3::Zero)
-			v.Normal = Vector3::Forward;
-		if (v.Tangent == Vector3::Zero)
-			v.Tangent = Vector3::Right;
-		if (v.Bitangent == Vector3::Zero)
-			v.Bitangent = Vector3::Up;
-		
-		v.Bitangent *= v.Normal.Cross(v.Tangent);
-		v.Bitangent.Normalize();
 	}
 
 	static constexpr uint64_t sBufferAlignment = 16;

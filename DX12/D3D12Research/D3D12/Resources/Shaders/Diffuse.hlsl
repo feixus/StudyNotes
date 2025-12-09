@@ -43,13 +43,12 @@ struct PerViewData
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
 ConstantBuffer<PerViewData> cViewData : register(b1);
 
-struct VSInput
+struct Vertex
 {
-    float3 position : POSITION;
-    float2 texCoord : TEXCOORD;
-    float3 normal : NORMAL;
-    float3 tangent : TANGENT;
-    float3 bitangent : TEXCOORD1;
+    float3 position;
+    float2 texCoord;
+    float3 normal;
+    float4 tangent;
 };
 
 struct PSInput
@@ -59,8 +58,7 @@ struct PSInput
     float3 positionVS : POSITION_VS;
     float2 texCoord : TEXCOORD;
     float3 normal : NORMAL;
-    float3 tangent : TANGENT;
-    float3 bitangent : TEXCOORD1;
+    float4 tangent : TANGENT;
 };
 
 Texture3D<float4> tLightScattering : register(t2);
@@ -256,14 +254,13 @@ PSInput VSMain(uint VertexId : SV_VertexID)
 {
     PSInput result;
     MeshData mesh = tMeshes[cObjectData.Mesh];
-    VSInput input = tBufferTable[mesh.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+    Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
     result.positionWS = mul(float4(input.position, 1.0f), mesh.World).xyz;
     result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
     result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
     result.texCoord = input.texCoord;
     result.normal = normalize(mul(input.normal, (float3x3)mesh.World));
-    result.tangent = normalize(mul(input.tangent, (float3x3)mesh.World));
-    result.bitangent = normalize(mul(input.bitangent, (float3x3)mesh.World));
+    result.tangent = float4(normalize(mul(input.tangent.xyz, (float3x3)mesh.World)), input.tangent.w);
     return result;
 }
 
@@ -302,7 +299,9 @@ void PSMain(PSInput input,
     float3 N = normalize(input.normal);
     if (material.Normal >= 0)
     {
-        float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), N);
+        float3 T = normalize(input.tangent.xyz);
+        float3 B = cross(N, T) * input.tangent.w;
+        float3x3 TBN = float3x3(T, B, N);
         float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
         N = TangentSpaceNormalMapping(tangentNormal, TBN, true);
     }
