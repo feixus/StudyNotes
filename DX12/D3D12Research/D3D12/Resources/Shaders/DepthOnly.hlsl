@@ -3,7 +3,7 @@
 
 #define RootSig "RootConstants(num32BitConstants = 2, b0), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_VERTEX), " \
-                "DescriptorTable(SRV(t11, numDescriptors = 1)), " \
+                "DescriptorTable(SRV(t10, numDescriptors = 11)), " \
                 GLOBAL_BINDLESS_TABLE \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 

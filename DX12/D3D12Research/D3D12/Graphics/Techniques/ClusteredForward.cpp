@@ -461,6 +461,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
 				inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
 				inputResource.pPreviousColor->GetSRV()->GetDescriptor(),
                 inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
                 inputResource.pMeshBuffer->GetSRV()->GetDescriptor()
                 
 			};

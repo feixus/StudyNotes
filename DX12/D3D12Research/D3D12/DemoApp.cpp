@@ -387,7 +387,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
 	
 	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)materials.size(), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
-	m_pMeshBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
+	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
 	{
 		Vector3 position(-150, 160, -10);

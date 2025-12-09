@@ -35,7 +35,7 @@ public:
 	Image(int width, int height, ImageFormat format, void* pInitialData = nullptr);
 
 	bool Load(const char* filePath);
-	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
+	bool Load(const void* pData, size_t dataSize, const char* pFormatHint);
 	void Save(const char* pFilePath);
 
 	bool SetSize(int x, int y, int components);
@@ -69,8 +69,8 @@ public:
 	static unsigned int TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb);
 
 private:
-	bool LoadDds(const char* inputStream);
-	bool LoadStbi(const char* inputStream);
+	bool LoadDDS(const void* pBytes, uint32_t numBytes);
+	bool LoadSTB(const void* pBytes, uint32_t numBytes);
 
 	int m_Width{0};
 	int m_Height{0};

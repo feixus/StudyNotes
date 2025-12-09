@@ -23,37 +23,38 @@ bool Image::Load(const char* filePath)
 {
 	const std::string extension = Paths::GetFileExtension(filePath);
 	bool success = false;
+
+	std::ifstream s(filePath, std::ios::binary | std::ios::ate);
+	if (s.fail())
+	{
+		return false;
+	}
+
+	std::vector<char> data((size_t)s.tellg());
+	s.seekg(0);
+	s.read(data.data(), data.size());
+
 	if (extension == ".dds")
 	{
-		success = LoadDds(filePath);
+		success = LoadDDS(data.data(), (uint32_t)data.size());
 	}
 	// png, jpg, jpeg, bmp, tga
 	else
 	{
-		success = LoadStbi(filePath);
+		success = LoadSTB(data.data(), (uint32_t)data.size());
 	}
 	
 	return success;
 }
 
-bool Image::Load(const void* pInPixels, size_t dataSize, const char* pFormatHint)
+bool Image::Load(const void* pData, size_t dataSize, const char* pFormatHint)
 {
-	m_Components = 4;
-	m_Depth = 1;
-	int components = 0;
-
-	unsigned char* pPixels = stbi_load_from_memory((stbi_uc*)pInPixels, (int)dataSize, &m_Width, &m_Height, &components, m_Components);
-	if (pPixels == nullptr)
+	if (std::string(pFormatHint).find("dds") != std::string::npos)
 	{
-		return false;
+		return LoadDDS(pData, (uint32_t)dataSize);
 	}
 
-	m_BBP = sizeof(uint8_t) * 8 * m_Components;
-	m_Format = ImageFormat::RGBA;
-	m_Pixels.resize(m_Width * m_Height * m_Components);
-	memcpy(m_Pixels.data(), pPixels, m_Pixels.size());
-	stbi_image_free(pPixels);
-	return true;
+	return LoadSTB(pData, (uint32_t)dataSize);
 }
 
 void Image::Save(const char* pFilePath)
@@ -241,9 +242,9 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 //  +-----------------------+
 //  | Image Data            |
 //  +-----------------------+
-bool Image::LoadDds(const char* inputStream)
+bool Image::LoadDDS(const void* pData, uint32_t numBytes)
 {
-	std::ifstream file(inputStream, std::ios::binary);
+	char* pBytes = (char*)pData;
 
 	// .DDS subheader
 #pragma pack(push, 1)
@@ -323,34 +324,32 @@ bool Image::LoadDds(const char* inputStream)
 	(uint32_t)((uint8_t)(ch0) | (uint8_t)(ch1) << 8 | (uint8_t)(ch2) << 16 | (uint8_t)(ch3) << 24)
 #endif
 
-	char magic[5];
-	magic[4] = '\0';
-	file.read(&magic[0], 4);
-	if (strcmp(magic, "DDS ") != 0)
+	constexpr const char pMagic[] = "DDS ";
+	if (memcmp(pMagic, pBytes, 4) != 0)
 	{
 		return false;
 	}
+	pBytes += 4;
 	
-	FileHeader header;
-	file.read(reinterpret_cast<char*>(&header), sizeof(FileHeader));
+	const FileHeader* pHeader = reinterpret_cast<const FileHeader*>(pBytes);
+	pBytes += sizeof(FileHeader);
 
-	if (header.Size == sizeof(FileHeader) && header.PixelFormat.Size == sizeof(PixelFormatHeader))
+	if (pHeader->Size == sizeof(FileHeader) && pHeader->PixelFormat.Size == sizeof(PixelFormatHeader))
 	{
-		m_BBP = header.PixelFormat.RGBBitCount;
+		m_BBP = pHeader->PixelFormat.RGBBitCount;
 
-		uint32_t fourCC = header.PixelFormat.FourCC;
+		uint32_t fourCC = pHeader->PixelFormat.FourCC;
 		char fourCCStr[5];
 		fourCCStr[4] = '\0';
 		memcpy(fourCCStr, &fourCC, 4);
 		bool hasDxgi = fourCC == MAKEFOURCC('D', 'X', '1', '0');
-		DX10FileHeader* pDx10Header = nullptr;
+		const DX10FileHeader* pDx10Header = nullptr;
 		if (hasDxgi)
 		{
-			DX10FileHeader dx10Header{};
-			pDx10Header = &dx10Header;
-			file.read(reinterpret_cast<char*>(&dx10Header), sizeof(DX10FileHeader));
+			pDx10Header = (DX10FileHeader*)pBytes;
+			pBytes += sizeof(DX10FileHeader);
 
-			switch (dx10Header.DXGIFormat)
+			switch (pDx10Header->DXGIFormat)
 			{
 			case IMAGE_FORMAT::BC1_UNORM_SRGB:
 				m_Components = 3;
@@ -412,6 +411,11 @@ bool Image::LoadDds(const char* inputStream)
 		{
 			switch (fourCC)
 			{
+			case MAKEFOURCC('B', 'C', '4', 'U'):
+				m_Format = ImageFormat::BC4;
+				m_Components = 1;
+				m_sRgb = false;
+				break;
 			case MAKEFOURCC('D', 'X', 'T', '1'):
 				m_Format = ImageFormat::BC1;
 				m_Components = 3;
@@ -439,7 +443,7 @@ bool Image::LoadDds(const char* inputStream)
 					m_Components = 4;
 
 #define ISBITMASK(r, g, b, a) \
-	(header.PixelFormat.RBitMask == (r) && header.PixelFormat.GBitMask == (g) && header.PixelFormat.BBitMask == (b) && header.PixelFormat.ABitMask == (a))
+	(pHeader->PixelFormat.RBitMask == (r) && pHeader->PixelFormat.GBitMask == (g) && pHeader->PixelFormat.BBitMask == (b) && pHeader->PixelFormat.ABitMask == (a))
 
 					if (ISBITMASK(0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000))
 					{
@@ -462,7 +466,7 @@ bool Image::LoadDds(const char* inputStream)
 			}
 		}
 
-		bool isCubemap = (header.Caps2 & 0x0000FC00U) != 0 || (hasDxgi && (pDx10Header->MiscFlag & 0x4) != 0);
+		bool isCubemap = (pHeader->Caps2 & 0x0000FC00U) != 0 || (hasDxgi && (pDx10Header->MiscFlag & 0x4) != 0);
 		uint32_t imageChainCount = 1;
 		if (isCubemap)
 		{
@@ -476,11 +480,11 @@ bool Image::LoadDds(const char* inputStream)
 		}
 
 		uint32_t totalDataSize = 0;
-		m_MipLevels = std::max<int>(1, header.MipMapCount);
+		m_MipLevels = std::max<int>(1, pHeader->MipMapCount);
 		for (int mipLevel = 0; mipLevel < m_MipLevels; ++mipLevel)
 		{
 			MipLevelInfo mipLevelInfo;
-			GetSurfaceInfo(header.Width, header.Height, header.Depth, mipLevel, mipLevelInfo);
+			GetSurfaceInfo(pHeader->Width, pHeader->Height, pHeader->Depth, mipLevel, mipLevelInfo);
 			m_MipLevelDataOffsets[mipLevel] = totalDataSize;
 			totalDataSize += mipLevelInfo.DataSize;
 		}
@@ -489,12 +493,14 @@ bool Image::LoadDds(const char* inputStream)
 		for (uint32_t imageIdx = 0; imageIdx < imageChainCount; ++imageIdx)
 		{
 			pCurrentImage->m_Pixels.resize(totalDataSize);
-			pCurrentImage->m_Width = header.Width;
-			pCurrentImage->m_Height = header.Height;
-			pCurrentImage->m_Depth = header.Depth;
+			pCurrentImage->m_Width = pHeader->Width;
+			pCurrentImage->m_Height = pHeader->Height;
+			pCurrentImage->m_Depth = pHeader->Depth;
 			pCurrentImage->m_Format = m_Format;
 			pCurrentImage->m_BBP = m_BBP;
-			file.read(reinterpret_cast<char*>(pCurrentImage->m_Pixels.data()), totalDataSize);
+
+			memcpy(pCurrentImage->m_Pixels.data(), pBytes, totalDataSize);
+			pBytes += totalDataSize;
 			
 			if (imageIdx < imageChainCount - 1)
 			{
@@ -511,16 +517,17 @@ bool Image::LoadDds(const char* inputStream)
 	return true;
 }
 
-bool Image::LoadStbi(const char* inputStream)
+bool Image::LoadSTB(const void* pBytes, uint32_t numBytes)
 {
 	m_Components = 4;
 	m_Depth = 1;
 	int components = 0;
 
-	m_IsHdr = stbi_is_hdr(inputStream);
+	const uint8_t* pData = reinterpret_cast<const uint8_t*>(pBytes);
+	m_IsHdr = stbi_is_hdr_from_memory(pData, numBytes);
 	if (m_IsHdr)
 	{
-		float* pPixels = stbi_loadf(inputStream, &m_Width, &m_Height, &components, m_Components);
+		float* pPixels = stbi_loadf_from_memory(pData, numBytes, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -535,7 +542,7 @@ bool Image::LoadStbi(const char* inputStream)
 	}
 	else
 	{
-		unsigned char* pPixels = stbi_load(inputStream, &m_Width, &m_Height, &components, m_Components);
+		unsigned char* pPixels = stbi_load_from_memory(pData, numBytes, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;

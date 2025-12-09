@@ -271,7 +271,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 					const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
 
 					int stride = accessor.ByteStride(bufferView);
-					const unsigned char* data = buffer.data.data() + accessor.byteOffset + bufferView.byteOffset;
+					const unsigned char* pData = buffer.data.data() + accessor.byteOffset + bufferView.byteOffset;
 
 					if (meshData.NumVertices == 0)
 					{
@@ -282,35 +282,39 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 					if (name == "POSITION")
 					{
 						check(stride == sizeof(Vector3));
+						const Vector3* pPositions = (Vector3*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].Position = ((Vector3*)data)[i];
+							vertices[vertexOffset + i].Position = pPositions[i];
 						}
 					}
 					else if (name == "NORMAL")
 					{
 						check(stride == sizeof(Vector3));
+						const Vector3* pNormals = (Vector3*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].Normal = ((Vector3*)data)[i];
+							vertices[vertexOffset + i].Normal =pNormals[i];
 						}
 					}
 					else if (name == "TANGENT")
 					{
 						check(stride == sizeof(Vector4));
+						const Vector4* pTangents = (Vector4*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].Tangent = Vector3(((Vector4*)data)[i]);
-							float sign = ((Vector4*)data)[i].w;
+							vertices[vertexOffset + i].Tangent = Vector3(pTangents[i]);
+							float sign = pTangents[i].w;
 							vertices[vertexOffset + i].Bitangent = Vector3(sign, sign, sign);
 						}
 					}
 					else if (name == "TEXCOORD_0")
 					{
 						check(stride == sizeof(Vector2));
+						Vector2* pTexCoords = (Vector2*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].TexCoord = ((Vector2*)data)[i];
+							vertices[vertexOffset + i].TexCoord = pTexCoords[i];
 						}
 					}
 				}
@@ -320,7 +324,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		meshToPrimitives.push_back(primitives);
 	}
 
-	// generate bittangents
+	// generate bittangents B = N x T * T.w
 	for (Vertex& v : vertices)
 	{
 		if (v.Normal == Vector3::Zero)
@@ -338,14 +342,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 	uint64_t bufferSize = vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32_t) + meshDatas.size() * sBufferAlignment;
 	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh GeometryBuffer");
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-
-	uint64_t dataOffset = 0;
-	auto CopyData = [&](void* pSource, uint64_t size)
-	{
-		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
-		dataOffset += size;
-		dataOffset = Math::AlignUp<uint64_t>(dataOffset, sBufferAlignment);
-	};
 
 	const tinygltf::Scene& gltfScene = model.scenes[Math::Max(0, model.defaultScene)];
 	for (size_t i = 0; i < gltfScene.nodes.size(); i++)
@@ -398,6 +394,14 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 			}
 		}
 	}
+
+	uint64_t dataOffset = 0;
+	auto CopyData = [&](void* pSource, uint64_t size)
+	{
+		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
+		dataOffset += size;
+		dataOffset = Math::AlignUp<uint64_t>(dataOffset, sBufferAlignment);
+	};
 
 	for (const MeshData& meshData : meshDatas)
 	{
