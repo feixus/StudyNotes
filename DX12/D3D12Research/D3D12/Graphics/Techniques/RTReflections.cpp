@@ -74,7 +74,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			context.SetComputeDynamicConstantBufferView(1, *sceneData.pShadowData);
             context.BindResource(2, 0, sceneData.pResolvedTarget->GetUAV());
             context.BindResources(3, 0, srvs, (int)std::size(srvs));
-            context.BindResourceTable(5, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
+            context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
             context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
         });
@@ -91,9 +91,6 @@ void RTReflections::SetupPipelines()
     {
         ShaderLibrary* pShaderLibrary = m_pGraphicsDevice->GetLibrary("RTReflections.hlsl");
 
-        m_pHitRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
-        m_pHitRS->Finalize("Hit RS", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-
         m_pGlobalRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
         m_pGlobalRS->FinalizeFromShader("Global RS", pShaderLibrary);
 
@@ -101,14 +98,13 @@ void RTReflections::SetupPipelines()
         stateDesc.Name = "RT Reflections";
         stateDesc.RayGenShader = "RayGen";
         stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ReflectionClosestHit", "ReflectionMiss", "ShadowMiss", "ReflectionAnyHit" });
-        stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit", "", m_pHitRS.get());
+        stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit");
         stateDesc.AddMissShader("ReflectionMiss");
         stateDesc.AddMissShader("ShadowMiss");
         stateDesc.MaxPayloadSize = 5 * sizeof(float);
         stateDesc.MaxAttributeSize = 2 * sizeof(float);
         stateDesc.MaxRecursion = 2;
         stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
-        stateDesc.RayGenShader = "RayGen";
         m_pRtSO = m_pGraphicsDevice->CreateStateObject(stateDesc);
     }
 }

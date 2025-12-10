@@ -34,6 +34,7 @@
 #include "ImGuizmo/ImGuizmo.h"
 #include "Content/image.h"
 #include <chrono>
+#include "Graphics/Techniques/PathTracing.h"
 
 static const uint32_t FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -257,8 +258,9 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get());
 
-	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice.get());
 	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice.get());
+	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice.get());
+	m_pPathTracing = std::make_unique<PathTracing>(m_pDevice.get());
 
 	m_pRTAO = std::make_unique<RTAO>(m_pDevice.get());
 	m_pSSAO = std::make_unique<SSAO>(m_pDevice.get());
@@ -797,303 +799,310 @@ void DemoApp::Update()
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
 		});
 
-	// depth prepass
-	// - depth only pass that renders the entire scene
-	// - optimization that prevents wasteful lighting calculations during the base pass
-	// - required for light culling
-	RGPassBuilder prepass = graph.AddPass("Depth Prepass");
-	sceneData.DepthStencil = prepass.Write(sceneData.DepthStencil);
-	prepass.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
-		{
-			GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
-
-			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-
-			RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
-			renderContext.BeginRenderPass(info);
-			renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
-			
-			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-				m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-			};
-			renderContext.BindResources(2, 0, srvs, std::size(srvs));
-
-			renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
-
-			struct ViewData
-			{
-				Matrix ViewProjection;
-			} viewData{};
-			viewData.ViewProjection = m_pCamera->GetViewProjection();
-			renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
-
-			{
-				GPU_PROFILE_SCOPE("Opaque", &renderContext);
-				renderContext.SetPipelineState(m_pDepthPrepassOpaquePSO);
-				DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
-			}
-			{
-				GPU_PROFILE_SCOPE("Masked", &renderContext);
-				renderContext.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
-				DrawScene(renderContext, m_SceneData, Batch::Blending::AlphaMask);
-			}
-
-			renderContext.EndRenderPass();
-		});
-
-	// [with MSAA] depth resolve
-	//  - if MSAA is enabled, run a compute shader to resolve the depth buffer
-	if (m_SampleCount > 1)
+	if (m_RenderPath != RenderPath::PathTracing)
 	{
-		RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
-		sceneData.DepthStencil = depthResolve.Read(sceneData.DepthStencil);
-		sceneData.DepthStencilResolved = depthResolve.Write(sceneData.DepthStencilResolved);
-		depthResolve.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+		// depth prepass
+		// - depth only pass that renders the entire scene
+		// - optimization that prevents wasteful lighting calculations during the base pass
+		// - required for light culling
+		RGPassBuilder prepass = graph.AddPass("Depth Prepass");
+		sceneData.DepthStencil = prepass.Write(sceneData.DepthStencil);
+		prepass.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
 			{
 				GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
-				GraphicsTexture* pDepthStencilResolve = resources.GetTexture(sceneData.DepthStencilResolved);
 
-				renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-				renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
-				renderContext.SetPipelineState(m_pResolveDepthPSO);
+				RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
+				renderContext.BeginRenderPass(info);
+				renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				renderContext.BindResource(0, 0, pDepthStencilResolve->GetUAV());
-				renderContext.BindResource(1, 0, pDepthStencil->GetSRV());
+				renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
+				
+				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+				};
+				renderContext.BindResources(2, 0, srvs, std::size(srvs));
 
-				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 16);
-				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 16);
-				renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
-
-				renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
-				renderContext.FlushResourceBarriers();
-			});
-	}
-	else
-	{
-		RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
-		depthResolve.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
-			{
-				renderContext.CopyTexture(GetDepthStencil(), GetResolveDepthStencil());
-			});
-	}
-
-	// camera velocity
-	if (Tweakables::g_TAA.Get())
-	{
-		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
-		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
-			{
-				renderContext.InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-				renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
-				renderContext.SetPipelineState(m_pCameraMotionPSO);
-
-				struct Parameters
-				{
-					Matrix ReprojectionMatrix;
-					Vector2 InvScreenDimensions;
-				} parameters;
-
-				Matrix preMult = Matrix(
-					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
-				);
-
-				Matrix postMult = Matrix(
-					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f)
-				);
-
-				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
-				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
-
-				renderContext.SetComputeDynamicConstantBufferView(0, parameters);
-
-				renderContext.BindResource(1, 0, m_pVelocity->GetUAV());
-				renderContext.BindResource(2, 0, GetResolveDepthStencil()->GetSRV());
-
-				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-				renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
-			});
-	}
-
-	m_pGpuParticles->Simulate(graph, GetResolveDepthStencil(), *m_pCamera);
-
-	if (Tweakables::g_RaytracedAO.Get())
-	{
-		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), m_SceneData, *m_pCamera);
-	}
-	else
-	{
-		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), *m_pCamera);
-	}
-
-	// shadow mapping
-	//  - renders the scene depth onto a separate depth buffer from the light's view
-	if (shadowIndex > 0)
-	{
-		if (Tweakables::g_ShowSDSM.Get())
-		{
-			RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
-			sceneData.DepthStencil = depthReduce.Write(sceneData.DepthStencil);
-			depthReduce.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
-				{
-					GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
-
-					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
-					renderContext.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
-
-					struct ShaderParameters
-					{
-						float Near;
-						float Far;
-					} parameters;
-					parameters.Near = m_pCamera->GetNear();
-					parameters.Far = m_pCamera->GetFar();
-
-					renderContext.SetComputeDynamicConstantBufferView(0, parameters);
-					renderContext.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
-					renderContext.BindResource(2, 0, pDepthStencil->GetSRV());
-
-					renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
-
-					renderContext.SetPipelineState(m_pReduceDepthPSO);
-					for (size_t i = 1; i < m_ReductionTargets.size(); i++)
-					{
-						renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-						renderContext.BindResource(1, 0, m_ReductionTargets[i]->GetUAV());
-						renderContext.BindResource(2, 0, m_ReductionTargets[i - 1]->GetSRV());
-
-						renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
-					}
-
-					renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-					renderContext.FlushResourceBarriers();
-
-					renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
-				});
-		}
-
-		RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
-		shadows.Bind([=](CommandContext& context, const RGPassResource& resources)
-			{
-				for (auto& pShadowMap : m_ShadowMaps)
-				{
-					context.InsertResourceBarrier(pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
-				}
-
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(m_pShadowRS.get());
+				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 				struct ViewData
 				{
 					Matrix ViewProjection;
-				}viewData;
+				} viewData{};
+				viewData.ViewProjection = m_pCamera->GetViewProjection();
+				renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
 
-				for (int i = 0; i < shadowIndex; ++i)
 				{
-					GPU_PROFILE_SCOPE("Light View", &context);
-
-					GraphicsTexture* pShadowMap = m_ShadowMaps[i].get();
-					context.BeginRenderPass(RenderPassInfo(pShadowMap, RenderPassAccess::Clear_Store));
-
-					viewData.ViewProjection = shadowData.LightViewProjections[i];
-					context.SetGraphicsDynamicConstantBufferView(1, viewData);
-
-					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-					};
-					context.BindResources(2, 0, srvs, std::size(srvs));
-
-					context.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
-
-					VisibilityMask mask;
-					mask.SetAll();
-					{
-						GPU_PROFILE_SCOPE("Opaque", &context);
-						context.SetPipelineState(m_pShadowOpaquePSO);
-						DrawScene(context, m_SceneData, mask, Batch::Blending::Opaque);
-					}
-					{
-						GPU_PROFILE_SCOPE("Masked", &context);
-						context.SetPipelineState(m_pShadowAlphaMaskPSO);
-						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask);
-					}
-					context.EndRenderPass();
+					GPU_PROFILE_SCOPE("Opaque", &renderContext);
+					renderContext.SetPipelineState(m_pDepthPrepassOpaquePSO);
+					DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
 				}
+				{
+					GPU_PROFILE_SCOPE("Masked", &renderContext);
+					renderContext.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
+					DrawScene(renderContext, m_SceneData, Batch::Blending::AlphaMask);
+				}
+
+				renderContext.EndRenderPass();
 			});
-	}
 
-	if (m_RenderPath == RenderPath::Tiled)
-	{
-		m_pTiledForward->Execute(graph, m_SceneData);
-	}
-	else if (m_RenderPath == RenderPath::Clustered)
-	{
-		m_pClusteredForward->Execute(graph, m_SceneData);
-	}
-
-	m_pGpuParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
-
-	RGPassBuilder sky = graph.AddPass("Sky");
-	sceneData.DepthStencil = sky.Read(sceneData.DepthStencil);
-	sky.Bind([=](CommandContext& renderContext, const RGPassResource& inputResources)
+		// [with MSAA] depth resolve
+		//  - if MSAA is enabled, run a compute shader to resolve the depth buffer
+		if (m_SampleCount > 1)
 		{
-			GraphicsTexture* pDepthStencil = inputResources.GetTexture(sceneData.DepthStencil);
+			RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
+			sceneData.DepthStencil = depthResolve.Read(sceneData.DepthStencil);
+			sceneData.DepthStencilResolved = depthResolve.Write(sceneData.DepthStencilResolved);
+			depthResolve.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+				{
+					GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
+					GraphicsTexture* pDepthStencilResolve = resources.GetTexture(sceneData.DepthStencilResolved);
 
-			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-			renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+					renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-			RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_Store, false);
+					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
+					renderContext.SetPipelineState(m_pResolveDepthPSO);
 
-			renderContext.BeginRenderPass(info);
-			renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					renderContext.BindResource(0, 0, pDepthStencilResolve->GetUAV());
+					renderContext.BindResource(1, 0, pDepthStencil->GetSRV());
 
-			renderContext.SetPipelineState(m_pSkyboxPSO);
-			renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
+					int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 16);
+					int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 16);
+					renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
 
-			struct Parameters
+					renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+					renderContext.FlushResourceBarriers();
+				});
+		}
+		else
+		{
+			RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
+			depthResolve.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+				{
+					renderContext.CopyTexture(GetDepthStencil(), GetResolveDepthStencil());
+				});
+		}
+
+		// camera velocity
+		if (Tweakables::g_TAA.Get())
+		{
+			RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
+			cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+				{
+					renderContext.InsertResourceBarrier(GetResolveDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+					renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
+					renderContext.SetPipelineState(m_pCameraMotionPSO);
+
+					struct Parameters
+					{
+						Matrix ReprojectionMatrix;
+						Vector2 InvScreenDimensions;
+					} parameters;
+
+					Matrix preMult = Matrix(
+						Vector4(2.0f, 0.0f, 0.0f, 0.0f),
+						Vector4(0.0f, -2.0f, 0.0f, 0.0f),
+						Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+						Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
+					);
+
+					Matrix postMult = Matrix(
+						Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
+						Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
+						Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+						Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f)
+					);
+
+					parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
+					parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+
+					renderContext.SetComputeDynamicConstantBufferView(0, parameters);
+
+					renderContext.BindResource(1, 0, m_pVelocity->GetUAV());
+					renderContext.BindResource(2, 0, GetResolveDepthStencil()->GetSRV());
+
+					int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+					int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+					renderContext.Dispatch(dispatchGroupX, dispatchGroupY);
+				});
+		}
+
+		m_pGpuParticles->Simulate(graph, GetResolveDepthStencil(), *m_pCamera);
+
+		if (Tweakables::g_RaytracedAO.Get())
+		{
+			m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), m_SceneData, *m_pCamera);
+		}
+		else
+		{
+			m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), *m_pCamera);
+		}
+
+		// shadow mapping
+		//  - renders the scene depth onto a separate depth buffer from the light's view
+		if (shadowIndex > 0)
+		{
+			if (Tweakables::g_ShowSDSM.Get())
 			{
-				Matrix View;
-				Matrix Projection;
-				Vector3 Bias;
-				float padding1{};
-				Vector3 SunDirection;
-				float padding2{};
-			} constBuffer;
+				RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
+				sceneData.DepthStencil = depthReduce.Write(sceneData.DepthStencil);
+				depthReduce.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+					{
+						GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
 
-			constBuffer.View = m_pCamera->GetView();
-			constBuffer.Projection = m_pCamera->GetProjection();
-			constBuffer.Bias = Vector3::One;
-			constBuffer.SunDirection = -m_Lights[0].Direction;
-			constBuffer.SunDirection.Normalize();
+						renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			renderContext.SetGraphicsDynamicConstantBufferView(0, constBuffer);
+						renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
+						renderContext.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
-			renderContext.Draw(0, 36);
+						struct ShaderParameters
+						{
+							float Near;
+							float Far;
+						} parameters;
+						parameters.Near = m_pCamera->GetNear();
+						parameters.Far = m_pCamera->GetFar();
 
-			renderContext.EndRenderPass();
-		});
+						renderContext.SetComputeDynamicConstantBufferView(0, parameters);
+						renderContext.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
+						renderContext.BindResource(2, 0, pDepthStencil->GetSRV());
 
-	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
+						renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
+
+						renderContext.SetPipelineState(m_pReduceDepthPSO);
+						for (size_t i = 1; i < m_ReductionTargets.size(); i++)
+						{
+							renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+							renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+							renderContext.BindResource(1, 0, m_ReductionTargets[i]->GetUAV());
+							renderContext.BindResource(2, 0, m_ReductionTargets[i - 1]->GetSRV());
+
+							renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
+						}
+
+						renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+						renderContext.FlushResourceBarriers();
+
+						renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
+					});
+			}
+
+			RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
+			shadows.Bind([=](CommandContext& context, const RGPassResource& resources)
+				{
+					for (auto& pShadowMap : m_ShadowMaps)
+					{
+						context.InsertResourceBarrier(pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					}
+
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.SetGraphicsRootSignature(m_pShadowRS.get());
+
+					struct ViewData
+					{
+						Matrix ViewProjection;
+					}viewData;
+
+					for (int i = 0; i < shadowIndex; ++i)
+					{
+						GPU_PROFILE_SCOPE("Light View", &context);
+
+						GraphicsTexture* pShadowMap = m_ShadowMaps[i].get();
+						context.BeginRenderPass(RenderPassInfo(pShadowMap, RenderPassAccess::Clear_Store));
+
+						viewData.ViewProjection = shadowData.LightViewProjections[i];
+						context.SetGraphicsDynamicConstantBufferView(1, viewData);
+
+						const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+							m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+							m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+						};
+						context.BindResources(2, 0, srvs, std::size(srvs));
+
+						context.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
+
+						VisibilityMask mask;
+						mask.SetAll();
+						{
+							GPU_PROFILE_SCOPE("Opaque", &context);
+							context.SetPipelineState(m_pShadowOpaquePSO);
+							DrawScene(context, m_SceneData, mask, Batch::Blending::Opaque);
+						}
+						{
+							GPU_PROFILE_SCOPE("Masked", &context);
+							context.SetPipelineState(m_pShadowAlphaMaskPSO);
+							DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask);
+						}
+						context.EndRenderPass();
+					}
+				});
+		}
+
+		if (m_RenderPath == RenderPath::Tiled)
+		{
+			m_pTiledForward->Execute(graph, m_SceneData);
+		}
+		else if (m_RenderPath == RenderPath::Clustered)
+		{
+			m_pClusteredForward->Execute(graph, m_SceneData);
+		}
+
+		m_pGpuParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
+
+		RGPassBuilder sky = graph.AddPass("Sky");
+		sceneData.DepthStencil = sky.Read(sceneData.DepthStencil);
+		sky.Bind([=](CommandContext& renderContext, const RGPassResource& inputResources)
+			{
+				GraphicsTexture* pDepthStencil = inputResources.GetTexture(sceneData.DepthStencil);
+
+				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+				RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_Store, false);
+
+				renderContext.BeginRenderPass(info);
+				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				renderContext.SetPipelineState(m_pSkyboxPSO);
+				renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
+
+				struct Parameters
+				{
+					Matrix View;
+					Matrix Projection;
+					Vector3 Bias;
+					float padding1{};
+					Vector3 SunDirection;
+					float padding2{};
+				} constBuffer;
+
+				constBuffer.View = m_pCamera->GetView();
+				constBuffer.Projection = m_pCamera->GetProjection();
+				constBuffer.Bias = Vector3::One;
+				constBuffer.SunDirection = -m_Lights[0].Direction;
+				constBuffer.SunDirection.Normalize();
+
+				renderContext.SetGraphicsDynamicConstantBufferView(0, constBuffer);
+
+				renderContext.Draw(0, 36);
+
+				renderContext.EndRenderPass();
+			});
+
+		DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
+	}
+	else
+	{
+		m_pPathTracing->Render(graph, m_SceneData);
+	}
 
 	RGPassBuilder resolve = graph.AddPass("Resolve");
 	resolve.Bind([=](CommandContext& context, const RGPassResource& resources)
@@ -1446,8 +1455,10 @@ void DemoApp::OnResize(int width, int height)
 	m_pTAASource = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "TAA Target");
 	m_pAmbientOcclusion = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "SSAO");
 
-	m_pClusteredForward->OnResize(width, height);
 	m_pTiledForward->OnResize(width, height);
+	m_pClusteredForward->OnResize(width, height);
+	m_pPathTracing->OnResize(width, height);
+
 	m_pSSAO->OnResize(width, height);
 	m_pRTReflections->OnResize(width, height);
 	
@@ -1722,11 +1733,15 @@ void DemoApp::UpdateImGui()
 				case RenderPath::Clustered:
 					*outText = "Clustered";
 					break;
+				case RenderPath::PathTracing:
+					*outText = "Path Tracing";
+					break;
 				default:
+					noEntry();
 					break;
 				}
 				return true;
-			}, nullptr, 2);
+			}, nullptr, (int)RenderPath::MAX);
 
 		ImGui::Separator();
 

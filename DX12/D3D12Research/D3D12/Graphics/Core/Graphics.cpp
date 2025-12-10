@@ -274,6 +274,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	uint8_t smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);
+	E_LOG(Info, "ShaderModel:%d-%d", smMaj, smMin);
 }
 
 GraphicsDevice::~GraphicsDevice()

@@ -22,6 +22,7 @@ class SSAO;
 class GpuParticles;
 class RTReflections;
 class SwapChain;
+class PathTracing;
 
 enum class DefaultTexture
 {
@@ -85,6 +86,8 @@ enum class RenderPath
 {
 	Tiled,
 	Clustered,
+	PathTracing,
+	MAX
 };
 
 void DrawScene(CommandContext& context, const SceneData& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
@@ -140,9 +143,11 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pResolvedNormals;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ShadowMaps;
 
-	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
-	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
+	std::unique_ptr<ClusteredForward> m_pClusteredForward;
+	std::unique_ptr<PathTracing> m_pPathTracing;
+
+	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<SSAO> m_pSSAO;
 	std::unique_ptr<RTReflections> m_pRTReflections;
@@ -151,7 +156,7 @@ private:
 	int32_t m_ScreenshotRowPitch{0};
 	std::unique_ptr<Buffer> m_pScreenshotBuffer;
 
-	RenderPath m_RenderPath = RenderPath::Clustered;
+	RenderPath m_RenderPath = RenderPath::PathTracing;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;

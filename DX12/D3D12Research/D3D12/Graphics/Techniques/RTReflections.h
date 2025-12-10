@@ -25,9 +25,6 @@ private:
     GraphicsDevice* m_pGraphicsDevice;
     
     StateObject* m_pRtSO{nullptr};
-
-    std::unique_ptr<RootSignature> m_pHitRS;
     std::unique_ptr<RootSignature> m_pGlobalRS;
-
     std::unique_ptr<GraphicsTexture> m_pSceneColor;
 };

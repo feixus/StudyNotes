@@ -43,4 +43,23 @@ float ComputeRayConeMip(RayCone cone, float3 vertexNormal, float2 vertexUVs[3], 
     return lambda;
 }
 
+RayDesc GeneratePinholeCameraRay(float2 pixel, float4x4 viewInverse, float4x4 projection)
+{
+    RayDesc ray;
+    ray.Origin = viewInverse[3].xyz;
+    ray.TMin = 0.f;
+    ray.TMax = RAY_MAX_T;
+    // extract the aspect ratio and fov from the FOV projection matrix
+    float aspect = projection[1][1] / projection[0][0];
+    float tanHalfFovY = 1.f / projection[1][1];
+
+    // forwar + right + up, tanHalfFovY and tanHalfFovX is the FOV scaling factor
+    ray.Direction = normalize(
+        (pixel.x * viewInverse[0].xyz * tanHalfFovY * aspect) -
+        (pixel.y * viewInverse[1].xyz * tanHalfFovY) +
+        viewInverse[2].xyz);
+    
+    return ray;
+}
+
 #endif

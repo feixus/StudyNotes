@@ -37,7 +37,7 @@ void ShaderBindingTable::BindHitGroup(const char* pName, uint32_t index, const s
 
 void ShaderBindingTable::BindHitGroup(const char* pName, uint32_t index, const void* pData, uint32_t dataSize)
 {
-    if (index > m_HitGroupShaderRecords.size())
+    if (index >= m_HitGroupShaderRecords.size())
     {
         m_HitGroupShaderRecords.resize(index + 1);
     }
