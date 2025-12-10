@@ -72,6 +72,7 @@ private:
     // step 6: lighting
     std::unique_ptr<RootSignature> m_pDiffuseRS;
 	PipelineState* m_pDiffusePSO{nullptr};
+	PipelineState* m_pDiffuseMaskedPSO{nullptr};
 	PipelineState* m_pDiffuseTransparencyPSO{nullptr};
 
     // cluster debug rendering

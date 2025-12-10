@@ -104,14 +104,14 @@ namespace ShaderCompiler
 		arguments.AddArgument(DXC_ARG_ALL_RESOURCES_BOUND);
 
 		// payload access qualifiers
-		if (majVersion >= 6 && minVersion >= 6)
+		// if (majVersion >= 6 && minVersion >= 6)
+		// {
+		// 	arguments.AddArgument("-enable-payload-qualifiers");
+		// 	arguments.AddDefine("_PAYLOAD_QUALIFIERS = 1");
+		// }
+		// else
 		{
-			arguments.AddArgument("-enable-payload-qualifiers");
-			arguments.AddArgument("_PAYLOAD_QUALIFIERS = 1");
-		}
-		else
-		{
-			arguments.AddArgument("_PAYLOAD_QUALIFIERS = 0");
+			arguments.AddDefine("_PAYLOAD_QUALIFIERS = 0");
 		}
 
 		if (debugShaders || shaderSymbols)

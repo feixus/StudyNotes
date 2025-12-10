@@ -194,7 +194,7 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 		float4 tangentNormal = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
 		float3 B = cross(v.normal, v.tangent.xyz) * v.tangent.w;
 		float3x3 TBN = float3x3(v.tangent.xyz, B, v.normal);
-		N = TangentSpaceNormalMapping(tangentNormal.xyz, TBN, false);
+		N = TangentSpaceNormalMapping(tangentNormal.xyz, TBN);
 	}
 	
 	ShadingData outData = (ShadingData) 0;
@@ -202,7 +202,7 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 	outData.V = -WorldRayDirection();
 	outData.N = N;
 	outData.UV = v.texCoord;
-	outData.Diffuse = baseColor.rgb;
+	outData.Diffuse = ComputeDiffuseColor(baseColor.rgb, metalness);
 	outData.Specular = ComputeF0(specular, baseColor.rgb, metalness);
 	outData.Roughness = roughness;
 	outData.Emissive = emissive;
@@ -251,7 +251,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
 		return result;
 	}
 
-	result = DefaultLitBxDF(shadingData.Specular, shadingData.Roughness, shadingData.Diffuse, shadingData.N, shadingData.V, L, attenuation);
+	result = DefaultLitBxDF(shadingData.Specular, shadingData.Roughness, shadingData.Diffuse, shadingData.N, shadingData.V, normalize(L), attenuation);
 	float4 color = light.GetColor();
 	result.Diffuse *= color.rgb * light.Intensity;
 	result.Specular *= color.rgb * light.Intensity;

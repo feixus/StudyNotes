@@ -402,7 +402,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(sunLight);
 
 		{
-			Light spotLight = Light::Spot(Vector3(-5, 16, 16), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
+			Light spotLight = Light::Spot(Vector3(-8, 10, 25), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 			spotLight.CastShadows = true;
 			spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
 			spotLight.VolumetricLighting = true;
@@ -1125,48 +1125,51 @@ void DemoApp::Update()
 			}
 		});
 
-	if (Tweakables::g_RaytracedReflections.Get())
+	if (m_RenderPath != RenderPath::PathTracing)
 	{
-		m_pRTReflections->Execute(graph, m_SceneData);
-	}
-
-	if (Tweakables::g_TAA.Get())
-	{
-		// temporal resolve
-		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
-		temporalResolve.Bind([=](CommandContext& context, const RGPassResource& resources)
-			{
-				context.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-
-				context.SetComputeRootSignature(m_pTemporalResolveRS.get());
-				context.SetPipelineState(m_pTemporalResolvePSO);
-
-				struct TemporalParameters
+		if (Tweakables::g_RaytracedReflections.Get())
+		{
+			m_pRTReflections->Execute(graph, m_SceneData);
+		}
+	
+		if (Tweakables::g_TAA.Get())
+		{
+			// temporal resolve
+			RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
+			temporalResolve.Bind([=](CommandContext& context, const RGPassResource& resources)
 				{
-					Vector2 InvScreenDimensions;
-					Vector2 Jitter;
-				} parameters;
-
-				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
-				parameters.Jitter.x = m_pCamera->GetPrevJitter().x - m_pCamera->GetJitter().x;
-				parameters.Jitter.y = -(m_pCamera->GetPrevJitter().y - m_pCamera->GetJitter().y);
-				context.SetComputeDynamicConstantBufferView(0, parameters);
-
-				context.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
-				context.BindResource(2, 0, m_pVelocity->GetSRV());
-				context.BindResource(2, 1, m_pPreviousColor->GetSRV());
-				context.BindResource(2, 2, m_pTAASource->GetSRV());
-				context.BindResource(2, 3, GetResolveDepthStencil()->GetSRV());
-
-				int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-				int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-				context.Dispatch(dispatchGroupX, dispatchGroupY);
-
-				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
-			});
+					context.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	
+					context.SetComputeRootSignature(m_pTemporalResolveRS.get());
+					context.SetPipelineState(m_pTemporalResolvePSO);
+	
+					struct TemporalParameters
+					{
+						Vector2 InvScreenDimensions;
+						Vector2 Jitter;
+					} parameters;
+	
+					parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+					parameters.Jitter.x = m_pCamera->GetPrevJitter().x - m_pCamera->GetJitter().x;
+					parameters.Jitter.y = -(m_pCamera->GetPrevJitter().y - m_pCamera->GetJitter().y);
+					context.SetComputeDynamicConstantBufferView(0, parameters);
+	
+					context.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
+					context.BindResource(2, 0, m_pVelocity->GetSRV());
+					context.BindResource(2, 1, m_pPreviousColor->GetSRV());
+					context.BindResource(2, 2, m_pTAASource->GetSRV());
+					context.BindResource(2, 3, GetResolveDepthStencil()->GetSRV());
+	
+					int dispatchGroupX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+					int dispatchGroupY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+					context.Dispatch(dispatchGroupX, dispatchGroupY);
+	
+					context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+				});
+		}
 	}
 
 	m_pClouds->Render(graph, m_pHDRRenderTarget.get(), GetResolveDepthStencil(), m_pCamera.get(), m_Lights[0]);
@@ -1532,6 +1535,7 @@ void DemoApp::InitializePipelines()
 
 		psoDesc.SetPixelShader(pixelShader);
 		psoDesc.SetName("Depth Prepass AlphaMask PSO");
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
@@ -1882,7 +1886,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 		// cull object that are small to the viewer
 		Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
 		float angle = tanf(batch.Radius / cameraVec.Length());
-		if (angle < Tweakables::g_TLASBoundsThreshold.Get() && cameraVec.Length() > batch.Radius)
+		if (angle < Tweakables::g_TLASBoundsThreshold.Get() && cameraVec.Length() > batch.Radius && m_RenderPath != RenderPath::PathTracing)
 		{
 			continue;
 		}
