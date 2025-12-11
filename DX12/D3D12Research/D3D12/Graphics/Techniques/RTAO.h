@@ -17,7 +17,7 @@ class RTAO
 public:
     RTAO(GraphicsDevice* pGraphicsDevice);
 
-    void Execute(RGGraph& graph, GraphicsTexture* pColor, GraphicsTexture* pDepth, const SceneData& sceneData, Camera& camera);
+    void Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneData& sceneData);
 
 private:
     void SetupPipelines();

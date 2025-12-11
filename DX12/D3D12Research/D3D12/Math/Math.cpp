@@ -112,13 +112,10 @@ namespace Math
         );
     }
 
-    Quaternion LookRotation(const Vector3& direction)
+    Quaternion LookRotation(const Vector3& direction, const Vector3& up)
     {
-        Vector3 v;
-        direction.Normalize(v);
-        float pitch = asin(-v.y);
-        float yaw = atan2(v.x, v.z);
-        return Quaternion::CreateFromYawPitchRoll(yaw, pitch, 0);
+        Matrix m = CreateLookToMatrix(Vector3::Zero, direction, up);
+        return Quaternion::CreateFromRotationMatrix(m);
     }
 
     std::string ToBase(unsigned int number, unsigned int base, bool addPrefix)

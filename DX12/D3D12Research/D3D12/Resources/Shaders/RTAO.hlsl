@@ -87,7 +87,7 @@ void RayGen()
     float3 world = WorldFromDepth(texCoord, depth, cData.ViewProjectionInverse);
     float3 normal = NormalFromDepth(tSceneDepth, sSceneSampler, texCoord, dimInv, cData.ViewProjectionInverse);
 
-    uint randSeed = SeedThread(launchIndexId + cData.FrameIndex * launchDim.x * launchDim.y);
+    uint randSeed = SeedThread(launchIndex, launchDim, cData.FrameIndex);
     float accumulateAo = 0;
     for (int i = 0; i < cData.Samples; i++)
     {

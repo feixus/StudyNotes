@@ -1,23 +1,19 @@
 #include "stdafx.h"
 #include "DemoApp.h"
-#include "Graphics/Core/CommandQueue.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/OfflineDescriptorAllocator.h"
-#include "Graphics/Core/DynamicResourceAllocator.h"
-#include "Graphics/Core/GraphicsTexture.h"
-#include "Graphics/Core/GraphicsBuffer.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/ResourceViews.h"
-#include "Graphics/Core/StateObject.h"
-#include "Core/Input.h"
 #include "Scene/Camera.h"
+#include "ImGuizmo/ImGuizmo.h"
+#include "Content/image.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/Light.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/GraphicsTexture.h"
+#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/RootSignature.h"
+#include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/Shader.h"
 #include "Graphics/Techniques/ClusteredForward.h"
 #include "Graphics/Techniques/TiledForward.h"
 #include "Graphics/Techniques/Clouds.h"
@@ -25,16 +21,14 @@
 #include "Graphics/Techniques/RTAO.h"
 #include "Graphics/Techniques/SSAO.h"
 #include "Graphics/Techniques/RTReflections.h"
+#include "Graphics/Techniques/PathTracing.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RenderGraph/Blackboard.h"
-#include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
-#include "Core/ConsoleVariables.h"
+#include "Core/CommandLine.h"
 #include "Core/Paths.h"
-#include "ImGuizmo/ImGuizmo.h"
-#include "Content/image.h"
-#include <chrono>
-#include "Graphics/Techniques/PathTracing.h"
+#include "Core/Input.h"
+#include "Core/ConsoleVariables.h"
 
 static const uint32_t FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -210,26 +204,12 @@ namespace Tweakables
 	float g_SunIntensity = 3.0f;
 }
 
-struct Object
-{
-	static void SetPosition(const Vector3& v)
-	{
-		E_LOG(Info, "Set position %f, %f, %f", v.x, v.y, v.z);
-	}
-
-	static void SetPosition(float x, float y, float z)
-	{
-		E_LOG(Info, "set position %f, %f, %f", x, y, z);
-	}
-};
-
-
 DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	m_WindowWidth(windowRect.x), m_WindowHeight(windowRect.y), m_SampleCount(sampleCount)
 {
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetPosition(Vector3(-50, 60, 0));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV2, Math::PIDIV4 * 0.5f, 0));
+	m_pCamera->SetPosition(Vector3(-13, 24, -15));
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 	m_pCamera->SetNearPlane(300.f);
 	m_pCamera->SetFarPlane(1.f);
 
@@ -937,11 +917,11 @@ void DemoApp::Update()
 
 		if (Tweakables::g_RaytracedAO.Get())
 		{
-			m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), m_SceneData, *m_pCamera);
+			m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), m_SceneData);
 		}
 		else
 		{
-			m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolveDepthStencil(), *m_pCamera);
+			m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), m_SceneData);
 		}
 
 		// shadow mapping
@@ -1883,12 +1863,15 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 	{
 		const Batch& batch = m_SceneData.Batches[instanceIndex];
 
-		// cull object that are small to the viewer
-		Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
-		float angle = tanf(batch.Radius / cameraVec.Length());
-		if (angle < Tweakables::g_TLASBoundsThreshold.Get() && cameraVec.Length() > batch.Radius && m_RenderPath != RenderPath::PathTracing)
+		if (m_RenderPath != RenderPath::PathTracing)
 		{
-			continue;
+			// cull object that are small to the viewer
+			Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
+			float angle = tanf(batch.Radius / cameraVec.Length());
+			if (angle < Tweakables::g_TLASBoundsThreshold.Get() && cameraVec.Length() > batch.Radius)
+			{
+				continue;
+			}
 		}
 
 		const SubMesh& subMesh = *batch.pMesh;
