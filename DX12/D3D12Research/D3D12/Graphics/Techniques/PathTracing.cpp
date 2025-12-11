@@ -25,7 +25,7 @@ PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pG
     StateObjectInitializer desc{};
     desc.Name = "Path Tracing";
     desc.MaxRecursion = 1;
-    desc.MaxPayloadSize = 10 * sizeof(float);
+    desc.MaxPayloadSize = 14 * sizeof(float);
     desc.MaxAttributeSize = 2 * sizeof(float);
     desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
     desc.AddLibrary(pLibrary);
@@ -59,6 +59,8 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
             uint32_t NumLights;
             float ViewPixelSpreadAngle;
             uint32_t TLASIndex;
+            uint32_t FrameIndex;
+            uint32_t Accumulate;
         } params{};
 
         params.View = sceneData.pCamera->GetView();
@@ -68,6 +70,8 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
         params.NumLights = sceneData.pLightBuffer->GetNumElements();
         params.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() * 0.5f) / sceneData.pRenderTarget->GetHeight());
         params.TLASIndex = sceneData.SceneTLAS;
+        params.FrameIndex = sceneData.FrameIndex;
+        params.Accumulate = sceneData.pCamera->GetPreviousViewProjection() == sceneData.pCamera->GetViewProjection();
 
         ShaderBindingTable bindingTable(m_pSO);
         bindingTable.BindRayGenShader("RayGen");

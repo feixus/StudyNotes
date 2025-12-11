@@ -121,7 +121,7 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 
 	TraceRay(
         tTLASTable[cViewData.TLASIndex],
-        RAY_FLAG_CULL_BACK_FACING_TRIANGLES,
+        0,
         0xFF,
         0,
         0,
