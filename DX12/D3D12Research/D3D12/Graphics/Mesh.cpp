@@ -342,7 +342,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		std::queue<QueuedNode> toProcess;
 		QueuedNode rootNode;
 		rootNode.Index = nodeIndex;
-		rootNode.Transform = Matrix::CreateScale(uniformScale);
+		rootNode.Transform = Matrix::CreateScale(uniformScale, uniformScale, uniformScale);
 		toProcess.push(rootNode);
 		while (!toProcess.empty())
 		{
