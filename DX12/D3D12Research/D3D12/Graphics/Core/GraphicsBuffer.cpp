@@ -29,17 +29,17 @@ D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 		D3D12_RESOURCE_FLAG_NONE
 	);
 
-	if (!Any(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
+	if (!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 	}
-	if (Any(bufferDesc.Usage, BufferFlag::UnorderedAccess))
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::UnorderedAccess))
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
 
 	// PIX: this will improve the shader's performance on some hardware.
-	if (Any(bufferDesc.Usage, BufferFlag::Structured))
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Structured))
 	{
 		desc.Width = Math::Max(desc.Width, 16ull);
 	}
@@ -56,19 +56,19 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
 	D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN;
 
-	if (Any(bufferDesc.Usage, BufferFlag::Readback))
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Readback))
 	{
 		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_COPY_DEST;
 		heapType = D3D12_HEAP_TYPE_READBACK;
 	}
-	else if (Any(bufferDesc.Usage, BufferFlag::Upload))
+	else if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Upload))
 	{
 		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
 		heapType = D3D12_HEAP_TYPE_UPLOAD;
 	}
-	if (Any(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
 	{
 		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
@@ -84,15 +84,15 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 
 	SetName(m_Name.c_str());
 
-	if (Any(bufferDesc.Usage, BufferFlag::UnorderedAccess))
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::UnorderedAccess))
 	{
 		// structured buffer
-		if (Any(bufferDesc.Usage, BufferFlag::Structured))
+		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Structured))
 		{
 			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, false, true));
 		}
 		// byteAddress buffer
-		else if (Any(bufferDesc.Usage, BufferFlag::ByteAddress))
+		else if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ByteAddress))
 		{
 			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
 		}
@@ -103,13 +103,13 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 		}
 	}
 
-	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
-		if (Any(bufferDesc.Usage, BufferFlag::Structured))
+		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Structured))
 		{
 			CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, false));
 		}
-		else if (Any(bufferDesc.Usage, BufferFlag::ByteAddress))
+		else if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ByteAddress))
 		{
 			CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true));
 		}

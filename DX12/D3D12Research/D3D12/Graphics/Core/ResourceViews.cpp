@@ -19,7 +19,7 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-    if (Any(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+    if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
     {
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
         srvDesc.Format = DXGI_FORMAT_UNKNOWN;

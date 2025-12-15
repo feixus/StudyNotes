@@ -1,12 +1,10 @@
-require "utility"
-
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
 
 workspace (ENGINE_NAME)
     basedir (ROOT)
-    configurations { "Debug", "Release" }
+    configurations { "Debug", "Release", "DebugASAN" }
     platforms { "x64" }
     startproject (ENGINE_NAME)
     language "C++"
@@ -17,7 +15,6 @@ workspace (ENGINE_NAME)
 	kind "WindowedApp"
     characterset "MBCS"
 	flags { "MultiProcessorCompile", "ShadowedVariables"}
-    --fatalwarnings {"all"}
 	rtti "Off"
     conformancemode "On"
     warnings "Extra"
@@ -25,15 +22,34 @@ workspace (ENGINE_NAME)
     disablewarnings { "4100" }
 
 	filter "configurations:Debug"
+        runtime "Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
 		inlining "Explicit"
 
 	filter "configurations:Release"
+        runtime "Release"
 		defines { "RELEASE" }
 		optimize ("Full")
         linktimeoptimization "On"  -- LTO
         flags { "NoIncrementalLink" }
+
+    filter "configurations:DebugASAN"
+        runtime "Release" 
+		optimize "Off"
+		symbols "On"
+		sanitize { "Address" }
+		flags { "NoIncrementalLink", "NoMinimalRebuild", "NoRuntimeChecks" }
+		editandcontinue "Off"
+		
+		buildoptions { "-fsanitize=address" } 
+    	linkoptions  { "-fsanitize=address" }
+
+		toolset "clang"
+		
+		-- libdirs {
+        -- 	"D:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/lib/clang/17/lib/windows"
+    	-- }
 
     filter {}
 
@@ -50,11 +66,10 @@ project (ENGINE_NAME)
 	includedirs (ROOT .. "D3D12/External")
 	includedirs (ROOT .. "D3D12/Resources/Shaders/Interop")
 
-	SetPlatformDefines()
-
     -- Windows SDK & toolset (Visual Studio only)
     filter {"system:windows", "action:vs*"}
         --toolset "v143"
+		defines { "PLATFORM_WINDOWS" }
     filter {}
 
 
@@ -88,10 +103,32 @@ project (ENGINE_NAME)
 
     ---- External libraries ----
 	filter "system:Windows"
-		AddD3D12()
-		AddPix()
-		AddDxc()
-		AddOptick()
+		-- D3D12
+		links {	"d3d12.lib", "dxgi", "d3dcompiler", "dxguid" }
+	
+		includedirs (ROOT .. "D3D12/External/D3D12/include")
+		includedirs (ROOT .. "D3D12/External/D3D12/include/d3dx12")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\D3D12Core.dll\" \"$(OutDir)\\D3D12\\\"") }
+		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\d3d12SDKLayers.dll\" \"$(OutDir)\\D3D12\\\"") }
+
+		-- pix
+		includedirs (ROOT .. "D3D12/External/Pix/include")
+		libdirs (ROOT .. "D3D12/External/Pix/lib")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+		links { "WinPixEventRuntime" }
+
+		-- dxc
+		links { "dxcompiler" }
+		includedirs (ROOT .. "D3D12/External/Dxc")
+		libdirs	(ROOT .. "D3D12/External/Dxc")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
+		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
+
+		-- optick
+		links { "OptickCore" }
+		includedirs (ROOT .. "D3D12/External/Optick/include")
+		libdirs	(ROOT .. "D3D12/External/Optick/lib")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Optick\\bin\\OptickCore.dll\" \"$(OutDir)\"") }
 		
 newaction {
 	trigger     = "clean",

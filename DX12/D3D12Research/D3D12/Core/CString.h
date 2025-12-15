@@ -12,7 +12,7 @@ inline int FormatString(char* pBuffer, size_t bufferSize, const char* pFormat, .
         return result;
 
     if (result == -1 || result >= bufferSize)
-        result = bufferSize - 1;
+        result = (int)bufferSize - 1;
         
     pBuffer[result] = 0;
     return result;
@@ -24,7 +24,7 @@ inline int FormatStringVars(char* pBuffer, size_t bufferSize, const char* pForma
     if (pBuffer == nullptr)
         return result;
     if (result == -1 || result >= bufferSize)
-        result = bufferSize - 1;
+        result = (int)bufferSize - 1;
         
     pBuffer[result] = 0;
     return result;

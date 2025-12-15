@@ -27,7 +27,7 @@
 GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 {
 	UINT flags = 0;
-	if (Any(createFlags, GraphicsInstanceFlags::DebugDevice))
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DebugDevice))
 	{
 		flags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
@@ -39,7 +39,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		m_AllowTearing = allowTearing;
 	}
 
-	if (Any(createFlags, GraphicsInstanceFlags::DRED))
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DRED))
 	{
 		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
@@ -52,7 +52,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		}
 	}
 
-	if (Any(createFlags, GraphicsInstanceFlags::GpuValidation))
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::GpuValidation))
 	{
 		ComPtr<ID3D12Debug1> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
@@ -61,7 +61,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		}
 	}
 
-	if (Any(createFlags, GraphicsInstanceFlags::Pix))
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::Pix))
 	{
 		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
 		{
@@ -77,7 +77,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 	}
 
 	// attach to RenderDoc
-	if (Any(createFlags, GraphicsInstanceFlags::RenderDoc))
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::RenderDoc))
 	{
 		if (GetModuleHandleA("C:\\Program Files\\RenderDoc\\renderdoc.dll") == 0)
 		{

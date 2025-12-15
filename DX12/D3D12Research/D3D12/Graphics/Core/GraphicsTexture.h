@@ -125,7 +125,7 @@ struct TextureDesc
 	{
 		check(width);
 		check(height);
-		check(Any(flags, TextureFlag::DepthStencil));
+		check(EnumHasAnyFlags(flags, TextureFlag::DepthStencil));
 		TextureDesc desc{};
 		desc.Width = width;
 		desc.Height = height;
@@ -143,7 +143,7 @@ struct TextureDesc
 	{
 		check(width);
 		check(height);
-		check(Any(flags, TextureFlag::RenderTarget));
+		check(EnumHasAnyFlags(flags, TextureFlag::RenderTarget));
 		TextureDesc desc{};
 		desc.Width = width;
 		desc.Height = height;
