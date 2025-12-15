@@ -1819,10 +1819,10 @@ void DemoApp::UpdateImGui()
 
 	ImGui::End();
 
-	m_pVisualizeTexture = m_pVisualizeTexture != nullptr ? m_pVisualizeTexture : m_pAmbientOcclusion.get();
+	//m_pVisualizeTexture = m_pVisualizeTexture != nullptr ? m_pVisualizeTexture : m_pAmbientOcclusion.get();
 	if (m_pVisualizeTexture)
 	{
-		std::string tabName = std::string("Visualize Texture:") + m_pVisualizeTexture->GetName();
+		std::string tabName = std::format("Visualize Texture: {}", m_pVisualizeTexture->GetName());
 		ImGui::Begin(tabName.c_str());
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
 
