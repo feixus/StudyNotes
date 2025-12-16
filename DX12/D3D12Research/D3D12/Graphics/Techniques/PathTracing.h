@@ -15,10 +15,14 @@ public:
 
     void Render(RGGraph& graph, const SceneData& sceneData);
     void OnResize(uint32_t width, uint32_t height);
-    
+    void Reset();
+
 private:
     GraphicsDevice* m_pGraphicsDevice;
     std::unique_ptr<RootSignature> m_pRS;
     StateObject* m_pSO{ nullptr };
-    std::unique_ptr<GraphicsTexture> m_pTargetTexture;
+
+	std::unique_ptr<GraphicsTexture> m_pAccumulationTexture;
+	DelegateHandle m_OnShaderCompiledHandle;
+	int m_NumAccumulatedFrames{1};
 };

@@ -35,13 +35,41 @@ PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pG
 
     desc.pGlobalRootSignature = m_pRS.get();
     m_pSO = m_pGraphicsDevice->CreateStateObject(desc);
+
+	m_OnShaderCompiledHandle = pGraphicsDevice->GetShaderManager()->OnLibraryRecompiledEvent().AddLambda([this](ShaderLibrary*, ShaderLibrary*)
+	{
+		Reset();
+	});
 }
     
 PathTracing::~PathTracing()
-{}
+{
+	m_pGraphicsDevice->GetShaderManager()->OnLibraryRecompiledEvent().Remove(m_OnShaderCompiledHandle);
+}
 
 void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 {
+	static int32_t numBounces = 3;
+
+	ImGui::Begin("Parameters");
+	ImGui::Text("Path Tracing");
+	if (ImGui::SliderInt("Bounces", &numBounces, 1, 15))
+	{
+		Reset();
+	}
+	if (ImGui::Button("Reset"))
+	{
+		Reset();
+	}
+	ImGui::End();
+
+	if (sceneData.pCamera->GetPreviousViewProjection() != sceneData.pCamera->GetViewProjection())
+	{
+		Reset();
+	}
+
+	m_NumAccumulatedFrames++;
+
     RGPassBuilder passBuilder = graph.AddPass("Path Tracing");
     passBuilder.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
@@ -60,7 +88,8 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
             float ViewPixelSpreadAngle;
             uint32_t TLASIndex;
             uint32_t FrameIndex;
-            uint32_t Accumulate;
+			uint32_t NumBounces;
+            uint32_t AccumulateFrames;
         } params{};
 
         params.View = sceneData.pCamera->GetView();
@@ -71,7 +100,8 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
         params.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() * 0.5f) / sceneData.pRenderTarget->GetHeight());
         params.TLASIndex = sceneData.SceneTLAS;
         params.FrameIndex = sceneData.FrameIndex;
-        params.Accumulate = sceneData.pCamera->GetPreviousViewProjection() == sceneData.pCamera->GetViewProjection();
+		params.NumBounces = numBounces;
+        params.AccumulateFrames = m_NumAccumulatedFrames;
 
         ShaderBindingTable bindingTable(m_pSO);
         bindingTable.BindRayGenShader("RayGen");
@@ -90,9 +120,15 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
             sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
         };
 
+		const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] =
+		{
+			sceneData.pRenderTarget->GetUAV()->GetDescriptor(),
+			m_pAccumulationTexture->GetUAV()->GetDescriptor(),
+		};
+
         context.SetComputeDynamicConstantBufferView(0, params);
         context.SetComputeDynamicConstantBufferView(1, *sceneData.pShadowData);
-        context.BindResource(2, 0, sceneData.pRenderTarget->GetUAV());
+        context.BindResources(2, 0, uavs, std::size(uavs));
         context.BindResources(3, 0, srvs, std::size(srvs));
         context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
@@ -101,4 +137,11 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 }
     
 void PathTracing::OnResize(uint32_t width, uint32_t height)
-{}
+{
+	m_pAccumulationTexture = m_pGraphicsDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::UnorderedAccess), "Accumulation Target");
+}
+
+void PathTracing::Reset()
+{
+	m_NumAccumulatedFrames = 0;
+}
