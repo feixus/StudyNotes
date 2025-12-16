@@ -3,7 +3,7 @@
 #include "RaytracingCommon.hlsli"
 #include "Lighting.hlsli"
 #include "Random.hlsli"
-#include "TonemappingCommon.hlsli"
+#include "Tonemap/TonemappingCommon.hlsli"
 
 #define MIN_BOUNCES 3
 #define RIS_CANDIDATES_LIGHTS 8
@@ -194,7 +194,7 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
         uint dataOffset = 0;
         positions[i] += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
         dataOffset += sizeof(uint2); // UV
-		outData.UV += UnpackHalf2(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
+		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
         dataOffset += sizeof(uint); // Normal
 		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
         dataOffset += sizeof(float4);
@@ -275,12 +275,13 @@ bool EvaluateDiffuseRay(float2 u, SurfaceData surface, float3 N, float3 V, out f
 // resampled importance sampling
 bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightIndex, out float sampleWeight)
 {
+    lightIndex = 0;
+	sampleWeight = 0;
     if (cViewData.NumLights <= 0)
     {
         return false;
     }
 
-    lightIndex = 0;
     float totalWeights = 0;
     float samplePdfG = 0;
     for (int i = 0; i < RIS_CANDIDATES_LIGHTS; i++)
@@ -360,7 +361,7 @@ void RayGen()
         SurfaceData surface = GetShadingData(payload.Material, payload.UV, 0);
 
         float3 N = payload.Normal;
-        float3 V = -desc.Direction;
+        float3 V = -rayDesc.Direction;
         float3 geometryNormal = payload.GeometryNormal;
         if (dot(geometryNormal, V) < 0.0f)
         {
