@@ -65,10 +65,29 @@ float2 HammersleyPoints(uint i, uint N)
 // hemisphereSample_uniform. Uniform distribution on the sphere
 float3 HemisphereSampleUniform(float u, float v)
 {
+    // ∫∫pdf(theta, phi) sin(theta) dtheta dphi = 1
     float phi = v * 2.0 * PI;
+    // pdf(theta) = 2 * cos(theta) * sin(theta) = sin(2theta)
+    // CDF(theta) = integral(0->theta) pdf(t) dt = sin^2(theta)
     float cosTheta = 1.0 - u;
     float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
     return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+
+// Samples a direction within a hemisphere oriented along +Z axis with a cosine-weighted distribution 
+// Source: "Sampling Transformations Zoo" in Ray Tracing Gems by Shirley et al.
+float3 HemisphereSampleCosineWeight(float2 u, out float pdf)
+{
+    // uniform disk sampling
+    //disk pdf(r, theta) = 2r, r in [0;1), theta in [0;2PI);  CDF(r) = r^2 --> r = sqrt(u.x)
+    float radius = sqrt(u.x);
+    float theta = 2.0f * PI * u.y;
+
+    // project up to hemisphere, from x^2 + y^2 = r^2 ---> x^2 + y^2 + z^2 = 1
+    float3 result = float3(radius * cos(theta), radius * sin(theta), sqrt(1.0f - u.x));
+    //hemisphere pdf(r, theta, phi) = cos(theta) / PI
+    pdf = result.z * INV_PI;
+    return result;
 }
 
 #endif

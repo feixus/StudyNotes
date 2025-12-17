@@ -107,7 +107,7 @@ void RayGen()
             tTLASTable[cData.TLASIndex],
             
             // RayFlags
-            RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER,
+            RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER,
             
             // parameter name: InstanceInclusionMask
             // instance inclusion mask used to mask out some geometry to this ray by and-ing the mask with a geometry mask

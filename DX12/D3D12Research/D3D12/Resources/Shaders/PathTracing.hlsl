@@ -7,13 +7,16 @@
 
 #define MIN_BOUNCES 3
 #define RIS_CANDIDATES_LIGHTS 8
-#define BLEND_FACTOR 0.02f
+
+#define RAY_INVALID -1
+#define RAY_DIFFUSE 0
+#define RAY_SPECULAR 1
 
 GlobalRootSignature GlobalRootSig =
 {
     "CBV(b0),"
     "CBV(b2),"
-    "DescriptorTable(UAV(u0, numDescriptors = 1)),"
+    "DescriptorTable(UAV(u0, numDescriptors = 2)),"
     "DescriptorTable(SRV(t5, numDescriptors = 7)),"
     GLOBAL_BINDLESS_TABLE
     "StaticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT),"
@@ -29,13 +32,6 @@ struct VertexAttribute
     int Material;
 };
 
-struct VertexInput
-{
-    uint2 Position;
-    uint UV;
-    float3 Normal;
-};
-
 struct ViewData
 {
     float4x4 View;
@@ -46,8 +42,16 @@ struct ViewData
     float ViewPixelSpreadAngle;
     uint TLASIndex;
     uint FrameIndex;
-    uint Accumulate;
     int NumBounces;
+    uint AccumulatedFrames;
+};
+
+struct VertexInput
+{
+    uint2 Position;
+    uint UV;
+    float3 Normal;
+    float4 Tangent;
 };
 
 struct RAYPAYLOAD PrimaryRayPayload
@@ -75,6 +79,7 @@ struct SurfaceData
 };
 
 RWTexture2D<float4> uOutput : register(u0);
+RWTexture2D<float4> uAccumulation : register(u1);
 ConstantBuffer<ViewData> cViewData : register(b0);
 
 float CastShadowRay(float3 origin, float3 direction)
@@ -115,9 +120,9 @@ SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
 	float metalness = material.MetalnessFactor;
 	if (material.RoughnessMetalness >= 0)
 	{
-		float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, uv, mipLevel);
-		roughness *= roughnessMetalness.g;
-		metalness *= roughnessMetalness.b;
+		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, uv, mipLevel);
+		roughness *= roughnessMetalnessSample.g;
+		metalness *= roughnessMetalnessSample.b;
 	}
 
 	float3 emissive = material.EmissiveFactor.rgb;
@@ -127,7 +132,7 @@ SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
 	}
 	float specular = 0.5f;
 
-	SurfaceData outData = (SurfaceData) 0;
+	SurfaceData outData = (SurfaceData)0;
 	outData.Diffuse = ComputeDiffuseColor(baseColor.rgb, metalness);
 	outData.Specular = ComputeF0(specular, baseColor.rgb, metalness);
 	outData.Roughness = roughness;
@@ -136,9 +141,9 @@ SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
 	return outData;
 }
 
-LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, SurfaceData surface)
+LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, SurfaceData surface)
 {
-	LightResult result = (LightResult) 0;
+	LightResult result = (LightResult)0;
 	float attenuation = GetAttenuation(light, worldPos);
 	if (attenuation <= 0.0f)
 	{
@@ -164,7 +169,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Surf
         lightPos.y = lightPos.y * -0.5f + 0.5f;
        
         attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-        attenuation *= CastShadowRay(worldPos, L);
+        attenuation *= CastShadowRay(OffsetRay(worldPos, geometryNormal), L);
     }
 
     L = normalize(L);
@@ -193,10 +198,11 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
 	{
         uint dataOffset = 0;
         positions[i] += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
-        dataOffset += sizeof(uint2); // UV
+        dataOffset += sizeof(uint2);
 		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-        dataOffset += sizeof(uint); // Normal
+        dataOffset += sizeof(uint);
 		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
+        dataOffset += sizeof(float3);
         dataOffset += sizeof(float4);
 	}
 	float4x3 worldMatrix = ObjectToWorld4x3();
@@ -249,32 +255,118 @@ void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload)
     payload.Hit = 1;
 }
 
-bool EvaluateDiffuseRay(float2 u, SurfaceData surface, float3 N, float3 V, out float3 direction, out float3 weight)
+// Compute the probability of a specular ray depending on Fresnel term
+// The Fresnel term is approximated because it's calculated with the shading normal instead of the half vector
+float BRDFProbability(SurfaceData surface, float3 N, float3 V)
 {
-    direction = HemisphereSampleUniform(u.x, u.y);
-    float3 b = float3(1, 0, 0);
-    float3 t = normalize(cross(direction, b));
-    b = cross(t, N);
-    direction = mul(direction, float3x3(t, b, N));
+    float diffuseReflectance = GetLuminance(surface.Diffuse);
+    float VdotN = max(0.05f, dot(V, N));
+    float fresenl = saturate(GetLuminance(F_Schlick(surface.Specular, VdotN)));
+    float specular = fresenl;
+    float diffuse = diffuseReflectance * (1.0f - fresenl);
+    float p = (specular / max(0.0001f, specular + diffuse));
+    return p;
+}
 
-    weight = surface.Diffuse;
+// indirect light BRDF evaluation
+bool EvaluateIndirectBRDF(int rayType, float2 u, SurfaceData surface, float3 N, float3 V, float3 geometryNormal, out float3 direction, out float3 weight)
+{
+    if (rayType == RAY_INVALID)
+    {
+        weight = float3(1, 0, 1);
+        return false;
+    }
 
-    if (dot(N, direction) <= 0.0f)
+    // skip if the view ray is under the hemisphere
+    if (dot(N, V) < 0.0f)
     {
         return false;
     }
 
-    if (GetLuminance(weight) < 0)
+    float4 qRotationToZ = GetRotationToZAxis(N);
+    float3 Vlocal = RotatePoint(qRotationToZ, V);
+    const float3 Nlocal = float3(0, 0, 1);
+
+    float3 directionLocal = float3(0, 0, 0);
+
+    if (rayType == RAY_DIFFUSE)
+    {
+        // PDF of cosine weighted sample cancel out the diffuse term
+        float pdf;
+        directionLocal = HemisphereSampleCosineWeight(u, pdf);
+        weight = surface.Diffuse;
+
+        // weight the diffuse term based on the specular term of random microfacet normal
+        // Diffuse = 1.0 - Fresnel
+        float alpha = Square(surface.Roughness);
+        float3 Hspecular = SampleGGXVNDF(Vlocal, alpha.xx, u);
+        float VdotH = max(0.00001f, min(1.0f, dot(Vlocal, Hspecular)));
+        weight *= (1.0f.xxx - F_Schlick(surface.Specular, VdotH));
+    }
+    else if (rayType == RAY_SPECULAR)
+    {
+        float alpha = Square(surface.Roughness);
+        float alphaSquared = Square(alpha);
+
+        // sample a microfacet normal(H) in local space
+        float3 Hlocal;
+        if (alpha == 0.0f)
+        {
+            // fast path for zero roughness (perfect reflection)
+            // also prevents NaNs appearing due to divisions by zeros
+            Hlocal = float3(0, 0, 1);
+        }
+        else
+        {
+            // for non-zero roughness, VNDF sampling for GG-X distribution
+            Hlocal = SampleGGXVNDF(Vlocal, alpha.xx, u);
+        }
+
+        // reflect view direction to obtain light vector
+        float3 Llocal = reflect(-Vlocal, Hlocal);
+
+        // clamp dot products here to small value to prevent numerical instability
+        // assume that rays incident from below the hemisphere have been filtered
+        float HdotL = max(0.00001f, min(1.0f, dot(Hlocal, Llocal)));
+        const float3 Nlocal = float3(0, 0, 1);
+        float NdotL = max(0.00001f, min(1.0f, dot(Nlocal, Llocal)));
+        float NdotV = max(0.00001f, min(1.0f, dot(Nlocal, Vlocal)));
+        float NdotH = max(0.00001f, min(1.0f, dot(Nlocal, Hlocal)));
+        float3 F = F_Schlick(surface.Specular, HdotL);
+
+        // calculate weight of the sample specific for selected sampling methos
+        // this is microfacet BRDF divided by PDF of sampling methos - notice how most terms cancel out.
+        weight = F * Smith_G2_Over_G1_Height_Correlated(alpha, alphaSquared, NdotL, NdotV);
+
+        directionLocal = Llocal;
+    }
+
+    // don't trace direction if there is no contribution
+    if (GetLuminance(weight) <= 0.0f)
     {
         return false;
     }
 
+    // rotate the direction back into vector space.
+    direction = normalize(RotatePoint(InvertRotation(qRotationToZ), directionLocal));
+
+    // don't trace under the hemisphere
+    if (dot(geometryNormal, direction) <= 0.0f)
+    {
+        return false;
+    }
     return true;
 }
 
-// resampled importance sampling
+// sample a random light by using resampled importance sampling(RIS)
 bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightIndex, out float sampleWeight)
 {
+    // Algorithm
+    // pick N random lights from the full set of lights
+    // compute contribution of each light
+    // if the light's weight is above a random threshold, pick it
+    // weight the selected light based on the total weight and light count.
+
     lightIndex = 0;
 	sampleWeight = 0;
     if (cViewData.NumLights <= 0)
@@ -320,7 +412,7 @@ void RayGen()
 
     uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy,  cViewData.FrameIndex);
 
-    // anti aliasing
+    // Jitter to achieve anti-aliasing
     float2 offset = float2(Random01(seed), Random01(seed));
     pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
@@ -351,15 +443,18 @@ void RayGen()
             payload
         );
 
+        // if the ray didn't hit anything, accumulate the sky and break the loop
         if (!payload.Hit)
         {
-            const float3 skyColor = 1;
+            const float3 skyColor = 3; // CIESky(rayDesc.Direction, -tLights[0].Direction)
             radiance += throughput * skyColor;
             break;
         }
 
+        // decode the hit payload to retrieve all the shading information
         SurfaceData surface = GetShadingData(payload.Material, payload.UV, 0);
 
+        // flip the normal towards the incoming ray
         float3 N = payload.Normal;
         float3 V = -rayDesc.Direction;
         float3 geometryNormal = payload.GeometryNormal;
@@ -372,6 +467,7 @@ void RayGen()
             N = -N;
         }
 
+        // the Emissive properties is like a light source and directly applied on top
         radiance += throughput * surface.Emissive;
 
         // direct light evaluation
@@ -379,11 +475,19 @@ void RayGen()
         float lightWeight = 0.0f;
         if (SampleLightRIS(seed, payload.Position, N, lightIndex, lightWeight))
         {
-            LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, surface);
+            LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, payload.GeometryNormal, surface);
             radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
         }
 
-        // russian roulette
+        // if we're at the last bounce, no point in computing the next ray
+        if (i == cViewData.NumBounces - 1)
+        {
+            break;
+        }
+
+        // russian roulette ray elimination
+        // kill the ray based on the current throughput
+        // we must correctly weight the sample based on this elimination to account for bias
         if (i > MIN_BOUNCES)
         {
             float rrProbability = min(0.95f, GetLuminance(throughput));
@@ -397,22 +501,37 @@ void RayGen()
             }
         }
 
-        float3 direction;
+        // produce new ray based on BRDF probability
+        int rayType = RAY_INVALID;
+        float brdfProbability = BRDFProbability(surface, N, V);
+        if (Random01(seed) < brdfProbability)
+        {
+            rayType = RAY_SPECULAR;
+            throughput /= brdfProbability;
+        }
+        else
+        {
+            rayType = RAY_DIFFUSE;
+            throughput /= (1.0f - brdfProbability);
+        }
+
+        // evaluate the BRDF based on the selected ray type (ie. Diffuse vs Specular)
         float3 weight;
-        if (!EvaluateDiffuseRay(float2(Random01(seed), Random01(seed)), surface, N, V, direction, weight))
+        if (!EvaluateIndirectBRDF(rayType, float2(Random01(seed), Random01(seed)), surface, N, V, geometryNormal, ray.Direction, weight))
         {
             break;
         }
-        throughput *= weight;
 
-        ray.Origin = payload.Position;
-        ray.Direction = direction;
+        // propagate the weight and define the new ray origin.
+        throughput *= weight;
+        ray.Origin = OffsetRay(payload.Position, geometryNormal);
     }
 
-    if (cViewData.Accumulate)
+    if (cViewData.AccumulatedFrames > 1)
     {
         float3 previousColor = uOutput[DispatchRaysIndex().xy].rgb;
-        radiance = lerp(previousColor, radiance, BLEND_FACTOR);
+        radiance += previousColor;
     }
-    uOutput[DispatchRaysIndex().xy] = float4(radiance, 1.0f);
+    uAccumulation[DispatchRaysIndex().xy] = float4(radiance, 1);
+    uOutput[DispatchRaysIndex().xy] = float4(radiance, 1.0f) / cViewData.AccumulatedFrames;
 }
