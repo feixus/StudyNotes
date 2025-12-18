@@ -474,4 +474,26 @@ bool RaySphereIntersect(Ray ray, Sphere sphere, out float intersectionA, out flo
 	return true;
 }
 
+// helpers for octahedral normal encoding/decoding
+float2 OctWrap(float2 v)
+{
+	return float2((1.0f - abs(v.y)) * (v.x >= 0.0f ? 1.0f : -1.0f), (1.0f - abs(v.x)) * (v.y >= 0.0f ? 1.0f : -1.0f));
+}
+
+float2 EncodeNormalOctahedron(float3 n)
+{
+	float2 p = float2(n.x, n.y) * (1.0f / (abs(n.x) + abs(n.y) + abs(n.z)));
+	p = (n.z < 0.0f) ? OctWrap(p) : p;
+	return p;
+}
+
+float3 DecodeNormalOctahedron(float2 p)
+{
+	float3 n = float3(p.x, p.y, 1.0f - abs(p.x) - abs(p.y));
+	float2 tmp = (n.z < 0.0f) ? OctWrap(float2(n.x, n.y)) : float2(n.x, n.y);
+	n.x = tmp.x;
+	n.y = tmp.y;
+	return normalize(n);
+}
+
 #endif

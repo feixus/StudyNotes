@@ -93,6 +93,10 @@ float4 GetRotationToZAxis(float3 input)
     {
         return float4(1.0f, 0.0f, 0.0f, 0.0f);
     }
+    
+    // half-angle formula, rotation axis is cross(input, zAxis) = (input.y, -input.x, 0), angle = acos(input.z)
+    // q = (cos(angle/2), sin(angle/2) * axis)
+    // q = normalize(1 + dot(V1, V2), cross(V1, V2)) to avoid expensive trigonometric functions
     return normalize(float4(input.y, -input.x, 0.0f, 1.0f + input.z));
 }
 

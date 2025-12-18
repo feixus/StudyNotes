@@ -39,7 +39,6 @@ struct ViewData
     float4x4 Projection;
     float4x4 ProjectionInv;
     uint NumLights;
-    float ViewPixelSpreadAngle;
     uint TLASIndex;
     uint FrameIndex;
     int NumBounces;
@@ -57,16 +56,15 @@ struct VertexInput
 struct RAYPAYLOAD PrimaryRayPayload
 {
     float2 UV;
+    float2 Normal;
+    float2 GeometryNormal;
     float3 Position;
-    float3 Normal;
-    float3 GeometryNormal;
     uint Material;
-    uint Hit;
-};
 
-struct RAYPAYLOAD ShadowRayPayload
-{
-    uint Hit;
+    bool IsHit()
+    {
+        return Material != -1;
+    }
 };
 
 struct SurfaceData
@@ -76,6 +74,7 @@ struct SurfaceData
 	float3 Specular;
 	float Roughness;
 	float3 Emissive;
+    float3 Normal;
 };
 
 RWTexture2D<float4> uOutput : register(u0);
@@ -91,20 +90,17 @@ float CastShadowRay(float3 origin, float3 direction)
     ray.TMin = RAY_BIAS;
     ray.TMax = len;
 
-    ShadowRayPayload shadowRay;
-    shadowRay.Hit = 0;
-
-    TraceRay(
+    RayQuery<RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
+    rayQuery.TraceRayInline(
         tTLASTable[cViewData.TLASIndex],
-        RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
+        0,
         0xFF,
-        0,
-        0,
-        1,
-        ray,
-        shadowRay
+        ray
     );
-    return shadowRay.Hit;
+
+    rayQuery.Proceed();
+
+    return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
 }
 
 SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
@@ -222,11 +218,10 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
     float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
 	VertexAttribute vertex = GetVertexAttributes(barycentrics);
 
-    payload.Hit = 1;
     payload.Material = vertex.Material;
     payload.UV = vertex.UV;
-    payload.Normal = vertex.Normal;
-    payload.GeometryNormal = vertex.GeometryNormal;
+    payload.Normal = EncodeNormalOctahedron(vertex.Normal);
+    payload.GeometryNormal = EncodeNormalOctahedron(vertex.GeometryNormal);
     payload.Position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 }
 
@@ -245,15 +240,7 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 
 [shader("miss")]
 void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload)
-{
-    payload.Hit = 0;
-}
-
-[shader("miss")]
-void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload)
-{
-    payload.Hit = 1;
-}
+{}
 
 // Compute the probability of a specular ray depending on Fresnel term
 // The Fresnel term is approximated because it's calculated with the shading normal instead of the half vector
@@ -425,6 +412,7 @@ void RayGen()
     for (int i = 0; i < cViewData.NumBounces; i++)
     {
         PrimaryRayPayload payload = (PrimaryRayPayload)0;
+        payload.Material = -1;
 
         RayDesc rayDesc;
         rayDesc.Origin = ray.Origin;
@@ -444,7 +432,7 @@ void RayGen()
         );
 
         // if the ray didn't hit anything, accumulate the sky and break the loop
-        if (!payload.Hit)
+        if (!payload.IsHit())
         {
             const float3 skyColor = 3; // CIESky(rayDesc.Direction, -tLights[0].Direction)
             radiance += throughput * skyColor;
@@ -455,9 +443,9 @@ void RayGen()
         SurfaceData surface = GetShadingData(payload.Material, payload.UV, 0);
 
         // flip the normal towards the incoming ray
-        float3 N = payload.Normal;
+        float3 N = DecodeNormalOctahedron(payload.Normal);
         float3 V = -rayDesc.Direction;
-        float3 geometryNormal = payload.GeometryNormal;
+        float3 geometryNormal = DecodeNormalOctahedron(payload.GeometryNormal);
         if (dot(geometryNormal, V) < 0.0f)
         {
             geometryNormal = -geometryNormal;
@@ -475,7 +463,7 @@ void RayGen()
         float lightWeight = 0.0f;
         if (SampleLightRIS(seed, payload.Position, N, lightIndex, lightWeight))
         {
-            LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, payload.GeometryNormal, surface);
+            LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, geometryNormal, surface);
             radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
         }
 

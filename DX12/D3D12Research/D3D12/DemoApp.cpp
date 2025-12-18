@@ -314,7 +314,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
 	}
 

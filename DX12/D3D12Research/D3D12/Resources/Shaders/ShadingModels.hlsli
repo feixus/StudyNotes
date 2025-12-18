@@ -150,7 +150,7 @@ float3 SampleGGXVNDF(float3 Ve, float2 alpha2D, float2 u)
     float t1 = r * cos(phi);
     float t2 = r * sin(phi);
     float s = 0.5f * (1.0f + Vh.z);
-    t2 = lerp(sqrt(1.0f - t1 * t1), t2, s);
+    t2 = lerp(sqrt(1.0f - t1 * t1), t2, s); // blend between uniform disk and semicircle sampling
 
     // section 4.3: reprojection onto hemisphere
     float3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
@@ -160,6 +160,7 @@ float3 SampleGGXVNDF(float3 Ve, float2 alpha2D, float2 u)
 }
 
 // Smith G1 term (masking function) further optimized for GGX distribution (by substituting G_a into G1_GGX)
+// G1 = 2 / (1 + sqrt(1 + a^2 * tan^2(theta)))
 float Smith_G1_GGX(float alpha, float NdotS, float alphaSquared, float NdotSSquared)
 {
     return 2.0f / (sqrt(((alphaSquared * (1.0f - NdotSSquared)) + NdotSSquared) / NdotSSquared) + 1.0f);
@@ -167,6 +168,7 @@ float Smith_G1_GGX(float alpha, float NdotS, float alphaSquared, float NdotSSqua
 
 // a fraction G2/G1 where G2 is height correlated can be expressed using only G1 terms.
 // Source: "Implementing a Simple Anisotropic Rough Diffuse Material with Stochastic Evaluation", Appendix A by Heitz & Dupuy
+// G2 = G1(V) * G1(L) / (G1(V) + G1(L) - G1(V) * G1(L))
 float Smith_G2_Over_G1_Height_Correlated(float alpha, float alphaSquared, float NdotL, float NdotV)
 {
     float G1V = Smith_G1_GGX(alpha, NdotV, alphaSquared, NdotV * NdotV);
