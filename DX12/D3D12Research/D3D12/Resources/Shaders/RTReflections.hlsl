@@ -29,6 +29,7 @@ struct ViewData
 	uint NumLights;
 	float ViewPixelSpreadAngle;
 	uint TLASIndex;
+	uint FrameIndex;
 };
 
 struct Vertex

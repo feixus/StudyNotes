@@ -67,6 +67,11 @@ struct RAYPAYLOAD PrimaryRayPayload
     }
 };
 
+struct RAYPAYLOAD ShadowRayPayload
+{
+	uint Hit;
+};
+
 struct SurfaceData
 {
 	float Opacity;
@@ -90,17 +95,58 @@ float CastShadowRay(float3 origin, float3 direction)
     ray.TMin = RAY_BIAS;
     ray.TMax = len;
 
-    RayQuery<RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
+	const int rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+						RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+						RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+
+	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
+
+#if _INLINE_RT
+	RayQuery <rayFlags> rayQuery;
     rayQuery.TraceRayInline(
-        tTLASTable[cViewData.TLASIndex],
+        TLAS,
         0,
         0xFF,
         ray
     );
 
-    rayQuery.Proceed();
+	while (rayQuery.Proceed())
+	{
+		switch (rayQuery.CandidateType())
+		{
+			// alpha test materials 
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
+											rayQuery.CandidateInstanceID(),
+											rayQuery.CandidatePrimitiveIndex());
+				SurfaceData surface = GetShadingData(vertex.Material, vertex.UV, 0);
+				if (surface.Opacity > 0.5f)
+				{
+					rayQuery.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
 
-    return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+	return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+	
+#else
+	ShadowRayPayload payload;
+	payload.Hit = 1;
+	TraceRay(
+		TLAS,		//AccelerationStructure
+		rayFlags,	//RayFlags
+		0xFF,		//InstanceInclusionMask
+		0,			//RayContributionToHitGroupIndex
+		0,			//MultiplierForGeometryContributionToHitGroupIndex
+		1,			//MissShaderIndex
+		ray,		//Ray
+		payload		//Payload
+	);
+	return !payload.Hit;
+#endif
 }
 
 SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
@@ -176,10 +222,11 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	return result;
 }
 
-VertexAttribute GetVertexAttributes(float3 barycentrics)
+VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex)
 {
+	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
 	MeshData mesh = tMeshes[InstanceID()];
-	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
+	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
 
 	VertexAttribute outData;
 	outData.UV = 0;
@@ -190,6 +237,7 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
 
     const uint vertexStride = sizeof(VertexInput);
     ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
+	
 	for (int i = 0; i < 3; i++)
 	{
         uint dataOffset = 0;
@@ -215,9 +263,7 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
 [shader("closesthit")]
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-    float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
-	VertexAttribute vertex = GetVertexAttributes(barycentrics);
-
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
     payload.Material = vertex.Material;
     payload.UV = vertex.UV;
     payload.Normal = EncodeNormalOctahedron(vertex.Normal);
@@ -228,9 +274,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-    float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
-	VertexAttribute vertex = GetVertexAttributes(barycentrics);
-
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
     SurfaceData surface = GetShadingData(vertex.Material, vertex.UV, 0);
     if (surface.Opacity < 0.5f)
     {
@@ -241,6 +285,12 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("miss")]
 void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload)
 {}
+
+[shader("miss")]
+void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload)
+{
+	payload.Hit = 0;
+}
 
 // Compute the probability of a specular ray depending on Fresnel term
 // The Fresnel term is approximated because it's calculated with the shading normal instead of the half vector
