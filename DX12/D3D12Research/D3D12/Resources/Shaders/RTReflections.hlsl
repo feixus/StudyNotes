@@ -30,22 +30,6 @@ struct ViewData
 	uint FrameIndex;
 };
 
-struct VertexAttribute
-{
-	float2 UV;
-	float3 Normal;
-	float4 Tangent;
-	uint Material;
-};
-
-struct VertexInput
-{
-	uint2 Position;
-	uint UV;
-	float3 Normal;
-	float4 Tangent;
-};
-
 struct RAYPAYLOAD ReflectionRayPayload
 {
 	float3 output RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit, miss));
@@ -54,39 +38,11 @@ struct RAYPAYLOAD ReflectionRayPayload
 
 struct RAYPAYLOAD ShadowRayPayload
 {
-	float hit RAYQUALIFIER(read(caller) : write(caller, miss));
+	uint Hit RAYQUALIFIER(read(caller) : write(caller, miss));
 };
 
 RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<ViewData> cViewData : register(b0);
-
-float CastShadowRay(float3 origin, float3 direction)
-{
-	float len = length(direction);
-
-	RayDesc ray;
-	ray.Origin = origin;
-	ray.Direction = direction / len;
-	ray.TMin = RAY_BIAS;
-	ray.TMax = len;
-
-	ShadowRayPayload shadowRay;
-	shadowRay.hit = 0.0f;
-
-	TraceRay(
-        tTLASTable[cViewData.TLASIndex], // Acceleration structure
-        RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-        RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, // Ray flags
-        0xFF, // InstanceInclusionMask
-        0, // RayContributionToHitGroupIndex - common pattern: 0-primary rays, 1-shadow rays, 2- reflection rays
-        0, // MultiplierForGeometryContributionToHitGroupIndex - opaque-0, transparent-1, mirror-2 etc.
-        1, // MissShaderIndex
-        ray, // Ray
-        shadowRay // Payload
-    );
-
-	return shadowRay.hit;
-}
 
 ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 {
@@ -116,38 +72,6 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
     );
     
 	return payload;
-}
-
-VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex)
-{
-	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
-	MeshData mesh = tMeshes[InstanceID()];
-	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
-
-	VertexAttribute outData;
-	outData.UV = 0;
-	outData.Normal = 0;
-	outData.Material = mesh.Material;
-
-    const uint vertexStride = sizeof(VertexInput);
-    ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
-	
-	for (int i = 0; i < 3; i++)
-	{
-        uint dataOffset = 0;
-        dataOffset += sizeof(uint2);
-		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-        dataOffset += sizeof(uint);
-		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-        dataOffset += sizeof(float3);
-        outData.Tangent += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
-        dataOffset += sizeof(float4);
-	}
-	float4x3 worldMatrix = ObjectToWorld4x3();
-	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
-	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
-
-	return outData;
 }
 
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, BrdfData brdfData)
@@ -183,7 +107,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 	else
 	{
 #if SECONDARY_SHADOW_RAY
-		attenuation *= CastShadowRay(worldPos, L);
+		attenuation *= CastShadowRay(worldPos, L, cViewData.TLASIndex);
 #endif
 	}
 	if (attenuation <= 0.0f)
@@ -237,7 +161,7 @@ void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleInterse
 [shader("miss")]
 void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
 {
-	payload.hit = 1;
+	payload.Hit = 0;
 }
 
 [shader("miss")]
@@ -262,7 +186,7 @@ void RayGen()
 
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
-	
+
 	if (depth > 0 && reflectivity > 0.0f)
 	{
 		float3 V = normalize(world - cViewData.ViewInverse[3].xyz);

@@ -24,14 +24,6 @@ GlobalRootSignature GlobalRootSig =
     "StaticSampler(s2, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc = COMPARISON_GREATER)"
 };
 
-struct VertexAttribute
-{
-    float2 UV;
-    float3 Normal;
-    float3 GeometryNormal;
-    int Material;
-};
-
 struct ViewData
 {
     float4x4 View;
@@ -43,14 +35,6 @@ struct ViewData
     uint FrameIndex;
     int NumBounces;
     uint AccumulatedFrames;
-};
-
-struct VertexInput
-{
-    uint2 Position;
-    uint UV;
-    float3 Normal;
-    float4 Tangent;
 };
 
 struct RAYPAYLOAD PrimaryRayPayload
@@ -76,107 +60,6 @@ RWTexture2D<float4> uOutput : register(u0);
 RWTexture2D<float4> uAccumulation : register(u1);
 ConstantBuffer<ViewData> cViewData : register(b0);
 
-VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex)
-{
-	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
-	MeshData mesh = tMeshes[InstanceID()];
-	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
-
-	VertexAttribute outData;
-	outData.UV = 0;
-	outData.Normal = 0;
-	outData.Material = mesh.Material;
-
-    float3 positions[3];
-
-    const uint vertexStride = sizeof(VertexInput);
-    ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
-	
-	for (int i = 0; i < 3; i++)
-	{
-        uint dataOffset = 0;
-        positions[i] += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
-        dataOffset += sizeof(uint2);
-		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-        dataOffset += sizeof(uint);
-		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-        dataOffset += sizeof(float3);
-        dataOffset += sizeof(float4);
-	}
-	float4x3 worldMatrix = ObjectToWorld4x3();
-	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
-
-    float3 edge20 = positions[2] - positions[0];
-    float3 edge21 = positions[2] - positions[1];
-    float3 edge10 = positions[1] - positions[0];
-    outData.GeometryNormal = mul(normalize(cross(edge20, edge10)), (float3x3)worldMatrix);
-
-	return outData;
-}
-
-float CastShadowRay(float3 origin, float3 direction)
-{
-    float len = length(direction);
-    RayDesc ray;
-    ray.Origin = origin;
-    ray.Direction = direction / len;
-    ray.TMin = RAY_BIAS;
-    ray.TMax = len;
-
-	const int rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-						RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-						RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
-
-	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
-
-#if _INLINE_RT
-	RayQuery <rayFlags> rayQuery;
-    rayQuery.TraceRayInline(
-        TLAS,
-        0,
-        0xFF,
-        ray
-    );
-
-	while (rayQuery.Proceed())
-	{
-		switch (rayQuery.CandidateType())
-		{
-			// alpha test materials 
-			case CANDIDATE_NON_OPAQUE_TRIANGLE:
-			{
-				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
-											rayQuery.CandidateInstanceID(),
-											rayQuery.CandidatePrimitiveIndex());
-				BrdfData surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
-				if (surface.Opacity > 0.5f)
-				{
-					rayQuery.CommitNonOpaqueTriangleHit();
-				}
-			}
-			break;
-		}
-	}
-
-	return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
-	
-#else
-	ShadowRayPayload payload;
-	payload.Hit = 1;
-	TraceRay(
-		TLAS,		//AccelerationStructure
-		rayFlags,	//RayFlags
-		0xFF,		//InstanceInclusionMask
-		0,			//RayContributionToHitGroupIndex
-		0,			//MultiplierForGeometryContributionToHitGroupIndex
-		1,			//MissShaderIndex
-		ray,		//Ray
-		payload		//Payload
-	);
-	return !payload.Hit;
-#endif
-}
-
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData surface)
 {
 	LightResult result = (LightResult)0;
@@ -198,14 +81,8 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
         float4 pos = float4(0, 0, 0, viewPosition.z);
         int shadowIndex = GetShadowIndex(light, pos, worldPos);
 
-        float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
-        float4 lightPos = mul(float4(worldPos, 1.0f), lightViewProjection);
-        lightPos.xyz /= lightPos.w;
-        lightPos.x = lightPos.x * 0.5f + 0.5f;
-        lightPos.y = lightPos.y * -0.5f + 0.5f;
-       
         attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-        attenuation *= CastShadowRay(OffsetRay(worldPos, geometryNormal), L);
+        attenuation *= CastShadowRay(OffsetRay(worldPos, geometryNormal), L, cViewData.TLASIndex);
     }
 
     L = normalize(L);
@@ -324,12 +201,12 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
         const float3 Nlocal = float3(0, 0, 1);
         float NdotL = max(0.00001f, min(1.0f, dot(Nlocal, Llocal)));
         float NdotV = max(0.00001f, min(1.0f, dot(Nlocal, Vlocal)));
-        float NdotH = max(0.00001f, min(1.0f, dot(Nlocal, Hlocal)));
         float3 F = F_Schlick(brdfData.Specular, HdotL);
+        float G = Smith_G2_Over_G1_Height_Correlated(alpha, alphaSquared, NdotL, NdotV);
 
         // calculate weight of the sample specific for selected sampling methos
-        // this is microfacet BRDF divided by PDF of sampling methos - notice how most terms cancel out.
-        weight = F * Smith_G2_Over_G1_Height_Correlated(alpha, alphaSquared, NdotL, NdotV);
+        // this is microfacet BRDF divided by PDF of sampling methos
+        weight = F * G;
 
         directionLocal = Llocal;
     }
