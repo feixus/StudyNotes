@@ -2,6 +2,7 @@
 #define __INCLUDE_RAYTRACING_COMMON__
 
 #include "SkyCommon.hlsli"
+#include "ShadingModels.hlsli"
 
 #define RAY_BIAS 1.0e-2f
 #define RAY_MAX_T 1.0e10f
@@ -73,7 +74,7 @@ struct MaterialProperties
 	float Specular;
 };
 
-MaterialProperties GetShadingData(uint materialIndex, float2 uv, float mipLevel)
+MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float mipLevel)
 {
     MaterialProperties properties;
 	MaterialData material = tMaterials[materialIndex];
@@ -105,8 +106,8 @@ MaterialProperties GetShadingData(uint materialIndex, float2 uv, float mipLevel)
     properties.NormalTS = float3(0, 0, 1);
     if (material.Normal >= 0)
     {
-        properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;
-    }
+		properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, uv, mipLevel).rgb;
+	}
 	
 	return properties;
 }
@@ -204,69 +205,6 @@ float3 OffsetRay(float3 position, float3 geometryNormal)
         (abs(position.y) < origin) ? position.y + float_scale * geometryNormal.y : p_i.y,
         (abs(position.z) < origin) ? position.z + float_scale * geometryNormal.z : p_i.z
     );
-}
-
-float CastShadowRay(float3 origin, float3 direction, uint TLASIndex)
-{
-    float len = length(direction);
-    RayDesc ray;
-    ray.Origin = origin;
-    ray.Direction = direction / len;
-    ray.TMin = RAY_BIAS;
-    ray.TMax = len;
-
-	const int rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-						RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-						RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
-
-	RaytracingAccelerationStructure TLAS = tTLASTable[TLASIndex];
-
-#if _INLINE_RT
-	RayQuery <rayFlags> rayQuery;
-    rayQuery.TraceRayInline(
-        TLAS,
-        0,
-        0xFF,
-        ray
-    );
-
-	while (rayQuery.Proceed())
-	{
-		switch (rayQuery.CandidateType())
-		{
-			// alpha test materials 
-			case CANDIDATE_NON_OPAQUE_TRIANGLE:
-			{
-				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
-											rayQuery.CandidateInstanceID(),
-											rayQuery.CandidatePrimitiveIndex());
-				BrdfData surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
-				if (surface.Opacity > 0.5f)
-				{
-					rayQuery.CommitNonOpaqueTriangleHit();
-				}
-			}
-			break;
-		}
-	}
-
-	return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
-	
-#else
-	ShadowRayPayload payload;
-	payload.Hit = 1;
-	TraceRay(
-		TLAS,		//AccelerationStructure
-		rayFlags,	//RayFlags
-		0xFF,		//InstanceInclusionMask
-		0,			//RayContributionToHitGroupIndex
-		0,			//MultiplierForGeometryContributionToHitGroupIndex
-		1,			//MissShaderIndex
-		ray,		//Ray
-		payload		//Payload
-	);
-	return !payload.Hit;
-#endif
 }
 
 #endif

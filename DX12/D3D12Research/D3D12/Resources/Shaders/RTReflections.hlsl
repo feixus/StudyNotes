@@ -44,6 +44,69 @@ struct RAYPAYLOAD ShadowRayPayload
 RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<ViewData> cViewData : register(b0);
 
+float CastShadowRay(float3 origin, float3 direction)
+{
+	float len = length(direction);
+	RayDesc ray;
+	ray.Origin = origin;
+	ray.Direction = direction / len;
+	ray.TMin = RAY_BIAS;
+	ray.TMax = len;
+
+	const int rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+						RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+						RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+
+	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
+
+#if _INLINE_RT
+	RayQuery <rayFlags> rayQuery;
+    rayQuery.TraceRayInline(
+        TLAS,
+        0,
+        0xFF,
+        ray
+    );
+
+	while (rayQuery.Proceed())
+	{
+		switch (rayQuery.CandidateType())
+		{
+			// alpha test materials 
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
+											rayQuery.CandidateInstanceID(),
+											rayQuery.CandidatePrimitiveIndex());
+				BrdfData surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+				if (surface.Opacity > 0.5f)
+				{
+					rayQuery.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
+
+	return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+	
+#else
+	ShadowRayPayload payload;
+	payload.Hit = 1;
+	TraceRay(
+		TLAS, //AccelerationStructure
+		rayFlags, //RayFlags
+		0xFF, //InstanceInclusionMask
+		0, //RayContributionToHitGroupIndex
+		0, //MultiplierForGeometryContributionToHitGroupIndex
+		1, //MissShaderIndex
+		ray, //Ray
+		payload //Payload
+	);
+	return !payload.Hit;
+#endif
+}
+
 ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 {
 	RayCone cone;
@@ -107,7 +170,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 	else
 	{
 #if SECONDARY_SHADOW_RAY
-		attenuation *= CastShadowRay(worldPos, L, cViewData.TLASIndex);
+		attenuation *= CastShadowRay(worldPos, L);
 #endif
 	}
 	if (attenuation <= 0.0f)
@@ -129,12 +192,12 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 
 	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
 	float mipLevel = 2.0f;
-	MaterialProperties material = GetMaterialProperties(vertex.material, vertex.UV, mipLevel);
+	MaterialProperties material = GetMaterialProperties(vertex.Material, vertex.UV, mipLevel);
 	BrdfData brdfData = GetBrdfData(material);
 
 	float3 hitLocation = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
-	float V = normalize(-WorldRayDirection());
-	flaot3 N = v.Normal;
+	float3 V = normalize(-WorldRayDirection());
+	float3 N = vertex.Normal;
 
 	LightResult totalResult = (LightResult)0;
 	for (int i = 0; i < cViewData.NumLights; ++i)
@@ -144,14 +207,14 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
-	payload.output += material.Emissive + totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(material.Diffuse, 1.0f, 0.1f);
+	payload.output += material.Emissive + totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(brdfData.Diffuse, 1.0f, 0.1f);
 }
 
 [shader("anyhit")]
 void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
 	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
-	MaterialProperties material = GetMaterialProperties(vertex.material, vertex.UV, mipLevel);
+	MaterialProperties material = GetMaterialProperties(vertex.Material, vertex.UV, 0);
 	if (material.Opacity < 0.5f)
 	{
 		IgnoreHit();
