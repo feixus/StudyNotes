@@ -208,9 +208,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	m_WindowWidth(windowRect.x), m_WindowHeight(windowRect.y), m_SampleCount(sampleCount)
 {
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetPosition(Vector3(-13, 24, -15));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
-	m_pCamera->SetNearPlane(300.f);
+	m_pCamera->SetNearPlane(3000.f);
 	m_pCamera->SetFarPlane(1.f);
 
 	E_LOG(Info, "DemoApp::InitD3D");
@@ -312,15 +310,13 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
 	{
+		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
+		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
+
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 10.0f);
+		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
 	}
-	/*{
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/apartment_floor_plan/scene.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
-	}*/
 
 	std::vector<ShaderInterop::MaterialData> materials;
 	std::vector<ShaderInterop::MeshData> meshes;

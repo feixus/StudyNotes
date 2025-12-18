@@ -16,6 +16,7 @@ public:
     void Render(RGGraph& graph, const SceneData& sceneData);
     void OnResize(uint32_t width, uint32_t height);
     void Reset();
+	bool IsSupported();
 
 private:
     GraphicsDevice* m_pGraphicsDevice;

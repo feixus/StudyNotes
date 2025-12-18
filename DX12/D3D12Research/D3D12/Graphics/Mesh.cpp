@@ -297,7 +297,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 						const Vector3* pNormals = (Vector3*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].Normal =pNormals[i];
+							vertices[vertexOffset + i].Normal = pNormals[i];
 						}
 					}
 					else if (name == "TANGENT")

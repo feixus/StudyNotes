@@ -12,7 +12,7 @@
 
 PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pGraphicsDevice)
 {
-	if (!pGraphicsDevice->GetCapabilities().SupportsRaytracing())
+	if (!IsSupported())
 	{
 		return;
 	}
@@ -31,7 +31,6 @@ PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pG
     desc.AddLibrary(pLibrary);
     desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "PrimaryAHS");
     desc.AddMissShader("PrimaryMS");
-    desc.AddMissShader("ShadowMS");
 
     desc.pGlobalRootSignature = m_pRS.get();
     m_pSO = m_pGraphicsDevice->CreateStateObject(desc);
@@ -44,11 +43,19 @@ PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pG
     
 PathTracing::~PathTracing()
 {
-	m_pGraphicsDevice->GetShaderManager()->OnLibraryRecompiledEvent().Remove(m_OnShaderCompiledHandle);
+	if (m_OnShaderCompiledHandle.IsValid())
+	{
+		m_pGraphicsDevice->GetShaderManager()->OnLibraryRecompiledEvent().Remove(m_OnShaderCompiledHandle);
+	}
 }
 
 void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 {
+	if (!IsSupported())
+	{
+		return;
+	}
+
 	static int32_t numBounces = 3;
 
 	ImGui::Begin("Parameters");
@@ -106,7 +113,6 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
         ShaderBindingTable bindingTable(m_pSO);
         bindingTable.BindRayGenShader("RayGen");
         bindingTable.BindMissShader("PrimaryMS", 0);
-        bindingTable.BindMissShader("ShadowMS", 1);
         bindingTable.BindHitGroup("PrimaryHG", 0);
 
         const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
@@ -138,10 +144,20 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
     
 void PathTracing::OnResize(uint32_t width, uint32_t height)
 {
+	if (!IsSupported())
+	{
+		return;
+	}
 	m_pAccumulationTexture = m_pGraphicsDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::UnorderedAccess), "Accumulation Target");
 }
 
 void PathTracing::Reset()
 {
 	m_NumAccumulatedFrames = 0;
+}
+
+bool PathTracing::IsSupported()
+{
+	// using inline RT, requires Tier 1.1.
+	return m_pGraphicsDevice->GetCapabilities().RayTracingTier >= D3D12_RAYTRACING_TIER_1_1;
 }
