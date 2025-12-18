@@ -1,7 +1,7 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
-#include "RaytracingCommon.hlsli"
 #include "Lighting.hlsli"
+#include "RaytracingCommon.hlsli"
 #include "Random.hlsli"
 #include "Tonemap/TonemappingCommon.hlsli"
 
@@ -69,158 +69,12 @@ struct RAYPAYLOAD PrimaryRayPayload
 
 struct RAYPAYLOAD ShadowRayPayload
 {
-	uint Hit;
-};
-
-struct SurfaceData
-{
-	float Opacity;
-	float3 Diffuse;
-	float3 Specular;
-	float Roughness;
-	float3 Emissive;
-    float3 Normal;
+	uint Hit RAYQUALIFIER(read(caller) : write(caller, miss));
 };
 
 RWTexture2D<float4> uOutput : register(u0);
 RWTexture2D<float4> uAccumulation : register(u1);
 ConstantBuffer<ViewData> cViewData : register(b0);
-
-float CastShadowRay(float3 origin, float3 direction)
-{
-    float len = length(direction);
-    RayDesc ray;
-    ray.Origin = origin;
-    ray.Direction = direction / len;
-    ray.TMin = RAY_BIAS;
-    ray.TMax = len;
-
-	const int rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-						RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-						RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
-
-	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
-
-#if _INLINE_RT
-	RayQuery <rayFlags> rayQuery;
-    rayQuery.TraceRayInline(
-        TLAS,
-        0,
-        0xFF,
-        ray
-    );
-
-	while (rayQuery.Proceed())
-	{
-		switch (rayQuery.CandidateType())
-		{
-			// alpha test materials 
-			case CANDIDATE_NON_OPAQUE_TRIANGLE:
-			{
-				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
-											rayQuery.CandidateInstanceID(),
-											rayQuery.CandidatePrimitiveIndex());
-				SurfaceData surface = GetShadingData(vertex.Material, vertex.UV, 0);
-				if (surface.Opacity > 0.5f)
-				{
-					rayQuery.CommitNonOpaqueTriangleHit();
-				}
-			}
-			break;
-		}
-	}
-
-	return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
-	
-#else
-	ShadowRayPayload payload;
-	payload.Hit = 1;
-	TraceRay(
-		TLAS,		//AccelerationStructure
-		rayFlags,	//RayFlags
-		0xFF,		//InstanceInclusionMask
-		0,			//RayContributionToHitGroupIndex
-		0,			//MultiplierForGeometryContributionToHitGroupIndex
-		1,			//MissShaderIndex
-		ray,		//Ray
-		payload		//Payload
-	);
-	return !payload.Hit;
-#endif
-}
-
-SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
-{
-	MaterialData material = tMaterials[materialIndex];
-	float4 baseColor = material.BaseColorFactor;
-	if (material.Diffuse >= 0)
-	{
-		baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, uv, mipLevel);
-	}
-
-	float roughness = material.RoughnessFactor;
-	float metalness = material.MetalnessFactor;
-	if (material.RoughnessMetalness >= 0)
-	{
-		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, uv, mipLevel);
-		roughness *= roughnessMetalnessSample.g;
-		metalness *= roughnessMetalnessSample.b;
-	}
-
-	float3 emissive = material.EmissiveFactor.rgb;
-	if (material.Emissive >= 0)
-	{
-		emissive *= tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, uv, mipLevel).rgb;
-	}
-	float specular = 0.5f;
-
-	SurfaceData outData = (SurfaceData)0;
-	outData.Diffuse = ComputeDiffuseColor(baseColor.rgb, metalness);
-	outData.Specular = ComputeF0(specular, baseColor.rgb, metalness);
-	outData.Roughness = roughness;
-	outData.Emissive = emissive;
-	outData.Opacity = baseColor.a;
-	return outData;
-}
-
-LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, SurfaceData surface)
-{
-	LightResult result = (LightResult)0;
-	float attenuation = GetAttenuation(light, worldPos);
-	if (attenuation <= 0.0f)
-	{
-		return result;
-	}
-
-	float3 L = light.Position - worldPos;
-	if (light.IsDirectional())
-	{
-		L = RAY_MAX_T * -light.Direction;
-	}
-
-    if (light.CastShadows())
-    {
-        float3 viewPosition = mul(float4(worldPos, 1.0f), cViewData.View).xyz;
-        float4 pos = float4(0, 0, 0, viewPosition.z);
-        int shadowIndex = GetShadowIndex(light, pos, worldPos);
-
-        float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
-        float4 lightPos = mul(float4(worldPos, 1.0f), lightViewProjection);
-        lightPos.xyz /= lightPos.w;
-        lightPos.x = lightPos.x * 0.5f + 0.5f;
-        lightPos.y = lightPos.y * -0.5f + 0.5f;
-       
-        attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-        attenuation *= CastShadowRay(OffsetRay(worldPos, geometryNormal), L);
-    }
-
-    L = normalize(L);
-	result = DefaultLitBxDF(surface.Specular, surface.Roughness, surface.Diffuse, N, V, L, attenuation);
-	float4 color = light.GetColor();
-	result.Diffuse *= color.rgb * light.Intensity;
-	result.Specular *= color.rgb * light.Intensity;
-	return result;
-}
 
 VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex)
 {
@@ -260,6 +114,108 @@ VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, 
 	return outData;
 }
 
+float CastShadowRay(float3 origin, float3 direction)
+{
+    float len = length(direction);
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction / len;
+    ray.TMin = RAY_BIAS;
+    ray.TMax = len;
+
+	const int rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+						RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+						RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+
+	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
+
+#if _INLINE_RT
+	RayQuery <rayFlags> rayQuery;
+    rayQuery.TraceRayInline(
+        TLAS,
+        0,
+        0xFF,
+        ray
+    );
+
+	while (rayQuery.Proceed())
+	{
+		switch (rayQuery.CandidateType())
+		{
+			// alpha test materials 
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
+											rayQuery.CandidateInstanceID(),
+											rayQuery.CandidatePrimitiveIndex());
+				BrdfData surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+				if (surface.Opacity > 0.5f)
+				{
+					rayQuery.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
+
+	return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+	
+#else
+	ShadowRayPayload payload;
+	payload.Hit = 1;
+	TraceRay(
+		TLAS,		//AccelerationStructure
+		rayFlags,	//RayFlags
+		0xFF,		//InstanceInclusionMask
+		0,			//RayContributionToHitGroupIndex
+		0,			//MultiplierForGeometryContributionToHitGroupIndex
+		1,			//MissShaderIndex
+		ray,		//Ray
+		payload		//Payload
+	);
+	return !payload.Hit;
+#endif
+}
+
+LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData surface)
+{
+	LightResult result = (LightResult)0;
+	float attenuation = GetAttenuation(light, worldPos);
+	if (attenuation <= 0.0f)
+	{
+		return result;
+	}
+
+	float3 L = light.Position - worldPos;
+	if (light.IsDirectional())
+	{
+		L = RAY_MAX_T * -light.Direction;
+	}
+
+    if (light.CastShadows())
+    {
+        float3 viewPosition = mul(float4(worldPos, 1.0f), cViewData.View).xyz;
+        float4 pos = float4(0, 0, 0, viewPosition.z);
+        int shadowIndex = GetShadowIndex(light, pos, worldPos);
+
+        float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
+        float4 lightPos = mul(float4(worldPos, 1.0f), lightViewProjection);
+        lightPos.xyz /= lightPos.w;
+        lightPos.x = lightPos.x * 0.5f + 0.5f;
+        lightPos.y = lightPos.y * -0.5f + 0.5f;
+       
+        attenuation *= LightTextureMask(light, shadowIndex, worldPos);
+        attenuation *= CastShadowRay(OffsetRay(worldPos, geometryNormal), L);
+    }
+
+    L = normalize(L);
+	result = DefaultLitBxDF(surface.Specular, surface.Roughness, surface.Diffuse, N, V, L, attenuation);
+	float4 color = light.GetColor();
+	result.Diffuse *= color.rgb * light.Intensity;
+	result.Specular *= color.rgb * light.Intensity;
+	return result;
+}
+
 [shader("closesthit")]
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
@@ -275,7 +231,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
 	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
-    SurfaceData surface = GetShadingData(vertex.Material, vertex.UV, 0);
+    BrdfData surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
     if (surface.Opacity < 0.5f)
     {
         IgnoreHit();
@@ -294,11 +250,11 @@ void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload)
 
 // Compute the probability of a specular ray depending on Fresnel term
 // The Fresnel term is approximated because it's calculated with the shading normal instead of the half vector
-float BRDFProbability(SurfaceData surface, float3 N, float3 V)
+float BRDFProbability(BrdfData brdfData, float3 N, float3 V)
 {
-    float diffuseReflectance = GetLuminance(surface.Diffuse);
+    float diffuseReflectance = GetLuminance(brdfData.Diffuse);
     float VdotN = max(0.05f, dot(V, N));
-    float fresenl = saturate(GetLuminance(F_Schlick(surface.Specular, VdotN)));
+    float fresenl = saturate(GetLuminance(F_Schlick(brdfData.Specular, VdotN)));
     float specular = fresenl;
     float diffuse = diffuseReflectance * (1.0f - fresenl);
     float p = (specular / max(0.0001f, specular + diffuse));
@@ -306,7 +262,7 @@ float BRDFProbability(SurfaceData surface, float3 N, float3 V)
 }
 
 // indirect light BRDF evaluation
-bool EvaluateIndirectBRDF(int rayType, float2 u, SurfaceData surface, float3 N, float3 V, float3 geometryNormal, out float3 direction, out float3 weight)
+bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, float3 V, float3 geometryNormal, out float3 direction, out float3 weight)
 {
     if (rayType == RAY_INVALID)
     {
@@ -331,18 +287,18 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, SurfaceData surface, float3 N, 
         // PDF of cosine weighted sample cancel out the diffuse term
         float pdf;
         directionLocal = HemisphereSampleCosineWeight(u, pdf);
-        weight = surface.Diffuse;
+        weight = brdfData.Diffuse;
 
         // weight the diffuse term based on the specular term of random microfacet normal
         // Diffuse = 1.0 - Fresnel
-        float alpha = Square(surface.Roughness);
+        float alpha = Square(brdfData.Roughness);
         float3 Hspecular = SampleGGXVNDF(Vlocal, alpha.xx, u);
         float VdotH = max(0.00001f, min(1.0f, dot(Vlocal, Hspecular)));
-        weight *= (1.0f.xxx - F_Schlick(surface.Specular, VdotH));
+        weight *= (1.0f.xxx - F_Schlick(brdfData.Specular, VdotH));
     }
     else if (rayType == RAY_SPECULAR)
     {
-        float alpha = Square(surface.Roughness);
+        float alpha = Square(brdfData.Roughness);
         float alphaSquared = Square(alpha);
 
         // sample a microfacet normal(H) in local space
@@ -369,7 +325,7 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, SurfaceData surface, float3 N, 
         float NdotL = max(0.00001f, min(1.0f, dot(Nlocal, Llocal)));
         float NdotV = max(0.00001f, min(1.0f, dot(Nlocal, Vlocal)));
         float NdotH = max(0.00001f, min(1.0f, dot(Nlocal, Hlocal)));
-        float3 F = F_Schlick(surface.Specular, HdotL);
+        float3 F = F_Schlick(brdfData.Specular, HdotL);
 
         // calculate weight of the sample specific for selected sampling methos
         // this is microfacet BRDF divided by PDF of sampling methos - notice how most terms cancel out.
@@ -490,7 +446,8 @@ void RayGen()
         }
 
         // decode the hit payload to retrieve all the shading information
-        SurfaceData surface = GetShadingData(payload.Material, payload.UV, 0);
+        MaterialProperties surface = GetMaterialProperties(payload.Material, payload.UV, 0);
+        BrdfData brdfData = GetBrdfData(surface);
 
         // flip the normal towards the incoming ray
         float3 N = DecodeNormalOctahedron(payload.Normal);
@@ -513,7 +470,7 @@ void RayGen()
         float lightWeight = 0.0f;
         if (SampleLightRIS(seed, payload.Position, N, lightIndex, lightWeight))
         {
-            LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, geometryNormal, surface);
+            LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, geometryNormal, brdfData);
             radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
         }
 
@@ -541,7 +498,7 @@ void RayGen()
 
         // produce new ray based on BRDF probability
         int rayType = RAY_INVALID;
-        float brdfProbability = BRDFProbability(surface, N, V);
+        float brdfProbability = BRDFProbability(brdfData, N, V);
         if (Random01(seed) < brdfProbability)
         {
             rayType = RAY_SPECULAR;
@@ -555,7 +512,7 @@ void RayGen()
 
         // evaluate the BRDF based on the selected ray type (ie. Diffuse vs Specular)
         float3 weight;
-        if (!EvaluateIndirectBRDF(rayType, float2(Random01(seed), Random01(seed)), surface, N, V, geometryNormal, ray.Direction, weight))
+        if (!EvaluateIndirectBRDF(rayType, float2(Random01(seed), Random01(seed)), brdfData, N, V, geometryNormal, ray.Direction, weight))
         {
             break;
         }

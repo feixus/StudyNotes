@@ -496,4 +496,33 @@ float3 DecodeNormalOctahedron(float2 p)
 	return normalize(n);
 }
 
+// Calculates rotation quaternion from input vector to the vector (0, 0, 1)
+// Input vector must be normalized!
+float4 GetRotationToZAxis(float3 input)
+{
+    if (input.z < -0.99999f)
+    {
+        return float4(1.0f, 0.0f, 0.0f, 0.0f);
+    }
+    
+    // half-angle formula, rotation axis is cross(input, zAxis) = (input.y, -input.x, 0), angle = acos(input.z)
+    // q = (cos(angle/2), sin(angle/2) * axis)
+    // q = normalize(1 + dot(V1, V2), cross(V1, V2)) to avoid expensive trigonometric functions
+    return normalize(float4(input.y, -input.x, 0.0f, 1.0f + input.z));
+}
+
+// Returns the quaternion with inverted rotation
+float4 InvertRotation(float4 q)
+{
+    return float4(-q.x, -q.y, -q.z, q.w);
+}
+
+// Optimized point rotation using quaternion
+// Source: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+float3 RotatePoint(float4 q, float3 v)
+{
+    float3 qAxis = float3(q.x, q.y, q.z);
+    return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);
+}
+
 #endif
