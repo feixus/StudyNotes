@@ -87,6 +87,7 @@ enum class RenderPath
 	Tiled,
 	Clustered,
 	PathTracing,
+	Visibility,
 	MAX
 };
 
@@ -228,6 +229,14 @@ private:
 
 	// clouds
 	std::unique_ptr<class Clouds> m_pClouds;
+
+	// visibility buffer
+	std::unique_ptr<RootSignature> m_pVisibilityRenderingRS;
+	PipelineState* m_pVisibilityRenderingPSO{nullptr};
+	std::unique_ptr<GraphicsTexture> m_pVisibilityTexture;
+	std::unique_ptr<GraphicsTexture> m_pBarycentricsTexture;
+	std::unique_ptr<RootSignature> m_pVisibilityShadingRS;
+	PipelineState* m_pVisibilityShadingPSO;
 
 	SceneData m_SceneData;
 	std::unique_ptr<Camera> m_pCamera;

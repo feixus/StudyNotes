@@ -74,7 +74,6 @@ void DrawScene(CommandContext& context, const SceneData& scene, const Visibility
 	}
 }
 
-
 void EditTransform(const Camera& camera, Matrix& matrix)
 {
 	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
@@ -361,10 +360,10 @@ void DemoApp::SetupScene(CommandContext& context)
 		}
 	}
 
-	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)meshes.size(), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
+	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
 	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
 	
-	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)materials.size(), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
+	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
 	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
 	{
@@ -1433,6 +1432,8 @@ void DemoApp::OnResize(int width, int height)
 	m_pVelocity = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Velocity");
 	m_pTAASource = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "TAA Target");
 	m_pAmbientOcclusion = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "SSAO");
+	m_pVisibilityTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32_UINT, TextureFlag::ShaderResource | TextureFlag::RenderTarget), "Visibility Buffer");
+	m_pBarycentricsTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget), "Barycentrics Buffer");
 
 	m_pTiledForward->OnResize(width, height);
 	m_pClusteredForward->OnResize(width, height);
@@ -1680,6 +1681,43 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
+
+	// visibility rendering
+	{
+		Shader* pVertexShader = m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain");
+
+		m_pVisibilityRenderingRS = std::make_unique<RootSignature>(m_pDevice.get());
+		m_pVisibilityRenderingRS->FinalizeFromShader("Visibility Rendering", pVertexShader);
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(m_pVisibilityRenderingRS->GetRootSignature());
+		psoDesc.SetVertexShader(pVertexShader);
+		psoDesc.SetPixelShader(pPixelShader);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		DXGI_FORMAT rtFormats[] = {
+			DXGI_FORMAT_R32_UINT,
+			DXGI_FORMAT_R32G32_FLOAT,
+		};
+		psoDesc.SetRenderTargetFormats(rtFormats, std::size(rtFormats), GraphicsDevice::DEPTH_STENCIL_FORMAT, m_SampleCount);
+		psoDesc.SetName("Visibility Rendering");
+		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
+	}
+
+	// visibility shading
+	{
+		Shader* pComputeShader = m_pDevice->GetShader("VisibilityShading.hlsl", ShaderType::Compute, "CSMain");
+
+		m_pVisibilityShadingRS = std::make_unique<RootSignature>(m_pDevice.get());
+		m_pVisibilityShadingRS->FinalizeFromShader("Visibility Rendering", pComputeShader);
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(m_pVisibilityShadingRS->GetRootSignature());
+		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		psoDesc.SetName("Visibility Shading");
+		m_pVisibilityShadingPSO = m_pDevice->CreatePipeline(psoDesc);
+	}
 }
 
 void DemoApp::UpdateImGui()
@@ -1715,6 +1753,9 @@ void DemoApp::UpdateImGui()
 					break;
 				case RenderPath::PathTracing:
 					*outText = "Path Tracing";
+					break;
+				case RenderPath::Visibility:
+					*outText = "Visibility";
 					break;
 				default:
 					noEntry();

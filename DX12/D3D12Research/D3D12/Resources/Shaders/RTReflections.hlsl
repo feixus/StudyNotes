@@ -77,7 +77,8 @@ float CastShadowRay(float3 origin, float3 direction)
 			{
 				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
 											rayQuery.CandidateInstanceID(),
-											rayQuery.CandidatePrimitiveIndex());
+											rayQuery.CandidatePrimitiveIndex(),
+											rayQuery.CandidateObjectToWorld4x3());
 				BrdfData surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
 				if (surface.Opacity > 0.5f)
 				{
@@ -190,7 +191,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 {
 	payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
 	float mipLevel = 2.0f;
 	MaterialProperties material = GetMaterialProperties(vertex.Material, vertex.UV, mipLevel);
 	BrdfData brdfData = GetBrdfData(material);
@@ -213,7 +214,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 [shader("anyhit")]
 void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
 	MaterialProperties material = GetMaterialProperties(vertex.Material, vertex.UV, 0);
 	if (material.Opacity < 0.5f)
 	{

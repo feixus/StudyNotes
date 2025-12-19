@@ -93,7 +93,8 @@ float CastShadowRay(float3 origin, float3 direction)
 			{
 				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
 											rayQuery.CandidateInstanceID(),
-											rayQuery.CandidatePrimitiveIndex());
+											rayQuery.CandidatePrimitiveIndex(),
+                                            rayQuery.CandidateObjectToWorld4x3());
 				BrdfData surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
 				if (surface.Opacity > 0.5f)
 				{
@@ -159,7 +160,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 [shader("closesthit")]
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
     payload.Material = vertex.Material;
     payload.UV = vertex.UV;
     payload.Normal = EncodeNormalOctahedron(vertex.Normal);
@@ -170,7 +171,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
     MaterialProperties surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
     if (surface.Opacity < 0.5f)
     {
@@ -269,6 +270,7 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 
         // calculate weight of the sample specific for selected sampling methos
         // this is microfacet BRDF divided by PDF of sampling methos
+        // due to the clever VNDF sampling methos, many of the terms cancel out
         weight = F * G;
 
         directionLocal = Llocal;

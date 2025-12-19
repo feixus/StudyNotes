@@ -109,6 +109,7 @@ public:
     void SetCallback(ExecuteCallback&& callback)
     {
         RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 4096, "the execute callback exceeds the maximum size");
+        checkf(!m_ExecuteCallback.IsBound(), "Pass is already bound");
         m_ExecuteCallback.BindLambda(std::move(callback));
     }
 
