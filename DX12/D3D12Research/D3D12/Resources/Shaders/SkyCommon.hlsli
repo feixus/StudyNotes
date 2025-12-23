@@ -12,7 +12,7 @@ float AngleBetween(float3 dir0, float3 dir1)
 // clear sky or overcast sky only
 // spectral radiance of the sun and sky in a given direction
 // how the spectral radiance of a distant object is changed as it travels through air to he viewer
-float3 CIESky(float3 dir, float3 sunDir)
+float3 CIESky(float3 dir, float3 sunDir, bool withSun = true)
 {
     float3 skyDir = float3(dir.x, saturate(dir.y), dir.z);
     float gamma = AngleBetween(skyDir, sunDir);
@@ -35,9 +35,12 @@ float3 CIESky(float3 dir, float3 sunDir)
 
     float3 color = SkyColor;
 
-    // draw a circle for the sun
-    float sunGamma = AngleBetween(dir, sunDir);
-    color = lerp(SunColor, SkyColor, saturate(abs(sunGamma) / SunWidth));
+    if (withSun)
+    {
+        // draw a circle for the sun
+        float sunGamma = AngleBetween(dir, sunDir);
+        color = lerp(SunColor, SkyColor, saturate(abs(sunGamma) / SunWidth));
+    }
 
     return max(color * luminance, 0);
 }

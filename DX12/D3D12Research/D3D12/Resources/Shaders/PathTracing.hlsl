@@ -41,6 +41,8 @@ struct RAYPAYLOAD PrimaryRayPayload
 {
     float2 UV;
     float2 Normal;
+    float2 Tangent;
+    int TangentSign;
     float2 GeometryNormal;
     float3 Position;
     uint Material;
@@ -164,6 +166,8 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
     payload.Material = vertex.Material;
     payload.UV = vertex.UV;
     payload.Normal = EncodeNormalOctahedron(vertex.Normal);
+    payload.Tangent = EncodeNormalOctahedron(vertex.Tangent.xyz);
+    payload.TangentSign = vertex.Tangent.w;
     payload.GeometryNormal = EncodeNormalOctahedron(vertex.GeometryNormal);
     payload.Position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 }
@@ -321,6 +325,10 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
         int candidate = Random(seed, 0, cViewData.NumLights);
         Light light = tLights[candidate];
         float3 L = normalize(light.Position - position);
+        if (light.IsDirectional())
+        {
+            L = -light.Direction;
+        }
         if (dot(N, L) < 0.00001f)
         {
             continue;
@@ -386,7 +394,7 @@ void RayGen()
         // if the ray didn't hit anything, accumulate the sky and break the loop
         if (!payload.IsHit())
         {
-            const float3 skyColor = 3; // CIESky(rayDesc.Direction, -tLights[0].Direction)
+            const float3 skyColor = CIESky(rayDesc.Direction, -tLights[0].Direction, false);
             radiance += throughput * skyColor;
             break;
         }
@@ -397,6 +405,7 @@ void RayGen()
 
         // flip the normal towards the incoming ray
         float3 N = DecodeNormalOctahedron(payload.Normal);
+        float3 T = DecodeNormalOctahedron(payload.Tangent);
         float3 V = -rayDesc.Direction;
         float3 geometryNormal = DecodeNormalOctahedron(payload.GeometryNormal);
         if (dot(geometryNormal, V) < 0.0f)
@@ -406,7 +415,11 @@ void RayGen()
         if (dot(geometryNormal, N) < 0.0f)
         {
             N = -N;
+            T = -T;
         }
+
+        float3x3 TBN = { T, cross(N, T) * payload.TangentSign, N };
+        N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
         // the Emissive properties is like a light source and directly applied on top
         radiance += throughput * surface.Emissive;

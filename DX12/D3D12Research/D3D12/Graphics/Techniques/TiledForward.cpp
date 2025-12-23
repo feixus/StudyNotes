@@ -162,7 +162,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[0].Target = inputResource.pRenderTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::DontCare_Resolve;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
 			renderPass.RenderTargets[1].Target = inputResource.pNormals;
 			renderPass.RenderTargets[1].ResolveTarget = inputResource.pResolvedNormals;
 			context.BeginRenderPass(renderPass);
@@ -174,17 +174,24 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
             context.SetGraphicsDynamicConstantBufferView(2, *inputResource.pShadowData);
 
             context.BindResourceTable(3, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
-            context.BindResource(4, 2, inputResource.pLightBuffer->GetSRV());
-            context.BindResource(4, 3, inputResource.pAO->GetSRV());
-			context.BindResource(4, 4, inputResource.pResolvedDepth->GetSRV());
-			context.BindResource(4, 5, inputResource.pPreviousColor->GetSRV());
+          
+			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
+				inputResource.pAO->GetSRV()->GetDescriptor(),
+				inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
+				inputResource.pPreviousColor->GetSRV()->GetDescriptor(),
+				inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				inputResource.pMeshBuffer->GetSRV()->GetDescriptor(),
+			};
+			context.BindResources(4, 3, srvs, std::size(srvs));
 
             {
                 GPU_PROFILE_SCOPE("Opaque", &context);
                 context.SetPipelineState(m_pDiffusePSO);
                         
-                context.BindResource(4, 0, m_pLightGridOpaque->GetSRV());
-                context.BindResource(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
+                context.BindResource(4, 1, m_pLightGridOpaque->GetSRV());
+                context.BindResource(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
 
 				DrawScene(context, inputResource, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
             }
@@ -193,8 +200,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 GPU_PROFILE_SCOPE("Transparent", &context);
                 context.SetPipelineState(m_pDiffuseAlphaPSO);
                         
-                context.BindResource(4, 0, m_pLightGridTransparent->GetSRV());
-                context.BindResource(4, 1, m_pLightIndexListBufferTransparent->GetSRV());
+                context.BindResource(4, 1, m_pLightGridTransparent->GetSRV());
+                context.BindResource(4, 2, m_pLightIndexListBufferTransparent->GetSRV());
 
 				DrawScene(context, inputResource, Batch::Blending::AlphaBlend);
             }
