@@ -273,6 +273,10 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
         // due to the clever VNDF sampling methos, many of the terms cancel out
         weight = F * G;
 
+        // Kulla17 - Energy conervation due to multiple scattering
+        float3 energyCompensation = EnergyCompensationFromMultipleScattering(brdfData.Specular, brdfData.Roughness, NdotV);
+        weight *= energyCompensation;
+
         directionLocal = Llocal;
     }
 

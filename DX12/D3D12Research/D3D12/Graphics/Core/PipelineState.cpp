@@ -20,7 +20,7 @@ VertexElementLayout& VertexElementLayout::operator=(const VertexElementLayout& r
 
 void VertexElementLayout::AddVertexElement(const char* pSemantic, DXGI_FORMAT format, uint32_t semanticIndex, uint32_t byteOffset, uint32_t inputSlot)
 {
-    strcpy_s(m_SemanticNames[m_NumElements], pSemantic);
+    check(strcpy_s(m_SemanticNames[m_NumElements], pSemantic) == 0);
     D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc[m_NumElements];
     element.AlignedByteOffset = byteOffset;
     element.Format = format;
@@ -34,7 +34,7 @@ void VertexElementLayout::AddVertexElement(const char* pSemantic, DXGI_FORMAT fo
 
 void VertexElementLayout::AddInstanceElement(const char* pSemantic, DXGI_FORMAT format, uint32_t semanticIndex, uint32_t byteOffset, uint32_t inputSlot, uint32_t stepRate)
 {
-    strcpy_s(m_SemanticNames[m_NumElements], pSemantic);
+    check(strcpy_s(m_SemanticNames[m_NumElements], pSemantic) == 0);
     D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc[m_NumElements];
     element.AlignedByteOffset = byteOffset;
     element.Format = format;

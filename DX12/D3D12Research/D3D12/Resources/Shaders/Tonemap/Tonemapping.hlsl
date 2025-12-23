@@ -44,7 +44,7 @@ void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 #endif
 
     float exposure = tAverageLuminance[2];
-    value *= exposure;
+    value *= (exposure + 1);
 
     switch(cTonemapper)
     {

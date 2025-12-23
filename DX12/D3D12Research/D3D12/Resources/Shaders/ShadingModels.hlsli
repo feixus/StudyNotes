@@ -5,6 +5,14 @@
 #include "CommonBindings.hlsli"
 #include "BRDF.hlsli"
 
+// Kulla17 - Energy conervation due to multiple scattering
+float3 EnergyCompensationFromMultipleScattering(float3 specularColor, float roughness, float ndotv)
+{
+    float gloss = Pow4(1 - roughness);
+    float3 DFG = EnvDFGPolynomial(specularColor, gloss, ndotv);
+    return 1.0f + specularColor * (1.0f /DFG.y - 1.0f);
+}
+
 // 0.08 is a max F0 we define for dielectrics which matches with Crystalware and gems(0.05 ~ 0.08)
 // this means we cannot represent Diamond-like surfaces as they have an F0 of 0.1 ~ 0.2
 float DielectricSpecularToF0(float specular)
@@ -72,6 +80,13 @@ LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3
     float3 F = F_Schlick(specularColor, VdotH);
 
     lighting.Specular = (falloff * NdotL) * (D * Vis) * F;
+
+#if 0
+    // Kulla17 - Energy conervation due to multiple scattering
+    float3 energyCompensation = EnergyCompensationFromMultipleScattering(specularColor, specularRoughness, NdotV);
+    lighting.Specular *= energyCompensation;
+#endif
+
     lighting.Diffuse = (falloff * NdotL) * Diffuse_Lambert(diffuseColor);
 
     return lighting;
