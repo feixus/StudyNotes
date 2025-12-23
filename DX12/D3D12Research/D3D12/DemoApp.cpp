@@ -217,6 +217,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	instanceFlags |= CommandLine::GetBool("dred") ? GraphicsInstanceFlags::DRED: GraphicsInstanceFlags::None;
 	instanceFlags |= CommandLine::GetBool("gpuvalidation") ? GraphicsInstanceFlags::GpuValidation : GraphicsInstanceFlags::None;
 	instanceFlags |= CommandLine::GetBool("pix") ? GraphicsInstanceFlags::Pix : GraphicsInstanceFlags::None;
+	instanceFlags |= GraphicsInstanceFlags::DebugDevice | GraphicsInstanceFlags::DRED | GraphicsInstanceFlags::GpuValidation | GraphicsInstanceFlags::Pix;
 	std::unique_ptr<GraphicsInstance> pInstance = GraphicsInstance::CreateInstance(instanceFlags);
 
 	ComPtr<IDXGIAdapter4> pAdapter = pInstance->EnumerateAdapter(CommandLine::GetBool("warp"));
@@ -774,7 +775,99 @@ void DemoApp::Update()
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32_t)m_pLightBuffer->GetSize(), (uint32_t)allocation.Offset, 0);
 		});
 
-	if (m_RenderPath != RenderPath::PathTracing)
+	if (m_RenderPath == RenderPath::Visibility)
+	{
+		RGPassBuilder visibilityPass = graph.AddPass("Visibility Buffer");
+		sceneData.DepthStencil = visibilityPass.Write(sceneData.DepthStencil);
+		visibilityPass.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+			{
+				GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
+
+				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+				renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+				RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
+				info.RenderTargetCount = 2;
+				info.RenderTargets[0].Target = m_pVisibilityTexture.get();
+				info.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
+				info.RenderTargets[1].Target = m_pBarycentricsTexture.get();
+				info.RenderTargets[1].Access = RenderPassAccess::DontCare_Store;
+
+				renderContext.BeginRenderPass(info);
+				renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
+				
+				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+				};
+
+				renderContext.BindResources(2, 0, srvs, std::size(srvs));
+				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
+
+				struct ViewData
+				{
+					Matrix ViewProjection;
+				} viewData{};
+				viewData.ViewProjection = m_pCamera->GetViewProjection();
+				renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
+
+				{
+					GPU_PROFILE_SCOPE("Opaque", &renderContext);
+					renderContext.SetPipelineState(m_pVisibilityRenderingPSO);
+					DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
+				}
+
+				renderContext.EndRenderPass();
+			});
+
+		RGPassBuilder shadingPass = graph.AddPass("Visibility Shading");
+		shadingPass.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
+			{
+				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetComputeRootSignature(m_pVisibilityShadingRS.get());
+				renderContext.SetPipelineState(m_pVisibilityShadingPSO);
+
+				struct ViewData
+				{
+					Matrix ViewProjection;
+					Matrix ViewInverse;
+					IntVector2 ScreenDimensions;
+				} viewData{};
+
+				viewData.ViewProjection = m_pCamera->GetViewProjection();
+				viewData.ViewInverse = m_pCamera->GetViewInverse();
+				viewData.ScreenDimensions = IntVector2(GetCurrentRenderTarget()->GetWidth(), GetCurrentRenderTarget()->GetHeight());
+				renderContext.SetComputeDynamicConstantBufferView(0, viewData);
+
+				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					m_SceneData.pLightBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					m_pVisibilityTexture->GetSRV()->GetDescriptor(),
+					m_pBarycentricsTexture->GetSRV()->GetDescriptor(),
+				};
+
+				renderContext.BindResources(1, 0, srvs, std::size(srvs));
+				renderContext.BindResource(2, 0, GetCurrentRenderTarget()->GetUAV());
+				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
+
+				renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
+			});
+
+		m_pVisualizeTexture = m_pVisibilityTexture.get();
+	}
+
+	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
 	{
 		// depth prepass
 		// - depth only pass that renders the entire scene
@@ -1074,7 +1167,7 @@ void DemoApp::Update()
 
 		DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 	}
-	else
+	else if (m_RenderPath == RenderPath::PathTracing)
 	{
 		m_pPathTracing->Render(graph, m_SceneData);
 	}
@@ -1100,7 +1193,7 @@ void DemoApp::Update()
 			}
 		});
 
-	if (m_RenderPath != RenderPath::PathTracing)
+	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
 	{
 		if (Tweakables::g_RaytracedReflections.Get())
 		{
@@ -1709,7 +1802,7 @@ void DemoApp::InitializePipelines()
 		Shader* pComputeShader = m_pDevice->GetShader("VisibilityShading.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pVisibilityShadingRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pVisibilityShadingRS->FinalizeFromShader("Visibility Rendering", pComputeShader);
+		m_pVisibilityShadingRS->FinalizeFromShader("Visibility Shading", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pVisibilityShadingRS->GetRootSignature());

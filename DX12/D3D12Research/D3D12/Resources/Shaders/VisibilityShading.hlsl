@@ -5,8 +5,8 @@
 
 #define RootSig \
     "CBV(b1, visibility = SHADER_VISIBILITY_ALL),"      \
-    "DescriptorTable(UAV(u0, numDescriptors = 1)),"     \
     "DescriptorTable(SRV(t5, numDescriptors = 12)),"    \
+    "DescriptorTable(UAV(u0, numDescriptors = 1)),"     \
     GLOBAL_BINDLESS_TABLE   \
     "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR),"
 
@@ -153,7 +153,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     float3 V = normalize(vertex.Position - cViewData.ViewInverse[3].xyz);
 
     Light light = tLights[0];
-    flaot3 L = -light.Direction;
+    float3 L = -light.Direction;
 
     float4 color = light.GetColor();
 

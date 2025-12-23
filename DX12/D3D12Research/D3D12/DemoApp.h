@@ -157,7 +157,7 @@ private:
 	int32_t m_ScreenshotRowPitch{0};
 	std::unique_ptr<Buffer> m_pScreenshotBuffer;
 
-	RenderPath m_RenderPath = RenderPath::Clustered;
+	RenderPath m_RenderPath = RenderPath::Visibility;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;

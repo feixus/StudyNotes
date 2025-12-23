@@ -560,6 +560,15 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	{
 		ShaderModel = (uint16_t)shaderModelSupport.HighestShaderModel;
 	}
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS3 caps3{};
+	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &caps3, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS3))))
+	{
+		if (!caps3.BarycentricsSupported)
+		{
+			E_LOG(Warning, "Barycentrics is not Supported");
+		}
+	}
 }
 
 bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
