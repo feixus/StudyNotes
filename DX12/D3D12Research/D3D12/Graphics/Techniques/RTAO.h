@@ -10,14 +10,14 @@ class CommandContext;
 class Buffer;
 class RGGraph;
 class StateObject;
-struct SceneData;
+struct SceneView;
 
 class RTAO
 {
 public:
     RTAO(GraphicsDevice* pGraphicsDevice);
 
-    void Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneData& sceneData);
+    void Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneView& sceneData);
 
 private:
     void SetupPipelines();

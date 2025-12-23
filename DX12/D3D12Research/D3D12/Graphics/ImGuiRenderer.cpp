@@ -12,7 +12,7 @@
 #include "Graphics/Core/OfflineDescriptorAllocator.h"
 #include "Graphics/Core/GraphicsTexture.h"
 #include "External/ImGuizmo/ImGuizmo.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pGraphicsDevice)
 {
@@ -156,7 +156,7 @@ void ImGuiRenderer::CreatePipeline(GraphicsDevice* pGraphicsDevice)
 	m_pPipelineStateObject = pGraphicsDevice->CreatePipeline(psoDesc);
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, GraphicsTexture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, GraphicsTexture* pRenderTarget)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();

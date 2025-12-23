@@ -14,7 +14,7 @@
 #include "Graphics/Core/OnlineDescriptorAllocator.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 
 static bool g_Enable = true;
 static int32_t g_EmitCount = 30;

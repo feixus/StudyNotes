@@ -11,7 +11,8 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
+#include "Graphics/Light.h"
 
 static const int Resolution = 128;
 static const int MaxPoints = 1024;

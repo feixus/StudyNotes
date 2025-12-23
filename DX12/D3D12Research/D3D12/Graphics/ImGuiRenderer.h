@@ -7,7 +7,7 @@ class RootSignature;
 class PipelineState;
 class GraphicsTexture;
 class RGGraph;
-struct SceneData;
+struct SceneView;
 
 class ImGuiRenderer
 {
@@ -16,7 +16,7 @@ public:
 	~ImGuiRenderer();
 
 	void NewFrame(uint32_t width, uint32_t height);
-	void Render(RGGraph& graph, const SceneData& sceneData, GraphicsTexture* pRenderTarget);
+	void Render(RGGraph& graph, const SceneView& sceneData, GraphicsTexture* pRenderTarget);
 
 private:
 	static const uint32_t m_WindowWidth{ 1240 };

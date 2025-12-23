@@ -12,7 +12,7 @@
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 
 RTReflections::RTReflections(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pGraphicsDevice)
 {
@@ -22,7 +22,7 @@ RTReflections::RTReflections(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevic
     }
 }
 
-void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
+void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 {
     RGPassBuilder rt = graph.AddPass("Raytracing Reflections");
     rt.Bind([=](CommandContext& context, const RGPassResource& passResource)

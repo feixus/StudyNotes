@@ -57,6 +57,7 @@ public:
 	D3D12_VARIABLE_SHADING_RATE_TIER VSRTier{ D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED };
 	int VSRTileSize{-1};
 	uint16_t ShaderModel{(D3D_SHADER_MODEL)0};
+	bool BarycentricsSupported{false};
 
 private:
 	GraphicsDevice* m_pDevice{nullptr};

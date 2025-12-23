@@ -564,7 +564,8 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	D3D12_FEATURE_DATA_D3D12_OPTIONS3 caps3{};
 	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &caps3, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS3))))
 	{
-		if (!caps3.BarycentricsSupported)
+		BarycentricsSupported = caps3.BarycentricsSupported;
+		if (!BarycentricsSupported)
 		{
 			E_LOG(Warning, "Barycentrics is not Supported");
 		}

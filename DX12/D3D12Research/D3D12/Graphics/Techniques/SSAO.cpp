@@ -9,7 +9,7 @@
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 
 SSAO::SSAO(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pGraphicsDevice)
 {
@@ -21,7 +21,7 @@ void SSAO::OnResize(int widowWidth, int windowHeight)
 	m_pAmbientOcclusionIntermediate = m_pGraphicsDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(widowWidth, 2), Math::DivideAndRoundUp(windowHeight, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Intermediate AO");
 }
 
-void SSAO::Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneData& sceneData)
+void SSAO::Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneView& sceneData)
 {
 	float g_AoPower = 3;
 	float g_AoThreshold = 0.0025f;

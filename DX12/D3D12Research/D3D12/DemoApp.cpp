@@ -34,46 +34,6 @@ static const uint32_t FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 
-void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes)
-{
-	DrawScene(context, scene, scene.VisibilityMask, blendModes);
-}
-
-void DrawScene(CommandContext& context, const SceneData& scene, const VisibilityMask& visibility, Batch::Blending blendModes)
-{
-	std::vector<const Batch*> meshes;
-	for (const Batch& b : scene.Batches)
-	{
-		if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.Index))
-		{
-			meshes.push_back(&b);
-		}
-	}
-
-	auto CompareSort = [&scene, blendModes](const Batch* a, const Batch* b)
-		{
-			float aDist = Vector3::DistanceSquared(a->pMesh->Bounds.Center, scene.pCamera->GetPosition());
-			float bDist = Vector3::DistanceSquared(b->pMesh->Bounds.Center, scene.pCamera->GetPosition());
-			return EnumHasAnyFlags(blendModes, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
-		};
-	std::sort(meshes.begin(), meshes.end(), CompareSort);
-
-	struct PerObjectData
-	{
-		uint32_t Mesh;
-		uint32_t Material;
-	} objectData;
-
-	for (const Batch* b : meshes)
-	{
-		objectData.Material = b->Material;
-		objectData.Mesh= b->Index;
-		context.SetGraphicsRootConstants(0, objectData);
-		context.SetIndexBuffer(b->pMesh->IndicesLocation);
-		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
-	}
-}
-
 void EditTransform(const Camera& camera, Matrix& matrix)
 {
 	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
@@ -217,7 +177,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	instanceFlags |= CommandLine::GetBool("dred") ? GraphicsInstanceFlags::DRED: GraphicsInstanceFlags::None;
 	instanceFlags |= CommandLine::GetBool("gpuvalidation") ? GraphicsInstanceFlags::GpuValidation : GraphicsInstanceFlags::None;
 	instanceFlags |= CommandLine::GetBool("pix") ? GraphicsInstanceFlags::Pix : GraphicsInstanceFlags::None;
-	instanceFlags |= GraphicsInstanceFlags::DebugDevice | GraphicsInstanceFlags::DRED | GraphicsInstanceFlags::GpuValidation | GraphicsInstanceFlags::Pix;
+	instanceFlags |= GraphicsInstanceFlags::DebugDevice | GraphicsInstanceFlags::DRED | GraphicsInstanceFlags::GpuValidation;
 	std::unique_ptr<GraphicsInstance> pInstance = GraphicsInstance::CreateInstance(instanceFlags);
 
 	ComPtr<IDXGIAdapter4> pAdapter = pInstance->EnumerateAdapter(CommandLine::GetBool("warp"));
@@ -1775,41 +1735,44 @@ void DemoApp::InitializePipelines()
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	// visibility rendering
+	if (m_pDevice->GetCapabilities().BarycentricsSupported)
 	{
-		Shader* pVertexShader = m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain");
+		// visibility rendering
+		{
+			Shader* pVertexShader = m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Vertex, "VSMain");
+			Shader* pPixelShader = m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain");
 
-		m_pVisibilityRenderingRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pVisibilityRenderingRS->FinalizeFromShader("Visibility Rendering", pVertexShader);
+			m_pVisibilityRenderingRS = std::make_unique<RootSignature>(m_pDevice.get());
+			m_pVisibilityRenderingRS->FinalizeFromShader("Visibility Rendering", pVertexShader);
 
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pVisibilityRenderingRS->GetRootSignature());
-		psoDesc.SetVertexShader(pVertexShader);
-		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		DXGI_FORMAT rtFormats[] = {
-			DXGI_FORMAT_R32_UINT,
-			DXGI_FORMAT_R32G32_FLOAT,
-		};
-		psoDesc.SetRenderTargetFormats(rtFormats, std::size(rtFormats), GraphicsDevice::DEPTH_STENCIL_FORMAT, m_SampleCount);
-		psoDesc.SetName("Visibility Rendering");
-		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pVisibilityRenderingRS->GetRootSignature());
+			psoDesc.SetVertexShader(pVertexShader);
+			psoDesc.SetPixelShader(pPixelShader);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			DXGI_FORMAT rtFormats[] = {
+				DXGI_FORMAT_R32_UINT,
+				DXGI_FORMAT_R32G32_FLOAT,
+			};
+			psoDesc.SetRenderTargetFormats(rtFormats, std::size(rtFormats), GraphicsDevice::DEPTH_STENCIL_FORMAT, m_SampleCount);
+			psoDesc.SetName("Visibility Rendering");
+			m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
 
-	// visibility shading
-	{
-		Shader* pComputeShader = m_pDevice->GetShader("VisibilityShading.hlsl", ShaderType::Compute, "CSMain");
+		// visibility shading
+		{
+			Shader* pComputeShader = m_pDevice->GetShader("VisibilityShading.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pVisibilityShadingRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pVisibilityShadingRS->FinalizeFromShader("Visibility Shading", pComputeShader);
+			m_pVisibilityShadingRS = std::make_unique<RootSignature>(m_pDevice.get());
+			m_pVisibilityShadingRS->FinalizeFromShader("Visibility Shading", pComputeShader);
 
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pVisibilityShadingRS->GetRootSignature());
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetName("Visibility Shading");
-		m_pVisibilityShadingPSO = m_pDevice->CreatePipeline(psoDesc);
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pVisibilityShadingRS->GetRootSignature());
+			psoDesc.SetComputeShader(pComputeShader);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			psoDesc.SetName("Visibility Shading");
+			m_pVisibilityShadingPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
 	}
 }
 
@@ -1820,66 +1783,31 @@ void DemoApp::UpdateImGui()
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("MS: %4.2f", Time::DeltaTime() * 1000.0f);
-	ImGui::SameLine(100);
-	ImGui::Text("%d x %d", m_WindowWidth, m_WindowHeight);
-	ImGui::SameLine(180.0f);
-	ImGui::Text("%dx MSAA", m_SampleCount);
+	ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_WindowWidth, m_WindowHeight);
 	ImGui::PlotLines("##", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
 
-	ImGui::Text("Camera: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
+	ImGui::Text("CameraP: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 	Vector3 eulerAngle = m_pCamera->GetRotation().ToEuler() * Math::RadiansToDegrees;
-	ImGui::Text("CameraRotation: [%.2f, %.2f, %.2f]", eulerAngle.x, eulerAngle.y, eulerAngle.z);
-
-	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
-			{
-				RenderPath path = (RenderPath)index;
-				switch (path)
-				{
-				case RenderPath::Tiled:
-					*outText = "Tiles";
-					break;
-				case RenderPath::Clustered:
-					*outText = "Clustered";
-					break;
-				case RenderPath::PathTracing:
-					*outText = "Path Tracing";
-					break;
-				case RenderPath::Visibility:
-					*outText = "Visibility";
-					break;
-				default:
-					noEntry();
-					break;
-				}
-				return true;
-			}, nullptr, (int)RenderPath::MAX);
-
-		ImGui::Separator();
-
-		if (ImGui::Button("Dump RenderGraph"))
-		{
-			Tweakables::g_DumpRenderGraph = true;
-		}
-		if (ImGui::Button("Screenshot"))
-		{
-			Tweakables::g_Screenshot = true;
-		}
-		if (ImGui::Button("Pix Capture"))
-		{
-			m_CapturePix = true;
-		}
-
-		ImGui::TreePop();
-	}
+	ImGui::Text("CameraR: [%.2f, %.2f, %.2f]", eulerAngle.x, eulerAngle.y, eulerAngle.z);
 
 	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
 		pRootNode->RenderImGui(m_Frame);
 		ImGui::TreePop();
+	}
+
+	if (ImGui::Button("Dump RenderGraph"))
+	{
+		Tweakables::g_DumpRenderGraph = true;
+	}
+	if (ImGui::Button("Screenshot"))
+	{
+		Tweakables::g_Screenshot = true;
+	}
+	if (ImGui::Button("Pix Capture"))
+	{
+		m_CapturePix = true;
 	}
 
 	ImGui::End();
@@ -1890,6 +1818,31 @@ void DemoApp::UpdateImGui()
 	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("Parameters", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+	ImGui::Text("Global");
+	ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
+	{
+		RenderPath path = (RenderPath)index;
+		switch (path)
+		{
+		case RenderPath::Tiled:
+			*outText = "Tiles";
+			break;
+		case RenderPath::Clustered:
+			*outText = "Clustered";
+			break;
+		case RenderPath::PathTracing:
+			*outText = "Path Tracing";
+			break;
+		case RenderPath::Visibility:
+			*outText = "Visibility";
+			break;
+		default:
+			noEntry();
+			break;
+		}
+		return true;
+	}, nullptr, (int)RenderPath::MAX);
 
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
@@ -1909,22 +1862,24 @@ void DemoApp::UpdateImGui()
 	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
 	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
 
-	constexpr static const char* tonemappers[] =
-	{
-		"Reinhard",
-		"Reinhard Extended",
-		"ACES fast",
-		"Unreal 3",
-		"Uncharted2"
-	};
-
 	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* data, int index, const char** outText)
 		{
+			constexpr static const char* tonemappers[] =
+			{
+				"Reinhard",
+				"Reinhard Extended",
+				"ACES fast",
+				"Unreal 3",
+				"Uncharted2"
+			};
+
 			if (index < (int)std::size(tonemappers))
 			{
 				*outText = tonemappers[index];
 				return true;
 			}
+
+			noEntry();
 			return false;
 		}, nullptr, 5);
 

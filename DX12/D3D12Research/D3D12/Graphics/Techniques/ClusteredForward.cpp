@@ -11,7 +11,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int gLightClusterTexelSize = 64;
@@ -87,7 +87,7 @@ Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
     return lightGridParams;
 }
 
-void ClusteredForward::Execute(RGGraph& graph, const SceneData& inputResource)
+void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 {
     RG_GRAPH_SCOPE("Clustered Lighting", graph);
 

@@ -12,7 +12,7 @@
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/GraphicsTexture.h"
 #include "Graphics/Core/ShaderBindingTable.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 
 RTAO::RTAO(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pGraphicsDevice)
 {
@@ -24,7 +24,7 @@ RTAO::RTAO(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pGraphicsDevice)
     SetupPipelines();
 }
 
-void RTAO::Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneData& sceneData)
+void RTAO::Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneView& sceneData)
 {
     static float g_AoPower = 3;
     static float g_AoRadius = 0.5f;

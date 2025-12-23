@@ -10,7 +10,7 @@ class CommandSignature;
 class GraphicsDevice;
 class UnorderedAccessView;
 class RGGraph;
-struct SceneData;
+struct SceneView;
 
 class ClusteredForward
 {
@@ -20,7 +20,7 @@ public:
 
     void OnResize(int windowWidth, int windowHeight);
 
-    void Execute(RGGraph& graph, const SceneData& inputResource);
+    void Execute(RGGraph& graph, const SceneView& inputResource);
     void VisualizeLightDensity(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
     
 private:

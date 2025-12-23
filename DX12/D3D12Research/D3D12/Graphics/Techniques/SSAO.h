@@ -7,7 +7,7 @@ class GraphicsTexture;
 class Camera;
 class PipelineState;
 class RGGraph;
-struct SceneData;
+struct SceneView;
 
 class SSAO
 {
@@ -16,7 +16,7 @@ public:
 
 	void OnResize(int widowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneData& sceneData);
+	void Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneView& sceneData);
 
 private:
 	void SetupPipelines();
