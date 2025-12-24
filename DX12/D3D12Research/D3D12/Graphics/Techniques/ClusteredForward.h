@@ -37,30 +37,12 @@ private:
 
     std::unique_ptr<GraphicsTexture> m_pHeatMapTexture;
 
-    // step 1: AABB
+    // AABB
     std::unique_ptr<RootSignature> m_pCreateAabbRS;
     PipelineState* m_pCreateAabbPSO{nullptr};
     std::unique_ptr<Buffer> m_pAabbBuffer;
 
-    // step 2: mark unique clusters
-    std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
-	PipelineState* m_pMarkUniqueClustersOpaquePSO{nullptr};
-	PipelineState* m_pMarkUniqueClustersTransparentPSO{nullptr};
-    std::unique_ptr<Buffer> m_pUniqueClusterBuffer;
-    UnorderedAccessView* m_pUniqueClusterBufferRawUAV{nullptr};
-
-    // step 3: compact cluster list
-    std::unique_ptr<RootSignature> m_pCompactClusterListRS;
-    PipelineState* m_pCompactClusterListPSO{nullptr};
-    std::unique_ptr<Buffer> m_pCompactedClusterBuffer;
-    UnorderedAccessView* m_pCompactedClusterBufferRawUAV{nullptr};
-
-    // step 4: update Indirect Dispatch Buffer
-    std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
-	PipelineState* m_pUpdateIndirectArgumentsPSO{nullptr};
-    std::unique_ptr<Buffer> m_pIndirectArguments;
-
-    // step 5: light culling
+    // light culling
     std::unique_ptr<RootSignature> m_pLightCullingRS;
     PipelineState* m_pLightCullingPSO{nullptr};
     std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;;
@@ -69,7 +51,7 @@ private:
     std::unique_ptr<Buffer> m_pLightGrid;
     UnorderedAccessView* m_pLightGridRawUAV{nullptr};
 
-    // step 6: lighting
+    // lighting
     std::unique_ptr<RootSignature> m_pDiffuseRS;
 	PipelineState* m_pDiffusePSO{nullptr};
 	PipelineState* m_pDiffuseMaskedPSO{nullptr};
@@ -78,7 +60,6 @@ private:
     // cluster debug rendering
     std::unique_ptr<RootSignature> m_pDebugClusterRS;
     PipelineState* m_pDebugClusterPSO{nullptr};
-    std::unique_ptr<Buffer> m_pDebugCompactedClusterBuffer;
     std::unique_ptr<Buffer> m_pDebugLightGrid;
     Matrix m_DebugClusterViewMatrix;
     bool m_DidCopyDebugClusterData{false};
