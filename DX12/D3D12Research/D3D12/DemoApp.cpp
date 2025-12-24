@@ -167,7 +167,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	m_WindowWidth(windowRect.x), m_WindowHeight(windowRect.y), m_SampleCount(sampleCount)
 {
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetNearPlane(3000.f);
+	m_pCamera->SetNearPlane(80.f);
 	m_pCamera->SetFarPlane(1.f);
 
 	E_LOG(Info, "DemoApp::InitD3D");

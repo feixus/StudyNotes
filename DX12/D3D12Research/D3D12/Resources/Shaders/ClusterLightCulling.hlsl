@@ -5,11 +5,12 @@
                 "DescriptorTable(UAV(u0, numDescriptors = 3))"
 
 #define MAX_LIGHTS_PER_TILE 256
-#define THREAD_COUNT 64
+#define THREAD_COUNT 4
 
 cbuffer ShaderParameters : register(b0)
 {
     float4x4 cView;
+    int3 cClusterDimensions;
     uint cLightCount;
 }
 
@@ -19,23 +20,6 @@ StructuredBuffer<AABB> tClusterAABBs : register(t1);
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uLightIndexList : register(u1);
 RWStructuredBuffer<uint2> uOutLightGrid : register(u2);
-
-groupshared AABB gGroupAABB;
-groupshared uint gClusterIndex;
-
-groupshared uint gIndexStartOffset;
-groupshared uint gLightCount;
-groupshared uint gLightList[MAX_LIGHTS_PER_TILE];
-
-void AddLight(uint lightIndex)
-{
-    uint index;
-    InterlockedAdd(gLightCount, 1, index);
-    if (index < MAX_LIGHTS_PER_TILE)
-    {
-        gLightList[index] = lightIndex;
-    }
-}
 
 bool ConeInSphere(float3 conePos, float3 coneDir, float coneRange, float2 coneAngleSinCos, Sphere sphere)
 {
@@ -51,26 +35,22 @@ bool ConeInSphere(float3 conePos, float3 coneDir, float coneRange, float2 coneAn
 
 struct CS_Input
 {
-    uint3 GroupID : SV_GroupID;
     uint3 DispatchThreadID : SV_DispatchThreadID;
-    uint GroupIndex : SV_GroupIndex;
 };
 
 [RootSignature(RootSig)]
-[numthreads(THREAD_COUNT, 1, 1)]
+[numthreads(THREAD_COUNT, THREAD_COUNT, THREAD_COUNT)]
 void LightCulling(CS_Input input)
 {
-    if (input.GroupIndex == 0)
-    {
-        gLightCount = 0;
-        gClusterIndex = input.GroupID.x;
-        gGroupAABB = tClusterAABBs[gClusterIndex];
-    }
-
-    GroupMemoryBarrierWithGroupSync();
+    uint lightList[MAX_LIGHTS_PER_TILE];
+    uint lightCount = 0;
+    uint clusterIndex = input.DispatchThreadID.z * (cClusterDimensions.x * cClusterDimensions.y) +
+                        input.DispatchThreadID.y * cClusterDimensions.x +
+                        input.DispatchThreadID.x;
+    AABB clusterAABB = tClusterAABBs[clusterIndex];
 
     [loop]
-    for (uint i = input.GroupIndex; i < cLightCount; i += THREAD_COUNT)
+    for (uint i = 0; i < cLightCount; i++)
     {
         Light light = tLights[i];
         if (light.IsPoint())
@@ -78,43 +58,49 @@ void LightCulling(CS_Input input)
             Sphere sphere;
             sphere.Radius = light.Range;
             sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
-            if (SphereInAABB(sphere, gGroupAABB))
+            if (SphereInAABB(sphere, clusterAABB))
             {
-                AddLight(i);
+                if (lightCount < MAX_LIGHTS_PER_TILE)
+                {
+                    lightList[lightCount] = i;
+                }
+                lightCount++;
             }
         }
         else if (light.IsSpot())
         {
             Sphere sphere;
-            sphere.Radius = sqrt(dot(gGroupAABB.Extents.xyz, gGroupAABB.Extents.xyz));
-            sphere.Position = gGroupAABB.Center.xyz;
+            sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
+            sphere.Position = clusterAABB.Center.xyz;
 
             float3 conePosition = mul(float4(light.Position, 1.0f), cView).xyz;
             float3 coneDirection = mul(light.Direction, (float3x3)cView);
             float angle = acos(light.SpotlightAngles.y);
             if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
             {
-                AddLight(i);
+                if (lightCount < MAX_LIGHTS_PER_TILE)
+                {
+                    lightList[lightCount] = i;
+                }
+                lightCount++;
             }
         }
         else
         {
-            AddLight(i);
+            if (lightCount < MAX_LIGHTS_PER_TILE)
+            {
+                lightList[lightCount] = i;
+            }
+            lightCount++;
         }
     }
 
-    GroupMemoryBarrierWithGroupSync();
+    uint startOffset = 0;
+    InterlockedAdd(uLightIndexCounter[clusterIndex], lightCount, startOffset);
+    uOutLightGrid[clusterIndex] = uint2(startOffset, lightCount);
 
-    if (input.GroupIndex == 0)
+    for (uint j = 0; j < lightCount; j++)
     {
-        InterlockedAdd(uLightIndexCounter[0], gLightCount, gIndexStartOffset);
-        uOutLightGrid[gClusterIndex] = uint2(gIndexStartOffset, gLightCount);
-    }
-
-    GroupMemoryBarrierWithGroupSync();
-
-    for (uint j = input.GroupIndex; j < gLightCount; j += THREAD_COUNT)
-    {
-        uLightIndexList[gIndexStartOffset + j] = gLightList[j];
+        uLightIndexList[startOffset + j] = lightList[j];
     }
 }

@@ -60,7 +60,7 @@ float EdgeDetection(uint2 index, uint width, uint height)
         sampledValue += LinearizeDepth01(tDepth.Load(uint3(index + offsets[j], 0)), cNear, cFar);
     }
     sampledValue /= 8.0f;
-    return lerp(1, 0, step(0.003f, length(reference - sampledValue)));
+    return lerp(1, 0, step(0.0002f, length(reference - sampledValue)));
 }
 
 float InverseLerp(float value, float minValue, float maxValue)
