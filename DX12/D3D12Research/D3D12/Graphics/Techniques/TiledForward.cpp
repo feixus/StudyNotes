@@ -183,6 +183,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
 				inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
 				inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
 				inputResource.pMeshBuffer->GetSRV()->GetDescriptor(),
+                inputResource.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 			};
 			context.BindResources(4, 3, srvs, std::size(srvs));
 

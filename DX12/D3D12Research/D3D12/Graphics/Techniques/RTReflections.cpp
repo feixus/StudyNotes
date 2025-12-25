@@ -69,7 +69,8 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
                 m_pSceneColor->GetSRV()->GetDescriptor(),
                 sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
                 sceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-                sceneData.pMeshBuffer->GetSRV()->GetDescriptor()
+                sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+                sceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
             };
 
             context.SetComputeDynamicConstantBufferView(0, parameters);

@@ -31,11 +31,16 @@ namespace ShaderInterop
 
     struct MeshData
 	{
-		uint Material;
         uint VertexBuffer;
         uint IndexBuffer;
-        float4x4 World;
 	};
+
+    struct MeshInstance
+    {
+        uint Material;
+        uint Mesh;
+        float4x4 World;
+    };
 
     enum LightFlags : uint
     {

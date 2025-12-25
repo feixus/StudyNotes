@@ -13,7 +13,6 @@ struct VertexAttribute
     float3 Normal;
     float4 Tangent;
     float3 GeometryNormal;
-    int Material;
 };
 
 struct VertexInput
@@ -32,16 +31,15 @@ T LoadGeometryData(ByteAddressBuffer buffer, uint index, uint vertexStride, inou
     return v;
 }
 
-VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex, float4x3 worldMatrix)
+VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycentrics, uint primitiveIndex, float4x3 worldMatrix)
 {
 	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
-	MeshData mesh = tMeshes[InstanceID()];
+	MeshData mesh = tMeshes[instance.Mesh];
 	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
 
 	VertexAttribute outData;
 	outData.UV = 0;
 	outData.Normal = 0;
-	outData.Material = mesh.Material;
 
     float3 positions[3];
     const uint vertexStride = sizeof(VertexInput);

@@ -9,8 +9,7 @@
 
 struct PerObjectData
 {
-    uint Mesh;
-    uint Material;
+    uint Index;
 };
 
 struct PerViewData
@@ -39,9 +38,10 @@ struct PSInput
 PSInput VSMain(uint VertexId : SV_VertexID)
 {
     PSInput result = (PSInput) 0;
-    MeshData mesh = tMeshes[cObjectData.Mesh];
+    MeshInstance instance = tMeshInstances[cObjectData.Index];
+    MeshData mesh = tMeshes[instance.Mesh];
     Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-    result.position = mul(mul(float4(UnpackHalf3(input.position), 1.0f), mesh.World), cViewData.ViewProjection);
+    result.position = mul(mul(float4(UnpackHalf3(input.position), 1.0f), instance.World), cViewData.ViewProjection);
     result.texCoord = UnpackHalf2(input.texCoord);
 
     return result;
@@ -49,7 +49,8 @@ PSInput VSMain(uint VertexId : SV_VertexID)
 
 void PSMain(PSInput input)
 {
-    MaterialData material = tMaterials[cObjectData.Material];
+    MeshInstance instance = tMeshInstances[cObjectData.Index];
+    MaterialData material = tMaterials[instance.Material];
     if (tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < material.AlphaCutoff)
     {
         discard;

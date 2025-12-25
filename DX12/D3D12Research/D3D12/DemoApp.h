@@ -177,6 +177,7 @@ private:
 	// light data
 	std::unique_ptr<Buffer> m_pMaterialBuffer;
 	std::unique_ptr<Buffer> m_pMeshBuffer;
+	std::unique_ptr<Buffer> m_pMeshInstanceBuffer;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
 

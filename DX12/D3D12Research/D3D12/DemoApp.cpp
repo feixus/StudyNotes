@@ -280,29 +280,37 @@ void DemoApp::SetupScene(CommandContext& context)
 
 	std::vector<ShaderInterop::MaterialData> materials;
 	std::vector<ShaderInterop::MeshData> meshes;
+	std::vector<ShaderInterop::MeshInstance> meshInstances;
 
 	for (const auto& pMesh : m_Meshes)
 	{
+		for (const SubMesh& subMesh : pMesh->GetMeshes())
+		{
+			ShaderInterop::MeshData mesh;
+			mesh.IndexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
+			mesh.VertexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
+			meshes.push_back(mesh);
+		}
+
 		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
 		{
-			const SubMesh& subMesh = pMesh->GetMesh(node.MeshIndex);
-			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
+			const SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
+			const Material& material = pMesh->GetMaterial(parentMesh.MaterialId);
+
+			ShaderInterop::MeshInstance meshInstance;
+			meshInstance.Mesh = node.MeshIndex;
+			meshInstance.Material = (uint32_t)materials.size() + parentMesh.MaterialId;
+			meshInstance.World = node.Transform;
+			meshInstances.push_back(meshInstance);
 
 			Batch b;
 			b.Index = (int)m_SceneData.Batches.size();
-			b.LocalBounds = subMesh.Bounds;
-			b.pMesh = &subMesh;
+			b.LocalBounds = parentMesh.Bounds;
+			b.pMesh = &parentMesh;
 			b.WorldMatrix = node.Transform;
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
-			b.Material = (uint32_t)materials.size() + subMesh.MaterialId;
+			b.Material = (uint32_t)materials.size() + parentMesh.MaterialId;
 			m_SceneData.Batches.push_back(b);
-
-			ShaderInterop::MeshData meshData;
-			meshData.VertexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
-			meshData.IndexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
-			meshData.Material = (uint32_t)materials.size() + subMesh.MaterialId;
-			meshData.World = node.Transform;
-			meshes.push_back(meshData);
 		}
 
 		for (const Material& material : pMesh->GetMaterials())
@@ -324,6 +332,9 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
 	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
 	
+	m_pMeshInstanceBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshInstances.size()), sizeof(ShaderInterop::MeshInstance), BufferFlag::ShaderResource), "Mesh Instances");
+	m_pMeshInstanceBuffer->SetData(&context, meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
+
 	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
 	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
@@ -622,6 +633,7 @@ void DemoApp::Update()
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
 	m_SceneData.pMaterialBuffer = m_pMaterialBuffer.get();
 	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
+	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer.get();
 	m_SceneData.pCamera = m_pCamera.get();
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.FrameIndex = m_Frame;
@@ -850,6 +862,7 @@ void DemoApp::Update()
 				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 				renderContext.BindResources(2, 0, srvs, std::size(srvs));
 
@@ -1052,6 +1065,7 @@ void DemoApp::Update()
 						const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 							m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 							m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+							m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 						};
 						context.BindResources(2, 0, srvs, std::size(srvs));
 

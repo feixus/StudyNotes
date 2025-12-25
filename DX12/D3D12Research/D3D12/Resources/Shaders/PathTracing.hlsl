@@ -17,7 +17,7 @@ GlobalRootSignature GlobalRootSig =
     "CBV(b0),"
     "CBV(b2),"
     "DescriptorTable(UAV(u0, numDescriptors = 2)),"
-    "DescriptorTable(SRV(t5, numDescriptors = 7)),"
+    "DescriptorTable(SRV(t5, numDescriptors = 8)),"
     GLOBAL_BINDLESS_TABLE
     "StaticSampler(s0, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT),"
     "StaticSampler(s1, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP),"
@@ -93,11 +93,12 @@ float CastShadowRay(float3 origin, float3 direction)
 			// alpha test materials 
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				VertexAttribute vertex = GetVertexAttributes(rayQuery.CandidateTriangleBarycentrics(),
-											rayQuery.CandidateInstanceID(),
+                MeshInstance instance = tMeshInstances[rayQuery.CandidateInstanceID()];
+				VertexAttribute vertex = GetVertexAttributes(instance,
+                                            rayQuery.CandidateTriangleBarycentrics(),
 											rayQuery.CandidatePrimitiveIndex(),
                                             rayQuery.CandidateObjectToWorld4x3());
-				BrdfData surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+				BrdfData surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 				if (surface.Opacity > 0.5f)
 				{
 					rayQuery.CommitNonOpaqueTriangleHit();
@@ -162,8 +163,9 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 [shader("closesthit")]
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
-    payload.Material = vertex.Material;
+    MeshInstance instance = tMeshInstances[InstanceID()];
+	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
+    payload.Material = instance.Material;
     payload.UV = vertex.UV;
     payload.Normal = EncodeNormalOctahedron(vertex.Normal);
     payload.Tangent = EncodeNormalOctahedron(vertex.Tangent.xyz);
@@ -175,8 +177,9 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
-    MaterialProperties surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+    MeshInstance instance = tMeshInstances[InstanceID()];
+	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
+    MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
     if (surface.Opacity < 0.5f)
     {
         IgnoreHit();
