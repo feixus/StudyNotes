@@ -65,7 +65,7 @@ Texture3D<float4> tLightScattering : register(t2);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 
 #if CLUSTERED_FORWARD
-    StructuredBuffer<uint2> tLightGrid : register(t3);
+    StructuredBuffer<uint> tLightGrid : register(t3);
     uint GetSliceFromDepth(float depth)
     {
         return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
@@ -123,9 +123,12 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
     uint tileIndex = clusterIndex3D.x + cViewData.ClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cViewData.ClusterDimensions.y);
 #endif
 
-#if TILED_FORWARD || CLUSTERED_FORWARD
+#if TILED_FORWARD
     uint startOffset = tLightGrid[tileIndex].x;
     uint lightCount = tLightGrid[tileIndex].y;
+#elif CLUSTERED_FORWARD
+    uint startOffset = tLightGrid[tileIndex * 2];
+    uint lightCount = tLightGrid[tileIndex * 2 + 1];
 #else
     uint lightCount = cViewData.LightCount;
 #endif

@@ -46,7 +46,6 @@ private:
     std::unique_ptr<RootSignature> m_pLightCullingRS;
     PipelineState* m_pLightCullingPSO{nullptr};
     std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;;
-    std::unique_ptr<Buffer> m_pLightIndexCounter;
     std::unique_ptr<Buffer> m_pLightIndexGrid;
     std::unique_ptr<Buffer> m_pLightGrid;
     UnorderedAccessView* m_pLightGridRawUAV{nullptr};
@@ -58,8 +57,8 @@ private:
 	PipelineState* m_pDiffuseTransparencyPSO{nullptr};
 
     // cluster debug rendering
-    std::unique_ptr<RootSignature> m_pDebugClusterRS;
-    PipelineState* m_pDebugClusterPSO{nullptr};
+    std::unique_ptr<RootSignature> m_pVisualizeLightClustersRS;
+    PipelineState* m_pVisualizeLightClustersPSO{nullptr};
     std::unique_ptr<Buffer> m_pDebugLightGrid;
     Matrix m_DebugClusterViewMatrix;
     bool m_DidCopyDebugClusterData{false};

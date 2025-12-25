@@ -2,9 +2,9 @@
 
 #define RootSig "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 2)), " \
-                "DescriptorTable(UAV(u0, numDescriptors = 3))"
+                "DescriptorTable(UAV(u0, numDescriptors = 2))"
 
-#define MAX_LIGHTS_PER_TILE 256
+#define MAX_LIGHTS_PER_TILE 32
 #define THREAD_COUNT 4
 
 struct ViewData
@@ -19,9 +19,8 @@ ConstantBuffer<ViewData> cViewData : register(b0);
 StructuredBuffer<Light> tLights : register(t0);
 StructuredBuffer<AABB> tClusterAABBs : register(t1);
 
-globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
-RWStructuredBuffer<uint> uLightIndexList : register(u1);
-RWStructuredBuffer<uint2> uOutLightGrid : register(u2);
+RWStructuredBuffer<uint> uLightIndexList : register(u0);
+RWStructuredBuffer<uint> uOutLightGrid : register(u1);
 
 bool ConeInSphere(float3 conePos, float3 coneDir, float coneRange, float2 coneAngleSinCos, Sphere sphere)
 {
@@ -35,74 +34,67 @@ bool ConeInSphere(float3 conePos, float3 coneDir, float coneRange, float2 coneAn
     return !(angleCull || frontCull || backCull);
 }
 
-struct CS_Input
+uint GetClusterIndex1D(uint3 clusterIndex)
 {
-    uint3 DispatchThreadID : SV_DispatchThreadID;
-};
+    return clusterIndex.z * (cViewData.ClusterDimensions.x * cViewData.ClusterDimensions.y) +
+           clusterIndex.y * cViewData.ClusterDimensions.x +
+           clusterIndex.x;
+}
+
+void AddLight(uint clusterIndex, uint lightIndex)
+{
+    uint culledLightIndex;
+    InterlockedAdd(uOutLightGrid[clusterIndex * 2 + 1], 1, culledLightIndex);
+    uOutLightGrid[clusterIndex * 2] = clusterIndex * MAX_LIGHTS_PER_TILE;
+    if (culledLightIndex < MAX_LIGHTS_PER_TILE)
+    {
+        uLightIndexList[clusterIndex * MAX_LIGHTS_PER_TILE + culledLightIndex] = lightIndex;
+    }
+}
 
 [RootSignature(RootSig)]
 [numthreads(THREAD_COUNT, THREAD_COUNT, THREAD_COUNT)]
-void LightCulling(CS_Input input)
+void LightCulling(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
-    uint lightList[MAX_LIGHTS_PER_TILE];
-    uint lightCount = 0;
-    uint clusterIndex = input.DispatchThreadID.z * (cViewData.ClusterDimensions.x * cViewData.ClusterDimensions.y) +
-                        input.DispatchThreadID.y * cViewData.ClusterDimensions.x +
-                        input.DispatchThreadID.x;
-    AABB clusterAABB = tClusterAABBs[clusterIndex];
+    uint3 clusterIndex3D = dispatchThreadID;
 
-    [loop]
-    for (uint i = 0; i < cViewData.LightCount; i++)
+    if (all(clusterIndex3D < cViewData.ClusterDimensions))
     {
-        Light light = tLights[i];
-        if (light.IsPoint())
+        uint clusterIndex = GetClusterIndex1D(clusterIndex3D);
+        AABB clusterAABB = tClusterAABBs[clusterIndex];
+
+        [loop]
+        for (uint i = 0; i < cViewData.LightCount; i++)
         {
-            Sphere sphere;
-            sphere.Radius = light.Range;
-            sphere.Position = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
-            if (SphereInAABB(sphere, clusterAABB))
+            Light light = tLights[i];
+            if (light.IsPoint())
             {
-                if (lightCount < MAX_LIGHTS_PER_TILE)
+                Sphere sphere;
+                sphere.Radius = light.Range;
+                sphere.Position = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
+                if (SphereInAABB(sphere, clusterAABB))
                 {
-                    lightList[lightCount] = i;
+                    AddLight(clusterIndex, i);
                 }
-                lightCount++;
             }
-        }
-        else if (light.IsSpot())
-        {
-            Sphere sphere;
-            sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
-            sphere.Position = clusterAABB.Center.xyz;
-
-            float3 conePosition = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
-            float3 coneDirection = mul(light.Direction, (float3x3)cViewData.View);
-            float angle = acos(light.SpotlightAngles.y);
-            if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
+            else if (light.IsSpot())
             {
-                if (lightCount < MAX_LIGHTS_PER_TILE)
+                Sphere sphere;
+                sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
+                sphere.Position = clusterAABB.Center.xyz;
+
+                float3 conePosition = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
+                float3 coneDirection = mul(light.Direction, (float3x3)cViewData.View);
+                float angle = acos(light.SpotlightAngles.y);
+                if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
                 {
-                    lightList[lightCount] = i;
+                    AddLight(clusterIndex, i);
                 }
-                lightCount++;
             }
-        }
-        else
-        {
-            if (lightCount < MAX_LIGHTS_PER_TILE)
+            else
             {
-                lightList[lightCount] = i;
+                AddLight(clusterIndex, i);
             }
-            lightCount++;
         }
-    }
-
-    uint startOffset = 0;
-    InterlockedAdd(uLightIndexCounter[clusterIndex], lightCount, startOffset);
-    uOutLightGrid[clusterIndex] = uint2(startOffset, lightCount);
-
-    for (uint j = 0; j < lightCount; j++)
-    {
-        uLightIndexList[startOffset + j] = lightList[j];
     }
 }

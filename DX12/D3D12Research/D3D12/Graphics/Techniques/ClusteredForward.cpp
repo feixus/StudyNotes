@@ -16,6 +16,7 @@
 
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClusterNumZ = 32;
+static constexpr int gMaxLightsPerCluster = 32;
 
 static constexpr int gVolumetricFroxelTexelSize = 8;
 static constexpr int gVolumetricNumZSlices =128;
@@ -46,12 +47,12 @@ void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 
     m_pAabbBuffer = m_pGraphicsDevice->CreateBuffer(BufferDesc::CreateStructured(m_MaxClusters, sizeof(Vector4) * 2), "AABBs");
  
-	m_pLightIndexCounter = m_pGraphicsDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32_t)), "Light Index Counter");
-    m_pLightIndexGrid = m_pGraphicsDevice->CreateBuffer(BufferDesc::CreateStructured(m_MaxClusters * 32, sizeof(uint32_t)), "Light Index Grid");
-    m_pLightGrid = m_pGraphicsDevice->CreateBuffer(BufferDesc::CreateStructured(m_MaxClusters, 2 * sizeof(uint32_t)), "Light Grid");
+    m_pLightIndexGrid = m_pGraphicsDevice->CreateBuffer(BufferDesc::CreateStructured(m_MaxClusters * gMaxLightsPerCluster, sizeof(uint32_t)), "Light Index Grid");
+	// LightGrid.x : Offset, LightGrid.y : Count
+	m_pLightGrid = m_pGraphicsDevice->CreateBuffer(BufferDesc::CreateStructured(m_MaxClusters * 2, sizeof(uint32_t)), "Light Grid");
     m_pLightGridRawUAV = nullptr;
     m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
-    m_pDebugLightGrid = m_pGraphicsDevice->CreateBuffer(BufferDesc::CreateStructured(m_MaxClusters, 2 * sizeof(uint32_t)), "Debug Light Grid");
+    m_pDebugLightGrid = m_pGraphicsDevice->CreateBuffer(m_pLightGrid->GetDesc(), "Debug Light Grid");
 
 	TextureDesc volumeDesc = TextureDesc::Create3D(Math::DivideAndRoundUp(windowWidth, gVolumetricFroxelTexelSize),
 		Math::DivideAndRoundUp(windowHeight, gVolumetricFroxelTexelSize),
@@ -117,7 +118,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 context.BindResource(1, 0, m_pAabbBuffer->GetUAV());
 
                 // Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
-                context.Dispatch(m_ClusterCountX, m_ClusterCountY, Math::DivideAndRoundUp(gLightClusterNumZ, 32));
+                constexpr uint32_t threadGroupSize = 32;
+                context.Dispatch(ComputeUtils::GetNumThreadGroups(
+                    m_ClusterCountX, 1,
+                    m_ClusterCountY, 1,
+                    gLightClusterNumZ, threadGroupSize
+                ));
             });
 
         m_ViewportDirty = false;
@@ -134,8 +140,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
             context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             context.InsertResourceBarrier(inputResource.pLightBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
+			// clear the light grid because we're accumulating the light count in the shader
             context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
-            context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
 
             struct ConstantBuffer
             {
@@ -152,11 +158,15 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
             context.BindResource(1, 0, inputResource.pLightBuffer->GetSRV());
             context.BindResource(1, 1, m_pAabbBuffer->GetSRV());
 
-            context.BindResource(2, 0, m_pLightIndexCounter->GetUAV());
-            context.BindResource(2, 1, m_pLightIndexGrid->GetUAV());
-            context.BindResource(2, 2, m_pLightGrid->GetUAV());
+            context.BindResource(2, 0, m_pLightIndexGrid->GetUAV());
+            context.BindResource(2, 1, m_pLightGrid->GetUAV());
 
-            context.Dispatch(ComputeUtils::GetNumThreadGroups(m_ClusterCountX, 4, m_ClusterCountY, 4, gLightClusterNumZ, 4));
+            constexpr uint32_t threadGroupSize = 4;
+            context.Dispatch(ComputeUtils::GetNumThreadGroups(
+                    m_ClusterCountX, threadGroupSize,
+                    m_ClusterCountY, threadGroupSize,
+                    gLightClusterNumZ, threadGroupSize
+            ));
     });
 
 	{
@@ -236,7 +246,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 				context.BindResources(3, 0, srvs, std::size(srvs));
 				context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(pDestinationVolume->GetWidth(), 8, pDestinationVolume->GetHeight(), 8, pDestinationVolume->GetDepth(), 4));
+                constexpr uint32_t threadGroupSizeXY = 8;
+                constexpr uint32_t threadGroupSizeZ = 4;
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(
+                    pDestinationVolume->GetWidth(), threadGroupSizeXY, 
+                    pDestinationVolume->GetHeight(), threadGroupSizeXY, 
+                    pDestinationVolume->GetDepth(), threadGroupSizeZ));
 			});
 
         RGPassBuilder accumulateFog = graph.AddPass("Accumulate Volume Fog");
@@ -266,7 +281,10 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 context.BindResources(3, 0, srvs, std::size(srvs));
                 context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
-                context.Dispatch(ComputeUtils::GetNumThreadGroups(pDestinationVolume->GetWidth(), 8,pDestinationVolume->GetHeight(), 8));
+                constexpr uint32_t threadGroupSize = 8;
+                context.Dispatch(ComputeUtils::GetNumThreadGroups(
+                    pDestinationVolume->GetWidth(), threadGroupSize,
+                    pDestinationVolume->GetHeight(), threadGroupSize));
             });
 	}
     
@@ -412,25 +430,25 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 
                 context.BeginRenderPass(RenderPassInfo(inputResource.pRenderTarget, RenderPassAccess::Load_Store, inputResource.pDepthBuffer, RenderPassAccess::Load_Store, false));
 
-                context.SetPipelineState(m_pDebugClusterPSO);
-                context.SetGraphicsRootSignature(m_pDebugClusterRS.get());
+                context.SetPipelineState(m_pVisualizeLightClustersPSO);
+                context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS.get());
+                context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-                Matrix p = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
-                context.SetGraphicsDynamicConstantBufferView(0, p);
-                context.BindResource(1, 0, m_pAabbBuffer->GetSRV());
-                context.BindResource(1, 1, m_pDebugLightGrid->GetSRV());
-                context.BindResource(1, 2, m_pHeatMapTexture->GetSRV());
-
-                if (m_pDebugClusterPSO->GetType() == PipelineStateType::Mesh)
+                struct ConstantBuffer
                 {
-                    context.DispatchMesh(m_MaxClusters);
-                }
-                else
-                {
-                    context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
-                    context.Draw(0, m_MaxClusters);
-                }
+                    Matrix View;
+                } constantBuffer;
+                constantBuffer.View = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
+                context.SetGraphicsDynamicConstantBufferView(0, constantBuffer);
+                
+                D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+                    m_pAabbBuffer->GetSRV()->GetDescriptor(),
+                    m_pDebugLightGrid->GetSRV()->GetDescriptor(),
+                    m_pHeatMapTexture->GetSRV()->GetDescriptor()
+                };
+                context.BindResources(1, 0, srvs, std::size(srvs));
 
+                context.Draw(0, m_ClusterCountX * m_ClusterCountY * gLightClusterNumZ);
 
                 context.EndRenderPass();
             });
@@ -455,7 +473,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
     RGPassBuilder visualizePass = graph.AddPass("Visualize Light Density");
     visualizePass.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
-            struct Data
+            struct ConstantBuffer
             {
                 Matrix ProjectionInverse;
                 IntVector3 ClusterDimensions;
@@ -465,15 +483,15 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
                 float Near;
                 float Far;
                 float FoV;
-            } constantData{};
+            } constantBuffer{};
 
-            constantData.ProjectionInverse = camera.GetProjectionInverse();
-            constantData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
-            constantData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-            constantData.LightGridParams = lightGridParams;
-            constantData.Near = nearZ;
-            constantData.Far = farZ;
-            constantData.FoV = camera.GetFoV();
+            constantBuffer.ProjectionInverse = camera.GetProjectionInverse();
+            constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
+            constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
+            constantBuffer.LightGridParams = lightGridParams;
+            constantBuffer.Near = nearZ;
+            constantBuffer.Far = farZ;
+            constantBuffer.FoV = camera.GetFoV();
 
             context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -483,7 +501,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
             context.SetPipelineState(m_pVisualizeLightsPSO);
             context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
 
-            context.SetComputeDynamicConstantBufferView(0, constantData);
+            context.SetComputeDynamicConstantBufferView(0, constantBuffer);
 
             context.BindResource(1, 0, pTarget->GetSRV());
             context.BindResource(1, 1, pDepth->GetSRV());
@@ -491,7 +509,10 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
             
             context.BindResource(2, 0, m_pVisualizeIntermediateTexture->GetUAV());
 
-            context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 16), Math::DivideAndRoundUp(pTarget->GetHeight(), 16));
+            context.Dispatch(ComputeUtils::GetNumThreadGroups(
+                pTarget->GetWidth(), 16,
+                pTarget->GetHeight(), 16
+            ));
             context.InsertUavBarrier();
 
             context.CopyTexture(m_pVisualizeIntermediateTexture.get(), pTarget);
@@ -574,7 +595,7 @@ void ClusteredForward::SetupPipelines()
 		Shader* pGeometryShader = m_pGraphicsDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Geometry, "GSMain");
 		Shader* pPixelShader = m_pGraphicsDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Pixel, "PSMain");
 
-		m_pDebugClusterRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
+		m_pVisualizeLightClustersRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
@@ -583,15 +604,15 @@ void ClusteredForward::SetupPipelines()
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, m_pGraphicsDevice->GetMultiSampleCount());
 		psoDesc.SetBlendMode(BlendMode::Add, false);
 
-        m_pDebugClusterRS->FinalizeFromShader("Debug Cluster", pVertexShader);
+        m_pVisualizeLightClustersRS->FinalizeFromShader("Visualize Cluster", pVertexShader);
 
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-        psoDesc.SetRootSignature(m_pDebugClusterRS->GetRootSignature());
+        psoDesc.SetRootSignature(m_pVisualizeLightClustersRS->GetRootSignature());
         psoDesc.SetVertexShader(pVertexShader);
         psoDesc.SetGeometryShader(pGeometryShader);
-        psoDesc.SetName("Debug Cluster PSO");
+        psoDesc.SetName("Visualize Cluster PSO");
 
-        m_pDebugClusterPSO = m_pGraphicsDevice->CreatePipeline(psoDesc);
+        m_pVisualizeLightClustersPSO = m_pGraphicsDevice->CreatePipeline(psoDesc);
     }
 
     {

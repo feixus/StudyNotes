@@ -32,7 +32,7 @@ float3 Diffuse_Lambert(float3 albedo)
     return albedo * INV_PI;
 }
 
-// Smith G1 term (masking function) further optimized for GGX distribution (by substituting G_a into G1_GGX)
+// Smith G1 term (masking function) optimized for the GGX distribution by substituting the GGX lambda function
 // G1 = 2 / (1 + sqrt(1 + a^2 * tan^2(theta)))
 float Smith_G1_GGX(float alpha, float NdotS, float alphaSquared, float NdotSSquared)
 {

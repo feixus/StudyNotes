@@ -39,6 +39,16 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		m_AllowTearing = allowTearing;
 	}
 
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DebugDevice))
+	{
+		ComPtr<ID3D12Debug1> pDebugController;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		{
+			pDebugController->EnableDebugLayer();
+			E_LOG(Info, "D3D12 Debug Layer Enabled");
+		}
+	}
+
 	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DRED))
 	{
 		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
@@ -58,6 +68,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
+			E_LOG(Info, "D3D12 GPU Validation Enabled");
 		}
 	}
 

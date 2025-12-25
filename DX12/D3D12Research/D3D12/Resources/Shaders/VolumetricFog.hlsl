@@ -34,7 +34,7 @@ SamplerState sVolumeSampler : register(s3);
 
 ConstantBuffer<ShaderData> cData : register(b0);
 
-StructuredBuffer<uint2>tLightGrid : register(t2);
+StructuredBuffer<uint>tLightGrid : register(t2);
 StructuredBuffer<uint> tLightIndexGrid : register(t3);
 Texture3D<float4> tLightScattering : register(t4);
 RWTexture3D<float4> uOutLightScattering : register(u0);
@@ -117,11 +117,10 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     float3 totalScattering = 0.0f;
 
     uint tileIndex = GetLightCluster(threadId.xy, z);
-    uint lightOffset = tLightGrid[tileIndex].x;
-    uint lightCount = tLightGrid[tileIndex].y;
+    uint lightOffset = tLightGrid[tileIndex * 2];
+    uint lightCount = tLightGrid[tileIndex * 2 + 1];
 
     // iterate over all the lights and light the froxel
-    // todo: leverage clustered light culling
     for (int i = 0; i < lightCount; i++)
     {
         int lightIndex = tLightIndexGrid[lightOffset + i];
@@ -147,12 +146,12 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
         float3 L = normalize(light.Position - worldPosition);
         if (light.IsDirectional())
         {
-            L = -light.Direction;
+            L = normalize(light.Direction);
         }
         float VdotL = dot(V, L);
         float4 lightColor = light.GetColor() * light.Intensity;
 
-        totalScattering += attenuation * lightColor.rgb * HenyeyGreestein(-VdotL, 0.5f);
+        totalScattering += attenuation * lightColor.rgb * HenyeyGreestein(VdotL, 0.8f);
     }
 
     totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.005f).x;
