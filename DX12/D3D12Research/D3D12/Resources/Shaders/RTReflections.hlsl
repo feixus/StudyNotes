@@ -156,22 +156,31 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 	float3 viewPosition = mul(float4(worldPos, 1.0f), cViewData.View).xyz;
 	float4 pos = float4(0, 0, 0, viewPosition.z);
 	int shadowIndex = GetShadowIndex(light, pos, worldPos);
-	float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
-	float4 lightPos = mul(float4(worldPos, 1.0f), lightViewProjection);
-	lightPos.xyz /= lightPos.w;
-	lightPos.x = lightPos.x * 0.5f + 0.5f;
-	lightPos.y = lightPos.y * -0.5f + 0.5f;
-	attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-
-	if (all(lightPos >= 0) && all(lightPos.xy <= 1.0f))
+	bool castShadowRay = true;
+	if (shadowIndex >= 0)
 	{
-		Texture2D shadowTexture = tTexture2DTable[cShadowData.ShadowMapOffset + shadowIndex];
-		attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+		float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
+		float4 lightPos = mul(float4(worldPos, 1.0f), lightViewProjection);
+		lightPos.xyz /= lightPos.w;
+		lightPos.x = lightPos.x * 0.5f + 0.5f;
+		lightPos.y = lightPos.y * -0.5f + 0.5f;
+		attenuation *= LightTextureMask(light, shadowIndex, worldPos);
+
+		if (all(lightPos >= 0) && all(lightPos.xy <= 1.0f))
+		{
+			Texture2D shadowTexture = tTexture2DTable[cShadowData.ShadowMapOffset + shadowIndex];
+			attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+			castShadowRay = false;
+		}
 	}
+
 	else
 	{
 #if SECONDARY_SHADOW_RAY
-		attenuation *= CastShadowRay(worldPos, L);
+		if (castShadowRay)
+		{
+			attenuation *= CastShadowRay(worldPos, L);
+		}
 #endif
 	}
 	if (attenuation <= 0.0f)

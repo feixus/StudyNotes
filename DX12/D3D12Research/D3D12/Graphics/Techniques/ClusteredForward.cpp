@@ -192,6 +192,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 			Vector3 ViewLocation;
             float FarZ;
             float Jitter;
+            float LightClusterSizeFactor;
+            Vector2 LightGridParams;
+            IntVector3 LightClusterDimensions;
         }constantBuffer{};
 
 		constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
@@ -205,6 +208,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 		constantBuffer.FarZ = inputResource.pCamera->GetFar();
         constexpr Math::HaltonSequence<1024, 2> halton;
 		constantBuffer.Jitter = halton[inputResource.FrameIndex & 1023];
+        constantBuffer.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
+        constantBuffer.LightGridParams = lightGridParams;
+        constantBuffer.LightClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
 
 		RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volumetric Lights");
 		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResource& passResource)
@@ -216,7 +222,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
+                    m_pLightGrid->GetSRV()->GetDescriptor(),
+                    m_pLightIndexGrid->GetSRV()->GetDescriptor(),
+					pSourceVolume->GetSRV()->GetDescriptor(),
 					inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
 					inputResource.pAO->GetSRV()->GetDescriptor(),
 					inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
@@ -244,6 +252,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 // context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
 
                 D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+                    m_pLightGrid->GetSRV()->GetDescriptor(),
+                    m_pLightIndexGrid->GetSRV()->GetDescriptor(),
                     pDestinationVolume->GetSRV()->GetDescriptor(),
                     inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
                     inputResource.pAO->GetSRV()->GetDescriptor(),

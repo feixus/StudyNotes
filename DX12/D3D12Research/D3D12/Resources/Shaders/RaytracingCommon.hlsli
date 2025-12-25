@@ -51,7 +51,7 @@ VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, 
 	{
         uint dataOffset = 0;
         positions[i] = UnpackHalf3(LoadGeometryData<uint2>(geometryBuffer, indices[i], vertexStride, dataOffset));
-		outData.UV += UnpackHalf2(LoadGeometryData<uint2>(geometryBuffer, indices[i], vertexStride, dataOffset)) * barycentrics[i];
+		outData.UV += UnpackHalf2(LoadGeometryData<uint>(geometryBuffer, indices[i], vertexStride, dataOffset)) * barycentrics[i];
 		outData.Normal += LoadGeometryData<float3>(geometryBuffer, indices[i], vertexStride, dataOffset) * barycentrics[i];
 		outData.Tangent += LoadGeometryData<float4>(geometryBuffer, indices[i], vertexStride, dataOffset) * barycentrics[i];
 	}
