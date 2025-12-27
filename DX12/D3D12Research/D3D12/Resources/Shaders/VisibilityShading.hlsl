@@ -5,13 +5,13 @@
 
 #define RootSig \
     "CBV(b1, visibility = SHADER_VISIBILITY_ALL),"      \
-    "DescriptorTable(SRV(t5, numDescriptors = 12)),"    \
+    "DescriptorTable(SRV(t5, numDescriptors = 10)),"    \
     "DescriptorTable(UAV(u0, numDescriptors = 1)),"     \
     GLOBAL_BINDLESS_TABLE   \
     "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR),"
 
-Texture2D<uint> tVisibilityTexture : register(t12);
-Texture2D<float2> tBarycentricsTexture : register(t13);
+Texture2D<uint> tVisibilityTexture : register(t13);
+Texture2D<float2> tBarycentricsTexture : register(t14);
 RWTexture2D<float4> uTarget : register(u0);
 
 struct PerViewData
@@ -38,7 +38,6 @@ struct VertexAttribute
     float3 Normal;
     float4 Tangent;
     float3 GeometryNormal;
-    uint Material;
 };
 
 struct MaterialProperties
@@ -120,10 +119,11 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint visibilityMask = tVisibilityTexture.Load(int3(dispatchThreadId.xy, 0));
     float2 bary = tBarycentricsTexture.Load(int3(dispatchThreadId.xy, 0));
     float3 barycentrics = float3(bary.xy, 1 - bary.x - bary.y);
-    uint meshIndex = visibilityMask >> 16;
+    uint objIndex = visibilityMask >> 16;
     uint primitiveIndex = visibilityMask & 0xFFFF;
 
-    MeshData mesh = tMeshes[meshIndex];
+    MeshInstance instance = tMeshInstances[objIndex];
+    MeshData mesh = tMeshes[instance.Mesh];
     uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
 
     const uint vertexStride = sizeof(VertexInput);
@@ -133,7 +133,6 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     vertex.Position = 0;
     vertex.UV = 0;
     vertex.Normal = 0;
-    vertex.Material = mesh.Material;
     for (int i = 0; i < 3; i++)
 	{
         uint dataOffset = 0;
@@ -147,7 +146,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         dataOffset += sizeof(float4);
 	}
 
-    MaterialProperties properties = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+    MaterialProperties properties = GetMaterialProperties(instance.Material, vertex.UV, 0);
     BrdfData brdfData = GetBrdfData(properties);
 
     float3 V = normalize(vertex.Position - cViewData.ViewInverse[3].xyz);

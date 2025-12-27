@@ -4,14 +4,13 @@
 
 #define RootSig "RootConstants(num32BitConstants = 2, b0), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_VERTEX), " \
-                "DescriptorTable(SRV(t10, numDescriptors = 2)), " \
+                "DescriptorTable(SRV(t10, numDescriptors = 3)), " \
                 GLOBAL_BINDLESS_TABLE \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
 struct PerObjectData
 {
-    uint Mesh;
-    uint Material;
+    uint Index;
 };
 
 struct PerViewData
@@ -39,9 +38,10 @@ struct PSInput
 PSInput VSMain(uint VertexId : SV_VertexID)
 {
     PSInput result = (PSInput) 0;
-    MeshData mesh = tMeshes[cObjectData.Mesh];
+    MeshInstance instance = tMeshInstances[cObjectData.Index];
+    MeshData mesh = tMeshes[instance.Mesh];
     Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-    result.Position = mul(mul(float4(UnpackHalf3(input.Position), 1.0f), mesh.World), cViewData.ViewProjection);
+    result.Position = mul(mul(float4(UnpackHalf3(input.Position), 1.0f), instance.World), cViewData.ViewProjection);
     return result;
 }
 
@@ -52,7 +52,6 @@ void PSMain(
     out uint outPrimitiveMask : SV_Target0,
     out float2 outBarycentrics : SV_Target1)
 {
-    MaterialData material = tMaterials[cObjectData.Material];
-    outPrimitiveMask = (cObjectData.Mesh << 16) | (primitiveIndex & 0xFFFF);
+    outPrimitiveMask = (cObjectData.Index << 16) | (primitiveIndex & 0xFFFF);
     outBarycentrics = barycentrics.xy;
 }

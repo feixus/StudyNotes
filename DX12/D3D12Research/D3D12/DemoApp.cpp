@@ -825,6 +825,7 @@ void DemoApp::Update()
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 					m_pVisibilityTexture->GetSRV()->GetDescriptor(),
 					m_pBarycentricsTexture->GetSRV()->GetDescriptor(),
 				};
