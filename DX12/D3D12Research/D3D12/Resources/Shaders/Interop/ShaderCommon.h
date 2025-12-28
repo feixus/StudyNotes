@@ -29,10 +29,18 @@ namespace ShaderInterop
         float AlphaCutoff;
     };
 
+    struct NormalData
+	{
+		float3 Normal;
+		float4 Tangent;
+	};
+
     struct MeshData
 	{
-        uint VertexBuffer;
-        uint IndexBuffer;
+		uint PositionStream;
+		uint UVStream;
+		uint NormalStream;
+		uint IndexStream;
 	};
 
     struct MeshInstance
@@ -41,6 +49,11 @@ namespace ShaderInterop
         uint Mesh;
         float4x4 World;
     };
+
+    struct PerObjectData
+	{
+		uint Index;
+	};
 
     enum LightFlags : uint
     {

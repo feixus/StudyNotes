@@ -45,3 +45,9 @@ SamplerComparisonState sShadowMapSampler :               register(s2);
     "visibility = SHADER_VISIBILITY_ALL), "
 
 #endif
+
+template<typename T>
+T GetVertexData(uint bufferIndex, uint vertexId)
+{
+    return tBufferTable[bufferIndex].Load<T>(vertexId * sizeof(T));
+}

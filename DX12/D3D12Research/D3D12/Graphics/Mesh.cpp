@@ -18,12 +18,30 @@
 
 #include "tinygltf/tiny_gltf.h"
 
-struct Vertex
+struct VS_Position
 {
 	PackedVector3 Position{0.0f, 0.0f, 0.0f, 0.0f};
-	PackedVector2 TexCoord{0.0f, 0.0f};
+};
+
+struct VS_UV
+{
+	PackedVector2 UV{0.0f, 0.0f};
+};
+
+struct VS_Normal
+{
 	Vector3 Normal{Vector3::Forward};
 	Vector4 Tangent{1, 0, 0, 1};
+};
+
+struct MeshData
+{
+	BoundingBox Bounds;
+	uint32_t NumIndices{0};
+	uint32_t IndexOffset{0};
+	uint32_t NumVertices{0};
+	uint32_t VertexOffset{0};
+	uint32_t MaterialIndex{0};
 };
 
 Mesh::~Mesh()
@@ -76,7 +94,7 @@ namespace GltfCallbacks
 	}
 }
 
-bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, float uniformScale)
+bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, Vector3 uniformScale)
 {
 	tinygltf::TinyGLTF loader;
 	std::string err, warn;
@@ -197,17 +215,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		}
 	}
 
-	std::vector<uint32_t> indices;
-	std::vector<Vertex> vertices;
-	struct MeshData
-	{
-		BoundingBox Bounds;
-		uint32_t NumIndices{0};
-		uint32_t IndexOffset{0};
-		uint32_t NumVertices{0};
-		uint32_t VertexOffset{0};
-		uint32_t MaterialIndex{0};
-	};
+	std::vector<uint32_t> indicesStream;
+	std::vector<VS_Position> positionsStream;
+	std::vector<VS_UV> uvStream;
+	std::vector<VS_Normal> normalStream;
+	
 	std::vector<MeshData> meshDatas;
 	std::vector<std::vector<int>> meshToPrimitives;
 	int primitiveIndex = 0;
@@ -221,7 +233,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 			MeshData meshData;
 			meshData.MaterialIndex = primitive.material;
 
-			uint32_t vertexOffset = (uint32_t)vertices.size();
+			uint32_t vertexOffset = (uint32_t)positionsStream.size();
 			meshData.VertexOffset = vertexOffset;
 
 			// Indices
@@ -232,8 +244,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 
 				int indexStride = accessor.ByteStride(bufferView);
 				size_t indexCount = accessor.count;
-				uint32_t indexOffset = (uint32_t)indices.size();
-				indices.resize(indexOffset + indexCount);
+				uint32_t indexOffset = (uint32_t)indicesStream.size();
+				indicesStream.resize(indexOffset + indexCount);
 
 				meshData.IndexOffset = indexOffset;
 				meshData.NumIndices = (uint32_t)indexCount;
@@ -243,14 +255,14 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 				{
 					for (size_t i = 0; i < indexCount; ++i)
 					{
-						indices[indexOffset + i] = ((uint32_t*)indexData)[i];
+						indicesStream[indexOffset + i] = ((uint32_t*)indexData)[i];
 					}
 				}
 				else if (indexStride == 2)
 				{
 					for (size_t i = 0; i < indexCount; ++i)
 					{
-						indices[indexOffset + i] = ((uint16_t*)indexData)[i];
+						indicesStream[indexOffset + i] = ((uint16_t*)indexData)[i];
 					}
 				}
 				else
@@ -275,7 +287,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 
 					if (meshData.NumVertices == 0)
 					{
-						vertices.resize(vertices.size() + accessor.count);
+						positionsStream.resize(positionsStream.size() + accessor.count);
+						uvStream.resize(uvStream.size() + accessor.count);
+						normalStream.resize(normalStream.size() + accessor.count);
 						meshData.NumVertices = (uint32_t)accessor.count;
 					}
 
@@ -286,7 +300,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 						const Vector3* pPositions = (Vector3*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].Position = PackedVector3(pPositions[i].x, pPositions[i].y, pPositions[i].z, 0);
+							positionsStream[vertexOffset + i].Position = PackedVector3(pPositions[i].x, pPositions[i].y, pPositions[i].z, 0);
 							positions.push_back(pPositions[i]);
 						}
 						meshData.Bounds.CreateFromPoints(meshData.Bounds, positions.size(), positions.data(), sizeof(Vector3));
@@ -297,7 +311,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 						const Vector3* pNormals = (Vector3*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].Normal = pNormals[i];
+							normalStream[vertexOffset + i].Normal = pNormals[i];
 						}
 					}
 					else if (name == "TANGENT")
@@ -306,7 +320,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 						const Vector4* pTangents = (Vector4*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].Tangent = pTangents[i];
+							normalStream[vertexOffset + i].Tangent = pTangents[i];
 						}
 					}
 					else if (name == "TEXCOORD_0")
@@ -315,7 +329,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 						Vector2* pTexCoords = (Vector2*)pData;
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
-							vertices[vertexOffset + i].TexCoord = PackedVector2(pTexCoords[i].x, pTexCoords[i].y);
+							uvStream[vertexOffset + i].UV = PackedVector2(pTexCoords[i].x, pTexCoords[i].y);
 						}
 					}
 				}
@@ -326,7 +340,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 	}
 
 	static constexpr uint64_t sBufferAlignment = 16;
-	uint64_t bufferSize = vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32_t) + meshDatas.size() * sBufferAlignment;
+	uint64_t bufferSize = indicesStream.size() * sizeof(uint32_t);
+	bufferSize += positionsStream.size() * sizeof(VS_Position);
+	bufferSize += uvStream.size() * sizeof(VS_UV);
+	bufferSize += normalStream.size() * sizeof(VS_Normal);
+	bufferSize += (positionsStream.size() * 3 + indicesStream.size()) * sBufferAlignment;
 	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh GeometryBuffer");
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
@@ -342,7 +360,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		std::queue<QueuedNode> toProcess;
 		QueuedNode rootNode;
 		rootNode.Index = nodeIndex;
-		rootNode.Transform = Matrix::CreateScale(uniformScale, uniformScale, uniformScale);
+		rootNode.Transform = Matrix::CreateScale(uniformScale.x, uniformScale.y, uniformScale.z);
 		toProcess.push(rootNode);
 		while (!toProcess.empty())
 		{
@@ -396,20 +414,30 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		subMesh.Bounds = meshData.Bounds;
 		subMesh.MaterialId = meshData.MaterialIndex;
 
-		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(Vertex));
 		subMesh.PositionsFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		subMesh.VerticesLocation = vbv;
-		subMesh.pVertexSRV = new ShaderResourceView();
-		subMesh.pVertexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(Vertex)));
-		CopyData(&vertices[meshData.VertexOffset], sizeof(Vertex) * meshData.NumVertices);
+		subMesh.PositionsStride = sizeof(VS_Position);
+
+		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position));
+		subMesh.pPositionStreamSRV = new ShaderResourceView();
+		subMesh.pPositionStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_Position)));
+		CopyData(&positionsStream[meshData.VertexOffset], sizeof(VS_Position) * meshData.NumVertices);
+		
+		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal));
+		subMesh.pNormalStreamSRV = new ShaderResourceView();
+		subMesh.pNormalStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_Normal)));
+		CopyData(&normalStream[meshData.VertexOffset], sizeof(VS_Normal) * meshData.NumVertices);
+
+		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV));
+		subMesh.pUVStreamSRV = new ShaderResourceView();
+		subMesh.pUVStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_UV)));
+		CopyData(&uvStream[meshData.VertexOffset], sizeof(VS_UV) * meshData.NumVertices);
 
 		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT);
 		subMesh.IndicesLocation = ibv;
 		subMesh.pIndexSRV = new ShaderResourceView();
 		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumIndices * sizeof(uint32_t)));
-		CopyData(&indices[meshData.IndexOffset], sizeof(uint32_t) * meshData.NumIndices);
+		CopyData(&indicesStream[meshData.IndexOffset], sizeof(uint32_t) * meshData.NumIndices);
 
-		subMesh.Stride = sizeof(Vertex);
 		subMesh.pParent = this;
 		m_Meshes.push_back(subMesh);
 	}
@@ -447,9 +475,9 @@ void Mesh::GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext
 		geometryDesc.Triangles.IndexCount = subMesh.IndicesLocation.Elements;
 		geometryDesc.Triangles.IndexFormat = subMesh.IndicesLocation.Format;
 		geometryDesc.Triangles.Transform3x4 = 0;
-		geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.VerticesLocation.Location;
-		geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.VerticesLocation.Stride;
-		geometryDesc.Triangles.VertexCount = subMesh.VerticesLocation.Elements;
+		geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.PositionStreamLocation.Location;
+		geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.PositionStreamLocation.Stride;
+		geometryDesc.Triangles.VertexCount = subMesh.PositionStreamLocation.Elements;
 		geometryDesc.Triangles.VertexFormat = subMesh.PositionsFormat;
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
@@ -489,7 +517,9 @@ void Mesh::GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext
 void SubMesh::Destroy()
 {
 	delete pIndexSRV;
-	delete pVertexSRV;
+	delete pPositionStreamSRV;
+	delete pNormalStreamSRV;
+	delete pUVStreamSRV;
 
 	delete pBLAS;
 	delete pBLASScratch;

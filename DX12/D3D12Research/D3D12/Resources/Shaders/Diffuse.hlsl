@@ -11,11 +11,6 @@
                 "StaticSampler(s1, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
                 "StaticSampler(s2, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc = COMPARISON_GREATER)"
 
-struct PerObjectData
-{
-    uint Index;
-};
-
 struct PerViewData
 {
     float4x4 View;
@@ -41,14 +36,6 @@ struct PerViewData
 
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
 ConstantBuffer<PerViewData> cViewData : register(b1);
-
-struct Vertex
-{
-    uint2 position;
-    uint texCoord;
-    float3 normal;
-    float4 tangent;
-};
 
 struct PSInput
 {
@@ -252,19 +239,24 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 }
 
 [RootSignature(RootSig)]
-PSInput VSMain(uint VertexId : SV_VertexID)
+PSInput VSMain(uint vertexId : SV_VertexID)
 {
     PSInput result;
     
     MeshInstance instance = tMeshInstances[cObjectData.Index];
     MeshData mesh = tMeshes[instance.Mesh];
-    Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-    result.positionWS = mul(float4(UnpackHalf3(input.position), 1.0f), instance.World).xyz;
+
+    float3 position = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+    result.positionWS = mul(float4(position, 1.0f), instance.World).xyz;
     result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
     result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
-    result.texCoord = UnpackHalf2(input.texCoord);
-    result.normal = normalize(mul(input.normal, (float3x3)instance.World));
-    result.tangent = float4(normalize(mul(input.tangent.xyz, (float3x3)instance.World)), input.tangent.w);
+
+    result.texCoord = UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId));
+
+    NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
+    result.normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
+    result.tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
+    
     return result;
 }
 

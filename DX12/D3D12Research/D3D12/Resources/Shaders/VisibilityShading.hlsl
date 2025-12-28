@@ -135,15 +135,12 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     vertex.Normal = 0;
     for (int i = 0; i < 3; i++)
 	{
-        uint dataOffset = 0;
-        vertex.Position += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
-        dataOffset += sizeof(uint2);
-		vertex.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-        dataOffset += sizeof(uint);
-		vertex.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-        dataOffset += sizeof(float3);
-		vertex.Tangent += geometryBuffer.Load<float4>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-        dataOffset += sizeof(float4);
+        uint vertexId = indices[i];
+        vertex.Position += UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+        outData.UV += UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
+        NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
+		outData.Normal += normalData.Normal * barycentrics[i];
+		outData.Tangent += normalData.Tangent * barycentrics[i];
 	}
 
     MaterialProperties properties = GetMaterialProperties(instance.Material, vertex.UV, 0);

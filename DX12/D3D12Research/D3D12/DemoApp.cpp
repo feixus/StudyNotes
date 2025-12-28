@@ -167,7 +167,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	m_WindowWidth(windowRect.x), m_WindowHeight(windowRect.y), m_SampleCount(sampleCount)
 {
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetNearPlane(80.f);
+	m_pCamera->SetNearPlane(200.f);
 	m_pCamera->SetFarPlane(1.f);
 
 	E_LOG(Info, "DemoApp::InitD3D");
@@ -274,7 +274,8 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context);
+		//pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context, Vector3(1, -1, 1));
 		m_Meshes.push_back(std::move(pMesh));
 	}
 
@@ -287,8 +288,10 @@ void DemoApp::SetupScene(CommandContext& context)
 		for (const SubMesh& subMesh : pMesh->GetMeshes())
 		{
 			ShaderInterop::MeshData mesh;
-			mesh.IndexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
-			mesh.VertexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
+			mesh.IndexStream = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
+			mesh.PositionStream = m_pDevice->RegisterBindlessResource(subMesh.pPositionStreamSRV);
+			mesh.NormalStream = m_pDevice->RegisterBindlessResource(subMesh.pNormalStreamSRV);
+			mesh.UVStream = m_pDevice->RegisterBindlessResource(subMesh.pUVStreamSRV);
 			meshes.push_back(mesh);
 		}
 

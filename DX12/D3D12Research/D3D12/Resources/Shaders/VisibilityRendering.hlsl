@@ -8,11 +8,6 @@
                 GLOBAL_BINDLESS_TABLE \
                 "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
-struct PerObjectData
-{
-    uint Index;
-};
-
 struct PerViewData
 {
     float4x4 ViewProjection;

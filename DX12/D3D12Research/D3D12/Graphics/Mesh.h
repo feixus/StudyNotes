@@ -10,12 +10,16 @@ struct SubMesh
 {
     void Destroy();
 
-    int Stride{0};
+    int PositionsStride{0};
     int MaterialId{0};
     DXGI_FORMAT PositionsFormat{DXGI_FORMAT_R32G32B32_FLOAT};
-    ShaderResourceView* pVertexSRV{nullptr};
+    ShaderResourceView* pPositionStreamSRV{nullptr};
+    ShaderResourceView* pUVStreamSRV{nullptr};
+    ShaderResourceView* pNormalStreamSRV{nullptr};
     ShaderResourceView* pIndexSRV{nullptr};
-    VertexBufferView VerticesLocation;
+    VertexBufferView PositionStreamLocation;
+    VertexBufferView UVStreamLocation;
+    VertexBufferView NormalStreamLocation;
     IndexBufferView IndicesLocation;
     BoundingBox Bounds;
     Mesh* pParent{nullptr};
@@ -48,14 +52,13 @@ class Mesh
 {
 public:
     ~Mesh();
-    bool Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, float scale = 1.0f);
+    bool Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, Vector3 scale = Vector3::One);
     int GetMeshCount() const { return (int)m_Meshes.size();  }
 	const SubMesh& GetMesh(int index) const { return m_Meshes[index]; }
     const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
     const std::vector<Material>& GetMaterials() const { return m_Materials; }
     const std::vector<SubMesh>& GetMeshes() const { return m_Meshes; }
-    Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
     void GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext);

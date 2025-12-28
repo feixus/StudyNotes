@@ -20,11 +20,6 @@ cbuffer FrameData : register(b0)
 StructuredBuffer<ParticleData> tParticleData : register(t0);
 StructuredBuffer<uint> tAliveList : register(t1);
 
-struct VS_INPUT
-{
-    uint vertexId : SV_VertexID;
-};
-
 struct PS_INPUT
 {
     float4 position : SV_POSITION;
@@ -43,16 +38,16 @@ static const float3 BILLBOARD[] = {
 };
 
 [RootSignature(RootSig)]
-PS_INPUT VSMain(VS_INPUT input)
+PS_INPUT VSMain(uint vertexId : SV_VertexID)
 {
     PS_INPUT output;
 
-    uint vertexId = input.vertexId % 6;
-    uint instanceId = input.vertexId / 6;
+    uint vertexID = vertexId % 6;
+    uint instanceId = vertexId / 6;
 
     uint particleIndex = tAliveList[instanceId];
     ParticleData particle = tParticleData[particleIndex];
-    float3 quadPos = particle.Size * BILLBOARD[vertexId];
+    float3 quadPos = particle.Size * BILLBOARD[vertexID];
 
     output.position = float4(mul(quadPos, (float3x3)cViewInverse), 1);
     output.position.xyz += particle.Position;
@@ -62,7 +57,7 @@ PS_INPUT VSMain(VS_INPUT input)
     // Calculate color based on lifetime
     float lifeFactor = particle.LifeTime / 4.0f; // Assuming max lifetime is 4
     output.color = float4(1.0f - lifeFactor, lifeFactor, 0.0f, 1.0f); // Gradient from red to green
-    output.texCoord = BILLBOARD[vertexId].xy * 0.5f + 0.5f;
+    output.texCoord = BILLBOARD[vertexID].xy * 0.5f + 0.5f;
 
     return output;
 }
