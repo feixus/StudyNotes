@@ -31,7 +31,7 @@ struct Light
 			.Position = Position,
 			.Flags = 0,
 			.Direction = Direction,
-			.Color = Math::EncodeColor(Colour),
+			.Color = Math::EncodeRGBA(Colour),
 			.SpotlightAngles = Vector2(cos(PenumbraAngleDegrees * 0.5f * Math::DegreesToRadians), cos(UmbraAngleDegrees * 0.5f * Math::DegreesToRadians)),
 			.Intensity = Intensity,
 			.Range = Range,

@@ -9,10 +9,10 @@ class GraphicsTexture;
 
 struct IntColor
 {
-	IntColor(const Color& color) : Color(Math::EncodeColor(color)) {}
+	IntColor(const Color& color) : Color(Math::EncodeRGBA(color)) {}
 	IntColor(uint32_t color = 0) : Color(color) {}
 	operator uint32_t() const { return Color; }
-	operator Color() const { return Math::DecodeColor(Color); }
+	operator Color() const { return Math::DecodeRGBA(Color); }
 
 	uint32_t Color;
 };

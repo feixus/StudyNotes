@@ -347,6 +347,18 @@ float Square(float x)
 	return x * x;
 }
 
+template<typename T>
+T min3(T a, T b, T c)
+{
+    return min(min(a, b), c);
+}
+
+template<typename T>
+T max3(T a, T b, T c)
+{
+    return max(max(a, b), c);
+}
+
 // follow IEC 61966-2-1 sRGB standard
 float SrgbToLinear(float y)
 {
