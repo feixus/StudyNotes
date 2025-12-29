@@ -59,8 +59,17 @@ bool Image::Load(const void* pData, size_t dataSize, const char* pFormatHint)
 
 void Image::Save(const char* pFilePath)
 {
-	int result = stbi_write_jpg(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), 100);
-	check(result);
+	std::string extension = Paths::GetFileExtension(pFilePath);
+	if (extension == ".png")
+	{
+		int result = stbi_write_png(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), m_Width * m_Components);
+		check(result);
+	}
+	else if (extension == ".jpg")
+	{
+		int result = stbi_write_jpg(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), 70);
+		check(result);
+	}
 }
 
 bool Image::SetSize(int x, int y, int components)

@@ -535,51 +535,21 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 {
 	m_pDevice = pDevice;
 
-	D3D12_FEATURE_DATA_D3D12_OPTIONS caps0{};
-	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
-	{
-		// level for placing different types of resources in the same heap.
-		checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_1, "device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
-		checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3, "device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported");
-	}
+	CD3DX12FeatureSupport support;
+	check(support.Init(pDevice->GetDevice()) == S_OK);
 
-	D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
-	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
-	{
-		RenderPassTier = caps5.RenderPassesTier;
-		RayTracingTier = caps5.RaytracingTier;
-	}
+	RenderPassTier = support.RenderPassesTier();
+	RayTracingTier = support.RaytracingTier();
+	VSRTileSize = support.VariableShadingRateTier();
+	VSRTileSize = support.ShadingRateImageTileSize();
+	MeshShaderSupport = support.MeshShaderTier();
+	SamplerFeedbackSupport = support.SamplerFeedbackTier();
+	ShaderModel = (uint16_t)support.HighestShaderModel();
 
-	D3D12_FEATURE_DATA_D3D12_OPTIONS6 caps6{};
-	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps6, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS6))))
+	BarycentricsSupported = support.BarycentricsSupported();
+	if (!BarycentricsSupported)
 	{
-		VSRTier = caps6.VariableShadingRateTier;
-		VSRTileSize = caps6.ShadingRateImageTileSize;
-	}
-
-	D3D12_FEATURE_DATA_D3D12_OPTIONS7 caps7{};
-	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
-	{
-		MeshShaderSupport = caps7.MeshShaderTier;
-		SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
-	}
-
-	D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport = {
-		.HighestShaderModel = D3D_SHADER_MODEL_6_6
-	};
-	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
-	{
-		ShaderModel = (uint16_t)shaderModelSupport.HighestShaderModel;
-	}
-
-	D3D12_FEATURE_DATA_D3D12_OPTIONS3 caps3{};
-	if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &caps3, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS3))))
-	{
-		BarycentricsSupported = caps3.BarycentricsSupported;
-		if (!BarycentricsSupported)
-		{
-			E_LOG(Warning, "Barycentrics is not Supported");
-		}
+		E_LOG(Warning, "Barycentrics is not Supported");
 	}
 }
 

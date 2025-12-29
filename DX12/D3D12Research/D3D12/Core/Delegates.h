@@ -325,11 +325,12 @@ public:
         Free();
     }
 
-    InlineAllocator(const InlineAllocator& other) : m_Size(other.m_Size)
+    InlineAllocator(const InlineAllocator& other) : m_Size(0)
     {
         if (other.HasAllocation())
         {
             memcpy(Allocate(other.m_Size), other.GetAllocation(), other.m_Size);
+			m_Size = other.m_Size;
         }
     }
 

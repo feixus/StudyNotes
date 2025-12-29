@@ -6,7 +6,7 @@ namespace Paths
 
   std::string GetFileName(const std::string& path);
   std::string GetFileNameWithoutExtension(const std::string& path);
-  std::string GetFileExtension(const std::string& path);
+  std::string GetFileExtension(const char* path);
   std::string GetDirectoryPath(const std::string& path);
 
   std::string Normalize(const std::string& path);

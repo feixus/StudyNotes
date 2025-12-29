@@ -37,7 +37,6 @@ struct VertexAttribute
     float2 UV;
     float3 Normal;
     float4 Tangent;
-    float3 GeometryNormal;
 };
 
 struct MaterialProperties
@@ -124,10 +123,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     MeshInstance instance = tMeshInstances[objIndex];
     MeshData mesh = tMeshes[instance.Mesh];
-    uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
-
-    const uint vertexStride = sizeof(VertexInput);
-    ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
+    uint3 indices = tBufferTable[mesh.IndexStream].Load<uint3>(primitiveIndex * sizeof(uint3));
 
     VertexAttribute vertex;
     vertex.Position = 0;
@@ -136,11 +132,11 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     for (int i = 0; i < 3; i++)
 	{
         uint vertexId = indices[i];
-        vertex.Position += UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
-        outData.UV += UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
+        vertex.Position += UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId)) * barycentrics[i];
+        vertex.UV += UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
         NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
-		outData.Normal += normalData.Normal * barycentrics[i];
-		outData.Tangent += normalData.Tangent * barycentrics[i];
+		vertex.Normal += normalData.Normal * barycentrics[i];
+		vertex.Tangent += normalData.Tangent * barycentrics[i];
 	}
 
     MaterialProperties properties = GetMaterialProperties(instance.Material, vertex.UV, 0);

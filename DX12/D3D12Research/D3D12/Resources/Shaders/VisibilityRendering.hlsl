@@ -24,24 +24,18 @@ struct Vertex
     float4 Tangent;
 };
 
-struct PSInput
-{
-    float4 Position : SV_Position;
-};
-
 [RootSignature(RootSig)]
-PSInput VSMain(uint VertexId : SV_VertexID)
+float4 VSMain(uint vertexId : SV_VertexID) : SV_POSITION
 {
-    PSInput result = (PSInput) 0;
     MeshInstance instance = tMeshInstances[cObjectData.Index];
     MeshData mesh = tMeshes[instance.Mesh];
-    Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-    result.Position = mul(mul(float4(UnpackHalf3(input.Position), 1.0f), instance.World), cViewData.ViewProjection);
-    return result;
+
+    float3 position = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+    return mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);;
 }
 
 void PSMain(
-    PSInput input,
+    float4 position : SV_POSITION,
     uint primitiveIndex : SV_PrimitiveID,
     float3 barycentrics : SV_Barycentrics,
     out uint outPrimitiveMask : SV_Target0,

@@ -22,7 +22,7 @@ namespace Paths
         return std::filesystem::path(path).filename().stem().string();
     }
 
-    std::string GetFileExtension(const std::string& path)
+    std::string GetFileExtension(const char* path)
     {
         return std::filesystem::path(path).extension().string();
     }

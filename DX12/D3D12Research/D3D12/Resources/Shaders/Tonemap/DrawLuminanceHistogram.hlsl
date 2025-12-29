@@ -30,8 +30,10 @@ void BlendPixel(uint2 location, uint2 offset, float4 color)
 [numthreads(NUM_HISTOGRAM_BINS, 1, 1)]
 void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV_DispatchThreadID)
 {
+    const uint binDrawSize = 4;
+
     uint maxBinValue = 1;
-    uint currentBinValue = tLuminanceHistogram.Load(threadId.x * 4);
+    uint currentBinValue = tLuminanceHistogram.Load(threadId.x * binDrawSize);
     gsHistogram[groupIndex] = currentBinValue;
 
     GroupMemoryBarrierWithGroupSync();
@@ -41,12 +43,9 @@ void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV
         maxBinValue = max(maxBinValue, gsHistogram[i]);
     }
 
-    uint c = gsHistogram[groupIndex];
-
-    uint2 dimensions;
-    uOutTexture.GetDimensions(dimensions.x, dimensions.y);
     // every histogram bin occupy 4 pixel, from left to right(256 * 4)
-    uint2 s = uint2(dimensions.x, 0) + uint2(-NUM_HISTOGRAM_BINS * 4 + groupIndex * 4, threadId.y);
+    uint2 dimensions = uint2(NUM_HISTOGRAM_BINS * binDrawSize, NUM_HISTOGRAM_BINS);
+    uint2 s = uint2(binDrawSize * groupIndex, threadId.y);
 
     float currentAverage = tAverageLuminance[0];
     float targetAverage = tAverageLuminance[1];

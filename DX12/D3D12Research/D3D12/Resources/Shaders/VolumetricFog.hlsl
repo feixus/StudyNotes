@@ -55,7 +55,7 @@ float HenyeyGreestein(float LoV, float G)
     return result;
 }
 
-float3 WorldPositionFromFroxel(uint3 index, float offset, out float linearDepth)
+float3 GetWorldPosition(uint3 index, float offset, out float linearDepth)
 {
     float2 texelUV = ((float2)index.xy + 0.5f) * cData.InvClusterDimensions.xy;
     float z = (float)(index.z + offset) * cData.InvClusterDimensions.z;
@@ -64,10 +64,10 @@ float3 WorldPositionFromFroxel(uint3 index, float offset, out float linearDepth)
     return WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
 }
 
-float3 WorldPositionFromFroxel(uint3 index, float offset)
+float3 GetWorldPosition(uint3 index, float offset)
 {
     float depth;
-    return WorldPositionFromFroxel(index, offset, depth);
+    return GetWorldPosition(index, offset, depth);
 }
 
 uint GetSliceFromDepth(float depth)
@@ -99,10 +99,10 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     uint3 cellIndex = threadId;
 
     float z;
-    float3 worldPosition = WorldPositionFromFroxel(cellIndex, cData.Jitter, z);
+    float3 worldPosition = GetWorldPosition(cellIndex, cData.Jitter, z);
 
     // compute reprojected UVW
-    float3 voxelCenterWS = WorldPositionFromFroxel(cellIndex, 0.5f);
+    float3 voxelCenterWS = GetWorldPosition(cellIndex, 0.5f);
     // world space -> clip space -> NDC space from previous frame's projection
     float4 reprojNDC = mul(float4(voxelCenterWS, 1), cData.PrevViewProjection);
     reprojNDC.xyz /= reprojNDC.w;
@@ -226,7 +226,7 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
     // each tiny slice of fog blocks a proportional amount of light. such as first slice blocks 10%, next slice blocks 10% of remaining 90
     for (int sliceIndex = 0; sliceIndex <= cData.ClusterDimensions.z; sliceIndex++)
     {
-        float3 worldPosition = WorldPositionFromFroxel(int3(threadId.xy, sliceIndex), 0.5f);
+        float3 worldPosition = GetWorldPosition(int3(threadId.xy, sliceIndex), 0.5f);
         float froxelLength = length(worldPosition - previousPosition);
         previousPosition = worldPosition;
 

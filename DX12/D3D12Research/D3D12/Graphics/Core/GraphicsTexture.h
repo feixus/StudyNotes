@@ -93,17 +93,17 @@ struct TextureDesc
 	TextureDesc(int width, int height, int depth, DXGI_FORMAT format, TextureFlag usage = TextureFlag::ShaderResource, TextureDimension dimension = TextureDimension::Texture2D)
 		: Width(width), Height(height), DepthOrArraySize(depth), Mips(1), SampleCount(1), Format(format), Usage(usage), Dimension(dimension), ClearBindingValue() {}
 
-	int Width;
-	int Height;
-	int DepthOrArraySize;
-	int Mips;
-	int SampleCount;
+	uint32_t Width;
+	uint32_t Height;
+	uint32_t DepthOrArraySize;
+	uint32_t Mips;
+	uint32_t SampleCount;
 	DXGI_FORMAT Format;
 	TextureFlag Usage;
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimension;
 
-	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureFlag flag = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
+	static TextureDesc Create2D(uint32_t width, uint32_t height, DXGI_FORMAT format, TextureFlag flag = TextureFlag::ShaderResource, uint32_t sampleCount = 1, uint32_t mips = 1)
 	{
 		check(width);
 		check(height);
@@ -120,8 +120,7 @@ struct TextureDesc
 		return desc;
 	}
 
-
-	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
+	static TextureDesc CreateDepth(uint32_t width, uint32_t height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, uint32_t sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
 		check(width);
 		check(height);
@@ -139,7 +138,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc CreateRenderTarget(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::RenderTarget, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
+	static TextureDesc CreateRenderTarget(uint32_t width, uint32_t height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::RenderTarget, uint32_t sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
 	{
 		check(width);
 		check(height);
@@ -157,7 +156,7 @@ struct TextureDesc
 		return desc;
 	}
 	
-	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureFlag flag = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
+	static TextureDesc Create3D(uint32_t width, uint32_t height, uint32_t depth, DXGI_FORMAT format, TextureFlag flag = TextureFlag::ShaderResource, uint32_t sampleCount = 1, uint32_t mips = 1)
 	{
 		check(width);
 		check(height);
@@ -174,7 +173,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc CreateCube(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
+	static TextureDesc CreateCube(uint32_t width, uint32_t height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, uint32_t sampleCount = 1, uint32_t mips = 1)
 	{
 		check(width);
 		check(height);
@@ -217,11 +216,11 @@ public:
 	GraphicsTexture(GraphicsDevice* pParent, const TextureDesc& desc, const char* pName = "");
 	~GraphicsTexture();
 
-	int GetWidth() const { return m_Desc.Width; }
-	int GetHeight() const { return m_Desc.Height; }
-	int GetDepth() const { return m_Desc.DepthOrArraySize; }
-	int GetArraySize() const { return m_Desc.DepthOrArraySize; }
-	int GetMipLevels() const { return m_Desc.Mips; }
+	uint32_t GetWidth() const { return m_Desc.Width; }
+	uint32_t GetHeight() const { return m_Desc.Height; }
+	uint32_t GetDepth() const { return m_Desc.DepthOrArraySize; }
+	uint32_t GetArraySize() const { return m_Desc.DepthOrArraySize; }
+	uint32_t GetMipLevels() const { return m_Desc.Mips; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
 	void Create(const TextureDesc& desc);

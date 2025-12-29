@@ -461,7 +461,7 @@ void DemoApp::Update()
 			float log = minZ * std::pow(maxZ / minZ, p);
 			float uniform = minZ + (maxZ - minZ) * p;
 			float d = Tweakables::g_PSSMFactor.Get() * (log - uniform) + uniform;
-			cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
+			cascadeSplits[i] = d - nearPlane;
 		}
 
 		for (size_t i = 0; i < m_Lights.size(); ++i)
@@ -503,6 +503,7 @@ void DemoApp::Update()
 					for (int j = 0; j < 4; j++)
 					{
 						Vector3 cornerRay = frustumCorners[j + 4] - frustumCorners[j];
+						cornerRay.Normalize();
 						Vector3 nearPoint = previousCascadeSplit * cornerRay;
 						Vector3 farPoint = currentCascadeSplit * cornerRay;
 						frustumCorners[j + 4] = frustumCorners[j] + farPoint;
@@ -564,8 +565,7 @@ void DemoApp::Update()
 						lightViewProjection = shadowView * projectionMatrix;
 					}
 
-					float* values = &shadowData.CascadeDepths.x;
-					values[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
+					static_cast<float*>(&shadowData.CascadeDepths.x)[shadowIndex] = currentCascadeSplit;
 					shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
 				}
 			}
@@ -655,6 +655,67 @@ void DemoApp::Update()
 		D3D::BeginPixCapture();
 	}
 
+	if (Tweakables::g_Screenshot)
+	{
+		CommandContext* pContext = m_pDevice->AllocateCommandContext();
+		GraphicsTexture* pSource = m_pTonemapTarget.get();
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+		D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
+		m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+		std::unique_ptr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
+		pScreenshotBuffer->Map();
+		pContext->InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+		pContext->InsertResourceBarrier(pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+		pContext->CopyTexture(m_pTonemapTarget.get(), pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
+		
+		ScreenshotRequest request
+		{
+			.Fence = pContext->Execute(false),
+			.Width = (uint32_t)pSource->GetWidth(),
+			.Height = (uint32_t)pSource->GetHeight(),
+			.RowPitch = textureFootprint.Footprint.RowPitch,
+			.pBuffer = pScreenshotBuffer.release()
+		};
+		m_ScreenshotBuffers.emplace(request);
+
+		Tweakables::g_Screenshot = false;
+	}
+
+	if (!m_ScreenshotBuffers.empty())
+	{
+		while (!m_ScreenshotBuffers.empty() && m_pDevice->IsFenceComplete(m_ScreenshotBuffers.front().Fence))
+		{
+			const ScreenshotRequest& request = m_ScreenshotBuffers.front();
+
+			TaskContext taskContext;
+			TaskQueue::Execute([request](uint32_t) {
+				char* pData = (char*)request.pBuffer->GetMappedData();
+				Image img;
+				img.SetSize(request.Width, request.Height, 4);
+				uint32_t imageRowPitch = request.Width * 4;
+				uint32_t targetOffset = 0;
+				for (int i = 0; i < request.Height; i++)
+				{
+					img.SetData((uint32_t*)pData, targetOffset, imageRowPitch);
+					pData += request.RowPitch;
+					targetOffset += imageRowPitch;
+				}
+		
+				SYSTEMTIME time;
+				GetSystemTime(&time);
+				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
+		
+				std::string filePath = std::format("{}Screenshot_{}_{:02d}_{:02d}__{:02d}_{:02d}_{:02d}.png", 
+								Paths::ScreenshotDir().c_str(),
+								time.wYear, time.wMonth, time.wDay,
+								time.wMonth, time.wMinute, time.wSecond);
+				img.Save(filePath.c_str());
+			}, taskContext);
+
+			m_ScreenshotBuffers.pop();
+		}
+	}
+
 	RGGraph graph(m_pDevice.get());
 
 	struct MainData
@@ -667,66 +728,6 @@ void DemoApp::Update()
 	sceneData.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolveDepthStencil());
 
 	uint64_t nextFenceValue = 0;
-
-	if (Tweakables::g_Screenshot && m_ScreenshotDelay < 0)
-	{
-		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
-		screenshot.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
-			{
-				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-				D3D12_RESOURCE_DESC desc = m_pTonemapTarget->GetResource()->GetDesc();
-				m_pDevice->GetDevice()->GetCopyableFootprints(&desc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-
-				m_pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Buffer");
-				m_pScreenshotBuffer->Map();
-
-				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-				renderContext.InsertResourceBarrier(m_pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-				renderContext.CopyTexture(m_pTonemapTarget.get(), m_pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
-				m_ScreenshotRowPitch = textureFootprint.Footprint.RowPitch;
-			});
-		m_ScreenshotDelay = 4;
-		Tweakables::g_Screenshot = false;
-	}
-
-	if (m_pScreenshotBuffer)
-	{
-		if (m_ScreenshotDelay == 0)
-		{
-			TaskContext taskContext;
-			TaskQueue::Execute([&](uint32_t) {
-				char* pData = (char*)m_pScreenshotBuffer->GetMappedData();
-				Image img;
-				img.SetSize(m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight(), 4);
-				uint32_t imageRowPitch = m_pTonemapTarget->GetWidth() * 4;
-				uint32_t targetOffset = 0;
-				for (int i = 0; i < m_pTonemapTarget->GetHeight(); i++)
-				{
-					img.SetData(pData, targetOffset, imageRowPitch);
-					pData += m_ScreenshotRowPitch;
-					targetOffset += imageRowPitch;
-				}
-
-				SYSTEMTIME time;
-				GetSystemTime(&time);
-				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-
-				char filePath[128];
-				FormatString(filePath, std::size(filePath), "%sScreenshot_%d_%02d_%02d__%02d_%02d_%2d.jpg",
-								Paths::ScreenshotDir().c_str(),
-								time.wYear, time.wMonth, time.wDay,
-								time.wMonth, time.wMinute, time.wSecond);
-				img.Save(filePath);
-
-				m_pScreenshotBuffer.reset();
-				}, taskContext);
-			m_ScreenshotDelay = -1;
-		}
-		else
-		{
-			m_ScreenshotDelay--;
-		}
-	}
 
 	RGPassBuilder updateTLAS = graph.AddPass("Update TLAS");
 	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
@@ -777,6 +778,7 @@ void DemoApp::Update()
 				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 
 				renderContext.BindResources(2, 0, srvs, std::size(srvs));
@@ -1387,7 +1389,11 @@ void DemoApp::Update()
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
 
+			ImGui::Begin("Luminance Histogram");
+			ImVec2 cursor = ImGui::GetCursorPos();
 			ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+			ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), std::format("{:.2f}", Tweakables::g_MinLogLuminance.Get()).c_str());
+			ImGui::End();
 		}
 	}
 
@@ -1861,6 +1867,19 @@ void DemoApp::UpdateImGui()
 		}
 		return true;
 	}, nullptr, (int)RenderPath::MAX);
+
+	ImGui::Text("Camera");
+	float fov = m_pCamera->GetFoV();
+	if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+	{
+		m_pCamera->SetFoV(fov);
+	}
+	Vector2 farNear(m_pCamera->GetFar(), m_pCamera->GetNear());
+	if (ImGui::DragFloatRange2("Near/Far Plane", &farNear.x, &farNear.y, 0.1f, 1, 100))
+	{
+		m_pCamera->SetFarPlane(farNear.x);
+		m_pCamera->SetNearPlane(farNear.y);
+	}
 
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);

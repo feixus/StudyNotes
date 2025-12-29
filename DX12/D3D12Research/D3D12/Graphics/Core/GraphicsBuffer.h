@@ -29,12 +29,16 @@ DECLARE_BITMASK_TYPE(BufferFlag)
 struct BufferDesc
 {
 	BufferDesc() = default;
-	BufferDesc(uint64_t elements, uint32_t elementSize, BufferFlag usage = BufferFlag::None)
+	BufferDesc(uint32_t elements, uint32_t elementSize, BufferFlag usage = BufferFlag::None)
 		: Size(elements * elementSize), ElementSize(elementSize), Usage(usage) {}
 
 	static BufferDesc CreateBuffer(uint64_t sizeInBytes, BufferFlag usage = BufferFlag::None)
 	{
-		return BufferDesc(sizeInBytes, 1, usage);
+		BufferDesc desc;
+		desc.Size = sizeInBytes;
+		desc.ElementSize = 1;
+		desc.Usage = usage;
+		return desc;
 	}
 
 	static BufferDesc CreateIndexBuffer(uint32_t elements, bool smallIndices, BufferFlag usage = BufferFlag::None)
@@ -42,21 +46,21 @@ struct BufferDesc
 		return BufferDesc(elements, smallIndices ? 2 : 4, usage);
 	}
 
-	static BufferDesc CreateVertexBuffer(uint32_t elements, int vertexSize, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateVertexBuffer(uint32_t elements, uint32_t vertexSize, BufferFlag usage = BufferFlag::None)
 	{
 		return BufferDesc(elements, vertexSize, usage);
 	}
 
-	static BufferDesc CreateReadback(uint32_t size)
+	static BufferDesc CreateReadback(uint64_t size)
 	{
-		return BufferDesc(size, sizeof(uint8_t), BufferFlag::Readback);
+		return CreateBuffer(size, BufferFlag::Readback);
 	}
 
 	static BufferDesc CreateStructured(uint32_t elementCount, uint32_t elementSize, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
 		BufferDesc desc;
 		desc.ElementSize = elementSize;
-		desc.Size = elementCount * desc.ElementSize;
+		desc.Size = (uint64_t)elementCount * desc.ElementSize;
 		desc.Usage = usage | BufferFlag::Structured;
 		return desc;
 	}
@@ -72,11 +76,11 @@ struct BufferDesc
 	}
 
 	template<typename IndirectParameters>
-	static BufferDesc CreateIndirectArgumemnts(int elements = 1, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateIndirectArgumemnts(uint32_t elements = 1, BufferFlag usage = BufferFlag::None)
 	{
 		BufferDesc desc;
 		desc.ElementSize = sizeof(IndirectParameters);
-		desc.Size = elements * desc.ElementSize;
+		desc.Size = (uint64_t)elements * desc.ElementSize;
 		desc.Usage = usage | BufferFlag::IndirectArgument | BufferFlag::UnorderedAccess;
 		return desc;
 	}
@@ -91,12 +95,12 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateTyped(int elementCount, DXGI_FORMAT format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
+	static BufferDesc CreateTyped(uint32_t elementCount, DXGI_FORMAT format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
 		check(!D3D::IsBlockCompressFormat(format));
 		BufferDesc desc;
 		desc.ElementSize = D3D::GetFormatRowDataSize(format, 1);
-		desc.Size = elementCount * desc.ElementSize;
+		desc.Size = (uint64_t)elementCount * desc.ElementSize;
 		desc.Usage = usage;
 		desc.Format = format;
 		return desc;
@@ -183,13 +187,6 @@ struct IndexBufferView
 	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32_t elements, DXGI_FORMAT format = DXGI_FORMAT_R32_UINT)
 		: Location(location), Elements(elements), Format(format)
 	{}
-
-	IndexBufferView(Buffer* pBuffer)
-	{
-		Location = pBuffer->GetGpuHandle();
-		Elements = (uint32_t)(pBuffer->GetSize() / pBuffer->GetDesc().ElementSize);
-		Format = pBuffer->GetDesc().Format;
-	}
 
 	uint32_t Stride() const
 	{

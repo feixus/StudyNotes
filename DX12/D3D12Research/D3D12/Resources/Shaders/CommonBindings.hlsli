@@ -16,13 +16,15 @@ StructuredBuffer<MaterialData> tMaterials :              register(t10);
 StructuredBuffer<MeshData> tMeshes :                     register(t11);
 StructuredBuffer<MeshInstance> tMeshInstances :          register(t12);
 
-// bindless resource tables
-SamplerState sSamplerTable[] :                           register(s1000, space1);
-Texture2D tTexture2DTable[] :                            register(t1000, space1);
-Texture2D tTexture3DTable[] :                            register(t1000, space2);
-Texture2D tTextureCubeTable[] :                          register(t1000, space3);
-ByteAddressBuffer tBufferTable[] :                       register(t1000, space4);
-RaytracingAccelerationStructure tTLASTable[] :           register(t1000, space5);
+// bindless samples
+SamplerState sSamplerTable[] :                           register(s1000, space100);
+
+// bindless SRVs
+Texture2D tTexture2DTable[] :                            register(t1000, space100);
+Texture2D tTexture3DTable[] :                            register(t1000, space101);
+Texture2D tTextureCubeTable[] :                          register(t1000, space102);
+ByteAddressBuffer tBufferTable[] :                       register(t1000, space103);
+RaytracingAccelerationStructure tTLASTable[] :           register(t1000, space104);
 
 // samplers
 SamplerState sDiffuseSampler :                           register(s0);
@@ -32,16 +34,16 @@ SamplerComparisonState sShadowMapSampler :               register(s2);
 // add a range for each bindless resoure table
 #define GLOBAL_BINDLESS_TABLE \
     "DescriptorTable("\
-        "SRV(t1000, numDescriptors = unbounded, space = 1, offset = 0), "\
-        "SRV(t1000, numDescriptors = unbounded, space = 2, offset = 0), "\
-        "SRV(t1000, numDescriptors = unbounded, space = 3, offset = 0), "\
-        "SRV(t1000, numDescriptors = unbounded, space = 4, offset = 0), "\
-        "SRV(t1000, numDescriptors = unbounded, space = 5, offset = 0), "\
+        "SRV(t1000, numDescriptors = unbounded, space = 100, offset = 0), "\
+        "SRV(t1000, numDescriptors = unbounded, space = 101, offset = 0), "\
+        "SRV(t1000, numDescriptors = unbounded, space = 102, offset = 0), "\
+        "SRV(t1000, numDescriptors = unbounded, space = 103, offset = 0), "\
+        "SRV(t1000, numDescriptors = unbounded, space = 104, offset = 0), "\
     "visibility = SHADER_VISIBILITY_ALL), "
 
 #define GLOBAL_BINDLESS_SAMPLER_TABLE \
     "DescriptorTable("\
-        "Sampler(s1000, numDescriptors = unbounded, space = 1), "\
+        "Sampler(s1000, numDescriptors = unbounded, space = 100, offset = 0), "\
     "visibility = SHADER_VISIBILITY_ALL), "
 
 #endif

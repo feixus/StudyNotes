@@ -109,9 +109,16 @@ private:
 	std::unique_ptr<SSAO> m_pSSAO;
 	std::unique_ptr<RTReflections> m_pRTReflections;
 
-	int32_t m_ScreenshotDelay{-1};
+	struct ScreenshotRequest
+	{
+		uint64_t Fence;
+		uint32_t Width;
+		uint32_t Height;
+		uint32_t RowPitch;
+		Buffer* pBuffer;
+	};
+	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
 	int32_t m_ScreenshotRowPitch{0};
-	std::unique_ptr<Buffer> m_pScreenshotBuffer;
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
 
