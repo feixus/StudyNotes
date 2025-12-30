@@ -22,7 +22,8 @@
 #include "Core/TaskQueue.h"
 #include "Content/image.h"
 #include "Core/Paths.h"
-#include "External/ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo/ImGuizmo.h"
+#include "pix3.h"
 
 GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 {
@@ -74,16 +75,9 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 
 	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::Pix))
 	{
-		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
+		if (PIXLoadLatestWinPixGpuCapturerLibrary())
 		{
-			std::string pixPath;
-			if (D3D::GetLatestWinPixGpuCapturePath(pixPath))
-			{
-				if (LoadLibraryA(pixPath.c_str()))
-				{
-					E_LOG(Warning, "Dynamically loaded PIX ('%s')", pixPath.c_str());
-				}
-			}
+			E_LOG(Warning, "Dynamically loaded PIX");
 		}
 	}
 

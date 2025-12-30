@@ -44,27 +44,6 @@ public:
 
 		E_LOG(Info, "Startup hello dx12");
 
-		// Check to see if a copy of WinPixGpuCapturer.dll has already been injected into the application.
-		// This may happen if the application is launched through the PIX UI. 
-		if (CommandLine::GetBool("pix") && GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
-		{
-			std::string pixPath;
-			if (D3D::GetLatestWinPixGpuCapturePath(pixPath))
-			{
-				if (LoadLibraryA(pixPath.c_str()))
-				{
-					E_LOG(Warning, "Dynamically loaded PIX ('%s')", pixPath.c_str());
-				}
-			}
-		}
-
-		// attach to RenderDoc
-		/*HMODULE mod = LoadLibraryA("C:\\Program Files\\RenderDoc\\renderdoc.dll");
-		if (!mod)
-		{
-			printf("RenderDoc DLL not found\n");
-		}*/
-
 		m_DisplayWidth = gWindowWidth;
 		m_DisplayHeight = gWindowHeight;
 

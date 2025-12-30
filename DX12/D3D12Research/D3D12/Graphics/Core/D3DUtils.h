@@ -1,7 +1,9 @@
 #pragma once
 
 #include <DXProgrammableCapture.h>
-#include <shlObj.h>
+#include "pix3.h"
+#include "Core/Paths.h"
+#include <winuser.h>
 
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
@@ -81,6 +83,25 @@ namespace D3D
 			return "UNKNOWN";
 		}
 #undef STATE_CASE
+	}
+
+	inline void EnqueuePIXCapture(uint32_t numFrames = 1)
+	{
+		HWND window = GetActiveWindow();
+		if (SUCCEEDED(PIXSetTargetWindow(window)))
+		{
+			SYSTEMTIME time;
+			GetSystemTime(&time);
+			Paths::CreateDirectoryTree(Paths::SavedDir());
+			std::string path = std::format("{}GPU_Capture_{}_{:02d}_{:02d}_{:02d}_{:02d}_{:02d}_{:02d}_{}.wpix",
+					Paths::SavedDir(),
+					time.wYear, time.wMonth, time.wDay,
+					time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
+			if (SUCCEEDED(PIXGpuCaptureNextFrames(MULTIBYTE_TO_UNICODE(path.c_str()), numFrames)))
+			{
+				E_LOG(Info, "Captured %d frames to '%s'", numFrames, path);
+			}
+		}
 	}
 
 	inline void BeginPixCapture()
@@ -510,37 +531,6 @@ namespace D3D
 		std::filesystem::path exePath(buffer);
 		std::string finalPath = exePath.parent_path().generic_string() + "/" + relativePath;
 		return finalPath;
-	}
-
-	static bool GetLatestWinPixGpuCapturePath(std::string& path)
-	{
-		LPWSTR programFilesPath = nullptr;
-		SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, NULL, &programFilesPath);
-
-		std::filesystem::path pixInstallationPath = programFilesPath;
-		pixInstallationPath /= "Microsoft PIX";
-
-		std::wstring newestVersionFound;
-
-		for (auto const& directory_entry : std::filesystem::directory_iterator(pixInstallationPath))
-		{
-			if (directory_entry.is_directory())
-			{
-				if (newestVersionFound.empty() || newestVersionFound < directory_entry.path().filename().c_str())
-				{
-					newestVersionFound = directory_entry.path().filename().c_str();
-				}
-			}
-		}
-
-		if (newestVersionFound.empty())
-		{
-			return false;
-		}
-
-		pixInstallationPath = pixInstallationPath / newestVersionFound / "WinPixGpuCapturer.dll";
-		path = pixInstallationPath.string();
-		return true;
 	}
 }
 

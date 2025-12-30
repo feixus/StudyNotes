@@ -651,11 +651,6 @@ void DemoApp::Update()
 	// Rendering Begin
 	////////////////////////////////
 
-	if (m_CapturePix)
-	{
-		D3D::BeginPixCapture();
-	}
-
 	if (Tweakables::g_Screenshot)
 	{
 		CommandContext* pContext = m_pDevice->AllocateCommandContext();
@@ -1465,9 +1460,16 @@ void DemoApp::Update()
 		graph.DumpGraphMermaid("graph.html");
 		Tweakables::g_DumpRenderGraph = false;
 	}
-	nextFenceValue = graph.Execute();
 
+	nextFenceValue = graph.Execute();
 	PROFILE_END();
+
+	if (m_CapturePix)
+	{
+		D3D::EnqueuePIXCapture();
+		m_CapturePix = false;
+	}
+
 	// present
 	//  - set fence for the currently queued frame
 	//  - present the frame buffer
@@ -1476,12 +1478,6 @@ void DemoApp::Update()
 	m_pSwapChain->Present();
 	m_pDevice->TickFrame();
 	++m_Frame;
-
-	if (m_CapturePix)
-	{
-		D3D::EndPixCapture();
-		m_CapturePix = false;
-	}
 }
 
 void DemoApp::OnResize(int width, int height)
