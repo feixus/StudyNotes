@@ -29,6 +29,7 @@
 #include "Core/Paths.h"
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
+#include "CBT.h"
 
 static const uint32_t FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -1965,6 +1966,64 @@ void DemoApp::UpdateImGui()
 			ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
 		}
 		ImGui::End();
+	}
+
+	static bool init = false;
+	static CBT cbt(4);
+	if (!init)
+	{
+		cbt.InitAtDepth(0);
+		init = true;
+	}
+
+	bool modified = false;
+
+	uint32_t heapID = 1;
+	for (uint32_t d = 0; d <= cbt.MaxDepth; d++)
+	{
+		for (uint32_t j = 0; j < CBT::Exp2(d); j++)
+		{
+			ImGui::PushID(heapID);
+			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(30, 0));
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+			{
+				cbt.SplitNode(heapID);
+				modified = true;
+			}
+			else if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+			{
+				cbt.MergeNode(heapID);
+				modified = true;
+			}
+
+			bool isLast = j + 1 == CBT::Exp2(d);
+			if (!isLast)
+			{
+				ImGui::SameLine();
+			}
+			ImGui::PopID();
+			heapID++;
+		}
+	}
+
+	ImGui::Separator();
+
+	for (uint32_t leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); leafIndex++)
+	{
+		ImGui::PushID(10000 + leafIndex);
+		if (ImGui::Button(Sprintf("%d", cbt.Bits[(int)CBT::Exp2(cbt.MaxDepth) + leafIndex]).c_str()))
+		{
+
+		}
+		ImGui::SameLine();
+		ImGui::PopID();
+	}
+
+	ImGui::Separator();
+
+	if (modified)
+	{
+		cbt.SumReduction();
 	}
 }
 
