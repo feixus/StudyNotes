@@ -2,23 +2,7 @@
 
 struct CBT
 {
-    static uint32_t Exp2(uint32_t exp)
-    {
-        return (uint32_t)exp2(exp);
-    }
-
-    // most significant bit
-    static uint32_t MSB(uint32_t value)
-    {
-         if (value == 0)
-         {
-             return -1;
-         }
-
-        return std::bit_width(value) - 1;
-    }
-
-    CBT(uint32_t maxDepth) : MaxDepth(maxDepth), Size(Exp2(maxDepth + 1))
+    CBT(uint32_t maxDepth) : MaxDepth(maxDepth), Size(Math::Exp2(maxDepth + 1))
     {
         Bits = new uint8_t[Size];
         InitAtDepth(0);
@@ -34,9 +18,9 @@ struct CBT
         assert(depth <= MaxDepth);
         memset(Bits, 0, Size * sizeof(uint8_t));
         Bits[0] = (uint8_t)MaxDepth;
-        uint32_t minRange = Exp2(depth);
-        uint32_t maxRange = Exp2(depth + 1);
-        uint32_t interval = Exp2(MaxDepth - depth);
+        uint32_t minRange = Math::Exp2(depth);
+        uint32_t maxRange = Math::Exp2(depth + 1);
+        uint32_t interval = Math::Exp2(MaxDepth - depth);
         for (uint32_t heapID = minRange; heapID < maxRange; heapID++)
         {
             Bits[heapID * interval] = 1;
@@ -49,8 +33,8 @@ struct CBT
         int32_t d = MaxDepth - 1;
         while (d >= 0)
         {
-            uint32_t minRange = Exp2(d);
-            uint32_t maxRange = Exp2(d + 1);
+            uint32_t minRange = Math::Exp2(d);
+            uint32_t maxRange = Math::Exp2(d + 1);
             for (uint32_t k = minRange; k < maxRange; k++)
             {
                 Bits[k] = Bits[LeftChildID(k)] + Bits[RightChildID(k)];
@@ -110,9 +94,9 @@ struct CBT
 
     uint32_t BitfieldHeapID(uint32_t heapID) const
     {
-        int32_t msb = MSB(heapID);
-        assert(msb != -1);
-        return heapID * Exp2(MaxDepth - msb);
+        uint32_t msb = 0;
+        assert(BitOperations::MostSignificantBit(heapID, &msb));
+        return heapID * Math::Exp2(MaxDepth - msb);
     }
 
     void SplitNode(uint32_t heapID)
@@ -149,6 +133,11 @@ struct CBT
         return heapID ^ 1;
     }
 
+    static uint32_t GetDepth(uint32_t heapID)
+    {
+        return (uint32_t)floor(log2(heapID));
+    }
+
     bool IsLeafNode(uint32_t heapID)
     {
         return Bits[heapID] == 1;
@@ -161,10 +150,60 @@ struct CBT
 
     uint32_t NumBitfieldBits() const
     {
-        return Exp2(MaxDepth);
+        return Math::Exp2(MaxDepth);
+    }
+
+    void GetElementRange(uint32_t heapID, uint32_t& begin, uint32_t& size) const
+    {
+        uint32_t depth = GetDepth(heapID);
+        size = MaxDepth - depth + 1;
+        begin = Math::Exp2(depth + 1) + heapID * size;
     }
 
     uint32_t MaxDepth;
     uint32_t Size;
     uint8_t* Bits{nullptr};
 };
+
+namespace LEB
+{
+    namespace Private
+    {
+        inline bool GetBitValue(uint32_t value, uint32_t bit)
+        {
+            return (value >> bit) & 1u;
+        }
+
+        inline Matrix GetSplitMatrix(bool bitSet)
+        {
+            float b = (float)bitSet;
+            float c = 1.0f - b;
+            return DirectX::XMFLOAT3X3(
+                c, b, 0.0f,
+                0.5f, 0.0f, 0.5f,
+                0.0f, c, b);
+        }
+
+        inline Matrix GetWindingMatrix(uint32_t bit)
+        {
+            float b = (float)bit;
+            float c = 1.0f - b;
+            return DirectX::XMFLOAT3X3(
+                c, 0.0f, b,
+                0.0f, 1.0f, 0.0f,
+                b, 0.0f, c);
+        }
+    }
+
+    inline Matrix GetMatrix(uint32_t heapID)
+    {
+        Matrix m = Matrix::Identity;
+        uint32_t d;
+        BitOperations::MostSignificantBit(heapID, &d);
+        for (int32_t bitID = d - 1; bitID >= 0; bitID--)
+        {
+            m = Private::GetSplitMatrix(Private::GetBitValue(heapID, bitID)) * m;
+        }
+        return Private::GetWindingMatrix(d & 1) * m;
+    }
+}
