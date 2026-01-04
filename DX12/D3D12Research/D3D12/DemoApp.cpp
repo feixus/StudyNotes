@@ -1965,109 +1965,88 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
+	ImGui::Begin("Triangles");
+
 	static bool init = false;
-	static CBT cbt(4);
+	static CBT cbt(5);
 	if (!init)
 	{
-		cbt.InitAtDepth(0);
+		cbt.InitAtDepth(5);
 		init = true;
 	}
-
-	bool modified = false;
 
 	uint32_t begin, size;
 	cbt.GetElementRange(1, begin, size);
 
 	uint32_t heapID = 1;
+	ImGui::BeginDisabled(true);
 	for (uint32_t d = 0; d <= cbt.MaxDepth; d++)
 	{
+		ImGui::Spacing();
 		for (uint32_t j = 0; j < Math::Exp2(d); j++)
 		{
 			ImGui::PushID(heapID);
-			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(30, 0));
-			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-			{
-				cbt.SplitNode(heapID);
-				modified = true;
-			}
-			else if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
-			{
-				cbt.MergeNode(heapID);
-				modified = true;
-			}
-
-			bool isLast = j + 1 == Math::Exp2(d);
-			if (!isLast)
-			{
-				ImGui::SameLine();
-			}
+			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(20, 0));
+			ImGui::SameLine();
 			ImGui::PopID();
 			heapID++;
 		}
 	}
 
+	ImGui::EndDisabled();
 	ImGui::Separator();
 
 	for (uint32_t leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); leafIndex++)
 	{
 		ImGui::PushID(10000 + leafIndex);
-		if (ImGui::Button(Sprintf("%d", cbt.Bits[(int)Math::Exp2(cbt.MaxDepth) + leafIndex]).c_str()))
+		uint32_t index = (int)Math::Exp2(cbt.MaxDepth) + leafIndex;
+		if (ImGui::Button(Sprintf("%d", cbt.Bits[index]).c_str(), ImVec2(20, 0)))
 		{
-
+			cbt.Bits[index] = !cbt.Bits[index];
 		}
 		ImGui::SameLine();
 		ImGui::PopID();
 	}
 
 	ImGui::Separator();
+	ImGui::Spacing();
 
-	if (modified)
+	cbt.Update([](uint32_t) {});
+
+	const ImVec2 cPos = ImGui::GetCursorScreenPos();
+	float scale = 400;
+	ImGui::GetWindowDrawList()->AddQuadFilled(
+		cPos + ImVec2(0, 0),
+		cPos + ImVec2(scale, 0),
+		cPos + ImVec2(scale, scale),
+		cPos + ImVec2(0, scale),
+		ImColor(1.0f, 1.0f, 1.0f, 1.0f));
+
+	auto LEBTriangle = [&](uint32_t heapIndex, Color color, float scale) 
 	{
-		cbt.SumReduction();
-	}
+		Vector3 a, b, c;
+		LEB::GetTriangleVertices(heapIndex, a, b, c);
+		a *= scale;
+		b *= scale;
+		c *= scale;
 
-	ImGui::SetNextWindowSize(ImVec2(400, 400));
-	ImGui::Begin("Triangles");
-
-	for (uint32_t i = 0; i < cbt.NumNodes(); i++)
-	{
-		uint32_t heapIndex = cbt.LeafIndexToHeapIndex(i);
-		Matrix m = LEB::GetMatrix(heapIndex);
-	}
-
-	ImVec2 cPos = ImGui::GetCursorScreenPos();
-	Matrix triangle = DirectX::XMFLOAT3X3{
-		0, 200, 0,
-		0, 0, 0,
-		200, 0, 0
-	};
-
-	ImGui::GetWindowDrawList()->AddTriangleFilled(
-		cPos + ImVec2(triangle._11, 200 - triangle._12),
-		cPos + ImVec2(triangle._21, 200 - triangle._22),
-		cPos + ImVec2(triangle._31, 200 - triangle._32),
-		ImColor(1.0f, 1.0f, 1.0f, 0.3f));
-
-	auto LEBTriangle = [&](uint32_t heapIndex, Color color) {
-		Matrix triangle0 = LEB::GetMatrix(heapIndex) * triangle;
-
-		ImGui::GetWindowDrawList()->AddTriangleFilled(
-			cPos + ImVec2(triangle0._11, 200 - triangle0._12),
-			cPos + ImVec2(triangle0._21, 200 - triangle0._22),
-			cPos + ImVec2(triangle0._31, 200 - triangle0._32),
+		ImGui::GetWindowDrawList()->AddTriangle(
+			cPos + ImVec2(a.x, a.y),
+			cPos + ImVec2(b.x, b.y),
+			cPos + ImVec2(c.x, c.y),
 			ImColor(color.x, color.y, color.z, color.w));
 
-		Vector2 pos = Vector2::Zero;
-		pos += Vector2(triangle0._11, 200 - triangle0._12);
-		pos += Vector2(triangle0._21, 200 - triangle0._22);
-		pos += Vector2(triangle0._31, 200 - triangle0._32);
-		pos /= 3;
-		ImGui::GetWindowDrawList()->AddText(cPos + ImVec2(pos.x, pos.y), ImColor(1.0f, 1.0f, 1.0f, 1.0f), Sprintf("%d", heapIndex).c_str());
+		ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
+		std::string text = std::format("{}", heapIndex);
+		ImVec2 textPos = cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f;
+		ImGui::GetWindowDrawList()->AddText(textPos, ImColor(1.0f, 0.0f, 1.0f, 1.0f), text.c_str());
 	};
 
-	static int heapIndex = 2;
-	ImGui::SliderInt("Heap Index", &heapIndex, 1, 20);
-	LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f));
+	auto iterateFn = [&](uint32_t heapIndex)
+	{
+		LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
+	};
+	cbt.IterateLeaves(iterateFn);
 
 	ImGui::End();
 }
