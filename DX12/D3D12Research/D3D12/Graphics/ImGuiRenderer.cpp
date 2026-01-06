@@ -192,7 +192,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, GraphicsT
 				const ImDrawList* pCmdList = pDrawData->CmdLists[n];
 
 				context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
-				context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
+				context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, sizeof(ImDrawIdx) == 2);
 
 				int indexOffset = 0;
 				for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)

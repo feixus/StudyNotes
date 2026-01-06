@@ -1967,26 +1967,30 @@ void DemoApp::UpdateImGui()
 
 	ImGui::Begin("Triangles");
 
+	static int maxDepth = 4;
 	static bool init = false;
-	static CBT cbt(5);
-	if (!init)
+
+	static CBT cbt;
+	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 16) || !init)
 	{
-		cbt.InitAtDepth(5);
+		cbt.Init(maxDepth, 1);
 		init = true;
 	}
+
+	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(cbt.GetMemoryUse()).c_str());
 
 	uint32_t begin, size;
 	cbt.GetElementRange(1, begin, size);
 
 	uint32_t heapID = 1;
 	ImGui::BeginDisabled(true);
-	for (uint32_t d = 0; d <= cbt.MaxDepth; d++)
+	for (uint32_t d = 0; d <= cbt.GetMaxDepth(); d++)
 	{
 		ImGui::Spacing();
 		for (uint32_t j = 0; j < Math::Exp2(d); j++)
 		{
 			ImGui::PushID(heapID);
-			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(20, 0));
+			ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(20, 0));
 			ImGui::SameLine();
 			ImGui::PopID();
 			heapID++;
@@ -1994,27 +1998,26 @@ void DemoApp::UpdateImGui()
 	}
 
 	ImGui::EndDisabled();
+	ImGui::Spacing();
 	ImGui::Separator();
 
 	for (uint32_t leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); leafIndex++)
 	{
 		ImGui::PushID(10000 + leafIndex);
-		uint32_t index = (int)Math::Exp2(cbt.MaxDepth) + leafIndex;
-		if (ImGui::Button(Sprintf("%d", cbt.Bits[index]).c_str(), ImVec2(20, 0)))
+		uint32_t index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
+		if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(20, 0)))
 		{
-			cbt.Bits[index] = !cbt.Bits[index];
+			cbt.SetData(index, !cbt.GetData(index));
 		}
 		ImGui::SameLine();
 		ImGui::PopID();
 	}
 
-	ImGui::Separator();
 	ImGui::Spacing();
-
-	cbt.Update([](uint32_t) {});
 
 	const ImVec2 cPos = ImGui::GetCursorScreenPos();
 	float scale = 400;
+
 	ImGui::GetWindowDrawList()->AddQuadFilled(
 		cPos + ImVec2(0, 0),
 		cPos + ImVec2(scale, 0),
@@ -2042,11 +2045,37 @@ void DemoApp::UpdateImGui()
 		ImGui::GetWindowDrawList()->AddText(textPos, ImColor(1.0f, 0.0f, 1.0f, 1.0f), text.c_str());
 	};
 
-	auto iterateFn = [&](uint32_t heapIndex)
 	{
-		LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
-	};
-	cbt.IterateLeaves(iterateFn);
+		PROFILE_SCOPE("CBT Update");
+		cbt.IterateLeaves([&](uint32_t heapIndex)
+		{
+			Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
+
+			if (LEB::PointInTriangle(relMousePos, heapIndex, scale))
+			{
+				LEB::CBTSplitConformed(cbt, heapIndex);
+			}
+
+			LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+			if (!LEB::PointInTriangle(relMousePos, diamond.Base, scale) && !LEB::PointInTriangle(relMousePos, diamond.Top, scale))
+			{
+				LEB::CBTMergeConformed(cbt, heapIndex);
+			}
+		});
+	}
+
+	{
+		PROFILE_SCOPE("CBT Sum Reduction");
+		cbt.SumReduction();
+	}
+
+	{
+		PROFILE_SCOPE("CBT Draw");
+		cbt.IterateLeaves([&](uint32_t heapIndex)
+		{
+			LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
+		});
+	}
 
 	ImGui::End();
 }

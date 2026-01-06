@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/CString.h"
 
 namespace Colors
 {
@@ -32,6 +33,23 @@ namespace Math
 	constexpr uint32_t KilobytesToBytes = 1 << 10;
 	constexpr uint32_t MegabytesToBytes = 1 << 20;
 	constexpr uint32_t GigabytesToBytes = 1 << 30;
+
+    inline std::string PrettyPrintDataSize(uint32_t sizeInBytes)
+    {
+        if (sizeInBytes > 1 << 30)
+        {
+            return Sprintf("%.2f GB", (float)sizeInBytes * BytesToGigaBytes);
+        }
+        if (sizeInBytes > 1 << 20)
+        {
+            return Sprintf("%.2f MB", (float)sizeInBytes * BytesToMegaBytes);
+        }
+        if (sizeInBytes > 1 << 10)
+        {
+            return Sprintf("%.2f KB", (float)sizeInBytes * BytesToKiloBytes);
+        }
+        return Sprintf("%.2f B", (float)sizeInBytes);
+    }
 
     template<typename T>
     T AlignUp(T value, T alignment)
