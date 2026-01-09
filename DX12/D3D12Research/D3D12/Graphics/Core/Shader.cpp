@@ -92,8 +92,8 @@ namespace ShaderCompiler
 		ComPtr<IDxcBlobEncoding> pSource;
 		VERIFY_HR(pUtils->CreateBlobFromPinned(pShaderSource, shaderSourceSize, CP_UTF8, pSource.GetAddressOf()));
 
-		bool debugShaders = CommandLine::GetBool("debugshaders");
-		bool shaderSymbols = CommandLine::GetBool("shadersymbols");
+		bool debugShaders = true;// CommandLine::GetBool("debugshaders");
+		bool shaderSymbols = true;// CommandLine::GetBool("shadersymbols");
 
 		std::string target = Sprintf("%s_%d_%d", pTarget, majVersion, minVersion);
 

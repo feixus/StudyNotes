@@ -202,6 +202,18 @@ private:
 	std::unique_ptr<RootSignature> m_pVisibilityShadingRS;
 	PipelineState* m_pVisibilityShadingPSO;
 
+	// CBT
+	std::unique_ptr<Buffer> pCBTTarget;
+	std::unique_ptr<RootSignature> m_pCBTRS;
+	std::unique_ptr<Buffer> m_pCBTBuffer;
+	std::unique_ptr<Buffer> m_pCBTIndirectArgs;
+	PipelineState* m_pCBTIndirectArgsPSO{nullptr};
+	PipelineState* m_pCBTSumReductionPSO{nullptr};
+	PipelineState* m_pCBTUpdatePSO{nullptr};
+
+	PipelineState* m_pCBTRenderPSO{nullptr};
+	std::unique_ptr<GraphicsTexture> m_pCBTTargetTexture;
+
 	SceneView m_SceneData;
 	std::unique_ptr<Camera> m_pCamera;
 

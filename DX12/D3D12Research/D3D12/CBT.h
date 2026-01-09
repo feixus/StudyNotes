@@ -22,7 +22,7 @@ public:
         Bits[0] |= 1 << maxDepth;
     #else
         Bits.resize(numBits);
-        Bits[0] = 1 << maxDepth;
+        Bits[0] = maxDepth;
     #endif
 
         uint32_t minRange = Math::Exp2(initialDepth);
@@ -95,7 +95,7 @@ public:
             uint32_t count = 1u << depth;
             for (uint32_t k = count; k < count << 1u; k++)
             {
-                SetData(k, GetData(LeftChildID(k)) + GetData(RightChildID(k)));
+                SetData(k, GetData(LeftChildIndex(k)) + GetData(RightChildIndex(k)));
             }
             depth--;
         }
@@ -139,7 +139,7 @@ public:
         uint32_t heapIndex = 1u;
         while (GetData(heapIndex) > 1u)
         {
-            uint32_t leftChild = LeftChildID(heapIndex);
+            uint32_t leftChild = LeftChildIndex(heapIndex);
             uint32_t leftChildValue = GetData(leftChild);
             uint32_t bit = leafIndex < leftChildValue ? 0 : 1;
 
@@ -158,7 +158,7 @@ public:
     {
         if (!IsCeilNode(heapIndex))
         {
-            uint32_t rightChild = RightChildID(heapIndex);
+            uint32_t rightChild = RightChildIndex(heapIndex);
             uint32_t bit = BitfieldheapIndex(rightChild);
             SetData(bit, 1);
         }
@@ -187,7 +187,7 @@ public:
         return heapIndex == 1u;
     }
 
-     uint32_t NumNodes() const
+    uint32_t NumNodes() const
     {
         return GetData(1);
     }
@@ -220,22 +220,22 @@ public:
         return (uint32_t)Bits.size() * sizeof(StorageType);
     }
 
-    static uint32_t LeftChildID(uint32_t heapIndex)
+    static uint32_t LeftChildIndex(uint32_t heapIndex)
     {
         return heapIndex << 1;
     }
 
-    static uint32_t RightChildID(uint32_t heapIndex)
+    static uint32_t RightChildIndex(uint32_t heapIndex)
     {
         return (heapIndex << 1) | 1;
     }
 
-    static uint32_t ParentID(uint32_t heapIndex)
+    static uint32_t ParentIndex(uint32_t heapIndex)
     {
         return heapIndex >> 1;
     }
 
-    static uint32_t SiblingID(uint32_t heapIndex)
+    static uint32_t SiblingIndex(uint32_t heapIndex)
     {
         return heapIndex ^ 1;
     }
@@ -272,6 +272,9 @@ namespace LEB
 
         inline Matrix GetSplitMatrix(bool bitSet)
         {
+            // if the base triangle is (v0, v1, v2), the longest edge bisection results in two triangles:
+            // b = 0, c = 1: (v0, mid(v0,v2), v1), b=1, c=0: (v1, mid(v0,v2), v2)
+            // the first vertex selects between v0 and v1, the last vertex selects between v1 and v2.
             float b = (float)bitSet;
             float c = 1.0f - b;
             return DirectX::XMFLOAT3X3(
@@ -282,6 +285,8 @@ namespace LEB
 
         inline Matrix GetWindingMatrix(uint32_t bit)
         {
+            // if the base triangle is (v0, v1, v2), the winding order is to swap v0 and v2 depending on the depth being odd or even.
+            // the even depths (0, 2, 4, ...) swap vertices, the odd depths (1, 3, 5, ...) keep the order.
             float b = (float)bit;
             float c = 1.0f - b;
             return DirectX::XMFLOAT3X3(
@@ -292,9 +297,10 @@ namespace LEB
 
         inline Matrix GetSquareMatrix(uint32_t quadBit)
         {
+            // quadrant selection: the left half nodes of one depth level from tree represent the left triangle of the square,
+            // the right half nodes represent the right triangle of the square.
             float b = float(quadBit);
             float c = 1.0f - b;
-
             return DirectX::XMFLOAT3X3(
                 c, 0.0f, b,
                 b, c,    b,
@@ -324,6 +330,7 @@ namespace LEB
             0, 0, 0,
             1, 0, 0
         };
+		Matrix transform = GetMatrix(heapIndex);
         Matrix t = GetMatrix(heapIndex) * baseTriangle;
         a = Vector3(t._11, t._12, t._13);
         b = Vector3(t._21, t._22, t._23);
@@ -340,12 +347,10 @@ namespace LEB
 
     inline NeighborIDs GetNeighbors(uint32_t heapIndex)
     {
-        uint32_t depth;
-        BitOperations::MostSignificantBit(heapIndex, &depth);
-
-        int32_t bitID = depth > 0 ? (int32_t)depth - 1 : 0;
+        int32_t depth = (int32_t)CBT::GetDepth(heapIndex);
+        int32_t bitID = depth > 0 ? depth - 1 : 0;
         uint32_t b = Private::GetBitValue(heapIndex, bitID);
-        NeighborIDs neighbors{ 0, 0, 3u - b, 2u + b };
+        NeighborIDs neighbors{ 0u, 0u, 3u - b, 2u + b };
 
         for (bitID = depth - 2; bitID >= 0; bitID--)
         {
@@ -357,8 +362,7 @@ namespace LEB
             uint32_t b2 = n2 == 0 ? 0 : 1;
             uint32_t b3 = n3 == 0 ? 0 : 1;
 
-            uint32_t bit = Private::GetBitValue(heapIndex, bitID);
-            if (bit == 0)
+            if (Private::GetBitValue(heapIndex, bitID) == 0)
             {
                 neighbors = NeighborIDs{ (n4 << 1) | 1, (n3 << 1) | b3, (n3 << 1) | b2, (n4 << 1) };
             }
@@ -370,6 +374,11 @@ namespace LEB
         return neighbors;
     }
 
+    inline uint32_t GetEdgeNeighbor(uint32_t heapIndex)
+    {
+        return GetNeighbors(heapIndex).Edge;
+    }
+
     struct DiamondIDs
     {
         uint32_t Base;
@@ -378,8 +387,8 @@ namespace LEB
 
     inline DiamondIDs GetDiamond(uint32_t heapIndex)
     {
-        uint32_t parent = CBT::ParentID(heapIndex);
-        uint32_t edge = GetNeighbors(parent).Edge;
+        uint32_t parent = CBT::ParentIndex(heapIndex);
+        uint32_t edge = GetEdgeNeighbor(parent);
         edge = edge > 0 ? edge : parent;
         return DiamondIDs{ parent, edge };
     }
@@ -391,7 +400,7 @@ namespace LEB
             const uint32_t minNodeID = 1u;
 
             cbt.SplitNode(heapIndex);
-            uint32_t edgeNeighbor = GetNeighbors(heapIndex).Edge;
+            uint32_t edgeNeighbor = GetEdgeNeighbor(heapIndex);
             while (edgeNeighbor > minNodeID)
             {
                 cbt.SplitNode(edgeNeighbor);
@@ -399,7 +408,7 @@ namespace LEB
                 if (edgeNeighbor > minNodeID)
                 {
                     cbt.SplitNode(edgeNeighbor);
-                    edgeNeighbor = GetNeighbors(edgeNeighbor).Edge;
+                    edgeNeighbor = GetEdgeNeighbor(edgeNeighbor);
                 }
             }
         }
