@@ -13,7 +13,7 @@ struct CBT
 
     uint GetMaxDepth()
     {
-        return firstbithigh(Storage.Load(0));
+        return firstbitlow(Storage.Load(0)); // least significant bit(LSB)
     }
 
     bool IsCeilNode(uint heapIndex)
@@ -95,15 +95,9 @@ struct CBT
         {
             uint leftChild = LeftChildIndex(heapIndex);
             uint leftChildValue = GetData(leftChild);
-            if (leafIndex < leftChildValue)
-            {
-                heapIndex = leftChild;
-            }
-            else
-            {
-                leafIndex -= leftChildValue;
-                heapIndex = RightChildIndex(heapIndex);
-            }
+            uint bit = leafIndex < leftChildValue ? 0 : 1;
+            heapIndex = leftChild | bit;
+            leafIndex -= bit * leftChildValue;
         }
         return heapIndex;
     }
@@ -245,7 +239,7 @@ namespace LEB
             {
                 neighbors.Left = (n4 << 1) | 1;
                 neighbors.Right = (n3 << 1) | b3;
-                neighbors.Edge = (n3 << 1) | b2;
+                neighbors.Edge = (n2 << 1) | b2;
                 neighbors.Current = (n4 << 1);
             }
             else

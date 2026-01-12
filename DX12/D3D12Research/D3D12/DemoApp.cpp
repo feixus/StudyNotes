@@ -2081,7 +2081,7 @@ void DemoApp::UpdateImGui()
 		cPos + ImVec2(scale, 0),
 		cPos + ImVec2(scale, scale),
 		cPos + ImVec2(0, scale),
-		ImColor(1.0f, 1.0f, 1.0f, 1.0f));
+		ImColor(1.0f, 1.0f, 1.0f, 0.5f));
 
 	auto LEBTriangle = [&](uint32_t heapIndex, Color color, float scale) 
 	{
@@ -2202,7 +2202,7 @@ void DemoApp::UpdateImGui()
 					pContext->SetGraphicsDynamicConstantBufferView(0, commonArgs);
 					pContext->BindResource(2, 0, m_pCBTBuffer->GetUAV());
 					pContext->BeginRenderPass(RenderPassInfo(m_pCBTTargetTexture.get(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
-					pContext->ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, sizeof(uint32_t) * 5);
+					pContext->ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, 3 * sizeof(uint32_t));
 					pContext->EndRenderPass();
 
 					m_pVisualizeTexture = m_pCBTTargetTexture.get();
