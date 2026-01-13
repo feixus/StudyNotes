@@ -57,12 +57,12 @@ void PrepareDispatchArgsCS(uint threadID : sV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
-    uIndirectArgs.Store3(0, uint3(cbt.NumNodes(), 1, 1));
+    uIndirectArgs.Store3(0, uint3(ceil(cbt.NumNodes() / 64.0f), 1, 1));
     uIndirectArgs.Store2(4 * 3, uint2(cbt.NumNodes() * 3, 1));
 }
 
 [RootSignature(RootSig)]
-[numthreads(1, 1, 1)]
+[numthreads(64, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
     CBT cbt;
@@ -78,7 +78,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
     }
 }
 
-[numthreads(16, 1, 1)]
+[numthreads(64, 1, 1)]
 void UpdateCS(uint threadID : SV_DispatchThreadID)
 {
     CBT cbt;
@@ -124,3 +124,13 @@ float4 RenderPS(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
 {
     return color;
 }
+
+// float4 RenderPS(float4 position : SV_POSITION, float4 color : COLOR, float3 bary : SV_Barycentrics) : SV_TARGET
+// {
+//     float3 deltas = fwidth(bary);
+//     float3 smoothing = deltas * 1;
+//     float3 thickness = deltas * 0.2;
+//     bary = smoothstep(thickness, thickness + smoothing, bary);
+//     float minBary = min(bary.x, min(bary.y, bary.z));
+//     return float4(color.xyz * minBary, 1);
+// }

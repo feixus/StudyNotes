@@ -203,7 +203,6 @@ private:
 	PipelineState* m_pVisibilityShadingPSO;
 
 	// CBT
-	std::unique_ptr<Buffer> pCBTTarget;
 	std::unique_ptr<RootSignature> m_pCBTRS;
 	std::unique_ptr<Buffer> m_pCBTBuffer;
 	std::unique_ptr<Buffer> m_pCBTIndirectArgs;

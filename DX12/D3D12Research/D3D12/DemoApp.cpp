@@ -277,7 +277,7 @@ void DemoApp::SetupScene(CommandContext& context)
 
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context);
-		//pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context, Vector3(1, -1, 1));
+		//pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context);
 		m_Meshes.push_back(std::move(pMesh));
 	}
 
@@ -1931,7 +1931,6 @@ void DemoApp::UpdateImGui()
 	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
 	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
 
-
 	constexpr static const char* tonemappers[] =
 	{
 		"Reinhard",
@@ -2032,84 +2031,8 @@ void DemoApp::UpdateImGui()
 
 	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(cbt.GetMemoryUse()).c_str());
 
-	const float itemWidth = 20;
-	const float itemSpacing = 5;
-
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing, itemSpacing));
-
-	ImDrawList* bgList = ImGui::GetWindowDrawList();
-
-	uint32_t heapID = 1;
-	for (uint32_t d = 0; d < cbt.GetMaxDepth(); d++)
-	{
-		ImGui::Spacing();
-		for (uint32_t j = 0; j < Math::Exp2(d); j++)
-		{
-			ImVec2 cursor = ImGui::GetCursorScreenPos();
-			cursor += ImVec2(itemWidth, itemWidth * 0.5f);
-			float rightChildPos = (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d - 1)) - 0.5f);
-
-			ImGui::PushID(heapID);
-			ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(itemWidth, itemWidth));
-
-			bgList->AddLine(cursor, ImVec2(cursor.x + rightChildPos, cursor.y), 0xFFFFFFFF);
-			bgList->AddLine(ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f), ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
-			bgList->AddLine(ImVec2(cursor.x + rightChildPos, cursor.y), ImVec2(cursor.x + rightChildPos, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
-			ImGui::SameLine();
-			ImGui::Spacing();
-			ImGui::SameLine(0, (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d)) - 1));
-			ImGui::PopID();
-			heapID++;
-		}
-	}
-
-	ImGui::Spacing();
-	ImGui::Separator();
-
-	for (uint32_t leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); leafIndex++)
-	{
-		ImGui::PushID(10000 + leafIndex);
-		uint32_t index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
-		if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
-		{
-			cbt.SetData(index, !cbt.GetData(index));
-		}
-		ImGui::SameLine();
-		ImGui::PopID();
-	}
-
-	ImGui::PopStyleVar();
-	ImGui::Spacing();
-
-	const ImVec2 cPos = ImGui::GetCursorScreenPos();
+	ImVec2 cPos = ImGui::GetCursorScreenPos();
 	float scale = 400;
-
-	ImGui::GetWindowDrawList()->AddQuadFilled(
-		cPos + ImVec2(0, 0),
-		cPos + ImVec2(scale, 0),
-		cPos + ImVec2(scale, scale),
-		cPos + ImVec2(0, scale),
-		ImColor(1.0f, 1.0f, 1.0f, 0.5f));
-
-	auto LEBTriangle = [&](uint32_t heapIndex, Color color, float scale) 
-	{
-		Vector3 a, b, c;
-		LEB::GetTriangleVertices(heapIndex, a, b, c);
-		a *= scale;
-		b *= scale;
-		c *= scale;
-
-		ImGui::GetWindowDrawList()->AddTriangle(
-			cPos + ImVec2(a.x, a.y),
-			cPos + ImVec2(b.x, b.y),
-			cPos + ImVec2(c.x, c.y),
-			ImColor(color.x, color.y, color.z, color.w));
-
-		ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
-		std::string text = std::format("{}", heapIndex);
-		ImVec2 textPos = cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f;
-		ImGui::GetWindowDrawList()->AddText(textPos, ImColor(1.0f, 0.0f, 1.0f, 1.0f), text.c_str());
-	};
 
 	{
 		if (gpuUpdate)
@@ -2122,9 +2045,7 @@ void DemoApp::UpdateImGui()
 				if (!m_pCBTBuffer || m_pCBTBuffer->GetSize() != size)
 				{
 					m_pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT Buffer");
-					pCBTTarget = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(size), "CBT Readback");
 					m_pCBTTargetTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(512, 512, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource), "CBT RT");
-					pCBTTarget->Map();
 					m_pCBTBuffer->SetData(pContext, cbt.GetData(), cbt.GetMemoryUse());
 				}
 				pContext->FlushResourceBarriers();
@@ -2177,7 +2098,7 @@ void DemoApp::UpdateImGui()
 						pContext->SetComputeDynamicConstantBufferView(1, reductionArgs);
 
 						pContext->SetPipelineState(m_pCBTSumReductionPSO);
-						pContext->Dispatch(1 << currentDepth);
+						pContext->Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 64));
 						pContext->InsertUavBarrier();
 					}
 				}
@@ -2205,21 +2126,70 @@ void DemoApp::UpdateImGui()
 					pContext->EndRenderPass();
 				}
 
-				pContext->InsertResourceBarrier(m_pCBTBuffer.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-				pContext->InsertResourceBarrier(pCBTTarget.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-				pContext->FlushResourceBarriers();
-				pContext->CopyBuffer(m_pCBTBuffer.get(), pCBTTarget.get(), (uint32_t)pCBTTarget->GetSize(), 0, 0);
-
 				ImGui::Image(m_pCBTTargetTexture.get(), ImVec2(scale, scale));
 			}
 
-			pContext->Execute(true);
-
-			void* pSource = pCBTTarget->GetMappedData();
-			memcpy(cbt.GetData(), pSource, pCBTTarget->GetSize());
+			pContext->Execute(false);
 		}
 		else
 		{
+			const float itemWidth = 20;
+			const float itemSpacing = 5;
+
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing, itemSpacing));
+
+			ImDrawList* bgList = ImGui::GetWindowDrawList();
+
+			uint32_t heapID = 1;
+			for (uint32_t d = 0; d < cbt.GetMaxDepth(); d++)
+			{
+				ImGui::Spacing();
+				for (uint32_t j = 0; j < Math::Exp2(d); j++)
+				{
+					ImVec2 cursor = ImGui::GetCursorScreenPos();
+					cursor += ImVec2(itemWidth, itemWidth * 0.5f);
+					float rightChildPos = (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d - 1)) - 0.5f);
+
+					ImGui::PushID(heapID);
+					ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(itemWidth, itemWidth));
+
+					bgList->AddLine(cursor, ImVec2(cursor.x + rightChildPos, cursor.y), 0xFFFFFFFF);
+					bgList->AddLine(ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f), ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
+					bgList->AddLine(ImVec2(cursor.x + rightChildPos, cursor.y), ImVec2(cursor.x + rightChildPos, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
+					ImGui::SameLine();
+					ImGui::Spacing();
+					ImGui::SameLine(0, (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d)) - 1));
+					ImGui::PopID();
+					heapID++;
+				}
+			}
+
+			ImGui::Spacing();
+			ImGui::Separator();
+
+			for (uint32_t leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); leafIndex++)
+			{
+				ImGui::PushID(10000 + leafIndex);
+				uint32_t index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
+				if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
+				{
+					cbt.SetData(index, !cbt.GetData(index));
+				}
+				ImGui::SameLine();
+				ImGui::PopID();
+			}
+
+			ImGui::PopStyleVar();
+			ImGui::Spacing();
+
+			cPos = ImGui::GetCursorScreenPos();
+			ImGui::GetWindowDrawList()->AddQuadFilled(
+				cPos + ImVec2(0, 0),
+				cPos + ImVec2(scale, 0),
+				cPos + ImVec2(scale, scale),
+				cPos + ImVec2(0, scale),
+				ImColor(1.0f, 1.0f, 1.0f, 0.5f));
+
 			if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
 			{
 				PROFILE_SCOPE("CBT Update");
@@ -2244,6 +2214,26 @@ void DemoApp::UpdateImGui()
 			}
 
 			cbt.SumReduction();
+
+			auto LEBTriangle = [&](uint32_t heapIndex, Color color, float scale)
+			{
+				Vector3 a, b, c;
+				LEB::GetTriangleVertices(heapIndex, a, b, c);
+				a *= scale;
+				b *= scale;
+				c *= scale;
+
+				ImGui::GetWindowDrawList()->AddTriangle(
+					cPos + ImVec2(a.x, a.y),
+					cPos + ImVec2(b.x, b.y),
+					cPos + ImVec2(c.x, c.y),
+					ImColor(color.x, color.y, color.z, color.w));
+
+				ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
+				std::string text = std::format("{}", heapIndex);
+				ImVec2 textPos = cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f;
+				ImGui::GetWindowDrawList()->AddText(textPos, ImColor(1.0f, 0.0f, 1.0f, 1.0f), text.c_str());
+			};
 
 			PROFILE_SCOPE("CBT Draw");
 			cbt.IterateLeaves([&](uint32_t heapIndex)
