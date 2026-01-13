@@ -350,7 +350,7 @@ namespace LEB
         int32_t depth = (int32_t)CBT::GetDepth(heapIndex);
         int32_t bitID = depth > 0 ? depth - 1 : 0;
         uint32_t b = Private::GetBitValue(heapIndex, bitID);
-        NeighborIDs neighbors{ 0u, 0u, 3u - b, 2u + b };
+        NeighborIDs neighbors{ 0u, 0u, 3u - b, 2u + b };    // heapIndex 2 and 3 at the depth 1.
 
         for (bitID = depth - 2; bitID >= 0; bitID--)
         {
@@ -364,7 +364,7 @@ namespace LEB
 
             if (Private::GetBitValue(heapIndex, bitID) == 0)
             {
-                neighbors = NeighborIDs{ (n4 << 1) | 1, (n3 << 1) | b3, (n3 << 1) | b2, (n4 << 1) };
+                neighbors = NeighborIDs{ (n4 << 1) | 1, (n3 << 1) | b3, (n2 << 1) | b2, (n4 << 1) };
             }
             else
             {
