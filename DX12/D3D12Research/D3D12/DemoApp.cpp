@@ -278,6 +278,12 @@ void DemoApp::SetupScene(CommandContext& context)
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context);
 		//pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context);
+		//pMesh->Load("Resources/apartment_floor_plan/scene.gltf", m_pDevice.get(), &context);
+		
+		//pMesh->LoadByCgltf("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context);
+		//pMesh->LoadByCgltf("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context);
+		//pMesh->LoadByCgltf("Resources/apartment_floor_plan/scene.gltf", m_pDevice.get(), &context);
+
 		m_Meshes.push_back(std::move(pMesh));
 	}
 
@@ -313,7 +319,7 @@ void DemoApp::SetupScene(CommandContext& context)
 			b.LocalBounds = parentMesh.Bounds;
 			b.pMesh = &parentMesh;
 			b.WorldMatrix = node.Transform;
-			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaBlend : Batch::Blending::Opaque;
 			b.Material = (uint32_t)materials.size() + parentMesh.MaterialId;
 			m_SceneData.Batches.push_back(b);
 		}
@@ -1843,6 +1849,7 @@ void DemoApp::UpdateImGui()
 	ImGui::Text("CameraP: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 	Vector3 eulerAngle = m_pCamera->GetRotation().ToEuler() * Math::RadiansToDegrees;
 	ImGui::Text("CameraR: [%.2f, %.2f, %.2f]", eulerAngle.x, eulerAngle.y, eulerAngle.z);
+	ImGui::SliderInt("CameraSpeed: ", &m_pCamera->GetVelocityFactor(), 1, 10);
 
 	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
 	{

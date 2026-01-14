@@ -15,6 +15,7 @@ class Mesh;
 class Buffer;
 class ClusteredForward;
 class Camera;
+class FreeCamera;
 class UnorderedAccessView;
 class TiledForward;
 class RTAO;
@@ -214,7 +215,7 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pCBTTargetTexture;
 
 	SceneView m_SceneData;
-	std::unique_ptr<Camera> m_pCamera;
+	std::unique_ptr<FreeCamera> m_pCamera;
 
 	GraphicsTexture* m_pVisualizeTexture{nullptr};
 

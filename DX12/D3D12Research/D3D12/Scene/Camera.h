@@ -67,8 +67,12 @@ private:
 
 class FreeCamera : public Camera
 {
-private:
+public:
     virtual void Update() override;
 
+	int& GetVelocityFactor() { return m_VelocityFactor; }
+
+private:
     Vector3 m_Velocity;
+	int m_VelocityFactor{4};
 };

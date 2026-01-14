@@ -18,6 +18,9 @@
 
 #include "tinygltf/tiny_gltf.h"
 
+#define CGLTF_IMPLEMENTATION
+#include "cgltf/cgltf.h"
+
 struct VS_Position
 {
 	PackedVector3 Position{0.0f, 0.0f, 0.0f, 0.0f};
@@ -368,19 +371,34 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 			toProcess.pop();
 
 			const tinygltf::Node& node = model.nodes[currentNode.Index];
-			Vector3 scale = node.scale.size() == 0 ? Vector3::One : Vector3((float)node.scale[0], (float)node.scale[1], (float)node.scale[2]);
-			Quaternion rotation = node.rotation.size() == 0 ? Quaternion::Identity : Quaternion((float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3]);
-			Vector3 translation = node.translation.size() == 0 ? Vector3::Zero : Vector3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2]);
 
-			Matrix matrix = node.matrix.size() == 0 ? Matrix::Identity : Matrix(
-				(float)node.matrix[0], (float)node.matrix[4], (float)node.matrix[8], (float)node.matrix[12],
-				(float)node.matrix[1], (float)node.matrix[5], (float)node.matrix[9], (float)node.matrix[13],
-				(float)node.matrix[2], (float)node.matrix[6], (float)node.matrix[10], (float)node.matrix[14],
-				(float)node.matrix[3], (float)node.matrix[7], (float)node.matrix[11], (float)node.matrix[15]
-			);
+			Matrix localMatrix = Matrix::Identity;
+			if (node.matrix.size() == 16)
+			{
+				localMatrix = Matrix(
+					(float)node.matrix[0], (float)node.matrix[1],
+					(float)node.matrix[2], (float)node.matrix[3],
+
+					(float)node.matrix[4], (float)node.matrix[5],
+					(float)node.matrix[6], (float)node.matrix[7],
+
+					(float)node.matrix[8], (float)node.matrix[9],
+					(float)node.matrix[10], (float)node.matrix[11],
+
+					(float)node.matrix[12], (float)node.matrix[13],
+					(float)node.matrix[14], (float)node.matrix[15]
+				);
+			}
+			else
+			{
+				Vector3 scale = node.scale.size() == 0 ? Vector3::One : Vector3((float)node.scale[0], (float)node.scale[1], (float)node.scale[2]);
+				Quaternion rotation = node.rotation.size() == 0 ? Quaternion::Identity : Quaternion((float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2], (float)node.rotation[3]);
+				Vector3 translation = node.translation.size() == 0 ? Vector3::Zero : Vector3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2]);
+				localMatrix = Matrix::CreateScale(scale) * Matrix::CreateFromQuaternion(rotation) * Matrix::CreateTranslation(translation); // S * R * T by row-major
+			}
 
 			SubMeshInstance newNode;
-			newNode.Transform = currentNode.Transform * matrix * Matrix::CreateFromQuaternion(rotation) * Matrix::CreateScale(scale) * Matrix::CreateTranslation(translation);
+			newNode.Transform = localMatrix * currentNode.Transform;  // local * parent by row-major
 			if (node.mesh >= 0)
 			{
 				for (int primitive : meshToPrimitives[node.mesh])
@@ -446,6 +464,275 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 	pContext->FlushResourceBarriers();
 
 	GenerateBLAS(pGraphicDevice, pContext);
+	return true;
+}
+
+bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, float uniformScale)
+{
+	cgltf_options options{};
+	cgltf_data* pGltfData = nullptr;
+	cgltf_result result = cgltf_parse_file(&options, pFilePath, &pGltfData);
+	if (result != cgltf_result_success)
+	{
+		E_LOG(Warning, "GLTF - Failed to load %s", pFilePath);
+		return false;
+	}
+
+	result = cgltf_load_buffers(&options, pGltfData, pFilePath);
+	if (result != cgltf_result_success)
+	{
+		E_LOG(Warning, "GLTF - Failed to load buffers %s", pFilePath);
+		return false;
+	}
+
+	std::map<const cgltf_image*, GraphicsTexture*> textureMap;
+
+	auto MaterialIndex = [&](const cgltf_material* pMat) -> int
+	{
+		check(pMat);
+		return (int)(pMat - pGltfData->materials);
+	};
+
+	m_Materials.reserve(pGltfData->materials_count);
+	for (size_t i = 0; i < pGltfData->materials_count; i++)
+	{
+		const cgltf_material& gltfMaterial = pGltfData->materials[i];
+
+		m_Materials.push_back(Material());
+		Material& material = m_Materials.back();
+
+		auto RetrieveTexture = [this, &textureMap, pGraphicDevice, pContext, pFilePath](const cgltf_texture_view texture, bool srgb) -> GraphicsTexture*
+		{
+			if (texture.texture == nullptr)
+			{
+				return nullptr;
+			}
+
+			const cgltf_image* pImage = texture.texture->image;
+			auto it = textureMap.find(pImage);
+			if (it != textureMap.end())
+			{
+				return it->second;
+			}
+
+			std::unique_ptr<GraphicsTexture> pTex = std::make_unique<GraphicsTexture>(pGraphicDevice, pImage->uri ? pImage->uri : "Material Texture");
+			bool success = false;
+			if (pImage->buffer_view)
+			{
+				Image newImg;
+				if (newImg.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type))
+				{
+					success = pTex->Create(pContext, newImg, srgb);
+				}
+			}
+			else
+			{
+				success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb);
+			}
+
+			if (success)
+			{
+				m_Textures.push_back(std::move(pTex));
+				textureMap[pImage] = m_Textures.back().get();
+				return m_Textures.back().get();
+			}
+
+			E_LOG(Warning, "GLTF - Failed to load texture '%s' for '%s'", pImage->uri, pFilePath);
+		};
+
+		if (gltfMaterial.has_pbr_metallic_roughness)
+		{
+			material.pDiffuseTexture = RetrieveTexture(gltfMaterial.pbr_metallic_roughness.base_color_texture, true);
+			material.pRoughnessMetalnessTexture = RetrieveTexture(gltfMaterial.pbr_metallic_roughness.metallic_roughness_texture, false);
+			material.BaseColorFactor.x = gltfMaterial.pbr_metallic_roughness.base_color_factor[0];
+			material.BaseColorFactor.y = gltfMaterial.pbr_metallic_roughness.base_color_factor[1];
+			material.BaseColorFactor.z = gltfMaterial.pbr_metallic_roughness.base_color_factor[2];
+			material.BaseColorFactor.w = gltfMaterial.pbr_metallic_roughness.base_color_factor[3];
+			material.MetalnessFactor = gltfMaterial.pbr_metallic_roughness.metallic_factor;
+			material.RoughnessFactor = gltfMaterial.pbr_metallic_roughness.roughness_factor;
+		}
+		material.AlphaCutoff = gltfMaterial.alpha_cutoff;
+		material.IsTransparent = gltfMaterial.alpha_mode != cgltf_alpha_mode_opaque;
+		material.pEmissiveTexture = RetrieveTexture(gltfMaterial.emissive_texture, true);
+		material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];
+		material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];
+		material.EmissiveFactor.z = gltfMaterial.emissive_factor[2];
+		material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
+	}
+
+	std::vector<uint32_t> indicesStream;
+	std::vector<VS_Position> positionsStream;
+	std::vector<VS_UV> uvStream;
+	std::vector<VS_Normal> normalStream;
+
+	std::vector<MeshData> meshDatas;
+	std::map<const cgltf_mesh*, std::vector<int>> meshToPrimitives;
+	int primitiveIndex = 0;
+
+	for (size_t meshIdx = 0; meshIdx < pGltfData->meshes_count; meshIdx++)
+	{
+		const cgltf_mesh& mesh = pGltfData->meshes[meshIdx];
+		std::vector<int> primitives;
+		for (size_t primIdx = 0; primIdx < mesh.primitives_count; primIdx++)
+		{
+			const cgltf_primitive& primitive = mesh.primitives[primIdx];
+			primitives.push_back(primitiveIndex++);
+			MeshData meshData;
+			uint32_t vertexOffset = (uint32_t)positionsStream.size();
+			meshData.VertexOffset = vertexOffset;
+
+			size_t indexCount = primitive.indices->count;
+			uint32_t indexOffset = (uint32_t)indicesStream.size();
+			indicesStream.resize(indicesStream.size() + indexCount);
+
+			meshData.IndexOffset = indexOffset;
+			meshData.NumIndices = (uint32_t)indexCount;
+			meshData.MaterialIndex = MaterialIndex(primitive.material);
+
+			constexpr int indexMap[] = {0, 2, 1};
+			for (size_t i = 0; i < indexCount; i += 3)
+			{
+				indicesStream[indexOffset + i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
+				indicesStream[indexOffset + i + 1] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
+				indicesStream[indexOffset + i + 2] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
+			}
+
+			for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; attrIdx++)
+			{
+				const cgltf_attribute& attribute = primitive.attributes[attrIdx];
+				const char* pName = attribute.name;
+
+				if (meshData.NumVertices == 0)
+				{
+					positionsStream.resize(positionsStream.size() + attribute.data->count);
+					uvStream.resize(uvStream.size() + attribute.data->count);
+					normalStream.resize(normalStream.size() + attribute.data->count);
+					meshData.NumVertices = (uint32_t)attribute.data->count;
+				}
+
+				if (strcmp(pName, "POSITION") == 0)
+				{
+					std::vector<Vector3> positions;
+					for (size_t i = 0; i < attribute.data->count; i++)
+					{
+						Vector3 position;
+						check(cgltf_accessor_read_float(attribute.data, i, &position.x, 3));
+						positionsStream[i + vertexOffset].Position = PackedVector3(position.x, position.y, position.z, 0);
+						positions.push_back(position);
+					}
+					meshData.Bounds.CreateFromPoints(meshData.Bounds, positions.size(), (DirectX::XMFLOAT3*)positions.data(), sizeof(Vector3));
+				}
+				else if (strcmp(pName, "NORMAL") == 0)
+				{
+					for (size_t i = 0; i < attribute.data->count; i++)
+					{
+						check(cgltf_accessor_read_float(attribute.data, i, &normalStream[i + vertexOffset].Normal.x, 3));
+					}
+				}
+				else if (strcmp(pName, "TANGENT") == 0)
+				{
+					for (size_t i = 0; i < attribute.data->count; i++)
+					{
+						check(cgltf_accessor_read_float(attribute.data, i, &normalStream[i + vertexOffset].Tangent.x, 4));
+					}
+				}
+				else if (strcmp(pName, "TEXCOORD_0") == 0)
+				{
+					for (size_t i = 0; i < attribute.data->count; i++)
+					{
+						Vector2 texCoord;
+						check(cgltf_accessor_read_float(attribute.data, i, &texCoord.x, 2));
+						uvStream[i + vertexOffset].UV = PackedVector2(texCoord.x, texCoord.y);
+					}
+				}
+				else
+				{
+					validateOncef(false, "GLTF - Attribute '%s' is unsupported!", pName);
+				}
+			}
+			meshDatas.push_back(meshData);
+		}
+		meshToPrimitives[&mesh] = primitives;
+	}
+
+	for (size_t i = 0; i < pGltfData->nodes_count; i++)
+	{
+		const cgltf_node& node = pGltfData->nodes[i];
+
+		cgltf_float matrix[16];
+		cgltf_node_transform_world(&node, matrix);
+
+		if (node.mesh)
+		{
+			SubMeshInstance newNode;
+			newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
+			for (int primitive : meshToPrimitives[node.mesh])
+			{
+				newNode.MeshIndex = primitive;
+				m_MeshInstances.push_back(newNode);
+			}
+		}
+	}
+
+	cgltf_free(pGltfData);
+
+	static constexpr uint64_t sBufferAlignment = 16;
+	uint64_t bufferSize = indicesStream.size() * sizeof(uint32_t);
+	bufferSize += positionsStream.size() * sizeof(VS_Position);
+	bufferSize += uvStream.size() * sizeof(VS_UV);
+	bufferSize += normalStream.size() * sizeof(VS_Normal);
+	bufferSize += (positionsStream.size() * 3 + indicesStream.size()) * sBufferAlignment;
+	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh GeometryBuffer");
+	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+
+	uint64_t dataOffset = 0;
+	auto CopyData = [&](void* pSource, uint64_t size)
+	{
+		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
+		dataOffset += size;
+		dataOffset = Math::AlignUp<uint64_t>(dataOffset, sBufferAlignment);
+	};
+
+	for (const MeshData& meshData : meshDatas)
+	{
+		SubMesh subMesh;
+		subMesh.Bounds = meshData.Bounds;
+		subMesh.MaterialId = meshData.MaterialIndex;
+
+		subMesh.PositionsFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		subMesh.PositionsStride = sizeof(VS_Position);
+
+		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position));
+		subMesh.pPositionStreamSRV = new ShaderResourceView();
+		subMesh.pPositionStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_Position)));
+		CopyData(&positionsStream[meshData.VertexOffset], sizeof(VS_Position) * meshData.NumVertices);
+		
+		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal));
+		subMesh.pNormalStreamSRV = new ShaderResourceView();
+		subMesh.pNormalStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_Normal)));
+		CopyData(&normalStream[meshData.VertexOffset], sizeof(VS_Normal) * meshData.NumVertices);
+
+		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV));
+		subMesh.pUVStreamSRV = new ShaderResourceView();
+		subMesh.pUVStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_UV)));
+		CopyData(&uvStream[meshData.VertexOffset], sizeof(VS_UV) * meshData.NumVertices);
+
+		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT);
+		subMesh.IndicesLocation = ibv;
+		subMesh.pIndexSRV = new ShaderResourceView();
+		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumIndices * sizeof(uint32_t)));
+		CopyData(&indicesStream[meshData.IndexOffset], sizeof(uint32_t) * meshData.NumIndices);
+
+		subMesh.pParent = this;
+		m_Meshes.push_back(subMesh);
+	}
+
+	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COMMON);
+	pContext->FlushResourceBarriers();
+
+	GenerateBLAS(pGraphicDevice, pContext);
+	return true;
+
 	return true;
 }
 
