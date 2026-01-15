@@ -1,13 +1,18 @@
 #include "Random.hlsli"
 #include "CBT.hlsli"
 
+#define DEBUG_ALWAYS_SUBDIVIDE 1
+
 #define RootSig "CBV(b0), " \
                 "CBV(b1), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 2)), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 1))"
+                "DescriptorTable(SRV(t0, numDescriptors = 1)), " \
+                "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR)"
 
 RWByteAddressBuffer uCBT : register(u0);
 RWByteAddressBuffer uIndirectArgs : register(u1);
+Texture2D tHeightmap : register(t0);
+SamplerState sSampler : register(s0);
 
 struct CommonArgs
 {
@@ -19,51 +24,47 @@ struct SumReductionData
     uint Depth;
 };
 
+struct RenderData
+{
+    float4x4 Transform;
+    float4x4 ViewProjection;
+    float HeightmapSizeInv;
+};
+
 struct SubdivisionData
 {
-    uint2 MouseLocation;
-    float Scale;
+    float4x4 Transform;
+    float4x4 ViewInverse;
 };
 
 ConstantBuffer<CommonArgs> cCommonArgs : register(b0);
 ConstantBuffer<SumReductionData> cSumReductionData : register(b1);
 ConstantBuffer<SubdivisionData> cSubdivisionData : register(b1);
-
-float Sign(float2 p1, float2 p2, float2 p3)
-{
-    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
-}
-
-bool PointInTriangle(float2 pt, uint heapIndex, float scale)
-{
-    float d1, d2, d3;
-    bool has_neg, has_pos;
-
-    float3x3 tri = LEB::GetTriangleVertices(heapIndex);
-    tri *= scale;
-
-    d1 = Sign(pt, tri[0].xy, tri[1].xy);
-    d2 = Sign(pt, tri[1].xy, tri[2].xy);
-    d3 = Sign(pt, tri[2].xy, tri[0].xy);
-
-    has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-    has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
-
-    return !(has_neg && has_pos);
-}
+ConstantBuffer<RenderData> cRenderData : register(b1);
 
 [numthreads(1, 1, 1)]
-void PrepareDispatchArgsCS(uint threadID : sV_DispatchThreadID)
+void PrepareDispatchArgsCS(uint3 threadID : sV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
-    uIndirectArgs.Store3(0, uint3(ceil(cbt.NumNodes() / 64.0f), 1, 1));
-    uIndirectArgs.Store2(4 * 3, uint2(cbt.NumNodes() * 3, 1));
+
+    uint numThreads = ceil(cbt.NumNodes() / 64.0f);
+    uIndirectArgs.Store(0, numThreads);
+    uIndirectArgs.Store(4, 1);
+    uIndirectArgs.Store(8, 1);
+
+    uint offset = 4 * 3;
+    uint numVertices = 3;
+    uint numInstances = cbt.NumNodes();
+    uIndirectArgs.Store(offset + 0, numVertices);
+    uIndirectArgs.Store(offset + 4, numInstances);
+    uIndirectArgs.Store(offset + 8, 0);
+    uIndirectArgs.Store(offset + 12, 0);
 }
 
 [RootSignature(RootSig)]
 [numthreads(64, 1, 1)]
-void SumReductionCS(uint threadID : SV_DispatchThreadID)
+void SumReductionCS(uint3 threadID : SV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
@@ -85,43 +86,54 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
     cbt.Init(uCBT, cCommonArgs.NumElements);
     uint heapIndex = cbt.LeafIndexToHeapIndex(threadID.x);
 
-    if (PointInTriangle(cSubdivisionData.MouseLocation, heapIndex, cSubdivisionData.Scale))
+    if (DEBUG_ALWAYS_SUBDIVIDE)
     {
         LEB::CBTSplitConformed(cbt, heapIndex);
     }
     
-    if (heapIndex > 1)
+    if (!DEBUG_ALWAYS_SUBDIVIDE && heapIndex > 1)
     {
         LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-        if (!PointInTriangle(cSubdivisionData.MouseLocation, diamond.Base, cSubdivisionData.Scale) &&
-            !PointInTriangle(cSubdivisionData.MouseLocation, diamond.Top, cSubdivisionData.Scale))
-        {
-            LEB::CBTMergeConformed(cbt, heapIndex);
-        }
+        LEB::CBTMergeConformed(cbt, heapIndex);
     }
 }
 
-void RenderVS(uint vertexID : SV_VertexID, out float4 pos : SV_POSITION, out float4 color : COLOR)
+void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out float4 pos : SV_POSITION, out float2 uv : TEXCOORD)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
 
-    uint triangleIndex = vertexID / 3;
-    uint vertexIndex = vertexID % 3;
-    uint heapIndex = cbt.LeafIndexToHeapIndex(triangleIndex);
+    uint heapIndex = cbt.LeafIndexToHeapIndex(instanceID);
 
-    float3x3 tri = LEB::GetTriangleVertices(heapIndex);
-    float2 position = tri[vertexIndex].xy;
-    position = position * 2 - 1;
-    position.y = -position.y;
-    pos = float4(position, 0.0f, 1.0f);
+    float3 tri = LEB::GetTriangleVertices(heapIndex)[vertexID];
+    uv = tri.xz;
 
-    uint state = SeedThread(heapIndex);
-    color = float4(Random01(state), Random01(state), Random01(state), 1.0f);
+    tri.y += tHeightmap.SampleLevel(sSampler, tri.xz, 0).r;
+    
+    tri = mul(float4(tri, 1), cRenderData.Transform).xyz;
+    pos = mul(float4(tri, 1), cRenderData.ViewProjection);
 }
 
-float4 RenderPS(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+float4 RenderPS(float4 position : SV_POSITION, float2 uv : TEXCOORD) : SV_TARGET
 {
+    float tl = tHeightmap.SampleLevel(sSampler, uv, 0, uint2(-1, -1)).r;
+    float t  = tHeightmap.SampleLevel(sSampler, uv, 0, uint2( 0, -1)).r;
+    float tr = tHeightmap.SampleLevel(sSampler, uv, 0, uint2( 1, -1)).r;
+    float l  = tHeightmap.SampleLevel(sSampler, uv, 0, uint2(-1,  0)).r;
+    float r  = tHeightmap.SampleLevel(sSampler, uv, 0, uint2( 1,  0)).r;
+    float bl = tHeightmap.SampleLevel(sSampler, uv, 0, uint2(-1,  1)).r;
+    float b  = tHeightmap.SampleLevel(sSampler, uv, 0, uint2( 0,  1)).r;
+    float br = tHeightmap.SampleLevel(sSampler, uv, 0, uint2( 1,  1)).r;
+
+    // sobel-filtered height gradients
+    float dX = tr + 2 * r + br - tl - 2 * l - bl;
+    float dY = bl + 2 * b + br - tl - 2 * t - tr;
+    // T = (1, dX, 0), B = (0, dY, 1)
+    float3 normal = normalize(float3(dX, 1.0f / 100, dY));
+
+    float3 dir = normalize(float3(1, 1, 1));
+    float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);
+
     return color;
 }
 
@@ -134,3 +146,26 @@ float4 RenderPS(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
 //     float minBary = min(bary.x, min(bary.y, bary.z));
 //     return float4(color.xyz * minBary, 1);
 // }
+
+void DebugVisualizeVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out float4 pos : SV_POSITION, out float4 color : COLOR)
+{
+    CBT cbt;
+    cbt.Init(uCBT, cCommonArgs.NumElements);
+
+    uint heapIndex = cbt.LeafIndexToHeapIndex(instanceID);
+
+    float3 tri = LEB::GetTriangleVertices(heapIndex)[vertexID];
+    tri.y = tri.z;
+    tri.xy = tri.xy * 2 - 1;
+    pos = float4(tri, 1);
+
+    uint state = SeedThread(heapIndex);
+    color = float4(Random01(state), Random01(state), Random01(state), 1);
+}
+
+float4 DebugVisualizePS(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+{
+    return color;
+}
+
+

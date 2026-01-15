@@ -200,6 +200,12 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, GraphicsT
 					}
 					else
 					{
+						// avoid trying to render things with a 0 cliprect
+						if (pCmd->ClipRect.z <= pCmd->ClipRect.x || pCmd->ClipRect.w <= pCmd->ClipRect.y)
+						{
+							continue;
+						}
+
 						drawData.ProjectionMatrix = projectionMatrix;
 						context.SetScissorRect(FloatRect(pCmd->ClipRect.x, pCmd->ClipRect.y, pCmd->ClipRect.z, pCmd->ClipRect.w));
 						ImTextureID textureData = pCmd->TextureId;

@@ -24,6 +24,7 @@ class GpuParticles;
 class RTReflections;
 class SwapChain;
 class PathTracing;
+class CBTTessellation;
 struct SubMesh;
 struct Material;
 
@@ -104,6 +105,7 @@ private:
 	std::unique_ptr<TiledForward> m_pTiledForward;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<PathTracing> m_pPathTracing;
+	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RTAO> m_pRTAO;
@@ -202,17 +204,6 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pBarycentricsTexture;
 	std::unique_ptr<RootSignature> m_pVisibilityShadingRS;
 	PipelineState* m_pVisibilityShadingPSO;
-
-	// CBT
-	std::unique_ptr<RootSignature> m_pCBTRS;
-	std::unique_ptr<Buffer> m_pCBTBuffer;
-	std::unique_ptr<Buffer> m_pCBTIndirectArgs;
-	PipelineState* m_pCBTIndirectArgsPSO{nullptr};
-	PipelineState* m_pCBTSumReductionPSO{nullptr};
-	PipelineState* m_pCBTUpdatePSO{nullptr};
-
-	PipelineState* m_pCBTRenderPSO{nullptr};
-	std::unique_ptr<GraphicsTexture> m_pCBTTargetTexture;
 
 	SceneView m_SceneData;
 	std::unique_ptr<FreeCamera> m_pCamera;

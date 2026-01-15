@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/Bitfield.h"
 
 #define CBT_MEMORY_COMPACT 1
 
@@ -8,7 +9,7 @@ public:
     using StorageType = uint32_t;
     constexpr static uint32_t NumBitsPerElement = sizeof(StorageType) * 8;
 
-    void Init(uint32_t maxDepth, uint32_t initialDepth)
+    void InitBare(uint32_t maxDepth, uint32_t initialDepth)
     {
         assert(initialDepth <= maxDepth);
 
@@ -18,7 +19,7 @@ public:
         Bits.clear();
 
     #if CBT_MEMORY_COMPACT
-        Bits.resize(numBits / NumBitsPerElement);
+        Bits.resize(Math::Max<int>(1, numBits / NumBitsPerElement));
         Bits[0] |= 1 << maxDepth;
     #else
         Bits.resize(numBits);
@@ -32,6 +33,11 @@ public:
         {
             SetData(heapIndex * interval, 1);
         }
+    }
+
+    void Init(uint32_t maxDepth, uint32_t initialDepth)
+    {
+        InitBare(maxDepth, initialDepth);
         SumReduction();
     }
 
