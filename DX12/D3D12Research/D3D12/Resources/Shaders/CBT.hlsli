@@ -310,6 +310,7 @@ namespace LEB
             if (cbt.GetData(diamond.Base) <= 2 && cbt.GetData(diamond.Top) <= 2)
             {
                 cbt.MergeNode_Single(heapIndex);
+                cbt.MergeNode_Single(cbt.RightChildIndex(diamond.Top));
             }
         }
     }

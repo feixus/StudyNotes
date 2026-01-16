@@ -22,7 +22,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     static bool debugVisualize = false;
     static bool cpuDemo = false;
 
-    Matrix terrainTransform = Matrix::CreateScale(30, 8, 30) * Matrix::CreateTranslation(-15, -5, -15);
+    Matrix terrainTransform = Matrix::CreateScale(30, 10, 30) * Matrix::CreateTranslation(0, -10, 0);
 
     ImGui::Begin("Parameters");
     ImGui::Text("CBT");
@@ -72,14 +72,28 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         context.SetComputeDynamicConstantBufferView(0, commonArgs);
 
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+        context.BindResource(3, 0, m_pHeightmap->GetSRV());
 
         struct SubdisvisionData
         {
             Matrix Transform;
-            Matrix ViewInverse;
+            Matrix View;
+            Matrix ViewProjection;
+            Vector4 FrustumPlanes[6];
         } subdivisionData;
         subdivisionData.Transform = terrainTransform;
-        subdivisionData.ViewInverse = sceneView.pCamera->GetViewInverse();
+        subdivisionData.View = sceneView.pCamera->GetView();
+        subdivisionData.ViewProjection = sceneView.pCamera->GetViewProjection();
+        
+        DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
+        sceneView.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
+        subdivisionData.FrustumPlanes[0] = Vector4(nearPlane);
+        subdivisionData.FrustumPlanes[1] = Vector4(farPlane);
+        subdivisionData.FrustumPlanes[2] = Vector4(left);
+        subdivisionData.FrustumPlanes[3] = Vector4(right);
+        subdivisionData.FrustumPlanes[4] = Vector4(top);
+        subdivisionData.FrustumPlanes[5] = Vector4(bottom);
+
         context.SetComputeDynamicConstantBufferView(1, subdivisionData);
 
         context.SetPipelineState(m_pCBTUpdatePSO);
@@ -174,8 +188,8 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         ImGui::ImageAutoSize(m_pDebugVisualizeTexture.get(), ImVec2((float)m_pDebugVisualizeTexture->GetWidth(), (float)m_pDebugVisualizeTexture->GetHeight()));
         ImGui::End();
 
-        RGPassBuilder cbtRender = graph.AddPass("CBT Debug Visualize");
-        cbtRender.Bind([=](CommandContext& context, const RGPassResource& resources)
+        RGPassBuilder cbtDebugVisualize = graph.AddPass("CBT Debug Visualize");
+		cbtDebugVisualize.Bind([=](CommandContext& context, const RGPassResource& resources)
         {
             context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
             context.InsertResourceBarrier(m_pDebugVisualizeTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -239,6 +253,22 @@ void CBTTessellation::SetupPipelines()
         drawPsoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
         drawPsoDesc.SetName("Draw CBT PSO");
         m_pCBTRenderPSO = m_pDevice->CreatePipeline(drawPsoDesc);
+    }
+
+    {
+		if (m_pDevice->GetCapabilities().SupportMeshShading())
+		{
+			PipelineStateInitializer drawPsoDesc;
+			drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
+			drawPsoDesc.SetMeshShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "RenderMS"));
+			drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS"));
+			drawPsoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
+			drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+			drawPsoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			drawPsoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			drawPsoDesc.SetName("Draw CBT Mesh Shader PSO");
+			m_pCBTRenderMeshShaderPSO = m_pDevice->CreatePipeline(drawPsoDesc);
+		}
     }
 
     {
