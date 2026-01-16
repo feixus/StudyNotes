@@ -276,6 +276,10 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pIndirectDrawSignature->AddDraw();
 	m_pIndirectDrawSignature->Finalize("Default Indirect Draw");
 
+	m_pIndirectDispatchMeshSignature = std::make_unique<CommandSignature>(this);
+	m_pIndirectDispatchMeshSignature->AddDispatchMesh();
+	m_pIndirectDispatchMeshSignature->Finalize("Default Indirect Dispatch Mesh");
+
 	uint8_t smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);

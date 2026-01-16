@@ -18,6 +18,7 @@ public:
     void Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, GraphicsTexture* pDepthTexture, const SceneView& sceneView);
 
 private:
+    void AllocateCBT();
     void SetupPipelines();
 
     void DemoCpuCBT();
@@ -27,6 +28,8 @@ private:
     CBT m_CBT;
     int m_MaxDepth{10};
     bool m_IsDirty{true};
+    BoundingFrustum m_CachedFrustum;
+    Matrix m_CachedViewMatrix;
 
     std::unique_ptr<GraphicsTexture> m_pHeightmap;
 

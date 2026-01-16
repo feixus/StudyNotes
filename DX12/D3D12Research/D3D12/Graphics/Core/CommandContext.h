@@ -320,6 +320,7 @@ public:
 
     void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; };
     void AddDispatch();
+    void AddDispatchMesh();
     void AddDraw();
     void AddDrawIndexed();
 	void AddConstants(uint32_t numConstants, uint32_t rootIndex, uint32_t offset);

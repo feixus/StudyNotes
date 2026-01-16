@@ -28,25 +28,18 @@ struct SumReductionData
     uint Depth;
 };
 
-struct RenderData
-{
-    float4x4 Transform;
-    float4x4 ViewProjection;
-    float HeightmapSizeInv;
-};
-
-struct SubdivisionData
+struct UpdateData
 {
     float4x4 Transform;
     float4x4 View;
     float4x4 ViewProjection;
     float4 FrustumPlanes[6];
+    float HeightmapSizeInv;
 };
 
 ConstantBuffer<CommonArgs> cCommonArgs : register(b0);
 ConstantBuffer<SumReductionData> cSumReductionData : register(b1);
-ConstantBuffer<SubdivisionData> cSubdivisionData : register(b1);
-ConstantBuffer<RenderData> cRenderData : register(b1);
+ConstantBuffer<UpdateData> cUpdateData : register(b1);
 
 [numthreads(1, 1, 1)]
 void PrepareDispatchArgsCS(uint3 threadID : sV_DispatchThreadID)
@@ -54,18 +47,30 @@ void PrepareDispatchArgsCS(uint3 threadID : sV_DispatchThreadID)
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
 
-    uint numThreads = ceil(cbt.NumNodes() / 256.0f);
-    uIndirectArgs.Store(0, numThreads);
-    uIndirectArgs.Store(4, 1);
-    uIndirectArgs.Store(8, 1);
+    uint offset = 0;
 
-    uint offset = 4 * 3;
+    uint numThreads = ceil(cbt.NumNodes() / 256.0f);
+    uIndirectArgs.Store(offset + 0, numThreads);
+    uIndirectArgs.Store(offset + 4, 1);
+    uIndirectArgs.Store(offset + 8, 1);
+
+    offset += sizeof(uint3);
+
+    uint numMeshThreads = ceil(cbt.NumNodes() / 32.0f);
+    uIndirectArgs.Store(offset + 0, numMeshThreads);
+    uIndirectArgs.Store(offset + 4, 1);
+    uIndirectArgs.Store(offset + 8, 1);
+
+    offset += sizeof(uint3);
+
     uint numVertices = 3;
     uint numInstances = cbt.NumNodes();
     uIndirectArgs.Store(offset + 0, numVertices);
     uIndirectArgs.Store(offset + 4, numInstances);
     uIndirectArgs.Store(offset + 8, 0);
     uIndirectArgs.Store(offset + 12, 0);
+
+    offset += sizeof(uint4);
 }
 
 [RootSignature(RootSig)]
@@ -96,16 +101,12 @@ bool HeightmapFlatness(float3x3 tri)
     return heightVariance >= minVariance;
 }
 
-float TriangleLevelOfDetail(float3x3 tri)
-{
-    return 1.0f;
-}
-
 bool BoxPlaneIntersect(AABB aabb, float4 plane)
 {
-    float4 dist = dot(float4(aabb.Center.xyz, 1), plane);
+    // plane: ax + by + cz + d = 0 <--> dot(normal, point) + d = 0
+    float dist = dot(float4(aabb.Center.xyz, 1), plane);
     float radius = dot(aabb.Extents.xyz, abs(plane.xyz));
-    return dot(dist <= radius, 1);
+    return dist <= radius;
 }
 
 bool BoxFrustumIntersect(AABB aabb, float4 planes[6])
@@ -122,34 +123,30 @@ bool BoxFrustumIntersect(AABB aabb, float4 planes[6])
 
 bool TriangleFrustumIntersect(float3x3 tri)
 {
-    float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cSubdivisionData.Transform).xyz;
-    float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cSubdivisionData.Transform).xyz;
+    float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cUpdateData.Transform).xyz;
+    float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.Transform).xyz;
     AABB aabb;
     AABBFromMinMax(aabb, bmin, bmax);
-    return BoxFrustumIntersect(aabb, cSubdivisionData.FrustumPlanes);
+    return BoxFrustumIntersect(aabb, cUpdateData.FrustumPlanes);
 }
 
-float GetLOD(float3x3 tri)
+float2 GetLOD(float3x3 tri)
 {
 #if FURSTUM_CULL
     if (!TriangleFrustumIntersect(tri))
     {
-        return 0;
+        return float2(0, 0);
     }
 #endif
 
 #if DISPLACEMENT_LOD
     if (!HeightmapFlatness(tri))
     {
-        return 0;
+        return float2(0, 1);
     }
 #endif
 
-#if DISTANCE_LOD
-    return TriangleLevelOfDetail(tri);
-#endif
-
-    return 1;
+    return float2(1, 1);
 }
 
 float3x3 GetVertices(uint heapIndex)
@@ -173,12 +170,12 @@ void UpdateCS(uint3 threadID : SV_DispatchThreadID)
         float3x3 tri = GetVertices(heapIndex);
 
     #if DEBUG_ALWAYS_SUBDIVIDE
-        float lod = 1;
+        float2 lod = 1;
     #else
-        float lod = GetLOD(tri);
+        float2 lod = GetLOD(tri);
     #endif
 
-        if (lod >= 1)
+        if (lod.x >= 1)
         {
             LEB::CBTSplitConformed(cbt, heapIndex);
         }
@@ -186,14 +183,67 @@ void UpdateCS(uint3 threadID : SV_DispatchThreadID)
         if (heapIndex > 1)
         {
             LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-            bool mergeTop = GetLOD(GetVertices(diamond.Top)) < 1.0;
-            bool mergeBase = GetLOD(GetVertices(diamond.Base)) < 1.0;
+            bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0;
+            bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0;
             if (mergeTop && mergeBase)
             {
                 LEB::CBTMergeConformed(cbt, heapIndex);
             }
         }
     }
+}
+
+struct ASPayload
+{
+    uint IDs[32];
+};
+
+[numthreads(32, 1, 1)]
+void UpdateAS(uint3 threadID : SV_DispatchThreadID)
+{
+    CBT cbt;
+    cbt.Init(uCBT, cCommonArgs.NumElements);
+    bool isVisible = false;
+
+    if (threadID.x < cbt.NumNodes())
+    {
+        uint heapIndex = cbt.LeafIndexToHeapIndex(threadID.x);
+        float3x3 tri = GetVertices(heapIndex);
+
+    #if DEBUG_ALWAYS_SUBDIVIDE
+        float2 lod = 1;
+    #else
+        float2 lod = GetLOD(tri);
+    #endif
+
+        if (lod.x >= 1)
+        {
+            LEB::CBTSplitConformed(cbt, heapIndex);
+        }
+        
+        if (heapIndex > 1)
+        {
+            LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+            bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0;
+            bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0;
+            if (mergeTop && mergeBase)
+            {
+                LEB::CBTMergeConformed(cbt, heapIndex);
+            }
+        }
+
+        isVisible = lod.y > 0;
+    }
+
+    uint count = WaveActiveCountBits(isVisible);
+    uint laneIndex = WavePrefixCountBits(isVisible);
+
+    ASPayload payload;
+    if (isVisible)
+    {
+        payload.IDs[laneIndex] = threadID.x;
+    }
+    DispatchMesh(count, 1, 1, payload);
 }
 
 struct VertexOut
@@ -203,30 +253,35 @@ struct VertexOut
 };
 
 [outputtopology("triangle")]
-[numthreads(128, 1, 1)]
-void RenderMS(uint3 threadID : SV_DispatchThreadID, out vertices VertexOut vertices[3], out indices uint3 triangles[3])
+[numthreads(1, 1, 1)]
+void RenderMS(
+    uint3 threadID : SV_DispatchThreadID, 
+    uint groupIndex : SV_GroupIndex,
+    in payload ASPayload payload,
+    out vertices VertexOut vertices[3], 
+    out indices uint3 triangles[1])
 {
-    SetMeshOutputCounts(3, 3);
+    SetMeshOutputCounts(3, 1);
 
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
+
+    threadID.x = payload.IDs[threadID.x];
 
     if (threadID.x < cbt.NumNodes())
     {
         uint heapIndex = cbt.LeafIndexToHeapIndex(threadID.x);
         float3x3 tri = GetVertices(heapIndex);
 
-        vertices[0].Position = mul(mul(float4(tri[0], 1), cRenderData.Transform), cRenderData.ViewProjection);
-        vertices[1].Position = mul(mul(float4(tri[1], 1), cRenderData.Transform), cRenderData.ViewProjection);
-        vertices[2].Position = mul(mul(float4(tri[2], 1), cRenderData.Transform), cRenderData.ViewProjection);
+        vertices[0].Position = mul(mul(float4(tri[0], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
+        vertices[1].Position = mul(mul(float4(tri[1], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
+        vertices[2].Position = mul(mul(float4(tri[2], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
 
         vertices[0].UV = tri[0].xz;
         vertices[1].UV = tri[1].xz;
         vertices[2].UV = tri[2].xz;
 
-        triangles[0] = 0;
-        triangles[1] = 1;
-        triangles[2] = 2;
+        triangles[groupIndex] = uint3(0, 1, 2);
     }
 }
 
@@ -239,7 +294,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
     float3 tri = GetVertices(heapIndex)[vertexID];
 
     vertex.UV = tri.xz;
-    vertex.Position = mul(mul(float4(tri, 1), cRenderData.Transform), cRenderData.ViewProjection);
+    vertex.Position = mul(mul(float4(tri, 1), cUpdateData.Transform), cUpdateData.ViewProjection);
 }
 
 float4 RenderPS(VertexOut vertex) : SV_TARGET

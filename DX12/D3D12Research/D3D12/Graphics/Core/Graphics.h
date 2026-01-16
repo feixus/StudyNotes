@@ -208,6 +208,7 @@ public:
 
 	CommandSignature* GetIndirectDrawSignature() const { return m_pIndirectDrawSignature.get(); }
 	CommandSignature* GetIndirectDispatchSignature() const { return m_pIndirectDispatchSignature.get(); }
+	CommandSignature* GetIndirectDispatchMeshSignature() const { return m_pIndirectDispatchMeshSignature.get(); }
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
@@ -250,4 +251,5 @@ private:
 
 	std::unique_ptr<CommandSignature> m_pIndirectDrawSignature;
 	std::unique_ptr<CommandSignature> m_pIndirectDispatchSignature;
+	std::unique_ptr<CommandSignature> m_pIndirectDispatchMeshSignature;
 };

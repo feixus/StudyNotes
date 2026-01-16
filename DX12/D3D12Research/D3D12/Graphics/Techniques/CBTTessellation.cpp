@@ -11,16 +11,22 @@
 #include "Core/Input.h"
 #include "imgui/imgui_internal.h"
 
+constexpr uint32_t IndirectDispatchArgsOffset = 0;
+constexpr uint32_t IndirectDispatchMeshArgsOffset = IndirectDispatchArgsOffset + sizeof(D3D12_DISPATCH_ARGUMENTS);
+constexpr uint32_t IndirectDrawArgsOffset = IndirectDispatchMeshArgsOffset + sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
+
 CBTTessellation::CBTTessellation(GraphicsDevice* pGraphicsDevice) : m_pDevice(pGraphicsDevice)
 {
     SetupPipelines();
-    m_CBT.Init(m_MaxDepth, 1);
+    AllocateCBT();
 }
 
 void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, GraphicsTexture* pDepthTexture, const SceneView& sceneView)
 {
+    static bool freezeCamera = false;
     static bool debugVisualize = false;
     static bool cpuDemo = false;
+    static bool meshShader = false;
 
     Matrix terrainTransform = Matrix::CreateScale(30, 10, 30) * Matrix::CreateTranslation(0, -10, 0);
 
@@ -29,13 +35,19 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 
     if (ImGui::SliderInt("Max Depth", &m_MaxDepth, 1, 30))
 	{
-		m_CBT.Init(m_MaxDepth, 1);
-        m_IsDirty = true;
+        AllocateCBT();
 	}
 
     ImGui::Checkbox("Debug Visualize", &debugVisualize);
     ImGui::Checkbox("CPU Demo", &cpuDemo);
+    ImGui::Checkbox("Mesh Shader", &meshShader);
+    ImGui::Checkbox("Freeze Camera", &freezeCamera);
     ImGui::End();
+
+    if (meshShader && !m_pDevice->GetCapabilities().SupportMeshShading())
+    {
+        meshShader = false;
+    }
 
     if (cpuDemo)
     {
@@ -44,71 +56,77 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 
     RG_GRAPH_SCOPE("CBT", graph);
 
+    if (!freezeCamera)
+    {
+        m_CachedFrustum = sceneView.pCamera->GetFrustum();
+        m_CachedViewMatrix = sceneView.pCamera->GetView();
+    }
+
+    struct CommonArgs
+    {
+        uint32_t NumElements;
+    } commonArgs;
+    commonArgs.NumElements = (uint32_t)m_pCBTBuffer->GetSize() / sizeof(uint32_t);
+
+    struct UpdateData
+    {
+        Matrix Transform;
+        Matrix View;
+        Matrix ViewProjection;
+        Vector4 FrustumPlanes[6];
+        float HeightmapSizeInv;
+    } updateData;
+    updateData.Transform = terrainTransform;
+    updateData.View = m_CachedViewMatrix;
+    updateData.ViewProjection = sceneView.pCamera->GetViewProjection();
+
+    DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
+    m_CachedFrustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
+    updateData.FrustumPlanes[0] = Vector4(nearPlane);
+    updateData.FrustumPlanes[1] = Vector4(farPlane);
+    updateData.FrustumPlanes[2] = Vector4(left);
+    updateData.FrustumPlanes[3] = Vector4(right);
+    updateData.FrustumPlanes[4] = Vector4(top);
+    updateData.FrustumPlanes[5] = Vector4(bottom);
+
+    updateData.HeightmapSizeInv = 1.0f / m_pHeightmap->GetWidth();
+
     if (m_IsDirty)
     {
         RGPassBuilder cbtUpload = graph.AddPass("CBT Upload");
         cbtUpload.Bind([=](CommandContext& context, const RGPassResource&)
         {
-            uint32_t size = m_CBT.GetMemoryUse();
-            m_pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT Buffer");
-            m_pCBTBuffer->SetData(&context, m_CBT.GetData(), size);
+            m_pCBTBuffer->SetData(&context, m_CBT.GetData(), m_CBT.GetMemoryUse());
             context.FlushResourceBarriers();
         });
         m_IsDirty = false;
     }
 
-    RGPassBuilder cbtUpdate = graph.AddPass("CBT Update");
-    cbtUpdate.Bind([=](CommandContext& context, const RGPassResource& resources)
+    if (!meshShader)
     {
-        context.InsertResourceBarrier(m_pCBTBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-        context.SetComputeRootSignature(m_pCBTRS.get());
-
-        struct CommonArgs
+        RGPassBuilder cbtUpdate = graph.AddPass("CBT Update");
+        cbtUpdate.Bind([=](CommandContext& context, const RGPassResource& resources)
         {
-            uint32_t NumElements;
-        } commonArgs;
-        commonArgs.NumElements = (uint32_t)m_pCBTBuffer->GetSize() / sizeof(uint32_t);
-        context.SetComputeDynamicConstantBufferView(0, commonArgs);
+            context.InsertResourceBarrier(m_pCBTBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+            context.SetComputeRootSignature(m_pCBTRS.get());
+    
+            context.SetComputeDynamicConstantBufferView(0, commonArgs);
+            context.SetComputeDynamicConstantBufferView(1, updateData);
+    
+            context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+            context.BindResource(3, 0, m_pHeightmap->GetSRV());
+    
+            context.SetPipelineState(m_pCBTUpdatePSO);
+            context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchArgsOffset);
+            context.InsertUavBarrier();
+        });
+    }
 
-        context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-        context.BindResource(3, 0, m_pHeightmap->GetSRV());
-
-        struct SubdisvisionData
-        {
-            Matrix Transform;
-            Matrix View;
-            Matrix ViewProjection;
-            Vector4 FrustumPlanes[6];
-        } subdivisionData;
-        subdivisionData.Transform = terrainTransform;
-        subdivisionData.View = sceneView.pCamera->GetView();
-        subdivisionData.ViewProjection = sceneView.pCamera->GetViewProjection();
-        
-        DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
-        sceneView.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
-        subdivisionData.FrustumPlanes[0] = Vector4(nearPlane);
-        subdivisionData.FrustumPlanes[1] = Vector4(farPlane);
-        subdivisionData.FrustumPlanes[2] = Vector4(left);
-        subdivisionData.FrustumPlanes[3] = Vector4(right);
-        subdivisionData.FrustumPlanes[4] = Vector4(top);
-        subdivisionData.FrustumPlanes[5] = Vector4(bottom);
-
-        context.SetComputeDynamicConstantBufferView(1, subdivisionData);
-
-        context.SetPipelineState(m_pCBTUpdatePSO);
-        context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr);
-        context.InsertUavBarrier();
-    });
-      
     RGPassBuilder cbtSumReduction = graph.AddPass("CBT Sum Reduction");
 	cbtSumReduction.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
-        struct CommonArgs
-        {
-            uint32_t NumElements;
-        } commonArgs;
-        commonArgs.NumElements = (uint32_t)m_pCBTBuffer->GetSize() / sizeof(uint32_t);
+        context.SetComputeRootSignature(m_pCBTRS.get());
         context.SetComputeDynamicConstantBufferView(0, commonArgs);
 
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
@@ -131,11 +149,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     RGPassBuilder cbtUpdateIndirectArgs = graph.AddPass("CBT Update Indirect Args");
 	cbtUpdateIndirectArgs.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
-        struct CommonArgs
-        {
-            uint32_t NumElements;
-        } commonArgs;
-        commonArgs.NumElements = (uint32_t)m_pCBTBuffer->GetSize() / sizeof(uint32_t);
+        context.SetComputeRootSignature(m_pCBTRS.get());
         context.SetComputeDynamicConstantBufferView(0, commonArgs);
 
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
@@ -153,32 +167,24 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
         context.SetGraphicsRootSignature(m_pCBTRS.get());
-        context.SetPipelineState(m_pCBTRenderPSO);
+        context.SetPipelineState(meshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
         context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        struct CommonArgs
-        {
-            uint32_t NumElements;
-        } commonArgs;
-        commonArgs.NumElements = (uint32_t)m_pCBTBuffer->GetSize() / sizeof(uint32_t);
         context.SetComputeDynamicConstantBufferView(0, commonArgs);
-
-        struct RenderArgs
-        {
-            Matrix Transform;
-            Matrix ViewProjection;
-            float HeightmapSizeInv;
-        } renderArgs;
-        renderArgs.Transform = terrainTransform;
-        renderArgs.ViewProjection = sceneView.pCamera->GetViewProjection();
-        renderArgs.HeightmapSizeInv = 1.0f / m_pHeightmap->GetWidth();
-        context.SetGraphicsDynamicConstantBufferView(1, renderArgs);
+        context.SetGraphicsDynamicConstantBufferView(1, updateData);
 
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
         context.BindResource(3, 0, m_pHeightmap->GetSRV());
 
         context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
-        context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, 3 * sizeof(uint32_t));
+        if (meshShader)
+        {
+            context.ExecuteIndirect(m_pDevice->GetIndirectDispatchMeshSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchMeshArgsOffset);
+        }
+        else
+        {
+            context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
+        }
         context.EndRenderPass();
     });
 
@@ -198,20 +204,24 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
             context.SetPipelineState(m_pCBTDebugVisualizePSO);
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-            struct CommonArgs
-            {
-                uint32_t NumElements;
-            } commonArgs;
-            commonArgs.NumElements = (uint32_t)m_pCBTBuffer->GetSize() / sizeof(uint32_t);
             context.SetComputeDynamicConstantBufferView(0, commonArgs);
+            context.SetComputeDynamicConstantBufferView(1, updateData);
 
             context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
             context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture.get(), RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
-            context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, 3 * sizeof(uint32_t));
+            context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
             context.EndRenderPass();
         });
     }
+}
+
+void CBTTessellation::AllocateCBT()
+{
+    m_CBT.Init(m_MaxDepth, 1);
+    uint32_t size = m_CBT.GetMemoryUse();
+    m_pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT Buffer");
+    m_IsDirty = true;
 }
 
 void CBTTessellation::SetupPipelines()
@@ -260,6 +270,7 @@ void CBTTessellation::SetupPipelines()
 		{
 			PipelineStateInitializer drawPsoDesc;
 			drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
+			drawPsoDesc.SetAmplificationShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "UpdateAS"));
 			drawPsoDesc.SetMeshShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "RenderMS"));
 			drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS"));
 			drawPsoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
@@ -286,7 +297,7 @@ void CBTTessellation::SetupPipelines()
 
     m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(512, 512, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
 
-    m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArgumemnts<uint32_t>(7), "CBT Indirect Args");
+    m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArgumemnts<uint32_t>(10), "CBT Indirect Args");
 }
 
 void CBTTessellation::DemoCpuCBT()
