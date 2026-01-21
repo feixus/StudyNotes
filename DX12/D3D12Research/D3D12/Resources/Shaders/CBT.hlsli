@@ -13,7 +13,7 @@ struct CBT
 
     uint GetMaxDepth()
     {
-        return firstbitlow(Storage.Load(0)); // least significant bit(LSB)
+        return firstbitlow(Storage.Load(0)); // least significant bit(LSB), the maxDepth is stored as 1 << maxDepth.
     }
 
     bool IsCeilNode(uint heapIndex)
@@ -30,6 +30,13 @@ struct CBT
     uint NumNodes()
     {
         return GetData(1);
+    }
+
+    uint BitIndexFromHeap(uint heapIndex, uint depth)
+    {
+        uint a = 2u << depth;   // equal to 2^(depth + 1), the number of bits before the current depth.
+        uint b = 1u + GetMaxDepth() - depth; // the number of bits per node at the current depth.
+        return a + heapIndex * b;
     }
 
     uint BitfieldGet_Single(uint elementIndex, uint bitOffset, uint bitCount)

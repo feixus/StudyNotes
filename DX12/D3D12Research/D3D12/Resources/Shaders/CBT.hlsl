@@ -90,6 +90,75 @@ void SumReductionCS(uint3 threadID : SV_DispatchThreadID)
     }
 }
 
+[numthreads(256, 1, 1)]
+void SumReductionFirstPassCS(uint3 threadID : SV_DispatchThreadID)
+{
+    CBT cbt;
+    cbt.Init(uCBT, cCommonArgs.NumElements);
+    uint depth = cSumReductionData.Depth;
+    uint count = 1u << depth;
+    // every thread handle 32 nodes
+    uint thread = threadID.x << 5u;
+    if (thread < count)
+    {
+        uint nodeIndex = thread + count;
+        uint bitOffset = cbt.BitIndexFromHeap(nodeIndex, depth);
+        uint elementIndex = bitOffset >> 5u;
+
+        uint bitField = cbt.Storage.Load(4 * elementIndex);
+
+        // sum of 1 bit pairs -> 16 * 2 bits
+        depth -= 1;
+        nodeIndex >>= 1;
+        bitField = (bitField & 0x55555555u) + ((bitField >> 1u) & 0x55555555u);
+        uint data = bitField;
+        cbt.Storage.Store(4 * ((bitOffset - count) >> 5u), data);
+
+        // sum of 2 bit pairs -> 8 * 3 bits
+        depth -= 1;
+        nodeIndex >>= 1;
+        bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
+        // compact to 24 bits
+        data = ((bitField >> 0u) & (7u << 0u)) |
+               ((bitField >> 1u) & (7u << 3u)) |
+               ((bitField >> 2u) & (7u << 6u)) |
+               ((bitField >> 3u) & (7u << 9u)) |
+               ((bitField >> 4u) & (7u << 12u)) |
+               ((bitField >> 5u) & (7u << 15u)) |
+               ((bitField >> 6u) & (7u << 18u)) |
+               ((bitField >> 7u) & (7u << 21u));
+
+        cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 24, data);
+
+        // sum of 3 bit pairs -> 4 * 4 bits
+        depth -= 1;
+        nodeIndex >>= 1;
+        bitField = (bitField & 0x0F0F0F0Fu) + ((bitField >> 4u) & 0x0F0F0F0Fu);
+        // compact to 16 bits
+        data = ((bitField >> 0u) & (15u << 0u)) |
+               ((bitField >> 4u) & (15u << 4u)) |
+               ((bitField >> 8u) & (15u << 8u)) |
+               ((bitField >> 12u) & (15u << 12u));
+        cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 16, data);
+
+        // sum of 4 bit pairs -> 2 * 5 bits
+        depth -= 1;
+        nodeIndex >>= 1;
+        bitField = (bitField & 0x00FF00FFu) + ((bitField >> 8u) & 0x00FF00FFu);
+        // compact to 10 bits
+        data = ((bitField >> 0u) & (31u << 0u)) | 
+               ((bitField >> 11u) & (31u << 5u));
+        cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 10, data);
+
+        // sum of 5 bit pairs -> 1 * 6 bits
+        depth -= 1;
+        nodeIndex >>= 1;
+        bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
+        data = bitField;
+        cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 6, data);
+    }
+}
+
 bool HeightmapFlatness(float3x3 tri)
 {
     const float minVariance = 0.015f;

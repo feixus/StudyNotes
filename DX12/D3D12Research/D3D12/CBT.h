@@ -95,16 +95,69 @@ public:
     // sum reduction bottom to top. this can be parallelized per layer.
     void SumReduction()
     {
-        int32_t depth = GetMaxDepth() - 1;
-        while (depth >= 0)
+        int32_t depth = GetMaxDepth();
+
+        constexpr bool doPrepass = true;
+        if constexpr (doPrepass)
+        {
+            uint32_t count = 1u << depth;
+            for (uint32_t bitIndex = 0; bitIndex < count; bitIndex += (1 << 5))
+            {
+                uint32_t nodeIndex = bitIndex + count;
+                uint32_t bitOffset = BitIndexFromHeap(nodeIndex, depth);
+                uint32_t elementIndex = bitOffset >> 5u;
+
+                uint32_t bitField = Bits[elementIndex];
+                bitField = (bitField & 0x55555555u) + ((bitField >> 1u) & 0x55555555u);
+                uint32_t data = bitField;
+                Bits[(bitOffset - count) >> 5u] = data;
+
+                bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
+                data = (bitField >> 1u) & (7u << 3u) |
+                       (bitField >> 2u) & (7u << 6u) |
+                       (bitField >> 3u) & (7u << 9u) |
+                       (bitField >> 4u) & (7u << 12u) |
+                       (bitField >> 5u) & (7u << 15u) |
+                       (bitField >> 6u) & (7u << 18u) |
+                       (bitField >> 7u) & (7u << 21u);
+
+                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 2u, depth - 2u), 24, data);
+
+                bitField = (bitField & 0x0F0F0F0Fu) + ((bitField >> 4u) & 0x0F0F0F0Fu);
+                data = (bitField >> 0u) & (15u << 0u) |
+                       (bitField >> 4u) & (15u << 4u) |
+                       (bitField >> 8u) & (15u << 8u) |
+                       (bitField >> 12u) & (15u << 12u);
+
+                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 4u, depth - 4u), 16, data);
+
+                bitField = (bitField & 0x00FF00FFu) + ((bitField >> 8u) & 0x00FF00FFu);
+                data = (bitField >> 0u) & (31u << 0u) | (bitField >> 11u) & (15u << 5u);
+                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 4u, depth - 4u), 10, data);
+
+                bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
+                data = bitField;
+                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 5u, depth - 5u), 6, data);
+            }
+
+            depth -= 5;
+        }
+
+        while (depth-- > 0)
         {
             uint32_t count = 1u << depth;
             for (uint32_t k = count; k < count << 1u; k++)
             {
                 SetData(k, GetData(LeftChildIndex(k)) + GetData(RightChildIndex(k)));
             }
-            depth--;
         }
+    }
+
+    uint32_t BitIndexFromHeap(uint32_t heapIndex, uint32_t depth)
+    {
+        uint32_t a = 2u << depth;
+        uint32_t b = 1u + GetMaxDepth() - depth;
+        return a + heapIndex * b;
     }
 
     uint32_t GetData(uint32_t index) const
