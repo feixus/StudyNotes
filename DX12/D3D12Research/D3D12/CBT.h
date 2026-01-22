@@ -97,6 +97,7 @@ public:
     {
         int32_t depth = GetMaxDepth();
 
+        #if CBT_MEMORY_COMPACT
         constexpr bool doPrepass = true;
         if constexpr (doPrepass)
         {
@@ -113,7 +114,8 @@ public:
                 Bits[(bitOffset - count) >> 5u] = data;
 
                 bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
-                data = (bitField >> 1u) & (7u << 3u) |
+                data = (bitField >> 0u) & (7u << 0u) |
+					   (bitField >> 1u) & (7u << 3u) |
                        (bitField >> 2u) & (7u << 6u) |
                        (bitField >> 3u) & (7u << 9u) |
                        (bitField >> 4u) & (7u << 12u) |
@@ -129,10 +131,11 @@ public:
                        (bitField >> 8u) & (15u << 8u) |
                        (bitField >> 12u) & (15u << 12u);
 
-                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 4u, depth - 4u), 16, data);
+                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 3u, depth - 3u), 16, data);
 
                 bitField = (bitField & 0x00FF00FFu) + ((bitField >> 8u) & 0x00FF00FFu);
-                data = (bitField >> 0u) & (31u << 0u) | (bitField >> 11u) & (15u << 5u);
+                data = (bitField >> 0u) & (31u << 0u) |
+					   (bitField >> 11u) & (31u << 5u);
                 BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 4u, depth - 4u), 10, data);
 
                 bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
@@ -142,6 +145,7 @@ public:
 
             depth -= 5;
         }
+        #endif
 
         while (depth-- > 0)
         {

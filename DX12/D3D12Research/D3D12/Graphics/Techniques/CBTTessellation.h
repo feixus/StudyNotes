@@ -20,13 +20,13 @@ public:
 private:
     void AllocateCBT();
     void SetupPipelines();
+    void CreateResources();
 
     void DemoCpuCBT();
 
     GraphicsDevice* m_pDevice;
 
     CBT m_CBT;
-    int m_MaxDepth{10};
     bool m_IsDirty{true};
     BoundingFrustum m_CachedFrustum;
     Matrix m_CachedViewMatrix;

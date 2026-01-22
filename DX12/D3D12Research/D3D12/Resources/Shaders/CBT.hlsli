@@ -77,7 +77,7 @@ struct CBT
     {
         uint depth = GetDepth(heapIndex);
         bitSize = GetMaxDepth() - depth + 1;
-        offset = exp2(depth + 1) + heapIndex * bitSize;
+        offset = (2u << depth) + heapIndex * bitSize;
     }
 
     uint GetData(uint heapIndex)
@@ -111,7 +111,7 @@ struct CBT
     uint BitfieldheapIndex(uint heapIndex)
     {
         uint msb = firstbithigh(heapIndex);
-        return heapIndex * exp2(GetMaxDepth() - msb);
+        return heapIndex * (1u << (GetMaxDepth() - msb));
     }
 
     void SplitNode_Single(uint heapIndex)
@@ -130,7 +130,7 @@ struct CBT
 
     uint GetDepth(uint heapIndex)
     {
-        return floor(log2(heapIndex));
+        return firstbithigh(heapIndex);
     }
 
     uint LeftChildIndex(uint heapIndex)
@@ -173,8 +173,8 @@ namespace LEB
 
     float3x3 GetWindingMatrix(uint bit)
     {
-        float b = bit;
-        float c = 1.0f - b;
+        float b = 1.0f - bit;
+        float c = bit;
         return float3x3(
             c,    0.0f, b,
             0.0f, 1.0f, 0.0f,

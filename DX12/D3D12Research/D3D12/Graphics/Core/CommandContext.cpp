@@ -234,6 +234,9 @@ void CommandContext::Dispatch(const IntVector3& groupCounts)
 
 void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
+	checkf(groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size X(%d) can not exceed %d", groupCountX, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
+	checkf(groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size Y(%d) can not exceed %d", groupCountY, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
+	checkf(groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size Z(%d) can not exceed %d", groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
 	PrepareDraw(CommandListContext::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }

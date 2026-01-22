@@ -2,10 +2,28 @@
 #include "Random.hlsli"
 #include "CBT.hlsli"
 
+#define MESH_SHADER_THREAD_GROUP_SIZE 32
+#define COMPUTE_THREAD_GROUP_SIZE 256
+
+#ifndef DEBUG_ALWAYS_SUBDIVIDE
 #define DEBUG_ALWAYS_SUBDIVIDE 0
+#endif
+
+#ifndef FRUSTUM_CULL
 #define FRUSTUM_CULL 1
+#endif
+
+#ifndef RENDER_WIREFRAME
+#define RENDER_WIREFRAME 1
+#endif
+
+#ifndef DISPLACEMENT_LOD
 #define DISPLACEMENT_LOD 1
+#endif
+
+#ifndef DISTANCE_LOD
 #define DISTANCE_LOD 1
+#endif
 
 #define RootSig "CBV(b0), " \
                 "CBV(b1), " \
@@ -30,11 +48,14 @@ struct SumReductionData
 
 struct UpdateData
 {
-    float4x4 Transform;
-    float4x4 View;
+    float4x4 World;
+    float4x4 WorldView;
     float4x4 ViewProjection;
+    float4x4 WorldViewProjection;
     float4 FrustumPlanes[6];
     float HeightmapSizeInv;
+    float ScreenSizeBias;
+    float HeightmapVarianceBias;
 };
 
 ConstantBuffer<CommonArgs> cCommonArgs : register(b0);
@@ -42,21 +63,21 @@ ConstantBuffer<SumReductionData> cSumReductionData : register(b1);
 ConstantBuffer<UpdateData> cUpdateData : register(b1);
 
 [numthreads(1, 1, 1)]
-void PrepareDispatchArgsCS(uint3 threadID : sV_DispatchThreadID)
+void PrepareDispatchArgsCS(uint threadID : sV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
 
     uint offset = 0;
 
-    uint numThreads = ceil(cbt.NumNodes() / 256.0f);
+    uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
     uIndirectArgs.Store(offset + 0, numThreads);
     uIndirectArgs.Store(offset + 4, 1);
     uIndirectArgs.Store(offset + 8, 1);
 
     offset += sizeof(uint3);
 
-    uint numMeshThreads = ceil(cbt.NumNodes() / 32.0f);
+    uint numMeshThreads = ceil(cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
     uIndirectArgs.Store(offset + 0, numMeshThreads);
     uIndirectArgs.Store(offset + 4, 1);
     uIndirectArgs.Store(offset + 8, 1);
@@ -74,13 +95,13 @@ void PrepareDispatchArgsCS(uint3 threadID : sV_DispatchThreadID)
 }
 
 [RootSignature(RootSig)]
-[numthreads(256, 1, 1)]
-void SumReductionCS(uint3 threadID : SV_DispatchThreadID)
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
+void SumReductionCS(uint threadID : sV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
     uint count = 1u << cSumReductionData.Depth;
-    uint index = threadID.x;
+    uint index = threadID;
     if (index < count)
     {
         index += count;
@@ -90,15 +111,15 @@ void SumReductionCS(uint3 threadID : SV_DispatchThreadID)
     }
 }
 
-[numthreads(256, 1, 1)]
-void SumReductionFirstPassCS(uint3 threadID : SV_DispatchThreadID)
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
+void SumReductionFirstPassCS(uint threadID : sV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
     uint depth = cSumReductionData.Depth;
     uint count = 1u << depth;
     // every thread handle 32 nodes
-    uint thread = threadID.x << 5u;
+    uint thread = threadID << 5u;
     if (thread < count)
     {
         uint nodeIndex = thread + count;
@@ -161,13 +182,12 @@ void SumReductionFirstPassCS(uint3 threadID : SV_DispatchThreadID)
 
 bool HeightmapFlatness(float3x3 tri)
 {
-    const float minVariance = 0.015f;
     float2 center = (tri[0].xz + tri[1].xz + tri[2].xz) / 3.0f;
     float2 dx = tri[0].xz - tri[1].xz;
     float2 dy = tri[0].xz - tri[2].xz;
     float height = tHeightmap.SampleGrad(sSampler, center, dx, dy).x;
     float heightVariance = saturate(height - Square(height));
-    return heightVariance >= minVariance;
+    return heightVariance >= cUpdateData.HeightmapVarianceBias;
 }
 
 bool BoxPlaneIntersect(AABB aabb, float4 plane)
@@ -192,15 +212,32 @@ bool BoxFrustumIntersect(AABB aabb, float4 planes[6])
 
 bool TriangleFrustumIntersect(float3x3 tri)
 {
-    float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cUpdateData.Transform).xyz;
-    float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.Transform).xyz;
+    float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
+    float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
     AABB aabb;
     AABBFromMinMax(aabb, bmin, bmax);
     return BoxFrustumIntersect(aabb, cUpdateData.FrustumPlanes);
 }
 
+float2 TriangleLOD(float3x3 tri)
+{
+    float3 p0 = mul(float4(tri[0], 1), cUpdateData.WorldView).xyz;
+    float3 p2 = mul(float4(tri[2], 1), cUpdateData.WorldView).xyz;
+
+    float3 c = (p0 + p2) * 0.5f;
+    float3 v = (p2 - p0);
+    float distSq = dot(c, c);
+    float lenSq = dot(v, v);
+
+    return float2(cUpdateData.ScreenSizeBias + log2(lenSq / distSq), 1);
+}
+
 float2 GetLOD(float3x3 tri)
 {
+#if DEBUG_ALWAYS_SUBDIVIDE
+    return 1;
+#endif
+
 #if FURSTUM_CULL
     if (!TriangleFrustumIntersect(tri))
     {
@@ -215,35 +252,35 @@ float2 GetLOD(float3x3 tri)
     }
 #endif
 
+#if DISTANCE_LOD
+    return TriangleLOD(tri);
+#endif
+
     return float2(1, 1);
 }
 
 float3x3 GetVertices(uint heapIndex)
 {
     float3x3 tri = LEB::GetTriangleVertices(heapIndex);
-    tri[0].y += tHeightmap.SampleLevel(sSampler, tri[0].xz, 0).r;
-    tri[1].y += tHeightmap.SampleLevel(sSampler, tri[1].xz, 0).r;
-    tri[2].y += tHeightmap.SampleLevel(sSampler, tri[2].xz, 0).r;
+    for (int i = 0; i < 3; i++)
+    {
+        tri[i].y += tHeightmap.SampleLevel(sSampler, tri[i].xz, 0).r;
+    }
     return tri;
 }
 
-[numthreads(256, 1, 1)]
-void UpdateCS(uint3 threadID : SV_DispatchThreadID)
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
+void UpdateCS(uint threadID : sV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
 
-    if (threadID.x < cbt.NumNodes())
+    if (threadID < cbt.NumNodes())
     {
-        uint heapIndex = cbt.LeafIndexToHeapIndex(threadID.x);
+        uint heapIndex = cbt.LeafIndexToHeapIndex(threadID);
         float3x3 tri = GetVertices(heapIndex);
 
-    #if DEBUG_ALWAYS_SUBDIVIDE
-        float2 lod = 1;
-    #else
         float2 lod = GetLOD(tri);
-    #endif
-
         if (lod.x >= 1)
         {
             LEB::CBTSplitConformed(cbt, heapIndex);
@@ -262,29 +299,38 @@ void UpdateCS(uint3 threadID : SV_DispatchThreadID)
     }
 }
 
+// #ifndef MESH_SHADER_SUBD_LEVEL
+#define MESH_SHADER_SUBD_LEVEL 6
+// #endif
+
+// #ifndef AMPLIFICATION_SHADER_SUBD_LEVEL
+#define AMPLIFICATION_SHADER_SUBD_LEVEL 0
+// #endif
+
+#define NUM_MESH_SHADER_TRIANGLES (1u << MESH_SHADER_SUBD_LEVEL)
+
 struct ASPayload
 {
-    uint IDs[32];
+    uint IDs[MESH_SHADER_THREAD_GROUP_SIZE];
 };
 
-[numthreads(32, 1, 1)]
-void UpdateAS(uint3 threadID : SV_DispatchThreadID)
+groupshared ASPayload gsPayload;
+
+[numthreads(MESH_SHADER_THREAD_GROUP_SIZE, 1, 1)]
+void UpdateAS(uint threadID : sV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
     bool isVisible = false;
+    float3x3 tri = 0;
+    uint heapIndex = 0;
 
-    if (threadID.x < cbt.NumNodes())
+    if (threadID < cbt.NumNodes())
     {
-        uint heapIndex = cbt.LeafIndexToHeapIndex(threadID.x);
-        float3x3 tri = GetVertices(heapIndex);
+        heapIndex = cbt.LeafIndexToHeapIndex(threadID);
+        tri = GetVertices(heapIndex);
 
-    #if DEBUG_ALWAYS_SUBDIVIDE
-        float2 lod = 1;
-    #else
         float2 lod = GetLOD(tri);
-    #endif
-
         if (lod.x >= 1)
         {
             LEB::CBTSplitConformed(cbt, heapIndex);
@@ -304,15 +350,14 @@ void UpdateAS(uint3 threadID : SV_DispatchThreadID)
         isVisible = lod.y > 0;
     }
 
-    uint count = WaveActiveCountBits(isVisible);
-    uint laneIndex = WavePrefixCountBits(isVisible);
-
-    ASPayload payload;
     if (isVisible)
     {
-        payload.IDs[laneIndex] = threadID.x;
+        uint laneIndex = WavePrefixCountBits(isVisible);
+        gsPayload.IDs[laneIndex] = heapIndex;
     }
-    DispatchMesh(count, 1, 1, payload);
+
+    uint count = WaveActiveCountBits(isVisible);
+    DispatchMesh((1u << AMPLIFICATION_SHADER_SUBD_LEVEL) * count, 1, 1, gsPayload);
 }
 
 struct VertexOut
@@ -322,36 +367,26 @@ struct VertexOut
 };
 
 [outputtopology("triangle")]
-[numthreads(1, 1, 1)]
+[numthreads(NUM_MESH_SHADER_TRIANGLES, 1, 1)]
 void RenderMS(
-    uint3 threadID : SV_DispatchThreadID, 
-    uint groupIndex : SV_GroupIndex,
+    uint groupThreadID : SV_GroupThreadID,
+    uint groupID : SV_GroupID,
     in payload ASPayload payload,
-    out vertices VertexOut vertices[3], 
-    out indices uint3 triangles[1])
+    out vertices VertexOut vertices[NUM_MESH_SHADER_TRIANGLES * 3], 
+    out indices uint3 triangles[NUM_MESH_SHADER_TRIANGLES])
 {
-    SetMeshOutputCounts(3, 1);
+    SetMeshOutputCounts(NUM_MESH_SHADER_TRIANGLES * 3, NUM_MESH_SHADER_TRIANGLES * 1);
 
-    CBT cbt;
-    cbt.Init(uCBT, cCommonArgs.NumElements);
+    uint outputIndex = groupThreadID;
+    uint heapIndex = payload.IDs[groupID];
+    float3x3 tri = GetVertices(heapIndex * NUM_MESH_SHADER_TRIANGLES + outputIndex);
 
-    threadID.x = payload.IDs[threadID.x];
-
-    if (threadID.x < cbt.NumNodes())
+    for (uint i = 0; i < 3; i++)
     {
-        uint heapIndex = cbt.LeafIndexToHeapIndex(threadID.x);
-        float3x3 tri = GetVertices(heapIndex);
-
-        vertices[0].Position = mul(mul(float4(tri[0], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
-        vertices[1].Position = mul(mul(float4(tri[1], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
-        vertices[2].Position = mul(mul(float4(tri[2], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
-
-        vertices[0].UV = tri[0].xz;
-        vertices[1].UV = tri[1].xz;
-        vertices[2].UV = tri[2].xz;
-
-        triangles[groupIndex] = uint3(0, 1, 2);
+        vertices[outputIndex * 3 + i].Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+        vertices[outputIndex * 3 + i].UV = tri[i].xz;
     }
+    triangles[outputIndex] = uint3(outputIndex * 3 + 0, outputIndex * 3 + 1, outputIndex * 3 + 2);
 }
 
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
@@ -363,24 +398,24 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
     float3 tri = GetVertices(heapIndex)[vertexID];
 
     vertex.UV = tri.xz;
-    vertex.Position = mul(mul(float4(tri, 1), cUpdateData.Transform), cUpdateData.ViewProjection);
+    vertex.Position = mul(float4(tri, 1), cUpdateData.WorldViewProjection);
 }
 
 float4 RenderPS(VertexOut vertex) : SV_TARGET
 {
-    float tl = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2(-1, -1)).r;
-    float t  = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 0, -1)).r;
-    float tr = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 1, -1)).r;
-    float l  = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2(-1,  0)).r;
-    float r  = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 1,  0)).r;
-    float bl = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2(-1,  1)).r;
-    float b  = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 0,  1)).r;
-    float br = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 1,  1)).r;
+    float tl = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1, -1)).r;
+    float t  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 0, -1)).r;
+    float tr = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1, -1)).r;
+    float l  = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1,  0)).r;
+    float r  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1,  0)).r;
+    float bl = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1,  1)).r;
+    float b  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 0,  1)).r;
+    float br = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1,  1)).r;
     // sobel-filtered height gradients
     float dX = tr + 2 * r + br - tl - 2 * l - bl;
     float dY = bl + 2 * b + br - tl - 2 * t - tr;
     // T = (1, dX, 0), B = (0, dY, 1)
-    float3 normal = normalize(float3(dX, 1.0f / 100, dY));
+    float3 normal = normalize(float3(dX, 1.0f / 20, dY));
 
     float3 dir = normalize(float3(1, 1, 1));
     float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);
@@ -388,14 +423,35 @@ float4 RenderPS(VertexOut vertex) : SV_TARGET
     return color;
 }
 
-// float4 RenderPS(float4 position : SV_POSITION, float4 color : COLOR, float3 bary : SV_Barycentrics) : SV_TARGET
+// float4 RenderPS(VertexOut vertex, float3 bary : SV_Barycentrics) : SV_TARGET
 // {
-//     float3 deltas = fwidth(bary);
-//     float3 smoothing = deltas * 1;
-//     float3 thickness = deltas * 0.2;
-//     bary = smoothstep(thickness, thickness + smoothing, bary);
-//     float minBary = min(bary.x, min(bary.y, bary.z));
-//     return float4(color.xyz * saturate(minBary + 0.5), 1);
+//     float tl = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1, -1)).r;
+//     float t  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 0, -1)).r;
+//     float tr = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1, -1)).r;
+//     float l  = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1,  0)).r;
+//     float r  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1,  0)).r;
+//     float bl = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1,  1)).r;
+//     float b  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 0,  1)).r;
+//     float br = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1,  1)).r;
+//     // sobel-filtered height gradients
+//     float dX = tr + 2 * r + br - tl - 2 * l - bl;
+//     float dY = bl + 2 * b + br - tl - 2 * t - tr;
+//     // T = (1, dX, 0), B = (0, dY, 1)
+//     float3 normal = normalize(float3(dX, 1.0f / 20, dY));
+
+//     float3 dir = normalize(float3(1, 1, 1));
+//     float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);
+
+//     #if RENDER_WIREFRAME
+//         float3 deltas = fwidth(bary);
+//         float3 smoothing = deltas * 1;
+//         float3 thickness = deltas * 0.2;
+//         bary = smoothstep(thickness, thickness + smoothing, bary);
+//         float minBary = min(bary.x, min(bary.y, bary.z));
+//         color.xyz *= saturate(minBary + 0.5);
+//     #endif
+
+//     return color;
 // }
 
 void DebugVisualizeVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out float4 pos : SV_POSITION, out float4 color : COLOR)

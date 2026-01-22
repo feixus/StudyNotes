@@ -26,6 +26,7 @@ struct ShaderDefine
 {
 	ShaderDefine() = default;
 	ShaderDefine(const char* pDefine) : Value(pDefine) {}
+	ShaderDefine(const std::string& pDefine) : Value(pDefine) {}
 	std::string Value;
 };
 
