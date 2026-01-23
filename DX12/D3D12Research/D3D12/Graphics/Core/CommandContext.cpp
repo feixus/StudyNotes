@@ -203,9 +203,7 @@ void CommandContext::InitializeBuffer(GraphicsResource* pResource, const void* p
 
 void CommandContext::InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount)
 {
-	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
-	uint64_t requiredSize = 0;
-	GetGraphics()->GetDevice()->GetCopyableFootprints(&desc, firstSubresource, subresourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
+	uint64_t requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubresource, subresourceCount);
 	/* D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT(512 bytes): can for the start address of each subresource's data
 	*  D3D12_TEXTURE_DATA_PITCH_ALIGNMENT(256 bytes): can used to ensure each row's pitch is properly padded
 	*  D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT(64 KB): can used to with CreatePlacedResource, for GPU page size
@@ -234,9 +232,11 @@ void CommandContext::Dispatch(const IntVector3& groupCounts)
 
 void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
-	checkf(groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size X(%d) can not exceed %d", groupCountX, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
-	checkf(groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size Y(%d) can not exceed %d", groupCountY, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
-	checkf(groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size Z(%d) can not exceed %d", groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
+	checkf(
+		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
+		groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
+		groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+		"Dispatch group size (%d x %d x %d) can not exceed %d", groupCountX, groupCountY, groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
 	PrepareDraw(CommandListContext::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }

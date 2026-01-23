@@ -260,9 +260,4 @@ namespace Math
     private:
         float Sequence[SIZE];
     };
-
-    inline uint32_t Exp2(uint32_t exp)
-    {
-        return (uint32_t)ldexp(1.0f, exp);
-    }
 }

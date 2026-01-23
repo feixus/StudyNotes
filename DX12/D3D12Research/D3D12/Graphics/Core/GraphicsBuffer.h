@@ -30,7 +30,7 @@ struct BufferDesc
 {
 	BufferDesc() = default;
 	BufferDesc(uint32_t elements, uint32_t elementSize, BufferFlag usage = BufferFlag::None)
-		: Size(elements * elementSize), ElementSize(elementSize), Usage(usage) {}
+		: Size((uint64_t)elements * elementSize), ElementSize(elementSize), Usage(usage) {}
 
 	static BufferDesc CreateBuffer(uint64_t sizeInBytes, BufferFlag usage = BufferFlag::None)
 	{

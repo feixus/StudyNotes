@@ -18,8 +18,11 @@
 
 #include "tinygltf/tiny_gltf.h"
 
+#pragma warning(push)
+#pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
 #define CGLTF_IMPLEMENTATION
 #include "cgltf/cgltf.h"
+#pragma warning(pop)
 
 struct VS_Position
 {

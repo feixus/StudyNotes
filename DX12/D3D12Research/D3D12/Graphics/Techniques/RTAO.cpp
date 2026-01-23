@@ -30,12 +30,17 @@ void RTAO::Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneView& sc
     static float g_AoRadius = 0.5f;
     static int g_AoSamples = 1;
 
-	ImGui::Begin("Parameters");
-    ImGui::Text("Ambient Occlusion");
-	ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
-	ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 5.0f);
-	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
-	ImGui::End();
+	if (ImGui::Begin("Parameters"))
+    {
+        if (ImGui::CollapsingHeader("Ambient Occlusion"))
+        {
+            ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
+            ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 5.0f);
+            ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
+
+        }
+    }
+    ImGui::End();
 
     RG_GRAPH_SCOPE("Ambient Occlusion", graph);
 

@@ -13,7 +13,7 @@ public:
     {
         assert(initialDepth <= maxDepth);
 
-        uint32_t numBits = Math::Exp2(maxDepth + 2);
+        uint32_t numBits = 1ull << (maxDepth + 2);
         assert(numBits < NumBitsPerElement || numBits % NumBitsPerElement == 0);
 
         Bits.clear();
@@ -26,9 +26,9 @@ public:
         Bits[0] = maxDepth;
     #endif
 
-        uint32_t minRange = Math::Exp2(initialDepth);
-        uint32_t maxRange = Math::Exp2(initialDepth + 1);
-        uint32_t interval = Math::Exp2(maxDepth - initialDepth);
+        uint32_t minRange = 1u << initialDepth;
+        uint32_t maxRange = 1u << (initialDepth + 1);
+        uint32_t interval = 1u << (maxDepth - initialDepth);
         for (uint32_t heapIndex = minRange; heapIndex < maxRange; heapIndex++)
         {
             SetData(heapIndex * interval, 1);
@@ -87,7 +87,7 @@ public:
         // number of bits used to store the value at this node, the leaf nodes use 1 bit each, the root uses maxDepth + 1 bits.
         // such as maxDepth = 3, total bits = 4 * 1 + 3 * 2  + 2 * 4 + 1 * 8 = 26 bits
         *pBitSize = GetMaxDepth() - depth + 1;
-        *pOffset = Math::Exp2(depth + 1) + heapIndex * *pBitSize;
+        *pOffset = 1u << (depth + 1) + heapIndex * *pBitSize;
         assert(*pBitSize < NumBitsPerElement);
     }
 #endif
@@ -214,7 +214,7 @@ public:
 
     uint32_t BitfieldheapIndex(uint32_t heapIndex) const
     {
-        return heapIndex * Math::Exp2(GetMaxDepth() - GetDepth(heapIndex));
+        return heapIndex * 1u << (GetMaxDepth() - GetDepth(heapIndex));
     }
 
     void SplitNode(uint32_t heapIndex)
@@ -268,14 +268,14 @@ public:
 
     uint32_t NumBitfieldBits() const
     {
-        return Math::Exp2(GetMaxDepth());
+        return 1u << GetMaxDepth();
     }
 
     void GetElementRange(uint32_t heapIndex, uint32_t& begin, uint32_t& size) const
     {
         uint32_t depth = GetDepth(heapIndex);
         size = GetMaxDepth() - depth + 1;
-        begin = Math::Exp2(depth + 1) + heapIndex * size;
+        begin = 1u << (depth + 1) + heapIndex * size;
     }
 
     uint32_t GetMemoryUse() const
@@ -484,7 +484,8 @@ namespace LEB
             DiamondIDs diamond = GetDiamond(heapIndex);
             if (cbt.GetData(diamond.Base) <= 2 && cbt.GetData(diamond.Top) <= 2)
             {
-                cbt.MergeNode(heapIndex);
+				cbt.MergeNode(heapIndex);
+				cbt.MergeNode(cbt.RightChildIndex(diamond.Top));
             }
         }
     }

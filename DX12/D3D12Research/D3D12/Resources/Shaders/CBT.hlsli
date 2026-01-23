@@ -1,11 +1,23 @@
 #define CBT_BITS_PER_ELEMENT 32
 
+#ifndef CBT_WRITE 
+#define CBT_WRITE 1
+#endif
+
 struct CBT
 {
+#if CBT_WRITE
     RWByteAddressBuffer Storage;
+#else
+    ByteAddressBuffer Storage;
+#endif
     uint NumElements;
 
+#if CBT_WRITE
     void Init(RWByteAddressBuffer buffer, uint numElements)
+#else
+    void Init(ByteAddressBuffer buffer, uint numElements)
+#endif
     {
         Storage = buffer;
         NumElements = numElements;
@@ -58,9 +70,11 @@ struct CBT
 
     void BitfieldSet_Single(uint elementIndex, uint bitOffset, uint bitCount, uint value)
     {
+    #if CBT_WRITE
         uint bitMask = ~(~(~0u << bitCount) << bitOffset);
         Storage.InterlockedAnd(elementIndex * 4, bitMask);
         Storage.InterlockedOr(elementIndex * 4, value << bitOffset);
+    #endif
     }
 
     void BinaryHeapSet(uint bitOffset, uint bitCount, uint value)
@@ -205,14 +219,8 @@ namespace LEB
         return mul(windingMatrix, m);
     }
 
-    float3x3 GetTriangleVertices(uint heapIndex)
+    float3x3 GetTriangleVertices(uint heapIndex, float3x3 baseTriangle)
     {
-        float3x3 baseTriangle = float3x3(
-            0, 0, 1,
-            0, 0, 0,
-            1, 0, 0
-        );
-
         float3x3 triMatrix = GetMatrix(heapIndex);
         return mul(triMatrix, baseTriangle);
     }

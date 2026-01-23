@@ -484,7 +484,7 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 										defines);
 	if (!result.Success)
 	{
-		E_LOG(Warning, "Failed to compile shader '%s': %s", pShaderPath, result.ErrorMsg.c_str());
+		E_LOG(Warning, "Failed to compile shader '%s:%s': %s", pShaderPath, pEntryPoint, result.ErrorMsg.c_str());
 		return nullptr;
 	}
 

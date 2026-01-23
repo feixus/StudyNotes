@@ -125,17 +125,21 @@ void Clouds::Initialize(GraphicsDevice* pGraphicsDevice)
 
 void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsTexture* pDepthTexture, Camera* pCamera, const Light& sunLight)
 {
-	ImGui::Begin("Parameters");
-	ImGui::Text("Clouds");
-	ImGui::SliderFloat3("Position", reinterpret_cast<float*>(&m_CloudBounds.Center), 0.f, 500.f);
-	ImGui::SliderFloat3("Extents", reinterpret_cast<float*>(&m_CloudBounds.Extents), 0.f, 500.f);
-	ImGui::SliderFloat("Scale", &sCloudParameters.CloudScale, 0, 0.02f);
-	ImGui::SliderFloat("Cloud Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
-	ImGui::SliderFloat("Density", &sCloudParameters.CloudDensity, 0, 1.0f);
-	ImGui::SliderFloat4("Noise Weights", &NoiseWeights.x, 0, 1);
-	if (ImGui::Button("Generate Noise"))
+	if (ImGui::Begin("Parameters"))
 	{
-		m_UpdateNoise = true;
+		if (ImGui::CollapsingHeader("Clouds"))
+		{
+			ImGui::SliderFloat3("Position", reinterpret_cast<float*>(&m_CloudBounds.Center), 0.f, 500.f);
+			ImGui::SliderFloat3("Extents", reinterpret_cast<float*>(&m_CloudBounds.Extents), 0.f, 500.f);
+			ImGui::SliderFloat("Scale", &sCloudParameters.CloudScale, 0, 0.02f);
+			ImGui::SliderFloat("Cloud Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
+			ImGui::SliderFloat("Density", &sCloudParameters.CloudDensity, 0, 1.0f);
+			ImGui::SliderFloat4("Noise Weights", &NoiseWeights.x, 0, 1);
+			if (ImGui::Button("Generate Noise"))
+			{
+				m_UpdateNoise = true;
+			}
+		}
 	}
 	ImGui::End();
 

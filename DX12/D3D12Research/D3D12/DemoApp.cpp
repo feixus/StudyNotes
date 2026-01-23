@@ -146,6 +146,7 @@ namespace Tweakables
 	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflection", false);
 	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 5.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
+	ConsoleVariable g_RenderTerrain("r.Terrain", false);
 	
 	// Misc
 	bool g_DumpRenderGraph = false;
@@ -277,7 +278,7 @@ void DemoApp::SetupScene(CommandContext& context)
 
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 		//pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context);
-		//pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context);
+		pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context);
 		//pMesh->Load("Resources/apartment_floor_plan/scene.gltf", m_pDevice.get(), &context);
 		//pMesh->Load("H:/downloads/Models/stadtverwaltung-jena-3d-model/scene.gltf", m_pDevice.get(), &context);
 		
@@ -1109,7 +1110,10 @@ void DemoApp::Update()
 
 		m_pGpuParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
 
-		m_pCBTTessellation->Execute(graph, GetCurrentRenderTarget(), GetDepthStencil(), m_SceneData);
+		if (Tweakables::g_RenderTerrain.GetBool())
+		{
+			m_pCBTTessellation->Execute(graph, GetCurrentRenderTarget(), GetDepthStencil(), m_SceneData);
+		}
 
 		RGPassBuilder sky = graph.AddPass("Sky");
 		sky.Bind([=](CommandContext& renderContext, const RGPassResource& inputResources)
@@ -1810,160 +1814,204 @@ void DemoApp::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
-	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
-	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_WindowWidth, m_WindowHeight);
-	ImGui::PlotLines("##", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
-
-	ImGui::Text("CameraP: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
-	Vector3 eulerAngle = m_pCamera->GetRotation().ToEuler() * Math::RadiansToDegrees;
-	ImGui::Text("CameraR: [%.2f, %.2f, %.2f]", eulerAngle.x, eulerAngle.y, eulerAngle.z);
-	ImGui::SliderInt("CameraSpeed: ", &m_pCamera->GetVelocityFactor(), 1, 10);
-
-	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
-		pRootNode->RenderImGui(m_Frame);
-		ImGui::TreePop();
-	}
-
-	if (ImGui::Button("Dump RenderGraph"))
-	{
-		Tweakables::g_DumpRenderGraph = true;
-	}
-	if (ImGui::Button("Screenshot"))
-	{
-		Tweakables::g_Screenshot = true;
-	}
-	if (ImGui::Button("Pix Capture"))
-	{
-		m_CapturePix = true;
-	}
-
-	ImGui::End();
-
 	static ImGuiConsole console;
+	static bool showProfiler = false;
+	static bool showImguiDemo = false;
+
+	if (ImGui::BeginMainMenuBar())
+	{
+		if (ImGui::BeginMenu("Windows"))
+		{
+			if (ImGui::MenuItem("Profiler", 0, showProfiler))
+			{
+				showProfiler = !showProfiler;
+			}
+			bool& showConsole = console.IsVisible();
+			if (ImGui::MenuItem("Output Log", 0, showConsole))
+			{
+				showConsole = !showConsole;
+			}
+			if (ImGui::MenuItem("ImGui Demo", 0, showImguiDemo))
+			{
+				showImguiDemo = !showImguiDemo;
+			}
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu("Tools"))
+		{
+			if (ImGui::MenuItem("Dump RenderGraph"))
+			{
+				Tweakables::g_DumpRenderGraph = true;
+			}
+			if (ImGui::MenuItem("Screenshot"))
+			{
+				Tweakables::g_Screenshot = true;
+			}
+			if (ImGui::MenuItem("Pix Capture"))
+			{
+				m_CapturePix = true;
+			}
+			ImGui::EndMenu();
+		}
+		ImGui::EndMainMenuBar();
+	}
+
 	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
 
-	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
-	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
-	ImGui::Begin("Parameters", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-	ImGui::Text("Global");
-
-	static const char* renderModeNames[] =
+	if (showImguiDemo)
 	{
-		"Tiles",
-		"Clustered",
-		"Path Tracing",
-		"Visibility"
-	};
+		ImGui::ShowDebugLogWindow();
+	}
 
-	int current = static_cast<int>(m_RenderPath);
-	if (ImGui::BeginCombo("Render Mode", renderModeNames[current]))
+	if (showProfiler)
 	{
-		for (int i = 0; i < (int)RenderPath::MAX; ++i)
+		if (ImGui::Begin("Profiler", &showProfiler))
 		{
-			bool selected = (current == i);
-			if (ImGui::Selectable(renderModeNames[i], selected))
+			ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_WindowWidth, m_WindowHeight);
+			ImGui::PlotLines("##", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
+
+			if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
 			{
-				m_RenderPath = static_cast<RenderPath>(i);
+				ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
+				pRootNode->RenderImGui(m_Frame);
+				ImGui::TreePop();
 			}
-
-			if (selected)
-				ImGui::SetItemDefaultFocus();
 		}
-		ImGui::EndCombo();
+		ImGui::End();
 	}
 
-	ImGui::Text("Camera");
-	float fov = m_pCamera->GetFoV();
-	if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+	if (ImGui::Begin("Parameters"))
 	{
-		m_pCamera->SetFoV(fov);
-	}
-	Vector2 farNear(m_pCamera->GetFar(), m_pCamera->GetNear());
-	if (ImGui::DragFloatRange2("Near/Far Plane", &farNear.x, &farNear.y, 0.1f, 1, 100))
-	{
-		m_pCamera->SetFarPlane(farNear.x);
-		m_pCamera->SetNearPlane(farNear.y);
-	}
+		ImGui::Text("CameraP: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
+		Vector3 eulerAngle = m_pCamera->GetRotation().ToEuler() * Math::RadiansToDegrees;
+		ImGui::Text("CameraR: [%.2f, %.2f, %.2f]", eulerAngle.x, eulerAngle.y, eulerAngle.z);
+		ImGui::SliderInt("CameraSpeed: ", &m_pCamera->GetVelocityFactor(), 1, 50);
 
-	ImGui::Text("Sky");
-	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
-	ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0.001f, 1);
-	ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
-	ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
-
-	ImGui::Text("Shadows");
-	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades.Get(), 1, 4);
-	ImGui::Checkbox("SDSM", &Tweakables::g_ShowSDSM.Get());
-	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascases.Get());
-	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
-	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
-
-	ImGui::Text("Expose/Tonemapping");
-	ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
-	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
-	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
-
-	constexpr static const char* tonemappers[] =
-	{
-		"Reinhard",
-		"Reinhard Extended",
-		"ACES fast",
-		"Unreal 3",
-		"Uncharted2"
-	};
-
-	int curTonemap = Tweakables::g_ToneMapper.Get();
-	if (ImGui::BeginCombo("Tonemap", tonemappers[curTonemap]))
-	{
-		for (int i = 0; i < (int)std::size(tonemappers); ++i)
+		static const char* renderModeNames[] =
 		{
-			bool selected = (curTonemap == i);
-			if (ImGui::Selectable(tonemappers[i], selected))
+			"Tiles",
+			"Clustered",
+			"Path Tracing",
+			"Visibility"
+		};
+	
+		if (ImGui::CollapsingHeader("Global"))
+		{
+			int current = static_cast<int>(m_RenderPath);
+			if (ImGui::BeginCombo("Render Mode", renderModeNames[current]))
 			{
-				Tweakables::g_ToneMapper.SetValue(i);
+				for (int i = 0; i < (int)RenderPath::MAX; ++i)
+				{
+					bool selected = (current == i);
+					if (ImGui::Selectable(renderModeNames[i], selected))
+					{
+						m_RenderPath = static_cast<RenderPath>(i);
+					}
+		
+					if (selected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
 			}
-
-			if (selected)
-				ImGui::SetItemDefaultFocus();
+			
+			ImGui::Text("Camera");
+			float fov = m_pCamera->GetFoV();
+			if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+			{
+				m_pCamera->SetFoV(fov);
+			}
+			Vector2 farNear(m_pCamera->GetFar(), m_pCamera->GetNear());
+			if (ImGui::DragFloatRange2("Near/Far Plane", &farNear.x, &farNear.y, 0.1f, 1, 100))
+			{
+				m_pCamera->SetFarPlane(farNear.x);
+				m_pCamera->SetNearPlane(farNear.y);
+			}
 		}
-		ImGui::EndCombo();
+
+		if (ImGui::CollapsingHeader("Sky"))
+		{
+			ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
+			ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0.001f, 1);
+			ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
+			ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
+		}
+
+		if (ImGui::CollapsingHeader("Shadows"))
+		{
+			ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades.Get(), 1, 4);
+			ImGui::Checkbox("SDSM", &Tweakables::g_ShowSDSM.Get());
+			ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascases.Get());
+			ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
+			ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
+		}
+
+		if (ImGui::CollapsingHeader("Expose/Tonemapping"))
+		{
+			ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
+			ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
+			ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
+			ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
+			
+			constexpr static const char* tonemappers[] =
+			{
+				"Reinhard",
+				"Reinhard Extended",
+				"ACES fast",
+				"Unreal 3",
+				"Uncharted2"
+			};
+		
+			int curTonemap = Tweakables::g_ToneMapper.Get();
+			if (ImGui::BeginCombo("Tonemap", tonemappers[curTonemap]))
+			{
+				for (int i = 0; i < (int)std::size(tonemappers); ++i)
+				{
+					bool selected = (curTonemap == i);
+					if (ImGui::Selectable(tonemappers[i], selected))
+					{
+						Tweakables::g_ToneMapper.SetValue(i);
+					}
+		
+					if (selected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+		}
+
+		if (ImGui::CollapsingHeader("Misc"))
+		{
+			ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
+			ImGui::Checkbox("Debug Render Light", &Tweakables::g_VisualizeLights.Get());
+			ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
+			extern bool g_VisualizeClusters;
+			ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
+			ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
+			ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
+			ImGui::Checkbox("Render Terrain", &Tweakables::g_RenderTerrain.Get());
+		}
+		
+		if (ImGui::CollapsingHeader("Raytracing"))
+		{
+			if (m_pDevice->GetCapabilities().SupportsRaytracing())
+			{
+				ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
+				ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
+				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
+			}
+		}
 	}
-
-	ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
-
-	ImGui::Text("Misc");
-	ImGui::Checkbox("Debug Render Light", &Tweakables::g_VisualizeLights.Get());
-	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
-	extern bool g_VisualizeClusters;
-	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
-	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
-
-	if (m_pDevice->GetCapabilities().SupportsRaytracing())
-	{
-		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
-		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
-		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
-	}
-
-	ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
-
 	ImGui::End();
 
 	//m_pVisualizeTexture = m_pVisualizeTexture != nullptr ? m_pVisualizeTexture : m_pAmbientOcclusion.get();
 	if (m_pVisualizeTexture)
 	{
 		std::string tabName = std::format("Visualize Texture: {}", m_pVisualizeTexture->GetName());
-		ImGui::Begin(tabName.c_str());
-		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
-
-		ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
-
+		if (ImGui::Begin(tabName.c_str()))
+		{
+			ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
+			ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
+		}
 		ImGui::End();
 	}
 
@@ -1972,11 +2020,13 @@ void DemoApp::UpdateImGui()
 		float imageSize = 230;
 		ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
 		ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
-		ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
-		const Light& sunLight = m_Lights[0];
-		for (int i = 0; i < 4; ++i)
+		if (ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground))
 		{
-			ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
+			const Light& sunLight = m_Lights[0];
+			for (int i = 0; i < 4; ++i)
+			{
+				ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
+			}
 		}
 		ImGui::End();
 	}

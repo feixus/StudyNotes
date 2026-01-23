@@ -261,7 +261,13 @@ float2 GetLOD(float3x3 tri)
 
 float3x3 GetVertices(uint heapIndex)
 {
-    float3x3 tri = LEB::GetTriangleVertices(heapIndex);
+    float3x3 baseTriangle = float3x3(
+        0, 0, 1,
+        0, 0, 0,
+        1, 0, 0
+    );
+
+    float3x3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle);
     for (int i = 0; i < 3; i++)
     {
         tri[i].y += tHeightmap.SampleLevel(sSampler, tri[i].xz, 0).r;
@@ -299,13 +305,13 @@ void UpdateCS(uint threadID : sV_DispatchThreadID)
     }
 }
 
-// #ifndef MESH_SHADER_SUBD_LEVEL
+#ifndef MESH_SHADER_SUBD_LEVEL
 #define MESH_SHADER_SUBD_LEVEL 6
-// #endif
+#endif
 
-// #ifndef AMPLIFICATION_SHADER_SUBD_LEVEL
+#ifndef AMPLIFICATION_SHADER_SUBD_LEVEL
 #define AMPLIFICATION_SHADER_SUBD_LEVEL 0
-// #endif
+#endif
 
 #define NUM_MESH_SHADER_TRIANGLES (1u << MESH_SHADER_SUBD_LEVEL)
 
@@ -379,7 +385,8 @@ void RenderMS(
 
     uint outputIndex = groupThreadID;
     uint heapIndex = payload.IDs[groupID];
-    float3x3 tri = GetVertices(heapIndex * NUM_MESH_SHADER_TRIANGLES + outputIndex);
+    uint subdHeapIndex = (((heapIndex << MESH_SHADER_SUBD_LEVEL) | outputIndex) << AMPLIFICATION_SHADER_SUBD_LEVEL) | groupID % (1u << AMPLIFICATION_SHADER_SUBD_LEVEL);
+    float3x3 tri = GetVertices(subdHeapIndex);
 
     for (uint i = 0; i < 3; i++)
     {
@@ -461,8 +468,12 @@ void DebugVisualizeVS(uint vertexID : SV_VertexID, uint instanceID : SV_Instance
 
     uint heapIndex = cbt.LeafIndexToHeapIndex(instanceID);
 
-    float3 tri = LEB::GetTriangleVertices(heapIndex)[vertexID];
-    tri.y = tri.z;
+    float3x3 baseTriangle = float3x3(
+        0, 1, 0,
+        0, 0, 0,
+        1, 0, 0
+    );
+    float3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle)[vertexID];
     tri.xy = tri.xy * 2 - 1;
     pos = float4(tri, 1);
 
@@ -474,5 +485,3 @@ float4 DebugVisualizePS(float4 position : SV_POSITION, float4 color : COLOR) : S
 {
     return color;
 }
-
-

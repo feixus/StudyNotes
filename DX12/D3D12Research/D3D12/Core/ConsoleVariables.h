@@ -217,7 +217,8 @@ public:
     }
 
     void Update(const ImVec2& position, const ImVec2& size);
-    
+    bool& IsVisible() { return m_ShowConsole; }
+
 private:
     int InputCallback(ImGuiInputTextCallbackData* pCallbackData);
 

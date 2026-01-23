@@ -52,6 +52,7 @@ void ImGuiRenderer::InitializeImGui(GraphicsDevice* pGraphicsDevice)
 	Paths::CreateDirectoryTree(Paths::SavedDir());
 	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
 	io.IniFilename = imguiPath.c_str();
+	io.ConfigWindowsMoveFromTitleBarOnly = true;
 
 	ImFontConfig fontConfig;
 	fontConfig.OversampleH = 2;
