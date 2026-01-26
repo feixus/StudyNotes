@@ -1,23 +1,11 @@
 #define CBT_BITS_PER_ELEMENT 32
 
-#ifndef CBT_WRITE 
-#define CBT_WRITE 1
-#endif
-
 struct CBT
 {
-#if CBT_WRITE
     RWByteAddressBuffer Storage;
-#else
-    ByteAddressBuffer Storage;
-#endif
     uint NumElements;
 
-#if CBT_WRITE
     void Init(RWByteAddressBuffer buffer, uint numElements)
-#else
-    void Init(ByteAddressBuffer buffer, uint numElements)
-#endif
     {
         Storage = buffer;
         NumElements = numElements;
@@ -70,11 +58,9 @@ struct CBT
 
     void BitfieldSet_Single(uint elementIndex, uint bitOffset, uint bitCount, uint value)
     {
-    #if CBT_WRITE
         uint bitMask = ~(~(~0u << bitCount) << bitOffset);
         Storage.InterlockedAnd(elementIndex * 4, bitMask);
         Storage.InterlockedOr(elementIndex * 4, value << bitOffset);
-    #endif
     }
 
     void BinaryHeapSet(uint bitOffset, uint bitCount, uint value)

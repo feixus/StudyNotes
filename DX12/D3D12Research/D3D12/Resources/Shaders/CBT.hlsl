@@ -63,7 +63,7 @@ ConstantBuffer<SumReductionData> cSumReductionData : register(b1);
 ConstantBuffer<UpdateData> cUpdateData : register(b1);
 
 [numthreads(1, 1, 1)]
-void PrepareDispatchArgsCS(uint threadID : sV_DispatchThreadID)
+void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
@@ -71,13 +71,13 @@ void PrepareDispatchArgsCS(uint threadID : sV_DispatchThreadID)
     uint offset = 0;
 
     uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
-    uIndirectArgs.Store(offset + 0, numThreads);
+    uIndirectArgs.Store(offset + 0, 1);
     uIndirectArgs.Store(offset + 4, 1);
     uIndirectArgs.Store(offset + 8, 1);
 
     offset += sizeof(uint3);
 
-    uint numMeshThreads = ceil(cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
+	uint numMeshThreads = ceil((float) cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
     uIndirectArgs.Store(offset + 0, numMeshThreads);
     uIndirectArgs.Store(offset + 4, 1);
     uIndirectArgs.Store(offset + 8, 1);
@@ -96,7 +96,7 @@ void PrepareDispatchArgsCS(uint threadID : sV_DispatchThreadID)
 
 [RootSignature(RootSig)]
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
-void SumReductionCS(uint threadID : sV_DispatchThreadID)
+void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
@@ -112,7 +112,7 @@ void SumReductionCS(uint threadID : sV_DispatchThreadID)
 }
 
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
-void SumReductionFirstPassCS(uint threadID : sV_DispatchThreadID)
+void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
@@ -276,7 +276,7 @@ float3x3 GetVertices(uint heapIndex)
 }
 
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
-void UpdateCS(uint threadID : sV_DispatchThreadID)
+void UpdateCS(uint threadID : SV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
@@ -323,7 +323,7 @@ struct ASPayload
 groupshared ASPayload gsPayload;
 
 [numthreads(MESH_SHADER_THREAD_GROUP_SIZE, 1, 1)]
-void UpdateAS(uint threadID : sV_DispatchThreadID)
+void UpdateAS(uint threadID : SV_DispatchThreadID)
 {
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
@@ -422,7 +422,7 @@ float4 RenderPS(VertexOut vertex) : SV_TARGET
     float dX = tr + 2 * r + br - tl - 2 * l - bl;
     float dY = bl + 2 * b + br - tl - 2 * t - tr;
     // T = (1, dX, 0), B = (0, dY, 1)
-    float3 normal = normalize(float3(dX, 1.0f / 20, dY));
+    float3 normal = normalize(float3(dX, 1.0f / 50, dY));
 
     float3 dir = normalize(float3(1, 1, 1));
     float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);

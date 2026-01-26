@@ -23,9 +23,9 @@ namespace CBTSettings
     static bool CpuDemo = false;
     static bool MeshShader = true;
     static bool SumReductionOptimized = true;
-    static float ScreenSizeBias = 9.0f;
-    static float HeightmapVarianceBias = 0.02f;
-    static float HeightScale = 0.4f;
+    static float ScreenSizeBias = 8.7f;
+    static float HeightmapVarianceBias = 0.01f;
+    static float HeightScale = 0.3f;
     
     // PSO settings
     static bool Wireframe = false;
@@ -263,7 +263,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
         context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        context.SetComputeDynamicConstantBufferView(0, commonArgs);
+        context.SetGraphicsDynamicConstantBufferView(0, commonArgs);
         context.SetGraphicsDynamicConstantBufferView(1, updateData);
 
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
@@ -326,7 +326,7 @@ void CBTTessellation::CreateResources()
 
     pContext->Execute(true);
 
-    m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(512, 512, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
+    m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 1024, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
 
     m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArgumemnts<uint32_t>(10), "CBT Indirect Args");
 }

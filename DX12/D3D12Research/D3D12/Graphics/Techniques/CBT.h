@@ -87,7 +87,7 @@ public:
         // number of bits used to store the value at this node, the leaf nodes use 1 bit each, the root uses maxDepth + 1 bits.
         // such as maxDepth = 3, total bits = 4 * 1 + 3 * 2  + 2 * 4 + 1 * 8 = 26 bits
         *pBitSize = GetMaxDepth() - depth + 1;
-        *pOffset = 1u << (depth + 1) + heapIndex * *pBitSize;
+        *pOffset = (1u << (depth + 1)) + heapIndex * *pBitSize;
         assert(*pBitSize < NumBitsPerElement);
     }
 #endif
