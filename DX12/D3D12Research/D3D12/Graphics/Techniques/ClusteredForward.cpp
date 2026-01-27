@@ -169,6 +169,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
             ));
     });
 
+    // why the volumetric lighting is not working???
 	{
 		RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 

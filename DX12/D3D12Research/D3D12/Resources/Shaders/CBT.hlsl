@@ -396,6 +396,44 @@ void RenderMS(
     triangles[outputIndex] = uint3(outputIndex * 3 + 0, outputIndex * 3 + 1, outputIndex * 3 + 2);
 }
 
+// why this may not define from C++ side?
+#ifndef GEOMETRY_SHADER_SUBD_LEVEL
+#define GEOMETRY_SHADER_SUBD_LEVEL 4
+#endif
+
+#define GEOMETRY_SHADER_SUB_D (1u << GEOMETRY_SHADER_SUBD_LEVEL)
+
+#if GEOMETRY_SHADER_SUBD_LEVEL > 0
+
+uint RenderVS(uint instanceID : SV_InstanceID) : INSTANCE_ID
+{
+    return instanceID;
+}
+
+[maxvertexcount(GEOMETRY_SHADER_SUB_D * 3)]
+void RenderGS(point uint input[1] : INSTANCE_ID, inout TriangleStream<VertexOut> triStream)
+{
+    CBT cbt;
+    cbt.Init(uCBT, cCommonArgs.NumElements);
+    uint heapIndex = cbt.LeafIndexToHeapIndex(input[0]);
+
+    for (uint d = 0; d < GEOMETRY_SHADER_SUB_D; d++)
+    {
+        float3x3 tri = GetVertices(heapIndex * GEOMETRY_SHADER_SUB_D + d);
+        uint i = 0;
+        for (i = 0; i < 3; i++)
+        {
+            VertexOut vertex;
+            vertex.Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+            vertex.UV = tri[i].xz;
+            triStream.Append(vertex);
+        }
+        triStream.RestartStrip();
+    }
+}
+
+#else
+
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
 {
     CBT cbt;
@@ -407,6 +445,8 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
     vertex.UV = tri.xz;
     vertex.Position = mul(float4(tri, 1), cUpdateData.WorldViewProjection);
 }
+
+#endif
 
 float4 RenderPS(VertexOut vertex) : SV_TARGET
 {

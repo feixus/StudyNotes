@@ -280,6 +280,7 @@ void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsText
         return;
     }
 
+    // why i cant see the particles???
 	RGPassBuilder renderParticles = graph.AddPass("Render Particles");
     renderParticles.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {

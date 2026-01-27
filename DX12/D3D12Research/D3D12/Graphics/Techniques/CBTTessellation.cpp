@@ -33,7 +33,8 @@ namespace CBTSettings
     static bool DisplacementLOD = true;
     static bool DistanceLOD = true;
     static bool AlwaysSubdivide = false;
-    static int TriangleSubdivision = 3;
+    static int MeshShaderSubD = 3;
+    static int GeometryShaderSubD = 2;
 }
 
 CBTTessellation::CBTTessellation(GraphicsDevice* pGraphicsDevice) : m_pDevice(pGraphicsDevice)
@@ -61,7 +62,9 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
             {
                 AllocateCBT();
             }
-            if (ImGui::SliderInt("Triangle SubD", &CBTSettings::TriangleSubdivision, 0, 4))
+            int& subd = CBTSettings::MeshShader ? CBTSettings::MeshShaderSubD : CBTSettings::GeometryShaderSubD;
+            int maxSubD = CBTSettings::MeshShader ? 3 : 2;
+            if (ImGui::SliderInt("Triangle SubD", &subd, 0, maxSubD))
             {
                 SetupPipelines();
             }
@@ -261,21 +264,22 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 
         context.SetGraphicsRootSignature(m_pCBTRS.get());
         context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
-        context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
+        
         context.SetGraphicsDynamicConstantBufferView(0, commonArgs);
         context.SetGraphicsDynamicConstantBufferView(1, updateData);
-
+        
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
         context.BindResource(3, 0, m_pHeightmap->GetSRV());
-
+        
         context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
         if (CBTSettings::MeshShader)
         {
+            context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.ExecuteIndirect(m_pDevice->GetIndirectDispatchMeshSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchMeshArgsOffset);
         }
         else
         {
+            context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
         }
         context.EndRenderPass();
@@ -339,8 +343,9 @@ void CBTTessellation::SetupPipelines()
         ShaderDefine(std::format("DISPLACEMENT_LOD={}", CBTSettings::DisplacementLOD ? 1 : 0)),
         ShaderDefine(std::format("DISTANCE_LOD={}", CBTSettings::DistanceLOD ? 1 : 0)),
         ShaderDefine(std::format("DEBUG_ALWAYS_SUBDIVIDE={}", CBTSettings::AlwaysSubdivide ? 1 : 0)),
-        ShaderDefine(std::format("MESH_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::TriangleSubdivision * 2, 6))),
-        ShaderDefine(std::format("AMPLIFICATION_SHADER_SUBD_LEVEL={}", Math::Max(CBTSettings::TriangleSubdivision * 2 - 6, 0))),
+        ShaderDefine(std::format("MESH_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::MeshShaderSubD * 2, 6))),
+        ShaderDefine(std::format("AMPLIFICATION_SHADER_SUBD_LEVEL={}", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0))),
+        ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
     };
 
     m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
@@ -371,8 +376,16 @@ void CBTTessellation::SetupPipelines()
         drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
         drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
         drawPsoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "RenderVS", defines));
+        if (!CBTSettings::MeshShader)
+        {
+            drawPsoDesc.SetGeometryShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Geometry, "RenderGS", defines));
+            drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
+        }
+        else
+        {
+            drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        }
         drawPsoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
-        drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
         drawPsoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
         drawPsoDesc.SetName("Draw CBT PSO");
         m_pCBTRenderPSO = m_pDevice->CreatePipeline(drawPsoDesc);

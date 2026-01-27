@@ -39,6 +39,7 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 
 void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
 {
+    // why the sky is not refresh???
     RG_GRAPH_SCOPE("Tiled Lighting", graph);
 
 	// 3. light culling
