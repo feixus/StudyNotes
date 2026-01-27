@@ -25,6 +25,10 @@
 #define DISTANCE_LOD 1
 #endif
 
+#ifndef COLOR_LEVELS
+#define COLOR_LEVELS 0
+#endif
+
 #define RootSig "CBV(b0), " \
                 "CBV(b1), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 2)), " \
@@ -50,7 +54,6 @@ struct UpdateData
 {
     float4x4 World;
     float4x4 WorldView;
-    float4x4 ViewProjection;
     float4x4 WorldViewProjection;
     float4 FrustumPlanes[6];
     float HeightmapSizeInv;
@@ -70,6 +73,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
     uint offset = 0;
 
+    // dispatch args
     uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
     uIndirectArgs.Store(offset + 0, 1);
     uIndirectArgs.Store(offset + 4, 1);
@@ -77,6 +81,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
     offset += sizeof(uint3);
 
+    // task/mesh shader args
 	uint numMeshThreads = ceil((float) cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
     uIndirectArgs.Store(offset + 0, numMeshThreads);
     uIndirectArgs.Store(offset + 4, 1);
@@ -84,6 +89,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
     offset += sizeof(uint3);
 
+    // draw args
     uint numVertices = 3;
     uint numInstances = cbt.NumNodes();
     uIndirectArgs.Store(offset + 0, numVertices);
@@ -123,7 +129,7 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
     if (thread < count)
     {
         uint nodeIndex = thread + count;
-        uint bitOffset = cbt.BitIndexFromHeap(nodeIndex, depth);
+        uint bitOffset = cbt.NodeBitIndex(nodeIndex);
         uint elementIndex = bitOffset >> 5u;
 
         uint bitField = cbt.Storage.Load(4 * elementIndex);
@@ -149,7 +155,7 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
                ((bitField >> 6u) & (7u << 18u)) |
                ((bitField >> 7u) & (7u << 21u));
 
-        cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 24, data);
+        cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 24, data);
 
         // sum of 3 bit pairs -> 4 * 4 bits
         depth -= 1;
@@ -160,7 +166,7 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
                ((bitField >> 4u) & (15u << 4u)) |
                ((bitField >> 8u) & (15u << 8u)) |
                ((bitField >> 12u) & (15u << 12u));
-        cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 16, data);
+        cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 16, data);
 
         // sum of 4 bit pairs -> 2 * 5 bits
         depth -= 1;
@@ -169,14 +175,14 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
         // compact to 10 bits
         data = ((bitField >> 0u) & (31u << 0u)) | 
                ((bitField >> 11u) & (31u << 5u));
-        cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 10, data);
+        cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 10, data);
 
         // sum of 5 bit pairs -> 1 * 6 bits
         depth -= 1;
         nodeIndex >>= 1;
         bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
         data = bitField;
-        cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 6, data);
+        cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 6, data);
     }
 }
 
@@ -267,7 +273,7 @@ float3x3 GetVertices(uint heapIndex)
         1, 0, 0
     );
 
-    float3x3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle);
+    float3x3 tri = LEB::TransformAttributes(heapIndex, baseTriangle);
     for (int i = 0; i < 3; i++)
     {
         tri[i].y += tHeightmap.SampleLevel(sSampler, tri[i].xz, 0).r;
@@ -370,6 +376,7 @@ struct VertexOut
 {
     float4 Position : SV_POSITION;
     float2 UV : TEXCOORD;
+    uint HeapIndex : HEAP_INDEX;
 };
 
 [outputtopology("triangle")]
@@ -390,17 +397,15 @@ void RenderMS(
 
     for (uint i = 0; i < 3; i++)
     {
-        vertices[outputIndex * 3 + i].Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
-        vertices[outputIndex * 3 + i].UV = tri[i].xz;
+        uint index = outputIndex * 3 + i;
+        vertices[index].Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+        vertices[index].UV = tri[i].xz;
+        vertices[index].HeapIndex = heapIndex;
     }
     triangles[outputIndex] = uint3(outputIndex * 3 + 0, outputIndex * 3 + 1, outputIndex * 3 + 2);
 }
 
-// why this may not define from C++ side?
-#ifndef GEOMETRY_SHADER_SUBD_LEVEL
-#define GEOMETRY_SHADER_SUBD_LEVEL 4
-#endif
-
+// why the macro may not define from C++ side? because these macro defines need prefix of "-D" when compiling HLSL shaders on IDxcCompiler3::Compile
 #define GEOMETRY_SHADER_SUB_D (1u << GEOMETRY_SHADER_SUBD_LEVEL)
 
 #if GEOMETRY_SHADER_SUBD_LEVEL > 0
@@ -420,15 +425,21 @@ void RenderGS(point uint input[1] : INSTANCE_ID, inout TriangleStream<VertexOut>
     for (uint d = 0; d < GEOMETRY_SHADER_SUB_D; d++)
     {
         float3x3 tri = GetVertices(heapIndex * GEOMETRY_SHADER_SUB_D + d);
-        uint i = 0;
-        for (i = 0; i < 3; i++)
+
+        float2 lod = GetLOD(tri);
+        if (lod.y > 0)
         {
-            VertexOut vertex;
-            vertex.Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
-            vertex.UV = tri[i].xz;
-            triStream.Append(vertex);
+            uint i = 0;
+            for (i = 0; i < 3; i++)
+            {
+                VertexOut vertex;
+                vertex.Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+                vertex.UV = tri[i].xz;
+                vertex.HeapIndex = heapIndex;
+                triStream.Append(vertex);
+            }
+            triStream.RestartStrip();
         }
-        triStream.RestartStrip();
     }
 }
 
@@ -444,6 +455,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 
     vertex.UV = tri.xz;
     vertex.Position = mul(float4(tri, 1), cUpdateData.WorldViewProjection);
+    vertex.HeapIndex = heapIndex;
 }
 
 #endif
@@ -464,10 +476,17 @@ float4 RenderPS(VertexOut vertex) : SV_TARGET
     // T = (1, dX, 0), B = (0, dY, 1)
     float3 normal = normalize(float3(dX, 1.0f / 50, dY));
 
-    float3 dir = normalize(float3(1, 1, 1));
-    float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);
+    float3 color = 1;
 
-    return color;
+    #if COLOR_LEVELS
+    uint state = SeedThread(firstbithigh(vertex.HeapIndex));
+    color = float3(Random01(state), Random01(state), Random01(state));
+    #endif
+
+    float3 dir = normalize(float3(1, 1, 1));
+    float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
+
+    return output;
 }
 
 // float4 RenderPS(VertexOut vertex, float3 bary : SV_Barycentrics) : SV_TARGET
@@ -486,8 +505,15 @@ float4 RenderPS(VertexOut vertex) : SV_TARGET
 //     // T = (1, dX, 0), B = (0, dY, 1)
 //     float3 normal = normalize(float3(dX, 1.0f / 20, dY));
 
+//     float3 color = 1;
+
+//     #if COLOR_LEVELS
+//     uint state = SeedThread(firstbithigh(vertex.HeapIndex));
+//     color = float3(Random01(state), Random01(state), Random01(state));
+//     #endif
+
 //     float3 dir = normalize(float3(1, 1, 1));
-//     float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);
+//     float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
 
 //     #if RENDER_WIREFRAME
 //         float3 deltas = fwidth(bary);
@@ -495,10 +521,10 @@ float4 RenderPS(VertexOut vertex) : SV_TARGET
 //         float3 thickness = deltas * 0.2;
 //         bary = smoothstep(thickness, thickness + smoothing, bary);
 //         float minBary = min(bary.x, min(bary.y, bary.z));
-//         color.xyz *= saturate(minBary + 0.5);
+//         output.xyz *= saturate(minBary + 0.5);
 //     #endif
 
-//     return color;
+//     return output;
 // }
 
 void DebugVisualizeVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out float4 pos : SV_POSITION, out float4 color : COLOR)
@@ -513,7 +539,7 @@ void DebugVisualizeVS(uint vertexID : SV_VertexID, uint instanceID : SV_Instance
         0, 0, 0,
         1, 0, 0
     );
-    float3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle)[vertexID];
+    float3 tri = LEB::TransformAttributes(heapIndex, baseTriangle)[vertexID];
     tri.xy = tri.xy * 2 - 1;
     pos = float4(tri, 1);
 

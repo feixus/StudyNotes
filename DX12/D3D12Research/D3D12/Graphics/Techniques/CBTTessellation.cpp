@@ -22,12 +22,12 @@ namespace CBTSettings
     static bool DebugVisualize = false;
     static bool CpuDemo = false;
     static bool MeshShader = true;
-    static bool SumReductionOptimized = true;
     static float ScreenSizeBias = 8.7f;
     static float HeightmapVarianceBias = 0.01f;
     static float HeightScale = 0.3f;
     
     // PSO settings
+	static bool ColorLevels = false;
     static bool Wireframe = false;
     static bool FrustumCull = true;
     static bool DisplacementLOD = true;
@@ -81,12 +81,15 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
             }
 
             ImGui::Checkbox("Freeze Camera", &CBTSettings::FreezeCamera);
-            ImGui::Checkbox("Optimized Sum Reduction", &CBTSettings::SumReductionOptimized);
             
             if (ImGui::Checkbox("Wireframe", &CBTSettings::Wireframe))
             {
                 SetupPipelines();
             }
+			if (ImGui::Checkbox("Color Levels", &CBTSettings::ColorLevels))
+			{
+				SetupPipelines();
+			}
             if (ImGui::Checkbox("Frustum Cull", &CBTSettings::FrustumCull))
             {
                 SetupPipelines();
@@ -130,7 +133,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     {
         Matrix World;
         Matrix WorldView;
-        Matrix ViewProjection;
         Matrix WorldViewProjection;
         Vector4 FrustumPlanes[6];
         float HeightmapSizeInv;
@@ -139,7 +141,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     } updateData;
     updateData.World = terrainTransform;
     updateData.WorldView = terrainTransform * m_CachedViewMatrix;
-    updateData.ViewProjection = sceneView.pCamera->GetViewProjection();
     updateData.WorldViewProjection = terrainTransform * sceneView.pCamera->GetViewProjection();
 
     DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
@@ -187,61 +188,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         });
     }
 
-    if (CBTSettings::SumReductionOptimized)
-    {
-        RGPassBuilder cbtSumReductionPrepass = graph.AddPass("CBT Sum Reduction Prepass");
-	    cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResource& resources)
-        {
-            context.SetComputeRootSignature(m_pCBTRS.get());
-            context.SetComputeDynamicConstantBufferView(0, commonArgs);
-
-            context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-
-            struct SumReductionData
-            {
-                uint32_t Depth;
-            } reductionArgs;
-            int32_t currentDepth = CBTSettings::CBTDepth;
-
-            reductionArgs.Depth = currentDepth;
-            context.SetComputeDynamicConstantBufferView(1, reductionArgs);
-
-            context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
-            context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
-            context.InsertUavBarrier(m_pCBTBuffer.get());
-        });
-    }
-
-    RGPassBuilder cbtSumReduction = graph.AddPass("CBT Sum Reduction");
-	cbtSumReduction.Bind([=](CommandContext& context, const RGPassResource& resources)
-    {
-        context.SetComputeRootSignature(m_pCBTRS.get());
-        context.SetComputeDynamicConstantBufferView(0, commonArgs);
-
-        context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-
-        struct SumReductionData
-        {
-            uint32_t Depth;
-        } reductionArgs;
-        int32_t currentDepth = CBTSettings::CBTDepth;
-
-        if (CBTSettings::SumReductionOptimized)
-        {
-            currentDepth -= 5;
-        }
-
-        for (currentDepth = currentDepth - 1; currentDepth >= 0; currentDepth--)
-        {
-            reductionArgs.Depth = currentDepth;
-            context.SetComputeDynamicConstantBufferView(1, reductionArgs);
-    
-            context.SetPipelineState(m_pCBTSumReductionPSO);
-            context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
-            context.InsertUavBarrier(m_pCBTBuffer.get());
-        }
-    });
-        
     RGPassBuilder cbtUpdateIndirectArgs = graph.AddPass("CBT Update Indirect Args");
 	cbtUpdateIndirectArgs.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
@@ -285,6 +231,53 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         context.EndRenderPass();
     });
 
+    RGPassBuilder cbtSumReductionPrepass = graph.AddPass("CBT Sum Reduction Prepass");
+	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResource& resources)
+    {
+        context.SetComputeRootSignature(m_pCBTRS.get());
+        context.SetComputeDynamicConstantBufferView(0, commonArgs);
+
+        context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+
+        struct SumReductionData
+        {
+            uint32_t Depth;
+        } reductionArgs;
+        int32_t currentDepth = CBTSettings::CBTDepth;
+
+        reductionArgs.Depth = currentDepth;
+        context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+
+        context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
+        context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
+        context.InsertUavBarrier(m_pCBTBuffer.get());
+    });
+    
+    RGPassBuilder cbtSumReduction = graph.AddPass("CBT Sum Reduction");
+	cbtSumReduction.Bind([=](CommandContext& context, const RGPassResource& resources)
+    {
+        context.SetComputeRootSignature(m_pCBTRS.get());
+        context.SetComputeDynamicConstantBufferView(0, commonArgs);
+
+        context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+
+        struct SumReductionData
+        {
+            uint32_t Depth;
+        } reductionArgs;
+
+        int32_t currentDepth = CBTSettings::CBTDepth - 5;
+        for (currentDepth = currentDepth - 1; currentDepth >= 0; currentDepth--)
+        {
+            reductionArgs.Depth = currentDepth;
+            context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+    
+            context.SetPipelineState(m_pCBTSumReductionPSO);
+            context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
+            context.InsertUavBarrier(m_pCBTBuffer.get());
+        }
+    });
+        
     if (CBTSettings::DebugVisualize)
     {
         ImGui::Begin("CBT");
@@ -345,7 +338,8 @@ void CBTTessellation::SetupPipelines()
         ShaderDefine(std::format("DEBUG_ALWAYS_SUBDIVIDE={}", CBTSettings::AlwaysSubdivide ? 1 : 0)),
         ShaderDefine(std::format("MESH_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::MeshShaderSubD * 2, 6))),
         ShaderDefine(std::format("AMPLIFICATION_SHADER_SUBD_LEVEL={}", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0))),
-        ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
+		ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
+		ShaderDefine(std::format("COLOR_LEVELS={}", CBTSettings::ColorLevels ? 1 : 0)),
     };
 
     m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
@@ -374,9 +368,9 @@ void CBTTessellation::SetupPipelines()
     {
         PipelineStateInitializer drawPsoDesc;
         drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-        drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
         drawPsoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "RenderVS", defines));
-        if (!CBTSettings::MeshShader)
+        drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
+        if (!CBTSettings::MeshShader && CBTSettings::GeometryShaderSubD > 0)
         {
             drawPsoDesc.SetGeometryShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Geometry, "RenderGS", defines));
             drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);

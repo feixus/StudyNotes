@@ -140,7 +140,7 @@ namespace ShaderCompiler
 
 		for (const std::string& define : defines)
 		{
-			arguments.AddArgument(define.c_str());
+			arguments.AddDefine(define.c_str());
 		}
 
 		DxcBuffer sourceBuffer;

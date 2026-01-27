@@ -1,8 +1,6 @@
 #pragma once
 #include "Core/Bitfield.h"
 
-#define CBT_MEMORY_COMPACT 1
-
 class CBT
 {
 public:
@@ -17,14 +15,8 @@ public:
         assert(numBits < NumBitsPerElement || numBits % NumBitsPerElement == 0);
 
         Bits.clear();
-
-    #if CBT_MEMORY_COMPACT
         Bits.resize(Math::Max<int>(1, numBits / NumBitsPerElement));
         Bits[0] |= 1 << maxDepth;
-    #else
-        Bits.resize(numBits);
-        Bits[0] = maxDepth;
-    #endif
 
         uint32_t minRange = 1u << initialDepth;
         uint32_t maxRange = 1u << (initialDepth + 1);
@@ -41,7 +33,6 @@ public:
         SumReduction();
     }
 
-#if CBT_MEMORY_COMPACT
     // get a value from the bag of bits. we must read from 2 elements in case the value crosses the boundary.
     uint32_t BinaryHeapGet(uint32_t bitOffset, uint32_t bitCount) const
     {
@@ -83,73 +74,65 @@ public:
 
     void GetDataRange(uint32_t heapIndex, uint32_t* pOffset, uint32_t* pBitSize) const
     {
-        uint32_t depth = (uint32_t)floor(log2(heapIndex));
+        uint32_t depth = GetDepth(heapIndex);
         // number of bits used to store the value at this node, the leaf nodes use 1 bit each, the root uses maxDepth + 1 bits.
         // such as maxDepth = 3, total bits = 4 * 1 + 3 * 2  + 2 * 4 + 1 * 8 = 26 bits
         *pBitSize = GetMaxDepth() - depth + 1;
         *pOffset = (1u << (depth + 1)) + heapIndex * *pBitSize;
         assert(*pBitSize < NumBitsPerElement);
     }
-#endif
 
     // sum reduction bottom to top. this can be parallelized per layer.
     void SumReduction()
     {
         int32_t depth = GetMaxDepth();
 
-        #if CBT_MEMORY_COMPACT
-        constexpr bool doPrepass = true;
-        if constexpr (doPrepass)
+        uint32_t count = 1u << depth;
+        for (uint32_t bitIndex = 0; bitIndex < count; bitIndex += (1 << 5))
         {
-            uint32_t count = 1u << depth;
-            for (uint32_t bitIndex = 0; bitIndex < count; bitIndex += (1 << 5))
-            {
-                uint32_t nodeIndex = bitIndex + count;
-                uint32_t bitOffset = BitIndexFromHeap(nodeIndex, depth);
-                uint32_t elementIndex = bitOffset >> 5u;
+            uint32_t nodeIndex = bitIndex + count;
+            uint32_t bitOffset = NodeBitIndex(nodeIndex);
+            uint32_t elementIndex = bitOffset >> 5u;
 
-                uint32_t bitField = Bits[elementIndex];
-                bitField = (bitField & 0x55555555u) + ((bitField >> 1u) & 0x55555555u);
-                uint32_t data = bitField;
-                Bits[(bitOffset - count) >> 5u] = data;
+            uint32_t bitField = Bits[elementIndex];
+            bitField = (bitField & 0x55555555u) + ((bitField >> 1u) & 0x55555555u);
+            uint32_t data = bitField;
+            Bits[(bitOffset - count) >> 5u] = data;
 
-                bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
-                data = (bitField >> 0u) & (7u << 0u) |
-					   (bitField >> 1u) & (7u << 3u) |
-                       (bitField >> 2u) & (7u << 6u) |
-                       (bitField >> 3u) & (7u << 9u) |
-                       (bitField >> 4u) & (7u << 12u) |
-                       (bitField >> 5u) & (7u << 15u) |
-                       (bitField >> 6u) & (7u << 18u) |
-                       (bitField >> 7u) & (7u << 21u);
+            bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
+            data = (bitField >> 0u) & (7u << 0u) |
+					(bitField >> 1u) & (7u << 3u) |
+                    (bitField >> 2u) & (7u << 6u) |
+                    (bitField >> 3u) & (7u << 9u) |
+                    (bitField >> 4u) & (7u << 12u) |
+                    (bitField >> 5u) & (7u << 15u) |
+                    (bitField >> 6u) & (7u << 18u) |
+                    (bitField >> 7u) & (7u << 21u);
 
-                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 2u, depth - 2u), 24, data);
+            BinaryHeapSet(NodeBitIndex(nodeIndex >> 2u), 24, data);
 
-                bitField = (bitField & 0x0F0F0F0Fu) + ((bitField >> 4u) & 0x0F0F0F0Fu);
-                data = (bitField >> 0u) & (15u << 0u) |
-                       (bitField >> 4u) & (15u << 4u) |
-                       (bitField >> 8u) & (15u << 8u) |
-                       (bitField >> 12u) & (15u << 12u);
+            bitField = (bitField & 0x0F0F0F0Fu) + ((bitField >> 4u) & 0x0F0F0F0Fu);
+            data = (bitField >> 0u) & (15u << 0u) |
+                    (bitField >> 4u) & (15u << 4u) |
+                    (bitField >> 8u) & (15u << 8u) |
+                    (bitField >> 12u) & (15u << 12u);
 
-                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 3u, depth - 3u), 16, data);
+            BinaryHeapSet(NodeBitIndex(nodeIndex >> 3u), 16, data);
 
-                bitField = (bitField & 0x00FF00FFu) + ((bitField >> 8u) & 0x00FF00FFu);
-                data = (bitField >> 0u) & (31u << 0u) |
-					   (bitField >> 11u) & (31u << 5u);
-                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 4u, depth - 4u), 10, data);
+            bitField = (bitField & 0x00FF00FFu) + ((bitField >> 8u) & 0x00FF00FFu);
+            data = (bitField >> 0u) & (31u << 0u) |
+					(bitField >> 11u) & (31u << 5u);
+            BinaryHeapSet(NodeBitIndex(nodeIndex >> 4u), 10, data);
 
-                bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
-                data = bitField;
-                BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 5u, depth - 5u), 6, data);
-            }
-
-            depth -= 5;
+            bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
+            data = bitField;
+            BinaryHeapSet(NodeBitIndex(nodeIndex >> 5u), 6, data);
         }
-        #endif
 
+        depth -= 5;
         while (depth-- > 0)
         {
-            uint32_t count = 1u << depth;
+            count = 1u << depth;
             for (uint32_t k = count; k < count << 1u; k++)
             {
                 SetData(k, GetData(LeftChildIndex(k)) + GetData(RightChildIndex(k)));
@@ -157,33 +140,18 @@ public:
         }
     }
 
-    uint32_t BitIndexFromHeap(uint32_t heapIndex, uint32_t depth)
-    {
-        uint32_t a = 2u << depth;
-        uint32_t b = 1u + GetMaxDepth() - depth;
-        return a + heapIndex * b;
-    }
-
     uint32_t GetData(uint32_t index) const
     {
-    #if CBT_MEMORY_COMPACT
         uint32_t offset, size;
         GetDataRange(index, &offset, &size);
         return BinaryHeapGet(offset, size);
-    #else
-        return Bits[index];
-    #endif
     }
 
     void SetData(uint32_t index, uint32_t value)
     {
-    #if CBT_MEMORY_COMPACT
         uint32_t offset, size;
         GetDataRange(index, &offset, &size);
         BinaryHeapSet(offset, size, value);
-    #else
-        Bits[index] = value;
-    #endif
     }
 
 	template<typename HeapFn>
@@ -212,7 +180,7 @@ public:
         return heapIndex;
     }
 
-    uint32_t BitfieldheapIndex(uint32_t heapIndex) const
+    uint32_t BitfieldHeapIndex(uint32_t heapIndex) const
     {
         return heapIndex * 1u << (GetMaxDepth() - GetDepth(heapIndex));
     }
@@ -222,7 +190,7 @@ public:
         if (!IsCeilNode(heapIndex))
         {
             uint32_t rightChild = RightChildIndex(heapIndex);
-            uint32_t bit = BitfieldheapIndex(rightChild);
+            uint32_t bit = BitfieldHeapIndex(rightChild);
             SetData(bit, 1);
         }
     }
@@ -232,7 +200,7 @@ public:
         if (!IsRootNode(heapIndex))
         {
             uint32_t rightSibling = heapIndex | 1;
-            uint32_t bit = BitfieldheapIndex(rightSibling);
+            uint32_t bit = BitfieldHeapIndex(rightSibling);
             SetData(bit, 0);
         }
     }
@@ -257,13 +225,9 @@ public:
 
     uint32_t GetMaxDepth() const
     {
-    #if CBT_MEMORY_COMPACT
         uint32_t maxDepth;
         assert(BitOperations::LeastSignificantBit(Bits[0], &maxDepth));
         return maxDepth;
-    #else
-        return Bits[0];
-    #endif
     }
 
     uint32_t NumBitfieldBits() const
@@ -318,6 +282,20 @@ public:
     void* GetData()
     {
         return Bits.data();
+    }
+
+    uint32_t CeilNode(uint32_t heapIndex) const
+    {
+        uint32_t depth = GetDepth(heapIndex);
+        return heapIndex << (GetMaxDepth() - depth);
+    }
+
+    uint32_t NodeBitIndex(uint32_t heapIndex) const
+    {
+        uint32_t depth = GetDepth(heapIndex);
+        uint32_t t1 = 2u << depth;
+        uint32_t t2 = 1u + GetMaxDepth() - depth;
+        return t1 + heapIndex * t2;
     }
 
 private:
