@@ -28,7 +28,7 @@ namespace CBTSettings
     
     // PSO settings
 	static bool ColorLevels = false;
-    static bool Wireframe = false;
+    static bool Wireframe = true;
     static bool FrustumCull = true;
     static bool DisplacementLOD = true;
     static bool DistanceLOD = true;
@@ -58,6 +58,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     {
         if (ImGui::CollapsingHeader("CBT"))
         {
+            ImGui::SliderFloat("Height Scale", &CBTSettings::HeightScale, 0.1f, 2.0f);
             if (ImGui::SliderInt("Max Depth", &CBTSettings::CBTDepth, 5, 28))
             {
                 AllocateCBT();
@@ -69,7 +70,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
                 SetupPipelines();
             }
 
-            ImGui::SliderFloat("Height Scale", &CBTSettings::HeightScale, 0.1f, 2.0f);
             ImGui::SliderFloat("Screen Size Bias", &CBTSettings::ScreenSizeBias, 0.0f, 15.0f);
             ImGui::SliderFloat("Heightmap Variance Bias", &CBTSettings::HeightmapVarianceBias, 0.0f, 0.1f);
             ImGui::Checkbox("Debug Visualize", &CBTSettings::DebugVisualize);
@@ -243,8 +243,8 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         {
             uint32_t Depth;
         } reductionArgs;
+        
         int32_t currentDepth = CBTSettings::CBTDepth;
-
         reductionArgs.Depth = currentDepth;
         context.SetComputeDynamicConstantBufferView(1, reductionArgs);
 
@@ -385,20 +385,18 @@ void CBTTessellation::SetupPipelines()
         m_pCBTRenderPSO = m_pDevice->CreatePipeline(drawPsoDesc);
     }
 
+    if (m_pDevice->GetCapabilities().SupportMeshShading())
     {
-		if (m_pDevice->GetCapabilities().SupportMeshShading())
-		{
-			PipelineStateInitializer drawPsoDesc;
-			drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-			drawPsoDesc.SetAmplificationShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "UpdateAS", defines));
-			drawPsoDesc.SetMeshShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "RenderMS", defines));
-			drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
-			drawPsoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
-			drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-			drawPsoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			drawPsoDesc.SetName("Draw CBT Mesh Shader PSO");
-			m_pCBTRenderMeshShaderPSO = m_pDevice->CreatePipeline(drawPsoDesc);
-		}
+        PipelineStateInitializer drawPsoDesc;
+        drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
+        drawPsoDesc.SetAmplificationShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "UpdateAS", defines));
+        drawPsoDesc.SetMeshShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "RenderMS", defines));
+        drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
+        drawPsoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
+        drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        drawPsoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+        drawPsoDesc.SetName("Draw CBT Mesh Shader PSO");
+        m_pCBTRenderMeshShaderPSO = m_pDevice->CreatePipeline(drawPsoDesc);
     }
 
     {
@@ -425,7 +423,7 @@ void CBTTessellation::DemoCpuCBT()
 	static bool init = false;
 
 	static CBT cbt;
-	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 16) || !init)
+	if (ImGui::SliderInt("Max Depth", &maxDepth, 5, 12) || !init)
 	{
 		cbt.Init(maxDepth, maxDepth);
 		init = true;
@@ -446,52 +444,54 @@ void CBTTessellation::DemoCpuCBT()
 
     const float itemWidth = 20;
     const float itemSpacing = 5;
-
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing, itemSpacing));
-
     ImDrawList* bgList = ImGui::GetWindowDrawList();
 
-    uint32_t heapID = 1;
-    for (uint32_t d = 0; d < cbt.GetMaxDepth(); d++)
-    {
-        ImGui::Spacing();
-        for (uint32_t j = 0; j < 1u << d; j++)
-        {
-            ImVec2 cursor = ImGui::GetCursorScreenPos();
-            cursor += ImVec2(itemWidth, itemWidth * 0.5f);
-            float rightChildPos = (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d - 1)) - 0.5f);
+	if (maxDepth < 10)
+	{
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing, itemSpacing));
 
-            ImGui::PushID(heapID);
-            ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(itemWidth, itemWidth));
+		uint32_t heapID = 1;
+		for (uint32_t d = 0; d < cbt.GetMaxDepth(); d++)
+		{
+			ImGui::Spacing();
+			for (uint32_t j = 0; j < (1u << d); j++)
+			{
+				ImVec2 cursor = ImGui::GetCursorScreenPos();
+				cursor += ImVec2(itemWidth, itemWidth * 0.5f);
+				float rightChildPos = (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d - 1)) - 0.5f);
 
-            bgList->AddLine(cursor, ImVec2(cursor.x + rightChildPos, cursor.y), 0xFFFFFFFF);
-            bgList->AddLine(ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f), ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
-            bgList->AddLine(ImVec2(cursor.x + rightChildPos, cursor.y), ImVec2(cursor.x + rightChildPos, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
-            ImGui::SameLine();
-            ImGui::Spacing();
-            ImGui::SameLine(0, (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d)) - 1));
-            ImGui::PopID();
-            heapID++;
-        }
-    }
+				ImGui::PushID(heapID);
+				ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(itemWidth, itemWidth));
 
-    ImGui::Spacing();
-    ImGui::Separator();
+				bgList->AddLine(cursor, ImVec2(cursor.x + rightChildPos, cursor.y), 0xFFFFFFFF);
+				bgList->AddLine(ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f), ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
+				bgList->AddLine(ImVec2(cursor.x + rightChildPos, cursor.y), ImVec2(cursor.x + rightChildPos, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
+				ImGui::SameLine();
+				ImGui::Spacing();
+				ImGui::SameLine(0, (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d)) - 1));
+				ImGui::PopID();
+				heapID++;
+			}
+		}
 
-    for (uint32_t leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); leafIndex++)
-    {
-        ImGui::PushID(10000 + leafIndex);
-        uint32_t index = (1u << cbt.GetMaxDepth()) + leafIndex;
-        if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
-        {
-            cbt.SetData(index, !cbt.GetData(index));
-        }
-        ImGui::SameLine();
-        ImGui::PopID();
-    }
+		ImGui::Spacing();
+		ImGui::Separator();
 
-    ImGui::PopStyleVar();
-    ImGui::Spacing();
+		for (uint32_t leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); leafIndex++)
+		{
+			ImGui::PushID(10000 + leafIndex);
+			uint32_t index = (1u << cbt.GetMaxDepth()) + leafIndex;
+			if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
+			{
+				cbt.SetData(index, !cbt.GetData(index));
+			}
+			ImGui::SameLine();
+			ImGui::PopID();
+		}
+
+		ImGui::PopStyleVar();
+		ImGui::Spacing();
+	}
 
     cPos = ImGui::GetCursorScreenPos();
 	static Vector2 mousePos;
@@ -499,27 +499,33 @@ void CBTTessellation::DemoCpuCBT()
 	bool inBounds = relMousePos.x > 0 && relMousePos.y > 0 && relMousePos.x < scale && relMousePos.y < scale;
 	if (inBounds && Input::Instance().IsMouseDown(VK_LBUTTON))
 	{
-		mousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
+		mousePos = relMousePos;
 	}
 
     {
         PROFILE_SCOPE("CBT Update");
         cbt.IterateLeaves([&](uint32_t heapIndex)
         {
-            if (splitting && LEB::PointInTriangle(mousePos, heapIndex, scale))
+            if (m_SplitMode)
             {
-                LEB::CBTSplitConformed(cbt, heapIndex);
-            }
-        
-            if (!CBT::IsRootNode(heapIndex))
-            {
-                LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-                if (merging && !LEB::PointInTriangle(mousePos, diamond.Base, scale) && !LEB::PointInTriangle(mousePos, diamond.Top, scale))
+                if (splitting && LEB::PointInTriangle(mousePos, heapIndex, scale))
                 {
-                    LEB::CBTMergeConformed(cbt, heapIndex);
+                    LEB::CBTSplitConformed(cbt, heapIndex);
+                }
+            }
+            else
+            {
+                if (!CBT::IsRootNode(heapIndex))
+                {
+                    LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+                    if (merging && !LEB::PointInTriangle(mousePos, diamond.Base, scale) && !LEB::PointInTriangle(mousePos, diamond.Top, scale))
+                    {
+                        LEB::CBTMergeConformed(cbt, heapIndex);
+                    }
                 }
             }
         });
+        m_SplitMode = !m_SplitMode;
 
 		cbt.SumReduction();
     }
@@ -532,6 +538,14 @@ void CBTTessellation::DemoCpuCBT()
         b *= scale;
         c *= scale;
 
+        srand(CBT::GetDepth(heapIndex));
+
+        ImGui::GetWindowDrawList()->AddTriangleFilled(
+            cPos + ImVec2(a.x, a.y),
+            cPos + ImVec2(b.x, b.y),
+            cPos + ImVec2(c.x, c.y),
+            ImColor(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), 0.5f));
+
         ImGui::GetWindowDrawList()->AddTriangle(
             cPos + ImVec2(a.x, a.y),
             cPos + ImVec2(b.x, b.y),
@@ -539,10 +553,13 @@ void CBTTessellation::DemoCpuCBT()
             ImColor(color.x, color.y, color.z, color.w),
 			2.0f);
 
-        ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
-        std::string text = std::format("{}", heapIndex);
-        ImVec2 textPos = cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f;
-        ImGui::GetWindowDrawList()->AddText(textPos, ImColor(1.0f, 0.0f, 1.0f, 1.0f), text.c_str());
+		if (maxDepth < 10)
+		{
+			ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
+			std::string text = std::format("{}", heapIndex);
+			ImVec2 textPos = cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f;
+			ImGui::GetWindowDrawList()->AddText(textPos, ImColor(1.0f, 0.0f, 1.0f, 1.0f), text.c_str());
+		}
     };
 
 	{
@@ -557,7 +574,7 @@ void CBTTessellation::DemoCpuCBT()
 
 		cbt.IterateLeaves([&](uint32_t heapIndex)
 		{
-			LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
+			LEBTriangle(heapIndex, Color(1, 1, 1, 1), scale);
 		});
 
 		ImGui::GetWindowDrawList()->AddCircleFilled(cPos + ImVec2(mousePos.x, mousePos.y), 8, 0xFF0000FF, 20);

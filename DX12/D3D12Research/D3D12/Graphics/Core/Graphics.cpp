@@ -25,6 +25,10 @@
 #include "ImGuizmo/ImGuizmo.h"
 #include "pix3.h"
 
+// setup the Agility D3D12 SDK
+extern "C" { _declspec(dllexport) inline const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
+extern "C" { _declspec(dllexport) inline const char* D3D12SDKPath = ".\\D3D12\\"; }
+
 GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 {
 	UINT flags = 0;

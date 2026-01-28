@@ -9,9 +9,9 @@ DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPa
 	: m_pPageManager(pPageManager)
 {}
 
-DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
+DynamicAllocation DynamicResourceAllocator::Allocate(uint64_t size, int alignment)
 {
-	size_t bufferSize = Math::AlignUp<size_t>(size, alignment);
+	uint64_t bufferSize = Math::AlignUp<uint64_t>(size, alignment);
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
@@ -27,7 +27,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 	}
 	else
 	{
-		m_CurrentOffset = Math::AlignUp<size_t>(m_CurrentOffset, alignment);
+		m_CurrentOffset = Math::AlignUp<uint64_t>(m_CurrentOffset, alignment);
 		
 		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize > PAGE_SIZE)
 		{
@@ -45,6 +45,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 		m_CurrentOffset += bufferSize;
 	}
 
+	memset(allocation.pMappedMemory, 0, allocation.Size);
 	return allocation;
 }
 
@@ -70,7 +71,7 @@ DynamicAllocationManager::~DynamicAllocationManager()
 {
 }
 
-Buffer* DynamicAllocationManager::AllocatePage(size_t size)
+Buffer* DynamicAllocationManager::AllocatePage(uint64_t size)
 {
 	std::scoped_lock lockGuard(m_PageMutex);
 
@@ -89,9 +90,9 @@ Buffer* DynamicAllocationManager::AllocatePage(size_t size)
 	return pPage;
 }
 
-Buffer* DynamicAllocationManager::CreateNewPage(size_t size)
+Buffer* DynamicAllocationManager::CreateNewPage(uint64_t size)
 {
-	std::unique_ptr<Buffer> pNewPage = GetGraphics()->CreateBuffer(BufferDesc::CreateBuffer((uint32_t)size, m_BufferFlags), "Dynamic Allocation Buffer");
+	std::unique_ptr<Buffer> pNewPage = GetGraphics()->CreateBuffer(BufferDesc::CreateBuffer(size, m_BufferFlags), "Dynamic Allocation Buffer");
 	pNewPage->Map();
 	return pNewPage.release();
 }

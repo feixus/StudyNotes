@@ -28,10 +28,6 @@ template<typename T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 #include <d3d12.h>
-// setup the Agility D3D12 SDK
-extern "C" { _declspec(dllexport) inline const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
-extern "C" { _declspec(dllexport) inline const char* D3D12SDKPath = ".\\D3D12\\"; }
-
 #include <dxgi1_6.h>
 
 #define D3DX12_NO_STATE_OBJECT_HELPERS

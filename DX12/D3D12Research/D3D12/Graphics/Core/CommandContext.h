@@ -174,7 +174,7 @@ public:
 	void CopyTexture(GraphicsResource* pSource, GraphicsResource* pDest);
 	void CopyTexture(GraphicsTexture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion = 0, int destinationOffset = 0);
 	void CopyTexture(GraphicsTexture* pSource, GraphicsTexture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, int sourceSubregion = 0, int destinationSubregion = 0);
-	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint32_t size, uint32_t sourceOffset = 0, uint32_t destinationOffset = 0);
+	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64_t size, uint64_t sourceOffset = 0, uint64_t destinationOffset = 0);
 	void InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 

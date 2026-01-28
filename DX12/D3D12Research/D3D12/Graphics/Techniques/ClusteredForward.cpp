@@ -169,7 +169,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
             ));
     });
 
-    // why the volumetric lighting is not working???
+    // why the volumetric lighting is not working???, also the -D of macro defines for hlsl compile.
 	{
 		RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 

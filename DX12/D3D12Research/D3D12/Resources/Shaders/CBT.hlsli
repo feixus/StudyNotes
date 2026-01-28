@@ -211,7 +211,7 @@ namespace LEB
             float3x3 splitMatrix = GetSplitMatrix(GetBitValue(heapIndex, bitID));
             m = mul(splitMatrix, m);
         }
-        float3x3 windingMatrix = GetWindingMatrix((depth ^ 1) & 1);
+        float3x3 windingMatrix = GetWindingMatrix((depth ^ 1u) & 1u);
         return mul(windingMatrix, m);
     }
 
@@ -303,7 +303,7 @@ namespace LEB
             while (edgeNeighbor > minNodeID)
             {
                 cbt.SplitNode_Single(edgeNeighbor);
-                edgeNeighbor >>= 1;
+                edgeNeighbor >>= 1u;
                 if (edgeNeighbor > minNodeID)
                 {
                     cbt.SplitNode_Single(edgeNeighbor);

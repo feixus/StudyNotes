@@ -25,10 +25,6 @@
 #define DISTANCE_LOD 1
 #endif
 
-#ifndef COLOR_LEVELS
-#define COLOR_LEVELS 0
-#endif
-
 #define RootSig "CBV(b0), " \
                 "CBV(b1), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 2)), " \
@@ -75,7 +71,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
     // dispatch args
     uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
-    uIndirectArgs.Store(offset + 0, 1);
+    uIndirectArgs.Store(offset + 0, numThreads);
     uIndirectArgs.Store(offset + 4, 1);
     uIndirectArgs.Store(offset + 8, 1);
 
@@ -291,7 +287,6 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
     {
         uint heapIndex = cbt.LeafIndexToHeapIndex(threadID);
         float3x3 tri = GetVertices(heapIndex);
-
         float2 lod = GetLOD(tri);
         if (lod.x >= 1)
         {
@@ -341,7 +336,6 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
     {
         heapIndex = cbt.LeafIndexToHeapIndex(threadID);
         tri = GetVertices(heapIndex);
-
         float2 lod = GetLOD(tri);
         if (lod.x >= 1)
         {
@@ -391,7 +385,7 @@ void RenderMS(
     SetMeshOutputCounts(NUM_MESH_SHADER_TRIANGLES * 3, NUM_MESH_SHADER_TRIANGLES * 1);
 
     uint outputIndex = groupThreadID;
-    uint heapIndex = payload.IDs[groupID];
+    uint heapIndex = payload.IDs[groupID / (1u << AMPLIFICATION_SHADER_SUBD_LEVEL)];
     uint subdHeapIndex = (((heapIndex << MESH_SHADER_SUBD_LEVEL) | outputIndex) << AMPLIFICATION_SHADER_SUBD_LEVEL) | groupID % (1u << AMPLIFICATION_SHADER_SUBD_LEVEL);
     float3x3 tri = GetVertices(subdHeapIndex);
 
@@ -551,3 +545,16 @@ float4 DebugVisualizePS(float4 position : SV_POSITION, float4 color : COLOR) : S
 {
     return color;
 }
+
+// float4 DebugVisualizePS(
+// 	float4 position : SV_POSITION, 
+// 	float4 color : COLOR, 
+// 	float3 bary : SV_Barycentrics) : SV_TARGET
+// {
+// 	float3 deltas = fwidth(bary);
+// 	float3 smoothing = deltas * 1;
+// 	float3 thickness = deltas * 0.2;
+// 	bary = smoothstep(thickness, thickness + smoothing, bary);
+// 	float minBary = min(bary.x, min(bary.y, bary.z));
+// 	return float4(color.xyz * saturate(minBary + 0.7), 1);
+// }

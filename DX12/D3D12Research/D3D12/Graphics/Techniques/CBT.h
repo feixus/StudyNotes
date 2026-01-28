@@ -7,16 +7,19 @@ public:
     using StorageType = uint32_t;
     constexpr static uint32_t NumBitsPerElement = sizeof(StorageType) * 8;
 
+    static uint64_t ComputeSize(uint64_t maxDepth)
+    {
+        uint64_t numBits = 1ull << (maxDepth + 2);
+        return numBits / NumBitsPerElement;
+    }
+
     void InitBare(uint32_t maxDepth, uint32_t initialDepth)
     {
         assert(initialDepth <= maxDepth);
 
-        uint32_t numBits = 1ull << (maxDepth + 2);
-        assert(numBits < NumBitsPerElement || numBits % NumBitsPerElement == 0);
-
-        Bits.clear();
-        Bits.resize(Math::Max<int>(1, numBits / NumBitsPerElement));
-        Bits[0] |= 1 << maxDepth;
+        Storage.clear();
+        Storage.resize(ComputeSize(maxDepth));
+        Storage[0] |= 1 << maxDepth;
 
         uint32_t minRange = 1u << initialDepth;
         uint32_t maxRange = 1u << (initialDepth + 1);
@@ -47,8 +50,8 @@ public:
         uint32_t elementOffsetLSB = bitOffset % NumBitsPerElement;
         uint32_t bitCountLSB = Math::Min(bitCount, NumBitsPerElement - elementOffsetLSB);
         uint32_t bitCountMSB = bitCount - bitCountLSB;
-        uint32_t valueLSB = BitfieldGet_Single(Bits[elementIndex], elementOffsetLSB, bitCountLSB);
-        uint32_t valueMSB = BitfieldGet_Single(Bits[Math::Min(elementIndex + 1, (uint32_t)Bits.size() - 1)], 0, bitCountMSB);
+        uint32_t valueLSB = BitfieldGet_Single(Storage[elementIndex], elementOffsetLSB, bitCountLSB);
+        uint32_t valueMSB = BitfieldGet_Single(Storage[Math::Min(elementIndex + 1, (uint32_t)Storage.size() - 1)], 0, bitCountMSB);
         uint32_t val = valueLSB | (valueMSB << bitCountLSB);
         return val;
     }
@@ -68,36 +71,27 @@ public:
         // split the write into 2 elements in case it crosses the boundary.
         uint32_t bitCountLSB = Math::Min(bitCount, NumBitsPerElement - elementOffsetLSB);
         uint32_t bitCountMSB = bitCount - bitCountLSB;
-        BitfieldSet_Single(Bits[elementIndex], elementOffsetLSB, bitCountLSB, value);
-        BitfieldSet_Single(Bits[Math::Min(elementIndex + 1, (uint32_t)Bits.size() - 1)], 0, bitCountMSB, value >> bitCountLSB);
-    }
-
-    void GetDataRange(uint32_t heapIndex, uint32_t* pOffset, uint32_t* pBitSize) const
-    {
-        uint32_t depth = GetDepth(heapIndex);
-        // number of bits used to store the value at this node, the leaf nodes use 1 bit each, the root uses maxDepth + 1 bits.
-        // such as maxDepth = 3, total bits = 4 * 1 + 3 * 2  + 2 * 4 + 1 * 8 = 26 bits
-        *pBitSize = GetMaxDepth() - depth + 1;
-        *pOffset = (1u << (depth + 1)) + heapIndex * *pBitSize;
-        assert(*pBitSize < NumBitsPerElement);
+        BitfieldSet_Single(Storage[elementIndex], elementOffsetLSB, bitCountLSB, value);
+        BitfieldSet_Single(Storage[Math::Min(elementIndex + 1, (uint32_t)Storage.size() - 1)], 0, bitCountMSB, value >> bitCountLSB);
     }
 
     // sum reduction bottom to top. this can be parallelized per layer.
     void SumReduction()
     {
         int32_t depth = GetMaxDepth();
-
         uint32_t count = 1u << depth;
+
+        // prepass
         for (uint32_t bitIndex = 0; bitIndex < count; bitIndex += (1 << 5))
         {
             uint32_t nodeIndex = bitIndex + count;
             uint32_t bitOffset = NodeBitIndex(nodeIndex);
             uint32_t elementIndex = bitOffset >> 5u;
 
-            uint32_t bitField = Bits[elementIndex];
+            uint32_t bitField = Storage[elementIndex];
             bitField = (bitField & 0x55555555u) + ((bitField >> 1u) & 0x55555555u);
             uint32_t data = bitField;
-            Bits[(bitOffset - count) >> 5u] = data;
+            Storage[(bitOffset - count) >> 5u] = data;
 
             bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
             data = (bitField >> 0u) & (7u << 0u) |
@@ -140,17 +134,17 @@ public:
         }
     }
 
-    uint32_t GetData(uint32_t index) const
+    uint32_t GetData(uint32_t heapIndex) const
     {
-        uint32_t offset, size;
-        GetDataRange(index, &offset, &size);
+        uint32_t offset = NodeBitIndex(heapIndex);
+        uint32_t size = GetNodeBitSize(heapIndex);
         return BinaryHeapGet(offset, size);
     }
 
-    void SetData(uint32_t index, uint32_t value)
+    void SetData(uint32_t heapIndex, uint32_t value)
     {
-        uint32_t offset, size;
-        GetDataRange(index, &offset, &size);
+        uint32_t offset = NodeBitIndex(heapIndex);
+        uint32_t size = GetNodeBitSize(heapIndex);
         BinaryHeapSet(offset, size, value);
     }
 
@@ -165,6 +159,63 @@ public:
 		}
 	}
 
+    void BitfieldSet(uint32_t bitOffset, uint32_t value)
+    {
+        uint32_t elementIndex = bitOffset / NumBitsPerElement;
+        uint32_t bitIndex = bitOffset % NumBitsPerElement;
+        uint32_t bitMask = ~(1u << bitIndex);
+
+        Storage[elementIndex] &= bitMask;
+        Storage[elementIndex] |= (value << bitIndex);
+    }
+
+    void SplitNode(uint32_t heapIndex)
+    {
+        if (!IsCeilNode(heapIndex))
+        {
+            uint32_t rightChild = RightChildIndex(heapIndex);
+            uint32_t bitfieldIndex = BitfieldHeapIndex(rightChild);
+            uint32_t bit = NodeBitIndex(bitfieldIndex);
+            BitfieldSet(bit, 1);
+        }
+    }
+
+    void MergeNode(uint32_t heapIndex)
+    {
+        if (!IsRootNode(heapIndex))
+        {
+            uint32_t rightSibling = heapIndex | 1;
+            uint32_t bitfieldIndex = BitfieldHeapIndex(rightSibling);
+            uint32_t bit = NodeBitIndex(bitfieldIndex);
+            BitfieldSet(bit, 0);
+        }
+    }
+
+    uint32_t GetNodeBitSize(uint32_t heapIndex) const
+    {
+        uint32_t depth = GetDepth(heapIndex);
+        return GetMaxDepth() - depth + 1;
+    }
+
+    uint32_t NodeBitIndex(uint32_t heapIndex) const
+    {
+        uint32_t depth = GetDepth(heapIndex);
+        uint32_t t1 = 2u << depth;
+        uint32_t t2 = 1u + GetMaxDepth() - depth;
+        return t1 + heapIndex * t2;
+    }
+
+    uint32_t BitfieldHeapIndex(uint32_t heapIndex) const
+    {
+        return heapIndex * (1u << (GetMaxDepth() - GetDepth(heapIndex)));
+    }
+
+    uint32_t CeilNode(uint32_t heapIndex) const
+    {
+        uint32_t depth = GetDepth(heapIndex);
+        return heapIndex << (GetMaxDepth() - depth);
+    }
+
     uint32_t LeafIndexToHeapIndex(uint32_t leafIndex) const
     {
         uint32_t heapIndex = 1u;
@@ -178,31 +229,6 @@ public:
             leafIndex -= bit * leftChildValue;
         }
         return heapIndex;
-    }
-
-    uint32_t BitfieldHeapIndex(uint32_t heapIndex) const
-    {
-        return heapIndex * 1u << (GetMaxDepth() - GetDepth(heapIndex));
-    }
-
-    void SplitNode(uint32_t heapIndex)
-    {
-        if (!IsCeilNode(heapIndex))
-        {
-            uint32_t rightChild = RightChildIndex(heapIndex);
-            uint32_t bit = BitfieldHeapIndex(rightChild);
-            SetData(bit, 1);
-        }
-    }
-
-    void MergeNode(uint32_t heapIndex)
-    {
-        if (!IsRootNode(heapIndex))
-        {
-            uint32_t rightSibling = heapIndex | 1;
-            uint32_t bit = BitfieldHeapIndex(rightSibling);
-            SetData(bit, 0);
-        }
     }
 
     // return true if the node is at the bottom of the tree and can't be split further.
@@ -226,7 +252,7 @@ public:
     uint32_t GetMaxDepth() const
     {
         uint32_t maxDepth;
-        assert(BitOperations::LeastSignificantBit(Bits[0], &maxDepth));
+        assert(BitOperations::LeastSignificantBit(Storage[0], &maxDepth));
         return maxDepth;
     }
 
@@ -235,16 +261,9 @@ public:
         return 1u << GetMaxDepth();
     }
 
-    void GetElementRange(uint32_t heapIndex, uint32_t& begin, uint32_t& size) const
-    {
-        uint32_t depth = GetDepth(heapIndex);
-        size = GetMaxDepth() - depth + 1;
-        begin = 1u << (depth + 1) + heapIndex * size;
-    }
-
     uint32_t GetMemoryUse() const
     {
-        return (uint32_t)Bits.size() * sizeof(StorageType);
+        return (uint32_t)Storage.size() * sizeof(StorageType);
     }
 
     static uint32_t LeftChildIndex(uint32_t heapIndex)
@@ -276,30 +295,16 @@ public:
 
     const void* GetData() const
     {
-        return Bits.data();
+        return Storage.data();
     }
 
     void* GetData()
     {
-        return Bits.data();
-    }
-
-    uint32_t CeilNode(uint32_t heapIndex) const
-    {
-        uint32_t depth = GetDepth(heapIndex);
-        return heapIndex << (GetMaxDepth() - depth);
-    }
-
-    uint32_t NodeBitIndex(uint32_t heapIndex) const
-    {
-        uint32_t depth = GetDepth(heapIndex);
-        uint32_t t1 = 2u << depth;
-        uint32_t t2 = 1u + GetMaxDepth() - depth;
-        return t1 + heapIndex * t2;
+        return Storage.data();
     }
 
 private:
-    std::vector<uint32_t> Bits;
+    std::vector<uint32_t> Storage;
 };
 
 namespace LEB
@@ -371,7 +376,6 @@ namespace LEB
             0, 0, 0,
             1, 0, 0
         };
-		Matrix transform = GetMatrix(heapIndex);
         Matrix t = GetMatrix(heapIndex) * baseTriangle;
         a = Vector3(t._11, t._12, t._13);
         b = Vector3(t._21, t._22, t._23);
@@ -386,32 +390,39 @@ namespace LEB
         uint32_t Current;
     };
 
+    inline NeighborIDs GetNeighbors(const NeighborIDs& neighbors, uint32_t bit)
+    {
+        uint32_t n1 = neighbors.Left;
+        uint32_t n2 = neighbors.Right;
+        uint32_t n3 = neighbors.Edge;
+        uint32_t n4 = neighbors.Current;
+
+        uint32_t b2 = n2 == 0u ? 0u : 1u;
+        uint32_t b3 = n3 == 0u ? 0u : 1u;
+
+        if (bit == 0)
+        {
+            return NeighborIDs{ (n4 << 1u) | 1, (n3 << 1u) | b3, (n2 << 1u) | b2, (n4 << 1u) };
+        }
+        else
+        {
+            return NeighborIDs{ (n3 << 1u), (n4 << 1u), (n1 << 1u), (n4 << 1u) | 1u };
+        }
+    }
+
     inline NeighborIDs GetNeighbors(uint32_t heapIndex)
     {
         int32_t depth = (int32_t)CBT::GetDepth(heapIndex);
-        int32_t bitID = depth > 0 ? depth - 1 : 0;
+        int32_t bitID = depth > 0u ? depth - 1u : 0u;
         uint32_t b = Private::GetBitValue(heapIndex, bitID);
         NeighborIDs neighbors{ 0u, 0u, 3u - b, 2u + b };    // heapIndex 2 and 3 at the depth 1.
 
         for (bitID = depth - 2; bitID >= 0; bitID--)
         {
-            uint32_t n1 = neighbors.Left;
-            uint32_t n2 = neighbors.Right;
-            uint32_t n3 = neighbors.Edge;
-            uint32_t n4 = neighbors.Current;
-
-            uint32_t b2 = n2 == 0 ? 0 : 1;
-            uint32_t b3 = n3 == 0 ? 0 : 1;
-
-            if (Private::GetBitValue(heapIndex, bitID) == 0)
-            {
-                neighbors = NeighborIDs{ (n4 << 1) | 1, (n3 << 1) | b3, (n2 << 1) | b2, (n4 << 1) };
-            }
-            else
-            {
-                neighbors = NeighborIDs{ (n3 << 1), (n4 << 1), (n1 << 1), (n4 << 1) | 1 };
-            }
+            uint32_t bitValue = Private::GetBitValue(heapIndex, bitID);
+            neighbors = GetNeighbors(neighbors, bitValue);
         }
+
         return neighbors;
     }
 
@@ -430,7 +441,7 @@ namespace LEB
     {
         uint32_t parent = CBT::ParentIndex(heapIndex);
         uint32_t edge = GetEdgeNeighbor(parent);
-        edge = edge > 0 ? edge : parent;
+        edge = edge > 0u ? edge : parent;
         return DiamondIDs{ parent, edge };
     }
 
@@ -441,11 +452,12 @@ namespace LEB
             const uint32_t minNodeID = 1u;
 
             cbt.SplitNode(heapIndex);
+
             uint32_t edgeNeighbor = GetEdgeNeighbor(heapIndex);
             while (edgeNeighbor > minNodeID)
             {
                 cbt.SplitNode(edgeNeighbor);
-                edgeNeighbor >>= 1;
+                edgeNeighbor = CBT::ParentIndex(edgeNeighbor);
                 if (edgeNeighbor > minNodeID)
                 {
                     cbt.SplitNode(edgeNeighbor);
