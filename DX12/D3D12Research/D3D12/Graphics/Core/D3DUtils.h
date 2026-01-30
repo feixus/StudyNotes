@@ -99,42 +99,71 @@ namespace D3D
 					time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
 			if (SUCCEEDED(PIXGpuCaptureNextFrames(MULTIBYTE_TO_UNICODE(path.c_str()), numFrames)))
 			{
-				E_LOG(Info, "Captured %d frames to '%s'", numFrames, path);
+				E_LOG(Info, "Captured %d frames to '%s'", numFrames, path.c_str());
 			}
 		}
 	}
 
-	inline void BeginPixCapture()
+	inline void BeginPixCapture(const char* pFileName)
 	{
-		ComPtr<IDXGraphicsAnalysis> pAnalysis;
-		if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pAnalysis.GetAddressOf()))))
+		PIXCaptureParameters parameters;
+		parameters.GpuCaptureParameters.FileName = MULTIBYTE_TO_UNICODE(pFileName);
+		if (SUCCEEDED(::PIXBeginCapture(PIX_CAPTURE_GPU, &parameters)))
 		{
-			pAnalysis->BeginCapture();
+			E_LOG(Info, "Started PIX capture to file %s", pFileName);
+		}
+		else
+		{
+			E_LOG(Info, "Failed to start PIX capture");
 		}
 	}
 
 	inline void EndPixCapture()
 	{
-		ComPtr<IDXGraphicsAnalysis> pAnalysis;
-		if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pAnalysis.GetAddressOf()))))
+		if (SUCCEEDED(::PIXEndCapture(false)))
 		{
-			pAnalysis->EndCapture();
+			E_LOG(Info, "Finish PIX capture");
+		}
+		else
+		{
+			E_LOG(Info, "failed to Finish PIX capture");
 		}
 	}
 
+	template<size_t hash>
 	class PixCaptureScope
 	{
 	public:
 		PixCaptureScope()
 		{
-			BeginPixCapture();
+			if (!sCaptured)
+			{
+				SYSTEMTIME time;
+				GetSystemTime(&time);
+				Paths::CreateDirectoryTree(Paths::SavedDir());
+				std::string path = std::format("{}GPU_Capture_{}_{:02d}_{:02d}_{:02d}_{:02d}_{:02d}_{:02d}_{}.wpix",
+					Paths::SavedDir(),
+					time.wYear, time.wMonth, time.wDay,
+					time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
+
+				BeginPixCapture(path.c_str());
+			}
+
 		}
 
 		~PixCaptureScope()
 		{
-			EndPixCapture();
+			if (!sCaptured)
+			{
+				EndPixCapture();
+				sCaptured = 1;
+			}
 		}
+
+		inline static int sCaptured{0};
 	};
+
+#define PIX_CAPTURE_ONCE() D3D::PixCaptureScope<__COUNTER__> MACRO_CONCAT(pix_capture, __COUNTER__)
 
 	// device removed extend data
 	inline void DREDHandler(ID3D12Device* pDevice)

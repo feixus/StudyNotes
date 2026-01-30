@@ -150,7 +150,7 @@ public:
     void Bind(ExecuteCallback&& callback);
 
     RGResourceHandle Read(const RGResourceHandle& resource);
-    [[nodiscard]]RGResourceHandle& Write(RGResourceHandle& resource);
+    [[nodiscard]]RGResourceHandle Write(RGResourceHandle& resource);
     RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
     RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
     void NeverCull();

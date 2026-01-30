@@ -80,7 +80,7 @@ const Matrix& Camera::GetViewProjection() const
     return m_ViewProjection;
 }
 
-const Matrix& Camera::GetViewProjectionInverse() const
+const Matrix Camera::GetViewProjectionInverse() const
 {
     return GetProjectionInverse() * GetViewInverse();
 }
@@ -205,7 +205,7 @@ void FreeCamera::Update()
 	}
 
     m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.2f);
-	m_Position += m_Velocity * Time::DeltaTime() * m_VelocityFactor;
+	m_Position += m_Velocity * Time::DeltaTime() * (float)m_VelocityFactor;
 
     // update camera matrices
     OnDirty();

@@ -22,7 +22,7 @@ namespace CBTSettings
     static bool DebugVisualize = false;
     static bool CpuDemo = false;
     static bool MeshShader = true;
-    static float ScreenSizeBias = 8.7f;
+    static float ScreenSizeBias = 10.5f;
     static float HeightmapVarianceBias = 0.01f;
     static float HeightScale = 0.3f;
     
@@ -280,7 +280,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 
 		context.SetPipelineState(m_pCBTCacheBitfieldPSO);
 		context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
-		context.InsertUavBarrier(m_pCBTBuffer.get());
 	});
 
     RGPassBuilder cbtSumReduction = graph.AddPass("CBT Sum Reduction");

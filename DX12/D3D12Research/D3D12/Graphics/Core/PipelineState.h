@@ -180,7 +180,6 @@ public:
 	void Create(const PipelineStateInitializer& initializer);
 	void ConditionallyReload();
 
-	PipelineStateType GetType() const { return m_Desc.m_Type; }
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
 
 protected:

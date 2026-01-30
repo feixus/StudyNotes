@@ -541,6 +541,7 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 			}
 
 			E_LOG(Warning, "GLTF - Failed to load texture '%s' for '%s'", pImage->uri, pFilePath);
+			return nullptr;
 		};
 
 		if (gltfMaterial.has_pbr_metallic_roughness)

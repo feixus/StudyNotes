@@ -699,7 +699,7 @@ void DemoApp::Update()
 				img.SetSize(request.Width, request.Height, 4);
 				uint32_t imageRowPitch = request.Width * 4;
 				uint32_t targetOffset = 0;
-				for (int i = 0; i < request.Height; i++)
+				for (uint32_t i = 0; i < request.Height; i++)
 				{
 					img.SetData((uint32_t*)pData, targetOffset, imageRowPitch);
 					pData += request.RowPitch;

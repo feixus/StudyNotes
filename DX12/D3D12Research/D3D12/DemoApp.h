@@ -121,7 +121,6 @@ private:
 		Buffer* pBuffer;
 	};
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
-	int32_t m_ScreenshotRowPitch{0};
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
 

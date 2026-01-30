@@ -15,7 +15,7 @@ RGResourceHandle RGPassBuilder::Read(const RGResourceHandle& resource)
 	return resource;
 }
 
-RGResourceHandle& RGPassBuilder::Write(RGResourceHandle& resource)
+RGResourceHandle RGPassBuilder::Write(RGResourceHandle& resource)
 {
 #if RG_DEBUG
     RG_ASSERT(m_Pass.WritesTo(resource) == false, "Pass already writes to this resource");

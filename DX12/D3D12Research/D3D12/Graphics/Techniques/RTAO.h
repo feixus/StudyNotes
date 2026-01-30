@@ -20,9 +20,8 @@ public:
     void Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneView& sceneData);
 
 private:
-    void SetupPipelines();
+    void SetupPipelines(GraphicsDevice* pGraphicsDevice);
 
-    GraphicsDevice* m_pGraphicsDevice;
     std::unique_ptr<RootSignature> m_pGlobalRS;
     StateObject* m_pStateObject{nullptr};
 };
