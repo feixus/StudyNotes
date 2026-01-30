@@ -28,7 +28,7 @@ private:
 
     CBT m_CBT;
     bool m_IsDirty{true};
-    bool m_SplitMode{false};
+    uint32_t m_SplitMode{0};
     BoundingFrustum m_CachedFrustum;
     Matrix m_CachedViewMatrix;
 
@@ -39,6 +39,7 @@ private:
     std::unique_ptr<Buffer> m_pCBTIndirectArgs;
 	std::unique_ptr<GraphicsTexture> m_pDebugVisualizeTexture;
 	PipelineState* m_pCBTIndirectArgsPSO{nullptr};
+	PipelineState* m_pCBTCacheBitfieldPSO{nullptr};
 	PipelineState* m_pCBTSumReductionPSO{nullptr};
 	PipelineState* m_pCBTSumReductionFirstPassPSO{nullptr};
 	PipelineState* m_pCBTUpdatePSO{nullptr};

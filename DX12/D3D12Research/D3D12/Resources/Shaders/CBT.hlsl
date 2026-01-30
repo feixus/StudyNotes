@@ -55,6 +55,7 @@ struct UpdateData
     float HeightmapSizeInv;
     float ScreenSizeBias;
     float HeightmapVarianceBias;
+    uint SplitMode;
 };
 
 ConstantBuffer<CommonArgs> cCommonArgs : register(b0);
@@ -96,6 +97,96 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
     offset += sizeof(uint4);
 }
 
+#if 1
+
+groupshared uint gsSumCache[COMPUTE_THREAD_GROUP_SIZE];
+
+// num of nodes writes per thread.
+static uint SUM_REDUCTION_LUT[] = {
+    0,
+	32,
+	16,
+	32,
+	8,
+	32,
+	16,
+	32,
+	4,
+	32,
+	16,
+	32,
+	8,
+	32,
+	16,
+	32,
+	2,
+	32,
+	16,
+	32,
+	8,
+	32,
+	16,
+	32,
+	4,
+	32,
+	16,
+	32,
+	8,
+	32,
+	16,
+	32,
+	1
+};
+
+[RootSignature(RootSig)]
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
+void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupID)
+{
+    CBT cbt;
+    cbt.Init(uCBT, cCommonArgs.NumElements);
+    uint count = 1u << cSumReductionData.Depth;
+    uint index = threadID;
+    if (index < count)
+    {
+        index += count;
+        uint leftChild = cbt.GetData(cbt.LeftChildIndex(index));
+        uint rightChild = cbt.GetData(cbt.RightChildIndex(index));
+        gsSumCache[groupThreadID] = leftChild + rightChild;
+    }
+
+    uint numThreadGroups = max(1, count / COMPUTE_THREAD_GROUP_SIZE);
+
+    GroupMemoryBarrierWithGroupSync();
+
+    uint nodeSize = cbt.NodeBitSize(index);
+    uint numNodesPerThread = SUM_REDUCTION_LUT[nodeSize];
+    uint numNodesPerWrite = min(count / numThreadGroups, numNodesPerThread);
+    uint numThreads = max(1, count / numThreadGroups / numNodesPerThread);
+    uint numNodesPerGroup = numThreads * numNodesPerWrite;
+
+    if (groupThreadID < numThreads)
+    {
+        uint nodeOffset = groupThreadID * numNodesPerWrite;
+        uint groupOffset = groupIndex * numNodesPerGroup;
+        uint baseNode = groupOffset + nodeOffset + count;
+        uint baseBitIndex = cbt.NodeBitIndex(baseNode);
+        
+        for (uint i = 0; i < numNodesPerWrite; i++)
+        {
+            uint value = gsSumCache[nodeOffset + i];
+            uint bitIndex = baseBitIndex + i * nodeSize;
+            CBT::DataMutateArgs args = cbt.GetDataArgs(bitIndex, nodeSize);
+            cbt.BitfieldSet_Single_Lockless(args.ElementIndexLSB, args.ElementOffsetLSB, args.BitCountLSB, value);
+            if (args.BitCountMSB > 0u)
+            {
+                cbt.BitfieldSet_Single_Lockless(args.ElementIndexMSB, 0u, args.BitCountMSB, value >> args.BitCountLSB);
+            }
+        }
+    }
+}
+
+#else
+
 [RootSignature(RootSig)]
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
@@ -110,6 +201,28 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
         uint leftChild = cbt.GetData(cbt.LeftChildIndex(index));
         uint rightChild = cbt.GetData(cbt.RightChildIndex(index));
         cbt.SetData(index, leftChild + rightChild);
+    }
+}
+
+#endif
+
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
+void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
+{
+    CBT cbt;
+    cbt.Init(uCBT, cCommonArgs.NumElements);
+
+    uint depth = cSumReductionData.Depth;
+    uint count = 1u << depth;
+    uint elementCount = count >> 5u;
+    if (threadID < elementCount)
+    {
+        uint nodeIndex = (threadID << 5u) + count;
+        uint bitOffset = cbt.NodeBitIndex(nodeIndex);
+        uint elementIndex = bitOffset >> 5u;
+        uint v = cbt.Storage.Load(4 * elementIndex);
+        // cache the bitfield in the layer above it so that it's immutable during the subdivision pass.
+        cbt.Storage.Store(4 * (elementIndex - elementCount), v);
     }
 }
 
@@ -288,19 +401,25 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
         uint heapIndex = cbt.LeafIndexToHeapIndex(threadID);
         float3x3 tri = GetVertices(heapIndex);
         float2 lod = GetLOD(tri);
-        if (lod.x >= 1)
+
+        if (cUpdateData.SplitMode == 1u)
         {
-            LEB::CBTSplitConformed(cbt, heapIndex);
-        }
-        
-        if (heapIndex > 1)
-        {
-            LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-            bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0;
-            bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0;
-            if (mergeTop && mergeBase)
+            if (lod.x >= 1.0f)
             {
-                LEB::CBTMergeConformed(cbt, heapIndex);
+                LEB::CBTSplitConformed(cbt, heapIndex);
+            }
+        }
+        else
+        {
+            if (heapIndex > 1)
+            {
+                LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+                bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0f;
+                bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0f;
+                if (mergeTop && mergeBase)
+                {
+                    LEB::CBTMergeConformed(cbt, heapIndex);
+                }
             }
         }
     }
@@ -329,31 +448,36 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
     CBT cbt;
     cbt.Init(uCBT, cCommonArgs.NumElements);
     bool isVisible = false;
-    float3x3 tri = 0;
     uint heapIndex = 0;
 
     if (threadID < cbt.NumNodes())
     {
         heapIndex = cbt.LeafIndexToHeapIndex(threadID);
-        tri = GetVertices(heapIndex);
+        float3x3 tri = GetVertices(heapIndex);
         float2 lod = GetLOD(tri);
-        if (lod.x >= 1)
+
+        if (cUpdateData.SplitMode == 1u)
         {
-            LEB::CBTSplitConformed(cbt, heapIndex);
-        }
-        
-        if (heapIndex > 1)
-        {
-            LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-            bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0;
-            bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0;
-            if (mergeTop && mergeBase)
+            if (lod.x >= 1.0f)
             {
-                LEB::CBTMergeConformed(cbt, heapIndex);
+                LEB::CBTSplitConformed(cbt, heapIndex);
+            }
+        }
+        else
+        {
+            if (heapIndex > 1)
+            {
+                LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+                bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0f;
+                bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0f;
+                if (mergeTop && mergeBase)
+                {
+                    LEB::CBTMergeConformed(cbt, heapIndex);
+                }
             }
         }
 
-        isVisible = lod.y > 0;
+        isVisible = lod.y > 0.0f;
     }
 
     if (isVisible)

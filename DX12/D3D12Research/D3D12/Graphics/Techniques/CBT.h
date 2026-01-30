@@ -7,9 +7,9 @@ public:
     using StorageType = uint32_t;
     constexpr static uint32_t NumBitsPerElement = sizeof(StorageType) * 8;
 
-    static uint64_t ComputeSize(uint64_t maxDepth)
+    static uint32_t ComputeSize(uint32_t maxDepth)
     {
-        uint64_t numBits = 1ull << (maxDepth + 2);
+        uint32_t numBits = 1u << (maxDepth + 2);
         return numBits / NumBitsPerElement;
     }
 
@@ -475,7 +475,8 @@ namespace LEB
             if (cbt.GetData(diamond.Base) <= 2 && cbt.GetData(diamond.Top) <= 2)
             {
 				cbt.MergeNode(heapIndex);
-				cbt.MergeNode(cbt.RightChildIndex(diamond.Top));
+                // if splitting/merging is not alternated, it causes bugs and this extra hack was necessary
+				// cbt.MergeNode(cbt.RightChildIndex(diamond.Top));
             }
         }
     }

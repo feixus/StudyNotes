@@ -138,6 +138,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         float HeightmapSizeInv;
         float ScreenSizeBias;
         float HeightmapVarianceBias;
+        uint32_t SplitMode;
     } updateData;
     updateData.World = terrainTransform;
     updateData.WorldView = terrainTransform * m_CachedViewMatrix;
@@ -155,6 +156,8 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     updateData.HeightmapSizeInv = 1.0f / m_pHeightmap->GetWidth();
     updateData.ScreenSizeBias = CBTSettings::ScreenSizeBias;
     updateData.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
+    updateData.SplitMode = m_SplitMode;
+    m_SplitMode = 1 - m_SplitMode;
 
     if (m_IsDirty)
     {
@@ -231,28 +234,55 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         context.EndRenderPass();
     });
 
-    RGPassBuilder cbtSumReductionPrepass = graph.AddPass("CBT Sum Reduction Prepass");
+	// no longer need to compute the sum reduction tree for the last 5 layers. instead, bits in the bitfield are counted directly
+#if 0
+	RGPassBuilder cbtSumReductionPrepass = graph.AddPass("CBT Sum Reduction Prepass");
 	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResource& resources)
-    {
-        context.SetComputeRootSignature(m_pCBTRS.get());
-        context.SetComputeDynamicConstantBufferView(0, commonArgs);
+	{
+		context.SetComputeRootSignature(m_pCBTRS.get());
+		context.SetComputeDynamicConstantBufferView(0, commonArgs);
 
-        context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+		context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
-        struct SumReductionData
-        {
-            uint32_t Depth;
-        } reductionArgs;
-        
-        int32_t currentDepth = CBTSettings::CBTDepth;
-        reductionArgs.Depth = currentDepth;
-        context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+		struct SumReductionData
+		{
+			uint32_t Depth;
+		} reductionArgs;
 
-        context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
-        context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
-        context.InsertUavBarrier(m_pCBTBuffer.get());
-    });
-    
+		int32_t currentDepth = CBTSettings::CBTDepth;
+		reductionArgs.Depth = currentDepth;
+		context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+
+		context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
+		context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
+		context.InsertUavBarrier(m_pCBTBuffer.get());
+	});
+#endif
+
+	// because the bits in the bitfield are counted directly, we need a snapshot of the bitfield before subdivision starts
+	// cache the btfield in the second to last layer as it is unused memory now.
+	RGPassBuilder cbtSumReductionPrepass = graph.AddPass("CBT Cache Bitfield");
+	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResource& resources)
+	{
+		context.SetComputeRootSignature(m_pCBTRS.get());
+		context.SetComputeDynamicConstantBufferView(0, commonArgs);
+
+		context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+
+		struct SumReductionData
+		{
+			uint32_t Depth;
+		} reductionArgs;
+
+		int32_t currentDepth = CBTSettings::CBTDepth;
+		reductionArgs.Depth = currentDepth;
+		context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+
+		context.SetPipelineState(m_pCBTCacheBitfieldPSO);
+		context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
+		context.InsertUavBarrier(m_pCBTBuffer.get());
+	});
+
     RGPassBuilder cbtSumReduction = graph.AddPass("CBT Sum Reduction");
 	cbtSumReduction.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
@@ -358,7 +388,11 @@ void CBTTessellation::SetupPipelines()
 
         psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS", defines));
         psoDesc.SetName("CBT Sum Reduction PSO");
-        m_pCBTSumReductionPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pCBTSumReductionPSO = m_pDevice->CreatePipeline(psoDesc);
+
+        psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "CacheBitfieldCS", defines));
+        psoDesc.SetName("CBT Cache Bitfield PSO");
+		m_pCBTCacheBitfieldPSO = m_pDevice->CreatePipeline(psoDesc);
 
         psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "UpdateCS", defines));
         psoDesc.SetName("CBT Update PSO");
@@ -525,7 +559,6 @@ void CBTTessellation::DemoCpuCBT()
                 }
             }
         });
-        m_SplitMode = !m_SplitMode;
 
 		cbt.SumReduction();
     }

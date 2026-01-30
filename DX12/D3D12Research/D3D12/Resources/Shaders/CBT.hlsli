@@ -39,6 +39,15 @@ struct CBT
         Storage.InterlockedOr(elementIndex * 4u, value << bitOffset);
     }
 
+    void BitfieldSet_Single_Lockless(uint elementIndex, uint bitOffset, uint bitCount, uint value)
+    {
+        uint bitMask = ~(~(~0u << bitCount) << bitOffset);
+        uint element = Storage.Load(elementIndex * 4u);
+        element &= bitMask;
+        element |= (value << bitOffset);
+        Storage.Store(elementIndex * 4u, element);
+    }
+
     struct DataMutateArgs
     {
         uint ElementIndexLSB;
@@ -76,12 +85,34 @@ struct CBT
 
     uint GetData(uint heapIndex)
     {
-        return BinaryHeapGet(NodeBitIndex(heapIndex), NodeBitSize(heapIndex));
+        // if we want to get data from the last 5 levels, count the bits in the int directly.
+        uint depth = GetDepth(heapIndex);
+        if (GetMaxDepth() - depth <= 5u)
+        {
+            uint bitfieldSize = (1u << GetMaxDepth());
+            uint bitfieldElements = bitfieldSize >> 5u;
+            uint numBits = 1u << (GetMaxDepth() - depth);
+            uint bitfieldBitIndex = NodeBitIndex(BitfieldHeapIndex(heapIndex));
+            uint offset = bitfieldBitIndex & 31u;
+            uint elementIndex = bitfieldBitIndex >> 5u;
+            // the bitfield is cached in the layer above the bitfield so that it is immutable during subdivision.
+            uint element = Storage.Load(4 * (elementIndex - bitfieldElements));
+            uint mask = (uint)~(~0ull << numBits);
+            element >>= offset;
+            element &= mask;
+            return countbits(element);
+        }
+
+        uint bitIndex = NodeBitIndex(heapIndex);
+        uint size = NodeBitSize(heapIndex);
+        return BinaryHeapGet(bitIndex, size);
     }
 
     void SetData(uint heapIndex, uint value)
     {
-        BinaryHeapSet(NodeBitIndex(heapIndex), NodeBitSize(heapIndex), value);
+        uint bitIndex = NodeBitIndex(heapIndex);
+        uint size = NodeBitSize(heapIndex);
+        BinaryHeapSet(bitIndex, size, value);
     }
 
     uint LeafIndexToHeapIndex(uint leafIndex)
@@ -221,57 +252,68 @@ namespace LEB
         return mul(transformMatrix, attributes);
     }
 
-    struct NeighborIDs
+    uint4 SplitNeighborIDs(uint4 neighbors, uint bit)
     {
-        uint Left;
-        uint Right;
-        uint Edge;
-        uint Current;
-    };
+    #if 1
+        uint b = bit;
+        uint c = bit ^ 1u;
+        bool cb = c;
+        uint4 n;
+        n.x = (neighbors[2 + b] << 1u) | (cb && neighbors[2 + b]);
+        n.y = (neighbors[2 + c] << 1u) | (cb && neighbors[2 + c]);
+        n.z = (neighbors[b] << 1u) | (cb && neighbors[b]);
+        n.w = (neighbors[3] << 1u) | b;
+        return n;
+    #else
 
-    NeighborIDs GetNeighbors(uint heapIndex)
+        uint n1 = neighbors.x; // left
+        uint n2 = neighbors.y; // right
+        uint n3 = neighbors.z; // edge
+        uint n4 = neighbors.w; // current
+
+        uint b2 = n2 == 0 ? 0 : 1;
+        uint b3 = n3 == 0 ? 0 : 1;
+
+        if (bit == 0)
+        {
+            neighbors.x = (n4 << 1) | 1;
+            neighbors.y = (n3 << 1) | b3;
+            neighbors.z = (n2 << 1) | b2;
+            neighbors.w = (n4 << 1);
+        }
+        else
+        {
+            neighbors.x = (n3 << 1);
+            neighbors.y = (n4 << 1);
+            neighbors.z = (n1 << 1);
+            neighbors.w = (n4 << 1) | 1;
+        }
+        return neighbors;
+    #endif
+    }
+
+    uint4 GetNeighbors(uint heapIndex)
     {
         int depth = firstbithigh(heapIndex);
         int bitID = depth > 0 ? depth - 1 : 0;
         uint b = GetBitValue(heapIndex, bitID);
 
-        NeighborIDs neighbors;
-        neighbors.Left = 0u;
-        neighbors.Right = 0u;
-        neighbors.Edge = 3u - b;
-        neighbors.Current = 2u + b;
+        uint4 neighbors;
+        neighbors.x = 0u;
+        neighbors.y = 0u;
+        neighbors.z = 3u - b;
+        neighbors.w = 2u + b;
 
         for (bitID = depth - 2; bitID >= 0; bitID--)
         {
-            uint n1 = neighbors.Left;
-            uint n2 = neighbors.Right;
-            uint n3 = neighbors.Edge;
-            uint n4 = neighbors.Current;
-
-            uint b2 = n2 == 0 ? 0 : 1;
-            uint b3 = n3 == 0 ? 0 : 1;
-
-            if (GetBitValue(heapIndex, bitID) == 0)
-            {
-                neighbors.Left = (n4 << 1) | 1;
-                neighbors.Right = (n3 << 1) | b3;
-                neighbors.Edge = (n2 << 1) | b2;
-                neighbors.Current = (n4 << 1);
-            }
-            else
-            {
-                neighbors.Left = (n3 << 1);
-                neighbors.Right = (n4 << 1);
-                neighbors.Edge = (n1 << 1);
-                neighbors.Current = (n4 << 1) | 1;
-            }
+            neighbors = SplitNeighborIDs(neighbors, GetBitValue(heapIndex, bitID));
         }
         return neighbors;
     }
 
     uint GetEdgeNeighbor(uint heapIndex)
     {
-        return GetNeighbors(heapIndex).Edge;
+        return GetNeighbors(heapIndex).z;
     }
 
     struct DiamondIDs
@@ -321,7 +363,8 @@ namespace LEB
             if (cbt.GetData(diamond.Base) <= 2 && cbt.GetData(diamond.Top) <= 2)
             {
                 cbt.MergeNode_Single(heapIndex);
-                cbt.MergeNode_Single(cbt.RightChildIndex(diamond.Top));
+                // if splitting/merging is not alternated, it causes bugs and this extra hack was necessary
+                // cbt.MergeNode_Single(cbt.RightChildIndex(diamond.Top));
             }
         }
     }

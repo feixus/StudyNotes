@@ -45,7 +45,6 @@ DynamicAllocation DynamicResourceAllocator::Allocate(uint64_t size, int alignmen
 		m_CurrentOffset += bufferSize;
 	}
 
-	memset(allocation.pMappedMemory, 0, allocation.Size);
 	return allocation;
 }
 
