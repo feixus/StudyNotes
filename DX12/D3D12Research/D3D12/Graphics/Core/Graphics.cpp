@@ -399,9 +399,9 @@ std::unique_ptr<GraphicsTexture> GraphicsDevice::CreateTexture(const TextureDesc
 	return std::make_unique<GraphicsTexture>(this, desc, pName);
 }
 
-std::unique_ptr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName)
+std::unique_ptr<GraphicsBuffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName)
 {
-	return std::make_unique<Buffer>(this, desc, pName);
+	return std::make_unique<GraphicsBuffer>(this, desc, pName);
 }
 
 ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue)

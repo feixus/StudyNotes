@@ -118,15 +118,15 @@ private:
 		uint32_t Width;
 		uint32_t Height;
 		uint32_t RowPitch;
-		Buffer* pBuffer;
+		GraphicsBuffer* pBuffer;
 	};
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
-	std::unique_ptr<Buffer> m_pTLAS;
-	std::unique_ptr<Buffer> m_pTLASScratch;
+	std::unique_ptr<GraphicsBuffer> m_pTLAS;
+	std::unique_ptr<GraphicsBuffer> m_pTLASScratch;
 
 	// shadow mapping
 	std::unique_ptr<RootSignature> m_pShadowRS;
@@ -152,8 +152,8 @@ private:
 	PipelineState* m_pToneMapPSO{nullptr};
 	std::unique_ptr<RootSignature> m_pDrawHistogramRS;
 	PipelineState* m_pDrawHistogramPSO{nullptr};
-	std::unique_ptr<Buffer> m_pLuminanceHistogram;
-	std::unique_ptr<Buffer> m_pAverageLuminance;
+	std::unique_ptr<GraphicsBuffer> m_pLuminanceHistogram;
+	std::unique_ptr<GraphicsBuffer> m_pAverageLuminance;
 	std::unique_ptr<GraphicsTexture> m_pDebugHistogramTexture;
 
 	// SSAO
@@ -169,7 +169,7 @@ private:
 	PipelineState* m_pReduceDepthPSO{nullptr};
 	std::unique_ptr<RootSignature> m_pReduceDepthRS;
 	std::vector<std::unique_ptr<GraphicsTexture>> m_ReductionTargets;
-	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
+	std::vector<std::unique_ptr<GraphicsBuffer>> m_ReductionReadbackTargets;
 
 	// TAA
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
@@ -184,11 +184,11 @@ private:
 	PipelineState* m_pSkyboxPSO{nullptr};
 
 	// light data
-	std::unique_ptr<Buffer> m_pMaterialBuffer;
-	std::unique_ptr<Buffer> m_pMeshBuffer;
-	std::unique_ptr<Buffer> m_pMeshInstanceBuffer;
+	std::unique_ptr<GraphicsBuffer> m_pMaterialBuffer;
+	std::unique_ptr<GraphicsBuffer> m_pMeshBuffer;
+	std::unique_ptr<GraphicsBuffer> m_pMeshInstanceBuffer;
 	std::vector<Light> m_Lights;
-	std::unique_ptr<Buffer> m_pLightBuffer;
+	std::unique_ptr<GraphicsBuffer> m_pLightBuffer;
 
 	// particles
 	std::unique_ptr<GpuParticles> m_pGpuParticles;

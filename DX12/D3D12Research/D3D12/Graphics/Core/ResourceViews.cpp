@@ -10,7 +10,7 @@ ShaderResourceView::~ShaderResourceView()
     Release();
 }
 
-void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
+void ShaderResourceView::Create(GraphicsBuffer* pBuffer, const BufferSRVDesc& desc)
 {
     check(pBuffer);
 	m_pParent = pBuffer;
@@ -147,7 +147,7 @@ UnorderedAccessView::~UnorderedAccessView()
     Release();
 }
 
-void UnorderedAccessView::Create(Buffer* pBuffer, const BufferUAVDesc& desc)
+void UnorderedAccessView::Create(GraphicsBuffer* pBuffer, const BufferUAVDesc& desc)
 {
     check(pBuffer);
 	m_pParent = pBuffer;

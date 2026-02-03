@@ -5,21 +5,21 @@
 #include "GraphicsTexture.h"
 #include "ResourceViews.h"
 
-Buffer::Buffer(GraphicsDevice* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
+GraphicsBuffer::GraphicsBuffer(GraphicsDevice* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
 	: GraphicsResource(pGraphics, pResource, state)
 {}
 
-Buffer::Buffer(GraphicsDevice* pGraphics, const char* pName)
+GraphicsBuffer::GraphicsBuffer(GraphicsDevice* pGraphics, const char* pName)
 	: GraphicsResource(pGraphics, pName)
 {}
 
-Buffer::Buffer(GraphicsDevice* pGraphics, const BufferDesc& desc, const char* pName)
-	: Buffer(pGraphics, pName)
+GraphicsBuffer::GraphicsBuffer(GraphicsDevice* pGraphics, const BufferDesc& desc, const char* pName)
+	: GraphicsBuffer(pGraphics, pName)
 {
 	Create(desc);
 }
 
-Buffer::~Buffer()
+GraphicsBuffer::~GraphicsBuffer()
 {}
 
 D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
@@ -47,7 +47,7 @@ D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 	return desc;
 }
 
-void Buffer::Create(const BufferDesc& bufferDesc)
+void GraphicsBuffer::Create(const BufferDesc& bufferDesc)
 {
 	Release();
 	m_Desc = bufferDesc;
@@ -120,13 +120,13 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	}
 }
 
-void Buffer::SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint64_t offset /*= 0*/)
+void GraphicsBuffer::SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint64_t offset /*= 0*/)
 {
 	check(dataSize + offset <= GetSize());
 	pContext->InitializeBuffer(this, pData, dataSize, (uint32_t)offset);
 }
 
-void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
+void GraphicsBuffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
 {
 	if (*pView == nullptr)
 	{
@@ -137,7 +137,7 @@ void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
 	(*pView)->Create(this, desc);
 }
 
-void Buffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
+void GraphicsBuffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
 {
 	if (*pView == nullptr)
 	{

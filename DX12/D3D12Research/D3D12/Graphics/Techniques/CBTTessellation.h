@@ -3,7 +3,7 @@
 
 class RootSignature;
 class PipelineState;
-class Buffer;
+class GraphicsBuffer;
 class GraphicsTexture;
 class GraphicsDevice;
 class RGGraph;
@@ -35,8 +35,8 @@ private:
     std::unique_ptr<GraphicsTexture> m_pHeightmap;
 
     std::unique_ptr<RootSignature> m_pCBTRS;
-    std::unique_ptr<Buffer> m_pCBTBuffer;
-    std::unique_ptr<Buffer> m_pCBTIndirectArgs;
+    std::unique_ptr<GraphicsBuffer> m_pCBTBuffer;
+    std::unique_ptr<GraphicsBuffer> m_pCBTIndirectArgs;
 	std::unique_ptr<GraphicsTexture> m_pDebugVisualizeTexture;
 	PipelineState* m_pCBTIndirectArgsPSO{nullptr};
 	PipelineState* m_pCBTCacheBitfieldPSO{nullptr};

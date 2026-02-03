@@ -4,7 +4,7 @@
 #include "ShaderCommon.h"
 
 class GraphicsTexture;
-class Buffer;
+class GraphicsBuffer;
 class Camera;
 class CommandContext;
 struct SubMesh;
@@ -43,10 +43,10 @@ struct SceneView
 	GraphicsTexture* pAO{ nullptr };
 	std::vector<Batch> Batches;
 	DescriptorHandle GlobalSRVHeapHandle{};
-	Buffer* pLightBuffer{ nullptr };
-	Buffer* pMaterialBuffer{ nullptr };
-	Buffer* pMeshBuffer{ nullptr };
-	Buffer* pMeshInstanceBuffer{ nullptr };
+	GraphicsBuffer* pLightBuffer{ nullptr };
+	GraphicsBuffer* pMaterialBuffer{ nullptr };
+	GraphicsBuffer* pMeshBuffer{ nullptr };
+	GraphicsBuffer* pMeshInstanceBuffer{ nullptr };
 	Camera* pCamera{ nullptr };
 	ShaderInterop::ShadowData* pShadowData{ nullptr };
 	int SceneTLAS{ 0 };

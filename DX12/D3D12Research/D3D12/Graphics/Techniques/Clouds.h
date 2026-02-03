@@ -3,7 +3,7 @@
 class PipelineState;
 class RootSignature;
 class GraphicsTexture;
-class Buffer;
+class GraphicsBuffer;
 class ShaderManager;
 class Camera;
 class CommandContext;
@@ -30,7 +30,7 @@ private:
 	std::unique_ptr<GraphicsTexture> m_pIntermediateColor;
 	std::unique_ptr<GraphicsTexture> m_pIntermediateDepth;
 
-	std::unique_ptr<Buffer> m_pQuadVertexBuffer;
+	std::unique_ptr<GraphicsBuffer> m_pQuadVertexBuffer;
 
 	bool m_UpdateNoise{true};
 	BoundingBox m_CloudBounds;

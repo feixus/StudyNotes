@@ -6,7 +6,7 @@
 
 class GraphicsResource;
 class GraphicsTexture;
-class Buffer;
+class GraphicsBuffer;
 class OnlineDescriptorAllocator;
 class RootSignature;
 class PipelineState;
@@ -172,9 +172,9 @@ public:
 	void FlushResourceBarriers();
 
 	void CopyTexture(GraphicsResource* pSource, GraphicsResource* pDest);
-	void CopyTexture(GraphicsTexture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion = 0, int destinationOffset = 0);
+	void CopyTexture(GraphicsTexture* pSource, GraphicsBuffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion = 0, int destinationOffset = 0);
 	void CopyTexture(GraphicsTexture* pSource, GraphicsTexture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, int sourceSubregion = 0, int destinationSubregion = 0);
-	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64_t size, uint64_t sourceOffset = 0, uint64_t destinationOffset = 0);
+	void CopyBuffer(GraphicsBuffer* pSource, GraphicsBuffer* pDestination, uint64_t size, uint64_t sourceOffset = 0, uint64_t destinationOffset = 0);
 	void InitializeBuffer(GraphicsResource* pResource, const void* pData, uint64_t dataSize, uint32_t offset = 0);
 	void InitializeTexture(GraphicsTexture* pResource, D3D12_SUBRESOURCE_DATA* pSubresources, int firstSubresource, int subresourceCount);
 
@@ -182,7 +182,7 @@ public:
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
 	void DispatchMesh(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
 
-	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32_t argumentsOffset = 0, uint32_t countOffset = 0);
+	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, GraphicsBuffer* pIndirectArguments, GraphicsBuffer* pCountBuffer, uint32_t argumentsOffset = 0, uint32_t countOffset = 0);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);

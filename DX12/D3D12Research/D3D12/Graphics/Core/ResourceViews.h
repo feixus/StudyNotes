@@ -1,7 +1,7 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class Buffer;
+class GraphicsBuffer;
 class GraphicsTexture;
 class GraphicsResource;
 
@@ -78,7 +78,7 @@ class ShaderResourceView : public ResourceView
 public:
 	~ShaderResourceView();
 
-	void Create(Buffer* pBuffer, const BufferSRVDesc& desc);
+	void Create(GraphicsBuffer* pBuffer, const BufferSRVDesc& desc);
 	void Create(GraphicsTexture* pTexture, const TextureSRVDesc& desc);
 	void Release();
 };
@@ -88,15 +88,15 @@ class UnorderedAccessView : public ResourceView
 public:
 	~UnorderedAccessView();
 
-	void Create(Buffer* pBuffer, const BufferUAVDesc& desc);
+	void Create(GraphicsBuffer* pBuffer, const BufferUAVDesc& desc);
 	void Create(GraphicsTexture* pTexture, const TextureUAVDesc& desc);
 	void Release();
 
-    Buffer* GetCounter() const { return m_pCounter.get(); }
+    GraphicsBuffer* GetCounter() const { return m_pCounter.get(); }
     UnorderedAccessView* GetCounterUAV() const;
     ShaderResourceView* GetCounterSRV() const;
 
 private:
-    std::unique_ptr<Buffer> m_pCounter;
+    std::unique_ptr<GraphicsBuffer> m_pCounter;
 };
 

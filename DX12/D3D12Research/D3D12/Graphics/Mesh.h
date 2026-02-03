@@ -24,8 +24,8 @@ struct SubMesh
     BoundingBox Bounds;
     Mesh* pParent{nullptr};
 
-	Buffer* pBLAS{nullptr};
-	Buffer* pBLASScratch{nullptr};
+	GraphicsBuffer* pBLAS{nullptr};
+	GraphicsBuffer* pBLASScratch{nullptr};
 };
 
 struct SubMeshInstance
@@ -65,7 +65,7 @@ private:
     void GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext);
 
     std::vector<Material> m_Materials;
-    std::unique_ptr<Buffer> m_pGeometryData;
+    std::unique_ptr<GraphicsBuffer> m_pGeometryData;
     std::vector<SubMesh> m_Meshes;
 	std::vector<SubMeshInstance> m_MeshInstances;
     std::vector<std::unique_ptr<GraphicsTexture>> m_Textures;

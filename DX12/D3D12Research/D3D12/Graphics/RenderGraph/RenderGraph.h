@@ -49,7 +49,7 @@ private:
 class RGBuffer : public RGResource
 {
 public:
-    RGBuffer(const char* pName, int id, const BufferDesc& desc, Buffer* pBuffer)
+    RGBuffer(const char* pName, int id, const BufferDesc& desc, GraphicsBuffer* pBuffer)
         : RGResource(pName, id, pBuffer != nullptr, RGResourceType::Buffer, pBuffer), m_Desc(desc) 
     {}
 
@@ -234,7 +234,7 @@ public:
         return CreateResourceNode(pResource);
     }
 
-    RGResourceHandle ImportBuffer(const char* pName, Buffer* pBuffer)
+    RGResourceHandle ImportBuffer(const char* pName, GraphicsBuffer* pBuffer)
     {
         check(pBuffer);
         BufferDesc desc{};

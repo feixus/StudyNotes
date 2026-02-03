@@ -3,7 +3,7 @@
 
 class CommandContext;
 class GraphicsDevice;
-class Buffer;
+class GraphicsBuffer;
 class ShaderResourceView;
 class UnorderedAccessView;
 class ResourceView;
@@ -127,13 +127,13 @@ struct BufferDesc
 	DXGI_FORMAT Format{DXGI_FORMAT_UNKNOWN};
 };
 
-class Buffer : public GraphicsResource
+class GraphicsBuffer : public GraphicsResource
 {
 public:
-	Buffer(GraphicsDevice* pGraphics, const char* pName = "");
-	Buffer(GraphicsDevice* pGraphics, const BufferDesc& desc, const char* pName = "");
-	Buffer(GraphicsDevice* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
-	~Buffer();
+	GraphicsBuffer(GraphicsDevice* pGraphics, const char* pName = "");
+	GraphicsBuffer(GraphicsDevice* pGraphics, const BufferDesc& desc, const char* pName = "");
+	GraphicsBuffer(GraphicsDevice* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+	~GraphicsBuffer();
 
 	void Create(const BufferDesc& desc);
 	void SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint64_t offset = 0);
@@ -148,12 +148,12 @@ public:
 	ShaderResourceView* GetSRV() const { return m_pSrv; }
 	UnorderedAccessView* GetUAV() const { return m_pUav; }
 
-	Buffer* GetCounter() const { return m_pCounter.get(); }
+	GraphicsBuffer* GetCounter() const { return m_pCounter.get(); }
 
 protected:
 	UnorderedAccessView* m_pUav{ nullptr };
 	ShaderResourceView* m_pSrv{ nullptr };
-	std::unique_ptr<Buffer> m_pCounter;
+	std::unique_ptr<GraphicsBuffer> m_pCounter;
 
 	BufferDesc m_Desc;
 };
@@ -167,7 +167,7 @@ struct VertexBufferView
 		: Location(location), Elements(elements), Stride(stride)
 	{}
 
-	VertexBufferView(Buffer* pBuffer)
+	VertexBufferView(GraphicsBuffer* pBuffer)
 	{
 		Location = pBuffer->GetGpuHandle();
 		Stride = pBuffer->GetDesc().ElementSize;

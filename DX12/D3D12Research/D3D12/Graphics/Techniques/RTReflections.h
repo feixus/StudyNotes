@@ -7,7 +7,7 @@ class GraphicsTexture;
 class Camera;
 class CommandContext;
 class RGGraph;
-class Buffer;
+class GraphicsBuffer;
 struct SceneView;
 class StateObject;
 

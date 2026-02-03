@@ -7,7 +7,7 @@ class RootSignature;
 class GraphicsTexture;
 class Camera;
 class CommandContext;
-class Buffer;
+class GraphicsBuffer;
 class RGGraph;
 class StateObject;
 struct SceneView;

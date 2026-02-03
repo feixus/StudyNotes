@@ -7,7 +7,7 @@ class RootSignature;
 class PipelineState;
 class GraphicsBuffer;
 class GraphicsTexture;
-class Buffer;
+class GraphicsBuffer;
 class Camera;
 class UnorderedAccessView;
 class RGGraph;
@@ -30,11 +30,11 @@ private:
 	// light culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
 	PipelineState* m_pComputeLightCullPipeline{nullptr};
-	std::unique_ptr<Buffer> m_pLightIndexCounter;
+	std::unique_ptr<GraphicsBuffer> m_pLightIndexCounter;
 	UnorderedAccessView* m_pLightIndexCounterRawUAV{nullptr};
-	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
+	std::unique_ptr<GraphicsBuffer> m_pLightIndexListBufferOpaque;
 	std::unique_ptr<GraphicsTexture> m_pLightGridOpaque;
-	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparent;
+	std::unique_ptr<GraphicsBuffer> m_pLightIndexListBufferTransparent;
 	std::unique_ptr<GraphicsTexture> m_pLightGridTransparent;
 
 	// diffuse

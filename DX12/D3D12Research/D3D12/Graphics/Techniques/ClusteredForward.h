@@ -3,7 +3,7 @@
 
 class PipelineState;
 class RootSignature;
-class Buffer;
+class GraphicsBuffer;
 class GraphicsTexture;
 class Camera;
 class CommandSignature;
@@ -40,14 +40,14 @@ private:
     // AABB
     std::unique_ptr<RootSignature> m_pCreateAabbRS;
     PipelineState* m_pCreateAabbPSO{nullptr};
-    std::unique_ptr<Buffer> m_pAabbBuffer;
+    std::unique_ptr<GraphicsBuffer> m_pAabbBuffer;
 
     // light culling
     std::unique_ptr<RootSignature> m_pLightCullingRS;
     PipelineState* m_pLightCullingPSO{nullptr};
     std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;;
-    std::unique_ptr<Buffer> m_pLightIndexGrid;
-    std::unique_ptr<Buffer> m_pLightGrid;
+    std::unique_ptr<GraphicsBuffer> m_pLightIndexGrid;
+    std::unique_ptr<GraphicsBuffer> m_pLightGrid;
     UnorderedAccessView* m_pLightGridRawUAV{nullptr};
 
     // lighting
@@ -59,7 +59,7 @@ private:
     // cluster debug rendering
     std::unique_ptr<RootSignature> m_pVisualizeLightClustersRS;
     PipelineState* m_pVisualizeLightClustersPSO{nullptr};
-    std::unique_ptr<Buffer> m_pDebugLightGrid;
+    std::unique_ptr<GraphicsBuffer> m_pDebugLightGrid;
     Matrix m_DebugClusterViewMatrix;
     bool m_DidCopyDebugClusterData{false};
 

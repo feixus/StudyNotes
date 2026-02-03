@@ -279,12 +279,12 @@ void TiledForward::SetupPipelines()
         psoDesc.SetName("Tiled Light Culling PSO");
         m_pComputeLightCullPipeline = m_pGraphicsDevice->CreatePipeline(psoDesc);
 
-        m_pLightIndexCounter = std::make_unique<Buffer>(m_pGraphicsDevice, "Light Index Counter");
+        m_pLightIndexCounter = std::make_unique<GraphicsBuffer>(m_pGraphicsDevice, "Light Index Counter");
         m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32_t)));
         m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
-        m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(m_pGraphicsDevice, "Light List Opaque");
+        m_pLightIndexListBufferOpaque = std::make_unique<GraphicsBuffer>(m_pGraphicsDevice, "Light List Opaque");
         m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
-        m_pLightIndexListBufferTransparent = std::make_unique<Buffer>(m_pGraphicsDevice, "Light List Transparent");
+        m_pLightIndexListBufferTransparent = std::make_unique<GraphicsBuffer>(m_pGraphicsDevice, "Light List Transparent");
         m_pLightIndexListBufferTransparent->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32_t)));
     }
 

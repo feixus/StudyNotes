@@ -110,7 +110,7 @@ void Clouds::Initialize(GraphicsDevice* pGraphicsDevice)
 			{ Vector3(1, -1, 2), Vector2(1, 1) },
 		};
 
-		m_pQuadVertexBuffer = std::make_unique<Buffer>(pGraphicsDevice, "Quad Vertex Buffer");
+		m_pQuadVertexBuffer = std::make_unique<GraphicsBuffer>(pGraphicsDevice, "Quad Vertex Buffer");
 		m_pQuadVertexBuffer->Create(BufferDesc::CreateVertexBuffer(6, sizeof(Vertex)));
 		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
 

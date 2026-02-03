@@ -158,7 +158,7 @@ void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pD
 	m_pCommandList->CopyResource(pDest->GetResource(), pSource->GetResource());
 }
 
-void CommandContext::CopyTexture(GraphicsTexture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion, int destinationOffset)
+void CommandContext::CopyTexture(GraphicsTexture* pSource, GraphicsBuffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion, int destinationOffset)
 {
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 	D3D12_RESOURCE_DESC desc = pSource->GetResource()->GetDesc();
@@ -176,7 +176,7 @@ void CommandContext::CopyTexture(GraphicsTexture* pSource, GraphicsTexture* pDes
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64_t size, uint64_t sourceOffset, uint64_t destinationOffset)
+void CommandContext::CopyBuffer(GraphicsBuffer* pSource, GraphicsBuffer* pDestination, uint64_t size, uint64_t sourceOffset, uint64_t destinationOffset)
 {
 	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
@@ -263,7 +263,7 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uin
 }
 
 // GPU-driven rendering
-void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32_t argumentsOffset, uint32_t countOffset)
+void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, GraphicsBuffer* pIndirectArguments, GraphicsBuffer* pCountBuffer, uint32_t argumentsOffset, uint32_t countOffset)
 {
 	PrepareDraw(pCommandSignature->IsCompute() ? CommandListContext::Compute : CommandListContext::Graphics);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);

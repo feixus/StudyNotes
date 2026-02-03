@@ -3,7 +3,7 @@
 
 struct DynamicAllocation
 {
-	Buffer* pBackingResource{ nullptr };
+	GraphicsBuffer* pBackingResource{ nullptr };
 	D3D12_GPU_VIRTUAL_ADDRESS GpuHandle{ 0 };
 	uint64_t Offset{ 0 };
 	uint64_t Size{ 0 };
@@ -20,19 +20,19 @@ public:
 	DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags);
 	~DynamicAllocationManager();
 
-	Buffer* AllocatePage(uint64_t size);
-	Buffer* CreateNewPage(uint64_t size);
+	GraphicsBuffer* AllocatePage(uint64_t size);
+	GraphicsBuffer* CreateNewPage(uint64_t size);
 
-	void FreePages(uint64_t fenceValue, const std::vector<Buffer*> pPages);
-	void FreeLargePages(uint64_t fenceValue, const std::vector<Buffer*> pLargePages);
+	void FreePages(uint64_t fenceValue, const std::vector<GraphicsBuffer*> pPages);
+	void FreeLargePages(uint64_t fenceValue, const std::vector<GraphicsBuffer*> pLargePages);
 	void CollectGrabage();
 
 private:
 	BufferFlag m_BufferFlags;
 	std::mutex m_PageMutex;
-	std::vector<std::unique_ptr<Buffer>> m_Pages;
-	std::queue<std::pair<uint64_t, Buffer*>> m_FreedPages;
-	std::queue<std::pair<uint64_t, std::unique_ptr<Buffer>>> m_DeleteQueue;
+	std::vector<std::unique_ptr<GraphicsBuffer>> m_Pages;
+	std::queue<std::pair<uint64_t, GraphicsBuffer*>> m_FreedPages;
+	std::queue<std::pair<uint64_t, std::unique_ptr<GraphicsBuffer>>> m_DeleteQueue;
 };
 
 class DynamicResourceAllocator
@@ -46,9 +46,9 @@ public:
 private:
 	DynamicAllocationManager* m_pPageManager;
 
-	Buffer* m_pCurrentPage{ nullptr };
+	GraphicsBuffer* m_pCurrentPage{ nullptr };
 	uint64_t m_CurrentOffset{ 0 };
-	std::vector<Buffer*> m_UsedPages;
-	std::vector<Buffer*> m_UsedLargePages;
+	std::vector<GraphicsBuffer*> m_UsedPages;
+	std::vector<GraphicsBuffer*> m_UsedLargePages;
 };
 

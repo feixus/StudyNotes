@@ -11,7 +11,7 @@ class OnlineDescriptorAllocator;
 class DynamicAllocationManager;
 class GraphicsResource;
 class GraphicsTexture;
-class Buffer;
+class GraphicsBuffer;
 class RootSignature;
 class PipelineState;
 class ShaderManager;
@@ -198,7 +198,7 @@ public:
 	}
 
 	std::unique_ptr<GraphicsTexture> CreateTexture(const TextureDesc& desc, const char* pName);
-	std::unique_ptr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+	std::unique_ptr<GraphicsBuffer> CreateBuffer(const BufferDesc& desc, const char* pName);
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 	void ReleaseResource(ID3D12Resource* pResource);

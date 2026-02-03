@@ -1,7 +1,7 @@
 #pragma once
 
 class GraphicsDevice;
-class Buffer;
+class GraphicsBuffer;
 class GraphicsTexture;
 class CommandContext;
 class RootSignature;
@@ -21,23 +21,23 @@ public:
 private:
     GraphicsDevice* m_pGraphicsDevice;
 
-    std::unique_ptr<Buffer> m_pAliveList1;
-    std::unique_ptr<Buffer> m_pAliveList2;
-    std::unique_ptr<Buffer> m_pDeadList;
-    std::unique_ptr<Buffer> m_pParticleBuffer;
-    std::unique_ptr<Buffer> m_pCounterBuffer;
+    std::unique_ptr<GraphicsBuffer> m_pAliveList1;
+    std::unique_ptr<GraphicsBuffer> m_pAliveList2;
+    std::unique_ptr<GraphicsBuffer> m_pDeadList;
+    std::unique_ptr<GraphicsBuffer> m_pParticleBuffer;
+    std::unique_ptr<GraphicsBuffer> m_pCounterBuffer;
     
     PipelineState* m_pPrepareArgumentsPSO{nullptr};
 
     PipelineState* m_pEmitPSO{nullptr};
-    std::unique_ptr<Buffer> m_pEmitArguments;
+    std::unique_ptr<GraphicsBuffer> m_pEmitArguments;
 
     std::unique_ptr<RootSignature> m_pSimulateRS;
     PipelineState* m_pSimulatePSO{nullptr};
-    std::unique_ptr<Buffer> m_pSimulateArguments;
+    std::unique_ptr<GraphicsBuffer> m_pSimulateArguments;
 
     PipelineState* m_pSimulateEndPSO{nullptr};
-    std::unique_ptr<Buffer> m_pDrawArguments;
+    std::unique_ptr<GraphicsBuffer> m_pDrawArguments;
 
     std::unique_ptr<RootSignature> m_pParticleRenderRS;
     PipelineState* m_pParticleRenderPSO{nullptr};
