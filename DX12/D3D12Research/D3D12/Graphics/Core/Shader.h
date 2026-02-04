@@ -1,9 +1,8 @@
 #pragma once
-#include "dxcapi.h"
 
 class FileWatcher;
 
-using ShaderBlob = ComPtr<IDxcBlob>;
+using ShaderBlob = ComPtr<ID3DBlob>;
 
 #ifndef SHADER_HASH_DEBUG
 #define SHADER_HASH_DEBUG 0

@@ -3,6 +3,7 @@
 #include "Core/Paths.h"
 #include "Core/CommandLine.h"
 #include "Core/FileWatcher.h"
+#include "Dxc/dxcapi.h"
 
 namespace ShaderCompiler
 {
@@ -42,16 +43,21 @@ namespace ShaderCompiler
 		}
 	}
 
+	void LoadDXC()
+	{
+		HMODULE lib = LoadLibraryA("dxcompiler.dll");
+		check(lib);
+		DxcCreateInstanceProc createInstance = (DxcCreateInstanceProc)GetProcAddress(lib, "DxcCreateInstance");
+		check(createInstance);
+		VERIFY_HR(createInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
+		VERIFY_HR(createInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
+		VERIFY_HR(createInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
+		VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
+		E_LOG(Info, "Loaded dxcompiler.dll");
+	}
+
 	CompileResult CompileDxc(const char* pFilePath, const char* pEntryPoint, const char* pTarget, uint8_t majVersion, uint8_t minVersion, const std::vector<ShaderDefine>& defines)
 	{
-		if (!pUtils)
-		{
-			VERIFY_HR(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
-			VERIFY_HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
-			VERIFY_HR(DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
-			VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
-		}
-
 		CompileResult result;
 
 		ComPtr<IDxcBlobEncoding> pSource;
@@ -170,6 +176,10 @@ namespace ShaderCompiler
 			{
 				ComPtr<IDxcBlobEncoding> pEncoding;
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
+				if (!Paths::FileExists(path))
+				{
+					return E_FAIL;
+				}
 				if (IncludedFiles.find(path) != IncludedFiles.end())
 				{
 					static const char nullStr[] = " ";
@@ -178,7 +188,7 @@ namespace ShaderCompiler
 					return S_OK;
 				}
 
-				HRESULT hr = pUtils->LoadFile(MULTIBYTE_TO_UNICODE(path.c_str()), nullptr, pEncoding.GetAddressOf());
+				HRESULT hr = pUtils->LoadFile(pFilename, nullptr, pEncoding.GetAddressOf());
 				if (SUCCEEDED(hr))
 				{
 					IncludedFiles.insert(path);
@@ -236,7 +246,7 @@ namespace ShaderCompiler
 		//Validation
 		{
 			ComPtr<IDxcOperationResult> pResult;
-			VERIFY_HR(pValidator->Validate(*result.pBlob.GetAddressOf(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
+			VERIFY_HR(pValidator->Validate((IDxcBlob*)result.pBlob.Get(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
 			HRESULT validationResult;
 			pResult->GetStatus(&validationResult);
 			if (validationResult != S_OK)
@@ -307,6 +317,7 @@ uint32_t ShaderBase::GetByteCodeSize() const
 ShaderManager::ShaderManager(const char* shaderSourcePath, uint8_t shaderModelMajor, uint8_t shaderModelMinor)
 	: m_ShaderSourcePath(shaderSourcePath), m_ShaderModelMajor(shaderModelMajor), m_ShaderModelMinor(shaderModelMinor)
 {
+	ShaderCompiler::LoadDXC();
 	//if (CommandLine::GetBool("shaderhotreload"))
 	{
 		m_pFileWatcher = std::make_unique<FileWatcher>();

@@ -120,7 +120,6 @@ project (ENGINE_NAME)
 		-- dxc
 		links { "dxcompiler" }
 		includedirs (ROOT .. "D3D12/External/Dxc")
-		libdirs	(ROOT .. "D3D12/External/Dxc")
 		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
 		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
 
