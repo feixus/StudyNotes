@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_RAYTRACING_COMMON__
-#define __INCLUDE_RAYTRACING_COMMON__
-
 #include "SkyCommon.hlsli"
 #include "ShadingModels.hlsli"
 
@@ -190,5 +187,3 @@ float3 OffsetRay(float3 position, float3 geometryNormal)
         (abs(position.z) < origin) ? position.z + float_scale * geometryNormal.z : p_i.z
     );
 }
-
-#endif

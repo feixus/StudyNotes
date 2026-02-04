@@ -26,7 +26,7 @@ struct ShaderDefine
 {
 	ShaderDefine() = default;
 	ShaderDefine(const char* pDefine) : Value(pDefine) {}
-	ShaderDefine(const std::string& pDefine) : Value(pDefine) {}
+	ShaderDefine(const std::string& define) : Value(define) {}
 	std::string Value;
 };
 
@@ -95,9 +95,6 @@ private:
 	ShaderLibrary* LoadLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
 
 	void RecompileFromFileChange(const std::string& filePath);
-
-	static bool ProcessSource(const std::string& sourcePath, const std::string& filePath, 
-							  std::stringstream& output, std::vector<ShaderStringHash>& processedIncludes);
 
 	std::unique_ptr<FileWatcher> m_pFileWatcher;
 

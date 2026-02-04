@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_BRDF__
-#define __INCLUDE_BRDF__
-
 #include "Common.hlsli"
 
 
@@ -138,5 +135,3 @@ float3 EnvDFGPolynomial(float3 specularColor, float gloss, float ndotv)
     bias *= saturate(50.0 * specularColor.y);
     return specularColor * scale + bias;
 }
-
-#endif

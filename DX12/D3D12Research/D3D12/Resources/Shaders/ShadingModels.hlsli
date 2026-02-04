@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_SHADING_MODELS__
-#define __INCLUDE_SHADING_MODELS__
-
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "BRDF.hlsli"
@@ -90,5 +87,3 @@ LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3
 
     return lighting;
 }
-
-#endif

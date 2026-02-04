@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_RNG__
-#define __INCLUDE_RNG__
-
 //Pseudo-Random Number Generator
 
 #include "Constants.hlsli"
@@ -97,5 +94,3 @@ float3 HemisphereSampleCosineWeight(float2 u, out float pdf)
     pdf = result.z * INV_PI;
     return result;
 }
-
-#endif

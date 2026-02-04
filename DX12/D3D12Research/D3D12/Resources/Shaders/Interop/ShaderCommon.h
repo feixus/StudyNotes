@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_INTEROP_COMMON__
-#define __INCLUDE_INTEROP_COMMON__
-
 #ifdef __cplusplus
 #pragma once
 namespace ShaderInterop
@@ -134,6 +131,4 @@ namespace ShaderInterop
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

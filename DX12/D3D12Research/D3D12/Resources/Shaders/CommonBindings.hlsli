@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_COMMON_BINDINGS__
-#define __INCLUDE_COMMON_BINDINGS__
-
 #include "Common.hlsli"
 
 // CBVs
@@ -45,8 +42,6 @@ SamplerComparisonState sShadowMapSampler :               register(s2);
     "DescriptorTable("\
         "Sampler(s1000, numDescriptors = unbounded, space = 100, offset = 0), "\
     "visibility = SHADER_VISIBILITY_ALL), "
-
-#endif
 
 template<typename T>
 T GetVertexData(uint bufferIndex, uint vertexId)

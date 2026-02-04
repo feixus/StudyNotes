@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_SKY__
-#define  __INCLUDE_SKY__
-
 float AngleBetween(float3 dir0, float3 dir1)
 {
     return acos(dot(dir0, dir1));
@@ -44,5 +41,3 @@ float3 CIESky(float3 dir, float3 sunDir, bool withSun = true)
 
     return max(color * luminance, 0);
 }
-
-#endif
