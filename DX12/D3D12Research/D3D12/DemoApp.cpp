@@ -787,7 +787,6 @@ void DemoApp::Update()
 				};
 
 				renderContext.BindResources(2, 0, srvs, std::size(srvs));
-				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 				struct ViewData
 				{
@@ -842,7 +841,6 @@ void DemoApp::Update()
 
 				renderContext.BindResources(1, 0, srvs, std::size(srvs));
 				renderContext.BindResource(2, 0, GetCurrentRenderTarget()->GetUAV());
-				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 				renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
 			});
@@ -876,8 +874,6 @@ void DemoApp::Update()
 					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 				renderContext.BindResources(2, 0, srvs, std::size(srvs));
-
-				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 				struct ViewData
 				{
@@ -1079,8 +1075,6 @@ void DemoApp::Update()
 							m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 						};
 						context.BindResources(2, 0, srvs, std::size(srvs));
-
-						context.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 						VisibilityMask mask;
 						mask.SetAll();

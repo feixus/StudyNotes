@@ -56,9 +56,7 @@ void Clouds::Initialize(GraphicsDevice* pGraphicsDevice)
 		Shader* pShader = pShaderManager->GetShader("WorleyNoise.hlsl", ShaderType::Compute, "WorleyNoiseCS");
 		
 		m_pWorleyNoiseRS = std::make_unique<RootSignature>(pGraphicsDevice);
-		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pWorleyNoiseRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pWorleyNoiseRS->Finalize("Worley Noise RS", D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pWorleyNoiseRS->FinalizeFromShader("Worley Noise RS", pShader);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pShader);

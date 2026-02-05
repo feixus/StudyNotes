@@ -1,10 +1,9 @@
 #include "Random.hlsli"
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 8), visibility=SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), " \
-                "StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, visibility=SHADER_VISIBILITY_ALL)"
+                "DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL)")
                 
 #define DEAD_LIST_COUNTER 0
 #define ALIVE_LIST_1_COUNTER 4
@@ -59,9 +58,7 @@ RWStructuredBuffer<uint> uAliveList2 : register(u6);
 RWStructuredBuffer<ParticleData> uParticleData : register(u7);
 
 ByteAddressBuffer tCounters : register(t0);
-Texture2D tDepth : register(t1);
-
-SamplerState sSampler : register(s0);
+Texture2D tSceneDepth : register(t1);
 
 float3 RandomDirection(uint seed)
 {
@@ -130,13 +127,13 @@ void Simulate(CS_INPUT input)
             if (screenPos.x > -1 && screenPos.x < 1 && screenPos.y > -1 && screenPos.y < 1)
             {
                 float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
-                float depth = tDepth.SampleLevel(sSampler, uv, 0).r;
+                float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
                 float linerarDepth = LinearizeDepth(depth, cNear, cFar);
                 const float thickness = 1.0f;
 
                 if (screenPos.w + p.Size > linerarDepth && screenPos.w - p.Size - thickness < linerarDepth)
                 {
-                    float3 normal = NormalFromDepth(tDepth, sSampler, uv, cViewDimensionsInv, cViewProjectionInv);
+                    float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cViewDimensionsInv, cViewProjectionInv);
                     if (dot(normal, p.Velocity) < 0)
                     {
                         p.Velocity = reflect(p.Velocity, normal) * 0.85f;

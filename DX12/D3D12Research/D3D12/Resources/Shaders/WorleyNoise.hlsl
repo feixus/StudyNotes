@@ -1,5 +1,7 @@
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL)"
+#include "CommonBindings.hlsli"
+
+#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL)")
 
 cbuffer Constants : register(b0)
 {

@@ -1,15 +1,11 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "Lighting.hlsli"
 
 #define BLOCK_SIZE 16
-#define RootSig "RootConstants(num32BitConstants = 2, b0), " \
+#define RootSig ROOT_SIG("RootConstants(num32BitConstants = 2, b0), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_ALL), " \
                 "CBV(b2, visibility = SHADER_VISIBILITY_PIXEL), " \
-                GLOBAL_BINDLESS_TABLE \
-                "DescriptorTable(SRV(t2, numDescriptors = 11)), " \
-                "StaticSampler(s0, filter = FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
-                "StaticSampler(s1, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
-                "StaticSampler(s2, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc = COMPARISON_GREATER)"
+                "DescriptorTable(SRV(t2, numDescriptors = 11))")
 
 struct PerViewData
 {
@@ -83,7 +79,7 @@ float ScreenSpaceShadows(float3 worldPos, float3 lightDir, int stepCount, float 
     for (uint i = 0; i < stepCount; i++)
     {
         float3 rayPos = rayStartPS.xyz + n * rayStep;
-        float depth = tDepth.SampleLevel(sDiffuseSampler, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
+        float depth = tDepth.SampleLevel(sLinearClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
         float diff = rayPos.z - depth;
 
         bool hit = abs(diff + tolerance) < tolerance;
@@ -190,10 +186,10 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
             {
                 uint4 step = float4(1, 2, 3, 4) + currStep;
                 float4 sceneZ = float4(
-                    tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.x, 0).x,
-                    tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.y, 0).x,
-                    tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.z, 0).x,
-                    tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.w, 0).x
+                    tDepth.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.x, 0).x,
+                    tDepth.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.y, 0).x,
+                    tDepth.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.z, 0).x,
+                    tDepth.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.w, 0).x
                 );
                 float4 currentPosition = rayPos.z + rayStep.z * step;
                 uint4 zTest = abs(sceneZ - currentPosition - zThickness) < zThickness;
@@ -226,7 +222,7 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
                 float2 distanceFromCenter = float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - float2(1.0f, 1.0f);
                 float edgeAttenuation = saturate((1.0f - (float(hitIndex) / maxSteps)) * 4.0f);
                 edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0f - dot(distanceFromCenter, distanceFromCenter)));
-                float3 reflectionResult = tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz;
+                float3 reflectionResult = tPreviousSceneColor.SampleLevel(sLinearClamp, texCoord.xy, 0).xyz;
                 hitColor = float4(reflectionResult, edgeAttenuation);
             }
 
@@ -265,7 +261,7 @@ void PSMain(PSInput input,
               out float4 outNormalRoughness : SV_Target1)
 {
     float2 screenUV = (float2)input.position.xy * cViewData.InvScreenDimensions;
-    float ambientOcclusion = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r; 
+    float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r; 
 
     // surface shader begin
     MeshInstance instance = tMeshInstances[cObjectData.Index];
@@ -275,14 +271,14 @@ void PSMain(PSInput input,
     float4 baseColor = material.BaseColorFactor;
     if (material.Diffuse >= 0)
     {
-        baseColor *= tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+        baseColor *= tTexture2DTable[material.Diffuse].Sample(sMaterialSampler, input.texCoord);
     }
 
     float roughness = material.RoughnessFactor;
     float metalness = material.MetalnessFactor;
     if (material.RoughnessMetalness >= 0)
     {
-        float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
+        float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sMaterialSampler, input.texCoord);
         roughness *= roughnessMetalness.g;
         metalness *= roughnessMetalness.b;
     }
@@ -290,7 +286,7 @@ void PSMain(PSInput input,
     float4 emissive = material.EmissiveFactor;
     if (material.Emissive >= 0)
     {
-        emissive *= tTexture2DTable[material.Emissive].Sample(sDiffuseSampler, input.texCoord);
+        emissive *= tTexture2DTable[material.Emissive].Sample(sMaterialSampler, input.texCoord);
     }
 
     float3 N = normalize(input.normal);
@@ -299,7 +295,7 @@ void PSMain(PSInput input,
         float3 T = normalize(input.tangent.xyz);
         float3 B = cross(N, T) * input.tangent.w;
         float3x3 TBN = float3x3(T, B, N);
-        float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+        float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sMaterialSampler, input.texCoord).xyz;
         N = TangentSpaceNormalMapping(tangentNormal, TBN);
     }
 // surface shader end
@@ -323,7 +319,7 @@ void PSMain(PSInput input,
 // hack: volfog only working in clustered path right now...
 #if CLUSTERED_FORWARD
     float fogSlice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
-    float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, fogSlice), 0);
+    float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
     outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 #else
     float4 scatteringTransmittance = 1;

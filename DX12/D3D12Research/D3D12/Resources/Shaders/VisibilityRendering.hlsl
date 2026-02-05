@@ -1,12 +1,9 @@
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "Random.hlsli"
 
-#define RootSig "RootConstants(num32BitConstants = 2, b0), " \
+#define RootSig ROOT_SIG("RootConstants(num32BitConstants = 2, b0), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_VERTEX), " \
-                "DescriptorTable(SRV(t10, numDescriptors = 3)), " \
-                GLOBAL_BINDLESS_TABLE \
-                "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
+                "DescriptorTable(SRV(t10, numDescriptors = 3))")
 
 struct PerViewData
 {

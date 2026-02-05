@@ -32,15 +32,15 @@ void RootSignature::SetDescriptorTable(uint32_t rootIndex, uint32_t rangeCount, 
     Get(rootIndex).InitAsDescriptorTable(rangeCount, m_DescriptorTableRanges[rootIndex].data(), visibility);
 }
 
-void RootSignature::SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIndex, uint32_t startshaderRegister, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, uint32_t heapSlotOffset)
+void RootSignature::SetDescriptorTableRange(uint32_t rootIndex, uint32_t rangeIndex, uint32_t startshaderRegister, uint32_t space, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, uint32_t heapSlotOffset)
 {
-    GetRange(rootIndex, rangeIndex).Init(type, count, startshaderRegister, 0, heapSlotOffset);
+    GetRange(rootIndex, rangeIndex).Init(type, count, startshaderRegister, space, heapSlotOffset);
 }
 
 void RootSignature::SetDescriptorTableSimple(uint32_t rootIndex, uint32_t startshaderRegister, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t count, D3D12_SHADER_VISIBILITY visibility)
 {
     SetDescriptorTable(rootIndex, 1, visibility);
-    SetDescriptorTableRange(rootIndex, 0, startshaderRegister, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
+    SetDescriptorTableRange(rootIndex, 0, startshaderRegister, 0, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 }
 
 void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc)
@@ -50,6 +50,8 @@ void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDes
 
 void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
+    AddDefaultParameters();
+
     D3D12_ROOT_SIGNATURE_FLAGS visibilityFlags =
         D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS |
@@ -170,7 +172,7 @@ void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase* pSha
         const D3D12_ROOT_PARAMETER& rootParameter = rsDesc.pParameters[i];
         if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
         {
-			checkf(rootParameter.DescriptorTable.NumDescriptorRanges <= MAX_RANGES_PER_TABLE, "Descriptor has more ranges (%d) than allowed (%d).", rootParameter.DescriptorTable.NumDescriptorRanges, MAX_RANGES_PER_TABLE);
+			m_DescriptorTableRanges[i].resize(rootParameter.DescriptorTable.NumDescriptorRanges);
             memcpy(m_DescriptorTableRanges[i].data(), rootParameter.DescriptorTable.pDescriptorRanges, rootParameter.DescriptorTable.NumDescriptorRanges * sizeof(D3D12_DESCRIPTOR_RANGE));
         }
     }
@@ -200,4 +202,48 @@ uint32_t RootSignature::GetDWordSize() const
         }
     }
     return count;
+}
+
+void RootSignature::AddDefaultParameters()
+{
+#if 0
+    int staticSamplerRegisterSlot = 10;
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER));
+    
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER));
+    
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER));
+    
+    AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, 0.0f, 16u, D3D12_COMPARISON_FUNC_GREATER));
+
+    uint32_t numSRVRanges = 5;
+    uint32_t numUAVRanges = 5;
+    uint32_t currentRangeIndex = 0;
+    m_BindlessViewsIndex = m_NumParameters;
+    SetDescriptorTable(m_BindlessViewsIndex, numSRVRanges + numUAVRanges, D3D12_SHADER_VISIBILITY_ALL);
+    for (uint32_t i = 0; i < numSRVRanges; i++)
+    {
+        SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 1000, currentRangeIndex + 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
+        currentRangeIndex++;
+    }
+
+    for (uint32_t i = 0; i < numUAVRanges; i++)
+    {
+        SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 1000, currentRangeIndex + 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
+        currentRangeIndex++;
+    }
+
+    m_BindlessSamplerIndex = m_NumParameters;
+    SetDescriptorTable(m_BindlessSamplerIndex, 1, D3D12_SHADER_VISIBILITY_ALL);
+    SetDescriptorTableRange(m_BindlessSamplerIndex, 0, 1000, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0xFFFFFFFF, 0);
+#endif
+    m_BindlessViewsIndex = m_NumParameters - 2;
+    m_BindlessSamplerIndex = m_NumParameters - 1;
 }

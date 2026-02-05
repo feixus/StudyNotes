@@ -1,14 +1,10 @@
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "Random.hlsli"
 #include "ShadingModels.hlsli"
 
-#define RootSig \
-    "CBV(b1, visibility = SHADER_VISIBILITY_ALL),"      \
+#define RootSig ROOT_SIG("CBV(b1, visibility = SHADER_VISIBILITY_ALL),"      \
     "DescriptorTable(SRV(t5, numDescriptors = 10)),"    \
-    "DescriptorTable(UAV(u0, numDescriptors = 1)),"     \
-    GLOBAL_BINDLESS_TABLE   \
-    "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR),"
+    "DescriptorTable(UAV(u0, numDescriptors = 1))")
 
 Texture2D<uint> tVisibilityTexture : register(t13);
 Texture2D<float2> tBarycentricsTexture : register(t14);
@@ -58,7 +54,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float mi
 	float4 baseColor = material.BaseColorFactor;
 	if (material.Diffuse >= 0)
 	{
-		baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, uv, mipLevel);
+		baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sLinearClamp, uv, mipLevel);
 	}
     properties.BaseColor = baseColor.rgb;
     properties.Opacity = baseColor.a;
@@ -67,7 +63,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float mi
 	properties.Metalness = material.MetalnessFactor;
 	if (material.RoughnessMetalness >= 0)
 	{
-		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, uv, mipLevel);
+		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sLinearClamp, uv, mipLevel);
 		properties.Roughness *= roughnessMetalnessSample.g;
 		properties.Metalness *= roughnessMetalnessSample.b;
 	}
@@ -75,7 +71,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float mi
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if (material.Emissive >= 0)
 	{
-		properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, uv, mipLevel).rgb;
+		properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sLinearClamp, uv, mipLevel).rgb;
 	}
 
 	properties.Specular = 0.5f;
@@ -83,7 +79,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float mi
     properties.NormalTS = float3(0, 0, 1);
     if (material.Normal >= 0)
     {
-		properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, uv, mipLevel).rgb;
+		properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sLinearClamp, uv, mipLevel).rgb;
 	}
 	
 	return properties;

@@ -1,13 +1,9 @@
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 
-#define RootSig \
-                "RootConstants(num32BitConstants = 2, b0), " \
+#define RootSig ROOT_SIG("RootConstants(num32BitConstants = 2, b0), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(SRV(t11, numDescriptors = 1)), " \
-                "DescriptorTable(UAV(u1, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
-                GLOBAL_BINDLESS_TABLE \
-                "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
+                "DescriptorTable(UAV(u1, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL)")
 
 struct ObjectData
 {

@@ -245,7 +245,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 				context.SetComputeDynamicConstantBufferView(1, *inputResource.pShadowData);
 				context.BindResource(2, 0, pDestinationVolume->GetUAV());
 				context.BindResources(3, 0, srvs, std::size(srvs));
-				context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
                 constexpr uint32_t threadGroupSizeXY = 8;
                 constexpr uint32_t threadGroupSizeZ = 4;
@@ -280,7 +279,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 context.SetComputeDynamicConstantBufferView(1, *inputResource.pShadowData);
                 context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
                 context.BindResources(3, 0, srvs, std::size(srvs));
-                context.BindResourceTable(4, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
                 constexpr uint32_t threadGroupSize = 8;
                 context.Dispatch(ComputeUtils::GetNumThreadGroups(
@@ -377,7 +375,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 
             context.SetGraphicsDynamicConstantBufferView(1, frameData);
             context.SetGraphicsDynamicConstantBufferView(2, *inputResource.pShadowData);
-            context.BindResourceTable(3, inputResource.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
@@ -392,7 +389,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 inputResource.pMeshBuffer->GetSRV()->GetDescriptor(),
                 inputResource.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 			};
-			context.BindResources(4, 0, srvs, std::size(srvs));
+			context.BindResources(3, 0, srvs, std::size(srvs));
 
             {
                 GPU_PROFILE_SCOPE("Opaque", &context);
@@ -527,9 +524,7 @@ void ClusteredForward::SetupPipelines()
         Shader* pComputeShader = m_pGraphicsDevice->GetShader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs");
 
         m_pCreateAabbRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
-        m_pCreateAabbRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-        m_pCreateAabbRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-        m_pCreateAabbRS->Finalize("Create AABBs", D3D12_ROOT_SIGNATURE_FLAG_NONE);
+        m_pCreateAabbRS->FinalizeFromShader("Create AABBs", pComputeShader);
 
         PipelineStateInitializer psoDesc;
         psoDesc.SetComputeShader(pComputeShader);

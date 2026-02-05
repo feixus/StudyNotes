@@ -1,10 +1,8 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+#define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
                 "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 4), visibility = SHADER_VISIBILITY_PIXEL), " \
-                "StaticSampler(s0, filter = FILTER_COMPARISON_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL), " \
-                "StaticSampler(s1, filter = FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
+                "DescriptorTable(SRV(t0, numDescriptors = 4), visibility = SHADER_VISIBILITY_PIXEL)")
                 
 struct VSInput
 {
@@ -23,9 +21,6 @@ Texture2D tSceneTexture : register(t0);
 Texture2D tDepthTexture : register(t1);
 Texture3D tCloudsTexture : register(t2);
 Texture2D tVerticalDensity : register(t3);
-
-SamplerState sSceneSampler : register(s0);
-SamplerState sCloudsSampler : register(s1);
 
 cbuffer Constants : register(b0)
 {
@@ -83,7 +78,7 @@ float GetLinearDepth(float c)
 float SampleDensity(float3 position)
 {
     float3 uvw = position * cCloudScale + cCloudOffset;
-    float4 shape = tCloudsTexture.SampleLevel(sCloudsSampler, uvw, 0);
+    float4 shape = tCloudsTexture.SampleLevel(sLinearClamp, uvw, 0);
     float s = shape.r * cNoiseWeights.x + shape.g * cNoiseWeights.y + shape.b * cNoiseWeights.z + shape.a * cNoiseWeights.w;
     return max(0, cCloudThreshold - s) * cCloudDensity;
 }
@@ -112,9 +107,9 @@ float4 PSMain(PSInput input) : SV_TARGET
     float3 rd = normalize(input.ray.xyz);
     float2 boxResult = RayBoxDistance(cMinExtents, cMaxExtents, ro, rd);
 
-    float4 color = tSceneTexture.Sample(sSceneSampler, input.texCoord);
+    float4 color = tSceneTexture.Sample(sLinearClamp, input.texCoord);
 
-    float depth = GetLinearDepth(tDepthTexture.Sample(sSceneSampler, input.texCoord).r);
+    float depth = GetLinearDepth(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
     float maxDepth = depth * length(input.ray.xyz);
 
     float distanceTravelled = 0;
@@ -132,7 +127,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     {
         float3 rayPos = ro + rd * (boxResult.x + distanceTravelled);
         float height = (cMaxExtents.y - rayPos.y) / (cMaxExtents.y - cMinExtents.y);
-        float densityMultiplier = tVerticalDensity.Sample(sSceneSampler, float2(0, height)).r;
+        float densityMultiplier = tVerticalDensity.Sample(sLinearClamp, float2(0, height)).r;
         float density = SampleDensity(rayPos) * stepSize * densityMultiplier;
         if (density > 0)
         {

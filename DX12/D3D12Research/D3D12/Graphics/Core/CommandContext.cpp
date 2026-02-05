@@ -540,6 +540,8 @@ void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
+
+	BindResourceTable(pRootSignature->GetBindlessViewIndex(), GetGraphics()->GetViewHeapHandle().GpuHandle, CommandListContext::Graphics);
 }
 
 void CommandContext::SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize)
@@ -692,6 +694,8 @@ void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
+
+	BindResourceTable(pRootSignature->GetBindlessViewIndex(), GetGraphics()->GetViewHeapHandle().GpuHandle, CommandListContext::Compute);
 }
 
 void CommandContext::SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)

@@ -1,8 +1,7 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
-#define RootSigVS "CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_VERTEX), " \
-                "StaticSampler(s0, filter = FILTER_MIN_MAG_MIP_LINEAR, visibility=SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP)" 
+#define RootSigVS ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_VERTEX)")
 
 #define MAX_LIGHTS_PER_BUCKET 10
 
@@ -14,7 +13,6 @@ cbuffer PerFrameData : register(b0)
 StructuredBuffer<AABB> tAABBs : register(t0);
 StructuredBuffer<uint2> tLightGrid : register(t1);
 Texture2D tHeatmapTexture : register(t2);
-SamplerState sHeatmapSampler : register(s0);
 
 struct GSInput
 {
@@ -42,7 +40,7 @@ GSInput VSMain(uint vertexId : SV_VertexID)
     output.extents = aabb.Extents;
 
     output.lightCount = tLightGrid[clusterIndex].y;
-    output.color = tHeatmapTexture.SampleLevel(sHeatmapSampler, float2((float)output.lightCount / MAX_LIGHTS_PER_BUCKET, 0), 0);
+    output.color = tHeatmapTexture.SampleLevel(sLinearClamp, float2((float)output.lightCount / MAX_LIGHTS_PER_BUCKET, 0), 0);
 
     return output;
 }
