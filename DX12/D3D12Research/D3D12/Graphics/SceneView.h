@@ -42,7 +42,6 @@ struct SceneView
 	GraphicsTexture* pResolvedNormals{ nullptr };
 	GraphicsTexture* pAO{ nullptr };
 	std::vector<Batch> Batches;
-	DescriptorHandle GlobalSRVHeapHandle{};
 	GraphicsBuffer* pLightBuffer{ nullptr };
 	GraphicsBuffer* pMaterialBuffer{ nullptr };
 	GraphicsBuffer* pMeshBuffer{ nullptr };

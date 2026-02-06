@@ -17,16 +17,16 @@ StructuredBuffer<MeshData> tMeshes :                     register(t11);
 StructuredBuffer<MeshInstance> tMeshInstances :          register(t12);
 
 // bindless samples
-SamplerState sSamplerTable[] :                           register(s1000, space100);
+SamplerState sSamplerTable[] :                           register(s0, space100);
 
 // bindless SRVs
-Texture2D tTexture2DTable[] :                            register(t1000, space100);
-Texture2D tTexture3DTable[] :                            register(t1000, space101);
-Texture2D tTextureCubeTable[] :                          register(t1000, space102);
-ByteAddressBuffer tBufferTable[] :                       register(t1000, space103);
-RaytracingAccelerationStructure tTLASTable[] :           register(t1000, space104);
+Texture2D tTexture2DTable[] :                            register(t0, space100);
+Texture2D tTexture3DTable[] :                            register(t0, space101);
+Texture2D tTextureCubeTable[] :                          register(t0, space102);
+ByteAddressBuffer tBufferTable[] :                       register(t0, space103);
+RaytracingAccelerationStructure tTLASTable[] :           register(t0, space104);
 
-// samplers
+// static samplers
 SamplerState sLinearWarp :                           register(s10);
 SamplerState sLinearClamp :                          register(s11);
 SamplerState sLinearBorder :                         register(s12);
@@ -40,29 +40,23 @@ SamplerState sMaterialSampler :                      register(s19);
 SamplerComparisonState sDepthComparison :            register(s20);
 SamplerState sLinearMipPoint :                       register(s21);
 
-template<typename T>
-T GetVertexData(uint bufferIndex, uint vertexId)
-{
-    return tBufferTable[bufferIndex].Load<T>(vertexId * sizeof(T));
-}
-
 #define ROOT_SIG(elements) elements ", " DEFAULT_ROOT_SIG_PARAMS
 
 #define DEFAULT_ROOT_SIG_PARAMS \
     "DescriptorTable("\
-        "SRV(t1000, numDescriptors = unbounded, space = 100, offset = 0), "\
-        "SRV(t1000, numDescriptors = unbounded, space = 101, offset = 0), "\
-        "SRV(t1000, numDescriptors = unbounded, space = 102, offset = 0), "\
-        "SRV(t1000, numDescriptors = unbounded, space = 103, offset = 0), "\
-        "SRV(t1000, numDescriptors = unbounded, space = 104, offset = 0), "\
-        "UAV(u1000, numDescriptors = unbounded, space = 105, offset = 0), "\
-        "UAV(u1000, numDescriptors = unbounded, space = 106, offset = 0), "\
-        "UAV(u1000, numDescriptors = unbounded, space = 107, offset = 0), "\
-        "UAV(u1000, numDescriptors = unbounded, space = 108, offset = 0), "\
-        "UAV(u1000, numDescriptors = unbounded, space = 109, offset = 0), "\
+        "SRV(t0, numDescriptors = unbounded, space = 100, offset = 0), "\
+        "SRV(t0, numDescriptors = unbounded, space = 101, offset = 0), "\
+        "SRV(t0, numDescriptors = unbounded, space = 102, offset = 0), "\
+        "SRV(t0, numDescriptors = unbounded, space = 103, offset = 0), "\
+        "SRV(t0, numDescriptors = unbounded, space = 104, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 105, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 106, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 107, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 108, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 109, offset = 0), "\
     "visibility = SHADER_VISIBILITY_ALL), "\
     "DescriptorTable("\
-        "Sampler(s1000, numDescriptors = unbounded, space = 100, offset = 0), visibility = SHADER_VISIBILITY_ALL), "  \
+        "Sampler(s0, numDescriptors = unbounded, space = 100, offset = 0), visibility = SHADER_VISIBILITY_ALL), "  \
     "StaticSampler(s10, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP, addressW = TEXTURE_ADDRESS_WRAP), "\
     "StaticSampler(s11, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP), "\
     "StaticSampler(s12, filter = FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_BORDER, addressV = TEXTURE_ADDRESS_BORDER, addressW = TEXTURE_ADDRESS_BORDER), "\
@@ -76,5 +70,10 @@ T GetVertexData(uint bufferIndex, uint vertexId)
     "StaticSampler(s20, filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc = COMPARISON_GREATER), "\
     "StaticSampler(s21, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP), "\
     
+template<typename T>
+T GetVertexData(uint bufferIndex, uint vertexId)
+{
+    return tBufferTable[bufferIndex].Load<T>(vertexId * sizeof(T));
+}
 
 #endif

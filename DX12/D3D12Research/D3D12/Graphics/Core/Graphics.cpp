@@ -263,6 +263,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
+	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
 	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get());
 
 	// allocate descriptor heaps pool
@@ -376,11 +377,6 @@ void GraphicsDevice::WaitForFence(uint64_t fenceValue)
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
 	CommandQueue* pQueue = GetCommandQueue(type);
 	pQueue->WaitForFence(fenceValue);
-}
-
-DescriptorHandle GraphicsDevice::GetViewHeapHandle() const
-{
-	return m_pGlobalViewHeap->GetStartHandle();
 }
 
 void GraphicsDevice::IdleGPU()
@@ -537,18 +533,17 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 {
 	m_pDevice = pDevice;
 
-	CD3DX12FeatureSupport support;
-	check(support.Init(pDevice->GetDevice()) == S_OK);
+	check(m_FeatureSupport.Init(pDevice->GetDevice()) == S_OK);
 
-	RenderPassTier = support.RenderPassesTier();
-	RayTracingTier = support.RaytracingTier();
-	VSRTileSize = support.VariableShadingRateTier();
-	VSRTileSize = support.ShadingRateImageTileSize();
-	MeshShaderSupport = support.MeshShaderTier();
-	SamplerFeedbackSupport = support.SamplerFeedbackTier();
-	ShaderModel = (uint16_t)support.HighestShaderModel();
+	RenderPassTier = m_FeatureSupport.RenderPassesTier();
+	RayTracingTier = m_FeatureSupport.RaytracingTier();
+	VSRTileSize = m_FeatureSupport.VariableShadingRateTier();
+	VSRTileSize = m_FeatureSupport.ShadingRateImageTileSize();
+	MeshShaderSupport = m_FeatureSupport.MeshShaderTier();
+	SamplerFeedbackSupport = m_FeatureSupport.SamplerFeedbackTier();
+	ShaderModel = (uint16_t)m_FeatureSupport.HighestShaderModel();
 
-	BarycentricsSupported = support.BarycentricsSupported();
+	BarycentricsSupported = m_FeatureSupport.BarycentricsSupported();
 	if (!BarycentricsSupported)
 	{
 		E_LOG(Warning, "Barycentrics is not Supported");
@@ -557,9 +552,6 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 
 bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 {
-	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
-	VERIFY_HR(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS)));
-
 	switch (format)
 	{
 	case DXGI_FORMAT_R32_FLOAT:
@@ -584,7 +576,7 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 	case DXGI_FORMAT_R8_UINT:
 	case DXGI_FORMAT_R8_SINT:
 		// All these are supported if this optional feature is set.
-		return featureData.TypedUAVLoadAdditionalFormats;
+		return m_FeatureSupport.TypedUAVLoadAdditionalFormats();
 
 	case DXGI_FORMAT_R16G16B16A16_UNORM:
 	case DXGI_FORMAT_R16G16B16A16_SNORM:
@@ -612,12 +604,13 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 	case DXGI_FORMAT_B5G5R5A1_UNORM:
 	case DXGI_FORMAT_B4G4R4A4_UNORM:
 		// Conditionally supported by specific pDevices.
-		if (featureData.TypedUAVLoadAdditionalFormats)
+		if (m_FeatureSupport.TypedUAVLoadAdditionalFormats())
 		{
-			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
-			VERIFY_HR(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)));
+			D3D12_FORMAT_SUPPORT1 f1 = D3D12_FORMAT_SUPPORT1_NONE;
+			D3D12_FORMAT_SUPPORT2 f2 = D3D12_FORMAT_SUPPORT2_NONE;
+			VERIFY_HR(m_FeatureSupport.FormatSupport(format, f1, f2));
 			const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
-			return ((formatSupport.Support2 & mask) == mask);
+			return ((f2 & mask) == mask);
 		}
 		return false;
 

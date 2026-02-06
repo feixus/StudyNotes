@@ -191,6 +191,12 @@ namespace ShaderCompiler
 					return S_OK;
 				}
 
+				if (!IsValidIncludePath(path.c_str()))
+				{
+					E_LOG(Warning, "Include path '%s' does not have a valid extension.", path.c_str());
+					return E_FAIL;
+				}
+
 				HRESULT hr = pUtils->LoadFile(pFilename, nullptr, pEncoding.GetAddressOf());
 				if (SUCCEEDED(hr))
 				{
@@ -202,6 +208,21 @@ namespace ShaderCompiler
 					*ppIncludeSource = nullptr;
 				}
 				return hr;
+			}
+
+			bool IsValidIncludePath(const char* pFilePath) const
+			{
+				std::string extension = Paths::GetFileExtension(pFilePath);
+				CString::ToLower(extension.c_str(), extension.data());
+				constexpr const char* pValidExtensions[] = {".hlsli", ".h"};
+				for (uint32_t i = 0; i < std::size(pValidExtensions); i++)
+				{
+					if (strcmp(pValidExtensions[i], extension.c_str()) == 0)
+					{
+						return true;
+					}
+				}
+				return false;
 			}
 
 			HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, _COM_Outptr_ void __RPC_FAR* __RPC_FAR* ppvObject) override

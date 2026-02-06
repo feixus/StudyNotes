@@ -61,6 +61,7 @@ public:
 
 private:
 	GraphicsDevice* m_pDevice{nullptr};
+	CD3DX12FeatureSupport m_FeatureSupport;
 };
 
 class DeferredDeleteQueue : public GraphicsObject
@@ -150,11 +151,12 @@ public:
 
 	void SetMultiSampleCount(uint32_t cnt) { m_SampleCount = cnt; }
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
-	DescriptorHandle GetViewHeapHandle() const;
-	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
+
+	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
+	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap.get(); }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -234,6 +236,7 @@ private:
 
 	std::unique_ptr<OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
+	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;

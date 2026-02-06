@@ -41,6 +41,7 @@ void CommandContext::Reset()
 	// GPU needs to know which heap(s) to read from when you bind descroptor tables.
 	ID3D12DescriptorHeap* pHeaps[] = {
 		GetGraphics()->GetGlobalViewHeap()->GetHeap(),
+		GetGraphics()->GetGlobalSamplerHeap()->GetHeap(),
 	};
 	m_pCommandList->SetDescriptorHeaps((UINT)std::size(pHeaps), pHeaps);
 }
@@ -541,7 +542,8 @@ void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 
-	BindResourceTable(pRootSignature->GetBindlessViewIndex(), GetGraphics()->GetViewHeapHandle().GpuHandle, CommandListContext::Graphics);
+	BindResourceTable(pRootSignature->GetBindlessViewIndex(), GetGraphics()->GetGlobalViewHeap()->GetStartHandle().GpuHandle, CommandListContext::Graphics);
+	BindResourceTable(pRootSignature->GetBindlessSamplerIndex(), GetGraphics()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle, CommandListContext::Graphics);
 }
 
 void CommandContext::SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize)
@@ -695,7 +697,8 @@ void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 
-	BindResourceTable(pRootSignature->GetBindlessViewIndex(), GetGraphics()->GetViewHeapHandle().GpuHandle, CommandListContext::Compute);
+	BindResourceTable(pRootSignature->GetBindlessViewIndex(), GetGraphics()->GetGlobalViewHeap()->GetStartHandle().GpuHandle, CommandListContext::Compute);
+	BindResourceTable(pRootSignature->GetBindlessSamplerIndex(), GetGraphics()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle, CommandListContext::Compute);
 }
 
 void CommandContext::SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
