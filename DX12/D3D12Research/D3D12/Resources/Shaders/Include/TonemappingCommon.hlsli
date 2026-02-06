@@ -1,4 +1,7 @@
-#include "../Common.hlsli"
+#ifndef __TONEMAPPINGCOMMON_INCLUDE__
+#define __TONEMAPPINGCOMMON_INCLUDE__
+
+#include "Common.hlsli"
 
 #define NUM_HISTOGRAM_BINS 256
 
@@ -84,3 +87,5 @@ float Exposure(float ev100)
 {
     return 1.0f / (pow(2.0f, ev100) * 1.2f);
 }
+
+#endif

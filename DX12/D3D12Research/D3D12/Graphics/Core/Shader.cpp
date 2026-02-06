@@ -56,7 +56,9 @@ namespace ShaderCompiler
 		E_LOG(Info, "Loaded dxcompiler.dll");
 	}
 
-	CompileResult CompileDxc(const char* pFilePath, const char* pEntryPoint, const char* pTarget, uint8_t majVersion, uint8_t minVersion, const std::vector<ShaderDefine>& defines)
+	CompileResult CompileDxc(const char* pFilePath, const char* pEntryPoint,
+							 const char* pTarget, uint8_t majVersion, uint8_t minVersion,
+							 const std::vector<ShaderDefine>& defines, const char* pShaderPath)
 	{
 		CompileResult result;
 
@@ -157,7 +159,8 @@ namespace ShaderCompiler
 		arguments.AddArgument(DXC_ARG_WARNINGS_ARE_ERRORS);
 		arguments.AddArgument(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
 
-		arguments.AddArgument("-I", Paths::GetDirectoryPath(pFilePath).c_str());
+		arguments.AddArgument("-I", pShaderPath);
+		arguments.AddArgument("-I", Paths::Combine(pShaderPath, "include").c_str());
 
 		for (const ShaderDefine& define : defines)
 		{
@@ -293,14 +296,14 @@ namespace ShaderCompiler
 
 	CompileResult Compile(const char* pFilePath, const char* pTarget, 
 						  const char* pEntryPoint, uint8_t majVersion, 
-						  uint8_t minVersion, const std::vector<ShaderDefine>& defines)
+						  uint8_t minVersion, const std::vector<ShaderDefine>& defines, const char* pShaderPath)
 	{
 		std::vector<ShaderDefine> definesActual = defines;
 		definesActual.push_back(std::format("_SM_MAJ={}", majVersion));
 		definesActual.push_back(std::format("_SM_MIN={}", minVersion));
 
 		definesActual.emplace_back("_DXC=1");
-		return CompileDxc(pFilePath, pEntryPoint, pTarget, majVersion, minVersion, definesActual);
+		return CompileDxc(pFilePath, pEntryPoint, pTarget, majVersion, minVersion, definesActual, pShaderPath);
 	}
 }
 
@@ -423,7 +426,8 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 										pEntryPoint, 
 										m_ShaderModelMajor,
 										m_ShaderModelMinor,
-										defines);
+										defines,
+										m_ShaderSourcePath);
 	if (!result.Success())
 	{
 		E_LOG(Warning, "Failed to compile shader '%s:%s': %s", pShaderPath, pEntryPoint, result.ErrorMsg.c_str());
@@ -449,7 +453,7 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 ShaderLibrary* ShaderManager::LoadLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines)
 {
 	std::string filePath = Paths::Combine(m_ShaderSourcePath, pShaderPath);
-	auto result = ShaderCompiler::Compile(filePath.c_str(), "lib", "", m_ShaderModelMajor, m_ShaderModelMinor, defines);
+	auto result = ShaderCompiler::Compile(filePath.c_str(), "lib", "", m_ShaderModelMajor, m_ShaderModelMinor, defines, m_ShaderSourcePath);
 	if (!result.Success())
 	{
 		E_LOG(Warning, "Failed to compile shader library '%s': %s", pShaderPath, result.ErrorMsg.c_str());

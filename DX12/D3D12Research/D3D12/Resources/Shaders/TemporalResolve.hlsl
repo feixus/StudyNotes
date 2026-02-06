@@ -1,5 +1,5 @@
 #include "CommonBindings.hlsli"
-#include "Tonemap/TonemappingCommon.hlsli"
+#include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
 #define HISTORY_REJECT_NONE             0

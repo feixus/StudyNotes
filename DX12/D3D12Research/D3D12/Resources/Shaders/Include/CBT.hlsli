@@ -1,3 +1,6 @@
+#ifndef __CBT_INCLUDE__
+#define __CBT_INCLUDE__
+
 struct CBT
 {
     RWByteAddressBuffer Storage;
@@ -369,3 +372,5 @@ namespace LEB
         }
     }
 }
+
+#endif

@@ -1,4 +1,4 @@
-#include "../CommonBindings.hlsli"
+#include "CommonBindings.hlsli"
 #include "TonemappingCommon.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
