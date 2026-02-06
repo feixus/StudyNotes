@@ -155,3 +155,20 @@ DescriptorHandle OnlineDescriptorAllocator::Allocate(uint32_t descriptorCount)
     m_pCurrentHeapBlock->CurrentOffset += descriptorCount;
     return handle;
 }
+
+PersistentDescriptorAllocator::PersistentDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)
+{
+}
+
+DescriptorHandle PersistentDescriptorAllocator::Allocate()
+{
+	return DescriptorHandle();
+}
+
+void PersistentDescriptorAllocator::Free(DescriptorHandle& handle)
+{
+}
+
+void PersistentDescriptorAllocator::Free(uint32_t& heapIndex)
+{
+}

@@ -206,7 +206,8 @@ uint32_t RootSignature::GetDWordSize() const
 
 void RootSignature::AddDefaultParameters()
 {
-#if 0
+#define CODE_ROOT_SIG 0
+#if CODE_ROOT_SIG
     int staticSamplerRegisterSlot = 10;
     AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
     AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
@@ -230,20 +231,21 @@ void RootSignature::AddDefaultParameters()
     SetDescriptorTable(m_BindlessViewsIndex, numSRVRanges + numUAVRanges, D3D12_SHADER_VISIBILITY_ALL);
     for (uint32_t i = 0; i < numSRVRanges; i++)
     {
-        SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 1000, currentRangeIndex + 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
+        SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, currentRangeIndex + 100, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
         currentRangeIndex++;
     }
 
     for (uint32_t i = 0; i < numUAVRanges; i++)
     {
-        SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 1000, currentRangeIndex + 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
+        SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, currentRangeIndex + 100, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
         currentRangeIndex++;
     }
 
     m_BindlessSamplerIndex = m_NumParameters;
     SetDescriptorTable(m_BindlessSamplerIndex, 1, D3D12_SHADER_VISIBILITY_ALL);
-    SetDescriptorTableRange(m_BindlessSamplerIndex, 0, 1000, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0xFFFFFFFF, 0);
-#endif
+    SetDescriptorTableRange(m_BindlessSamplerIndex, 0, 0, 100, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0xFFFFFFFF, 0);
+#else
     m_BindlessViewsIndex = m_NumParameters - 2;
     m_BindlessSamplerIndex = m_NumParameters - 1;
+#endif
 }
