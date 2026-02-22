@@ -3,7 +3,7 @@
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
 #include "Random.hlsli"
-#include "Tonemap/TonemappingCommon.hlsli"
+#include "TonemappingCommon.hlsli"
 
 #define MIN_BOUNCES 3
 #define RIS_CANDIDATES_LIGHTS 8
@@ -95,7 +95,7 @@ float CastShadowRay(float3 origin, float3 direction)
                                             rayQuery.CandidateTriangleBarycentrics(),
 											rayQuery.CandidatePrimitiveIndex(),
                                             rayQuery.CandidateObjectToWorld4x3());
-				BrdfData surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
+				MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 				if (surface.Opacity > 0.5f)
 				{
 					rayQuery.CommitNonOpaqueTriangleHit();

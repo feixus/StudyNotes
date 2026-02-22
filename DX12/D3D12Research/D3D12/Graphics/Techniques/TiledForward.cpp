@@ -188,20 +188,20 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
 
             {
                 GPU_PROFILE_SCOPE("Opaque", &context);
-                context.SetPipelineState(m_pDiffusePSO);
                         
-                context.BindResource(4, 1, m_pLightGridOpaque->GetSRV());
-                context.BindResource(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
+                context.SetPipelineState(m_pDiffusePSO);
+                context.BindResource(3, 1, m_pLightGridOpaque->GetSRV());
+                context.BindResource(3, 2, m_pLightIndexListBufferOpaque->GetSRV());
 
 				DrawScene(context, inputResource, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
             }
 
             {
                 GPU_PROFILE_SCOPE("Transparent", &context);
-                context.SetPipelineState(m_pDiffuseAlphaPSO);
                         
-                context.BindResource(4, 1, m_pLightGridTransparent->GetSRV());
-                context.BindResource(4, 2, m_pLightIndexListBufferTransparent->GetSRV());
+                context.SetPipelineState(m_pDiffuseAlphaPSO);
+                context.BindResource(3, 1, m_pLightGridTransparent->GetSRV());
+                context.BindResource(3, 2, m_pLightIndexListBufferTransparent->GetSRV());
 
 				DrawScene(context, inputResource, Batch::Blending::AlphaBlend);
             }

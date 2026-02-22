@@ -143,7 +143,7 @@ void Console::Log(const char* message, LogType type)
         std::scoped_lock lock(sLogMutex);
         sMessageQueue.push(LogEntry(message, type));
     }
-
+	
     if (type == LogType::Error)
     {
         __debugbreak();

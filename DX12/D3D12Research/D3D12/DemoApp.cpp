@@ -146,7 +146,7 @@ namespace Tweakables
 	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflection", false);
 	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 5.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
-	ConsoleVariable g_RenderTerrain("r.Terrain", true);
+	ConsoleVariable g_RenderTerrain("r.Terrain", false);
 	
 	// Misc
 	bool g_DumpRenderGraph = false;
@@ -275,7 +275,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		//pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context);
+		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context);
 		//pMesh->Load("Resources/pica_pica/scene.gltf", m_pDevice.get(), &context);
 		//pMesh->Load("Resources/apartment_floor_plan/scene.gltf", m_pDevice.get(), &context);
 		//pMesh->Load("H:/downloads/Models/stadtverwaltung-jena-3d-model/scene.gltf", m_pDevice.get(), &context);

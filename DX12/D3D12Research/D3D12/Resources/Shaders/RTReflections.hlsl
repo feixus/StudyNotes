@@ -20,7 +20,9 @@ struct ViewData
 {
 	float4x4 View;
 	float4x4 ViewInverse;
-	float4x4 ProjectionInverse;
+
+
+	float4x4 ProjectionInverse;\
 	uint NumLights;
 	float ViewPixelSpreadAngle;
 	uint TLASIndex;
@@ -77,7 +79,7 @@ float CastShadowRay(float3 origin, float3 direction)
 											rayQuery.CandidateTriangleBarycentrics(),
 											rayQuery.CandidatePrimitiveIndex(),
 											rayQuery.CandidateObjectToWorld4x3());
-				BrdfData surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
+				MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 				if (surface.Opacity > 0.5f)
 				{
 					rayQuery.CommitNonOpaqueTriangleHit();

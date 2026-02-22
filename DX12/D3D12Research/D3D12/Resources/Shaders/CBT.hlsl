@@ -432,6 +432,13 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 
 #define NUM_MESH_SHADER_TRIANGLES (1u << MESH_SHADER_SUBD_LEVEL)
 
+struct VertexOut
+{
+	float4 Position : SV_POSITION;
+	float2 UV : TEXCOORD;
+	uint HeapIndex : HEAP_INDEX;
+};
+
 struct ASPayload
 {
     uint IDs[MESH_SHADER_THREAD_GROUP_SIZE];
@@ -486,13 +493,6 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
     uint count = WaveActiveCountBits(isVisible);
     DispatchMesh((1u << AMPLIFICATION_SHADER_SUBD_LEVEL) * count, 1, 1, gsPayload);
 }
-
-struct VertexOut
-{
-    float4 Position : SV_POSITION;
-    float2 UV : TEXCOORD;
-    uint HeapIndex : HEAP_INDEX;
-};
 
 [outputtopology("triangle")]
 [numthreads(NUM_MESH_SHADER_TRIANGLES, 1, 1)]
@@ -575,107 +575,107 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 
 #endif
 
-float4 RenderPS(VertexOut vertex) : SV_TARGET
+//float4 RenderPS(VertexOut vertex) : SV_TARGET
+//{
+//    float tl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1, -1)).r;
+//    float t  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0, -1)).r;
+//    float tr = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1, -1)).r;
+//    float l  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  0)).r;
+//    float r  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  0)).r;
+//    float bl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  1)).r;
+//    float b  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0,  1)).r;
+//    float br = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  1)).r;
+//    // sobel-filtered height gradients
+//    float dX = tr + 2 * r + br - tl - 2 * l - bl;
+//    float dY = bl + 2 * b + br - tl - 2 * t - tr;
+//    // T = (1, dX, 0), B = (0, dY, 1)
+//    float3 normal = normalize(float3(dX, 1.0f / 50, dY));
+
+//    float3 color = 1;
+
+//    #if COLOR_LEVELS
+//    uint state = SeedThread(firstbithigh(vertex.HeapIndex));
+//    color = float3(Random01(state), Random01(state), Random01(state));
+//    #endif
+
+//    float3 dir = normalize(float3(1, 1, 1));
+//    float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
+
+//    return output;
+//}
+
+float4 RenderPS(VertexOut vertex, float3 bary : SV_Barycentrics) : SV_TARGET
 {
-    float tl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1, -1)).r;
-    float t  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0, -1)).r;
-    float tr = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1, -1)).r;
-    float l  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  0)).r;
-    float r  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  0)).r;
-    float bl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  1)).r;
-    float b  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0,  1)).r;
-    float br = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  1)).r;
-    // sobel-filtered height gradients
-    float dX = tr + 2 * r + br - tl - 2 * l - bl;
-    float dY = bl + 2 * b + br - tl - 2 * t - tr;
-    // T = (1, dX, 0), B = (0, dY, 1)
-    float3 normal = normalize(float3(dX, 1.0f / 50, dY));
+	float tl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1, -1)).r;
+	float t = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(0, -1)).r;
+	float tr = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(1, -1)).r;
+	float l = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1, 0)).r;
+	float r = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(1, 0)).r;
+	float bl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1, 1)).r;
+	float b = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(0, 1)).r;
+	float br = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(1, 1)).r;
+     // sobel-filtered height gradients
+	float dX = tr + 2 * r + br - tl - 2 * l - bl;
+	float dY = bl + 2 * b + br - tl - 2 * t - tr;
+     // T = (1, dX, 0), B = (0, dY, 1)
+	float3 normal = normalize(float3(dX, 1.0f / 20, dY));
 
-    float3 color = 1;
+	float3 color = 1;
 
-    #if COLOR_LEVELS
-    uint state = SeedThread(firstbithigh(vertex.HeapIndex));
-    color = float3(Random01(state), Random01(state), Random01(state));
-    #endif
+#if COLOR_LEVELS
+     uint state = SeedThread(firstbithigh(vertex.HeapIndex));
+     color = float3(Random01(state), Random01(state), Random01(state));
+#endif
 
-    float3 dir = normalize(float3(1, 1, 1));
-    float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
+	float3 dir = normalize(float3(1, 1, 1));
+	float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
 
-    return output;
+#if RENDER_WIREFRAME
+	float3 deltas = fwidth(bary);
+	float3 smoothing = deltas * 1;
+	float3 thickness = deltas * 0.2;
+	bary = smoothstep(thickness, thickness + smoothing, bary);
+	float minBary = min(bary.x, min(bary.y, bary.z));
+	output.xyz *= saturate(minBary + 0.5);
+#endif
+
+	return output;
 }
-
-// float4 RenderPS(VertexOut vertex, float3 bary : SV_Barycentrics) : SV_TARGET
-// {
-//     float tl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1, -1)).r;
-//     float t  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0, -1)).r;
-//     float tr = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1, -1)).r;
-//     float l  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  0)).r;
-//     float r  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  0)).r;
-//     float bl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  1)).r;
-//     float b  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0,  1)).r;
-//     float br = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  1)).r;
-//     // sobel-filtered height gradients
-//     float dX = tr + 2 * r + br - tl - 2 * l - bl;
-//     float dY = bl + 2 * b + br - tl - 2 * t - tr;
-//     // T = (1, dX, 0), B = (0, dY, 1)
-//     float3 normal = normalize(float3(dX, 1.0f / 20, dY));
-
-//     float3 color = 1;
-
-//     #if COLOR_LEVELS
-//     uint state = SeedThread(firstbithigh(vertex.HeapIndex));
-//     color = float3(Random01(state), Random01(state), Random01(state));
-//     #endif
-
-//     float3 dir = normalize(float3(1, 1, 1));
-//     float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
-
-//     #if RENDER_WIREFRAME
-//         float3 deltas = fwidth(bary);
-//         float3 smoothing = deltas * 1;
-//         float3 thickness = deltas * 0.2;
-//         bary = smoothstep(thickness, thickness + smoothing, bary);
-//         float minBary = min(bary.x, min(bary.y, bary.z));
-//         output.xyz *= saturate(minBary + 0.5);
-//     #endif
-
-//     return output;
-// }
 
 void DebugVisualizeVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out float4 pos : SV_POSITION, out float4 color : COLOR)
 {
-    CBT cbt;
-    cbt.Init(uCBT, cCommonArgs.NumElements);
+	CBT cbt;
+	cbt.Init(uCBT, cCommonArgs.NumElements);
 
-    uint heapIndex = cbt.LeafIndexToHeapIndex(instanceID);
+	uint heapIndex = cbt.LeafIndexToHeapIndex(instanceID);
 
-    float3x3 baseTriangle = float3x3(
+	float3x3 baseTriangle = float3x3(
         0, 1, 0,
         0, 0, 0,
         1, 0, 0
     );
-    float3 tri = LEB::TransformAttributes(heapIndex, baseTriangle)[vertexID];
-    tri.xy = tri.xy * 2 - 1;
-    pos = float4(tri, 1);
+	float3 tri = LEB::TransformAttributes(heapIndex, baseTriangle)[vertexID];
+	tri.xy = tri.xy * 2 - 1;
+	pos = float4(tri, 1);
 
-    uint state = SeedThread(firstbithigh(heapIndex));
-    color = float4(Random01(state), Random01(state), Random01(state), 1);
+	uint state = SeedThread(firstbithigh(heapIndex));
+	color = float4(Random01(state), Random01(state), Random01(state), 1);
 }
 
-float4 DebugVisualizePS(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+//float4 DebugVisualizePS(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+//{
+//    return color;
+//}
+
+float4 DebugVisualizePS(
+ 	float4 position : SV_POSITION,
+ 	float4 color : COLOR,
+ 	float3 bary : SV_Barycentrics) : SV_TARGET
 {
-    return color;
+	float3 deltas = fwidth(bary);
+	float3 smoothing = deltas * 1;
+	float3 thickness = deltas * 0.2;
+	bary = smoothstep(thickness, thickness + smoothing, bary);
+	float minBary = min(bary.x, min(bary.y, bary.z));
+	return float4(color.xyz * saturate(minBary + 0.7), 1);
 }
-
-// float4 DebugVisualizePS(
-// 	float4 position : SV_POSITION, 
-// 	float4 color : COLOR, 
-// 	float3 bary : SV_Barycentrics) : SV_TARGET
-// {
-// 	float3 deltas = fwidth(bary);
-// 	float3 smoothing = deltas * 1;
-// 	float3 thickness = deltas * 0.2;
-// 	bary = smoothstep(thickness, thickness + smoothing, bary);
-// 	float minBary = min(bary.x, min(bary.y, bary.z));
-// 	return float4(color.xyz * saturate(minBary + 0.7), 1);
-// }

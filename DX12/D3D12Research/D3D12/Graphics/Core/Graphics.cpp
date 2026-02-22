@@ -542,6 +542,7 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	MeshShaderSupport = m_FeatureSupport.MeshShaderTier();
 	SamplerFeedbackSupport = m_FeatureSupport.SamplerFeedbackTier();
 	ShaderModel = (uint16_t)m_FeatureSupport.HighestShaderModel();
+	ShaderModel = D3D_SHADER_MODEL::D3D_SHADER_MODEL_6_6;	//temp
 
 	BarycentricsSupported = m_FeatureSupport.BarycentricsSupported();
 	if (!BarycentricsSupported)

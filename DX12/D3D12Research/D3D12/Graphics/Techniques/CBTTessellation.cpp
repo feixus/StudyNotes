@@ -367,7 +367,7 @@ void CBTTessellation::SetupPipelines()
         ShaderDefine(std::format("DEBUG_ALWAYS_SUBDIVIDE={}", CBTSettings::AlwaysSubdivide ? 1 : 0)),
         ShaderDefine(std::format("MESH_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::MeshShaderSubD * 2, 6))),
         ShaderDefine(std::format("AMPLIFICATION_SHADER_SUBD_LEVEL={}", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0))),
-		ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
+		//ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
 		ShaderDefine(std::format("COLOR_LEVELS={}", CBTSettings::ColorLevels ? 1 : 0)),
     };
 
@@ -422,7 +422,7 @@ void CBTTessellation::SetupPipelines()
     {
         PipelineStateInitializer drawPsoDesc;
         drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-        drawPsoDesc.SetAmplificationShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "UpdateAS", defines));
+        drawPsoDesc.SetAmplificationShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Amplification, "UpdateAS", defines));
         drawPsoDesc.SetMeshShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "RenderMS", defines));
         drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
         drawPsoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
@@ -435,8 +435,8 @@ void CBTTessellation::SetupPipelines()
     {
         PipelineStateInitializer drawPsoDesc;
         drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-        drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "DebugVisualizePS", defines));
         drawPsoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "DebugVisualizeVS", defines));
+        drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "DebugVisualizePS", defines));
         drawPsoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
         drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
         drawPsoDesc.SetDepthEnable(false);
