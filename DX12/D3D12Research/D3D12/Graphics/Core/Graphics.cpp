@@ -117,7 +117,7 @@ ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 	{
 		uint32_t adapterIndex = 0;
 		E_LOG(Info, "Adapters:");
-		DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_UNSPECIFIED;
+		DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
 		while (m_pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) == S_OK)
 		{
 			DXGI_ADAPTER_DESC3 desc;
@@ -264,7 +264,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
 	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
-	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get());
+	m_pPersistentViewHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalViewHeap.get());
+	m_pPersistentSamplerHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalSamplerHeap.get());
 
 	// allocate descriptor heaps pool
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
@@ -313,7 +314,7 @@ int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, Resour
 
 	if (pResourceView)
 	{
-		DescriptorHandle handle = m_pPersistentDescriptorHeap->Allocate(1);
+		DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
 		m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, pResourceView->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		m_ViewToDescriptorIndex[pResourceView] = handle.HeapIndex;
 		return handle.HeapIndex;
@@ -388,6 +389,19 @@ void GraphicsDevice::IdleGPU()
 			pCommandQueue->WaitForIdle();
 		}
 	}
+}
+
+uint32_t GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
+{
+	DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
+
+	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	return handle.HeapIndex;
+}
+
+void GraphicsDevice::FreeViewDescriptor(uint32_t& heapIndex)
+{
+	m_pPersistentViewHeap->Free(heapIndex);
 }
 
 std::unique_ptr<GraphicsTexture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName)
@@ -542,7 +556,7 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	MeshShaderSupport = m_FeatureSupport.MeshShaderTier();
 	SamplerFeedbackSupport = m_FeatureSupport.SamplerFeedbackTier();
 	ShaderModel = (uint16_t)m_FeatureSupport.HighestShaderModel();
-	ShaderModel = D3D_SHADER_MODEL::D3D_SHADER_MODEL_6_6;	//temp
+	ShaderModel = D3D_SHADER_MODEL::D3D_SHADER_MODEL_6_5;	//temp
 
 	BarycentricsSupported = m_FeatureSupport.BarycentricsSupported();
 	if (!BarycentricsSupported)

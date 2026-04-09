@@ -56,6 +56,7 @@ void ShaderResourceView::Create(GraphicsBuffer* pBuffer, const BufferSRVDesc& de
 			m_Descriptor = pBuffer->GetGraphics()->AllocateDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>();
 		}
 	    m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, m_Descriptor);
+		m_HeapIndex = m_pParent->GetGraphics()->StoreViewDescriptor(m_Descriptor);
     }
 }
 
@@ -130,6 +131,7 @@ void ShaderResourceView::Create(GraphicsTexture* pTexture, const TextureSRVDesc&
 		m_Descriptor = pTexture->GetGraphics()->AllocateDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>();
 	}
     m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, m_Descriptor);
+	m_HeapIndex = m_pParent->GetGraphics()->StoreViewDescriptor(m_Descriptor);
 }
 
 void ShaderResourceView::Release()
@@ -139,6 +141,7 @@ void ShaderResourceView::Release()
         check(m_pParent);
         m_pParent->GetGraphics()->FreeDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>(m_Descriptor);
         m_Descriptor.ptr = 0;
+		m_pParent->GetGraphics()->FreeViewDescriptor(m_HeapIndex);
     }
 }
 
@@ -184,6 +187,7 @@ void UnorderedAccessView::Create(GraphicsBuffer* pBuffer, const BufferUAVDesc& d
 		m_Descriptor = pBuffer->GetGraphics()->AllocateDescriptor<D3D12_UNORDERED_ACCESS_VIEW_DESC>();
 	}
 	m_pParent->GetGraphics()->GetDevice()->CreateUnorderedAccessView(pBuffer->GetResource(), m_pCounter ? m_pCounter->GetResource() : nullptr, &uavDesc, m_Descriptor);
+	m_HeapIndex = m_pParent->GetGraphics()->StoreViewDescriptor(m_Descriptor);
 }
 
 void UnorderedAccessView::Create(GraphicsTexture* pTexture, const TextureUAVDesc& desc)
@@ -238,6 +242,7 @@ void UnorderedAccessView::Create(GraphicsTexture* pTexture, const TextureUAVDesc
 		m_Descriptor = pTexture->GetGraphics()->AllocateDescriptor<D3D12_UNORDERED_ACCESS_VIEW_DESC>();
 	}
     m_pParent->GetGraphics()->GetDevice()->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, m_Descriptor);
+	m_HeapIndex = m_pParent->GetGraphics()->StoreViewDescriptor(m_Descriptor);
 }
 
 void UnorderedAccessView::Release()
@@ -247,6 +252,7 @@ void UnorderedAccessView::Release()
         check(m_pParent);
         m_pParent->GetGraphics()->FreeDescriptor<D3D12_UNORDERED_ACCESS_VIEW_DESC>(m_Descriptor);
         m_Descriptor.ptr = 0;
+		m_pParent->GetGraphics()->FreeViewDescriptor(m_HeapIndex);
     }
 }
 

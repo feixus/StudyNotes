@@ -5,7 +5,7 @@
 #include "RootSignature.h"
 
 GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t blockSize, uint32_t numDescriptors)
-    : GraphicsObject(pParent), m_Type(type), m_NumDescriptors(numDescriptors)
+    : GraphicsObject(pParent), m_Type(type), m_NumDescriptors(numDescriptors), m_BlockSize(blockSize)
 {
     checkf(numDescriptors % blockSize == 0, "number of descriptors must be a multiple of blockSize (%d)", blockSize);
     checkf(type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, "Online Decriptor Heap must be either of CBV/SRV/UAV or Sampler type.");
@@ -157,18 +157,56 @@ DescriptorHandle OnlineDescriptorAllocator::Allocate(uint32_t descriptorCount)
 }
 
 PersistentDescriptorAllocator::PersistentDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)
-{
-}
+	:GraphicsObject(pGlobalHeap->GetGraphics()), m_pHeapAllocator(pGlobalHeap)
+{}
 
 DescriptorHandle PersistentDescriptorAllocator::Allocate()
 {
-	return DescriptorHandle();
+	std::lock_guard lock(m_AllocationLock);
+
+	if (m_NumAllocated >= m_FreeHandles.size())
+	{
+		m_HeapBlocks.push_back(m_pHeapAllocator->AllocateBlock());
+		m_FreeHandles.resize(m_FreeHandles.size() + m_HeapBlocks.back()->Size);
+		int i = m_NumAllocated;
+		auto generate = [&i]() { return i++; };
+		std::generate(m_FreeHandles.begin() + m_NumAllocated, m_FreeHandles.end(), generate);
+	}
+
+	uint32_t index = m_FreeHandles[m_NumAllocated];
+	++m_NumAllocated;
+	uint32_t blockIndex = index / m_pHeapAllocator->GetBlockSize();
+	check(blockIndex < m_HeapBlocks.size());
+	DescriptorHandle handle = m_HeapBlocks[blockIndex]->StartHandle;
+	uint32_t elementIndex = index % m_pHeapAllocator->GetBlockSize();
+	check(elementIndex < m_HeapBlocks[blockIndex]->Size);
+	// the invalid offset will result in pointer danger, it's to hard to find.
+	handle.OffsetInline(elementIndex, m_pHeapAllocator->GetDescriptorSize());
+
+	D3D12_CPU_DESCRIPTOR_HANDLE heapStart = handle.CpuHandle;
+	UINT incSize = GetGraphics()->GetDevice()->GetDescriptorHandleIncrementSize(
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	SIZE_T heapEnd = heapStart.ptr + (SIZE_T)m_pHeapAllocator->GetBlockSize() * incSize;
+	assert(handle.CpuHandle.ptr >= heapStart.ptr && handle.CpuHandle.ptr < heapEnd);
+
+	return handle;
 }
 
 void PersistentDescriptorAllocator::Free(DescriptorHandle& handle)
 {
+	check(!handle.IsNull());
+	Free(handle.HeapIndex);
+	handle.Reset();
 }
 
 void PersistentDescriptorAllocator::Free(uint32_t& heapIndex)
 {
+	std::lock_guard lock(m_AllocationLock);
+	check(m_HeapBlocks.size() > 0);
+	uint32_t index = heapIndex - m_HeapBlocks[0]->StartHandle.HeapIndex;
+	check(index >= 0);
+	check(index < m_NumAllocated);
+	--m_NumAllocated;
+	m_FreeHandles[m_NumAllocated] = index;
+	heapIndex = ~0u;
 }

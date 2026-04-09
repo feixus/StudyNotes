@@ -19,6 +19,7 @@ class PipelineStateInitializer;
 class StateObject;
 class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
+class PersistentDescriptorAllocator;
 class ResourceView;
 class SwapChain;
 class Fence;
@@ -199,6 +200,9 @@ public:
 		return m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
+	uint32_t StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view);
+	void FreeViewDescriptor(uint32_t& heapIndex);
+
 	std::unique_ptr<GraphicsTexture> CreateTexture(const TextureDesc& desc, const char* pName);
 	std::unique_ptr<GraphicsBuffer> CreateBuffer(const BufferDesc& desc, const char* pName);
 
@@ -234,9 +238,10 @@ private:
 	HANDLE m_DeviceRemovedEvent{0};
 	std::unique_ptr<Fence> m_pDeviceRemovalFence;
 
-	std::unique_ptr<OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
+	std::unique_ptr<PersistentDescriptorAllocator> m_pPersistentViewHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
+	std::unique_ptr<PersistentDescriptorAllocator> m_pPersistentSamplerHeap;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
