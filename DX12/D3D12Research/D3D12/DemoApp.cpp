@@ -296,10 +296,10 @@ void DemoApp::SetupScene(CommandContext& context)
 		for (const SubMesh& subMesh : pMesh->GetMeshes())
 		{
 			ShaderInterop::MeshData mesh;
-			mesh.IndexStream = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
-			mesh.PositionStream = m_pDevice->RegisterBindlessResource(subMesh.pPositionStreamSRV);
-			mesh.NormalStream = m_pDevice->RegisterBindlessResource(subMesh.pNormalStreamSRV);
-			mesh.UVStream = m_pDevice->RegisterBindlessResource(subMesh.pUVStreamSRV);
+			mesh.IndexStream = subMesh.pIndexSRV->GetHeapIndex();
+			mesh.PositionStream = subMesh.pPositionStreamSRV->GetHeapIndex();
+			mesh.NormalStream = subMesh.pNormalStreamSRV->GetHeapIndex();
+			mesh.UVStream = subMesh.pUVStreamSRV->GetHeapIndex();
 			meshes.push_back(mesh);
 		}
 
@@ -327,10 +327,10 @@ void DemoApp::SetupScene(CommandContext& context)
 		for (const Material& material : pMesh->GetMaterials())
 		{
 			ShaderInterop::MaterialData materialData;
-			materialData.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture);
-			materialData.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture);
-			materialData.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture);
-			materialData.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture);
+			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV()->GetHeapIndex() : -1;
+			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRV()->GetHeapIndex() : -1;
+			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRV()->GetHeapIndex() : -1;
+			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRV()->GetHeapIndex() : -1;
 			materialData.BaseColorFactor = material.BaseColorFactor;
 			materialData.MetalnessFactor = material.MetalnessFactor;
 			materialData.RoughnessFactor = material.RoughnessFactor;
@@ -362,7 +362,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		{
 			Light spotLight = Light::Spot(Vector3(-8, 10, 25), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 			spotLight.CastShadows = true;
-			spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
+			spotLight.LightTexture = m_pLightCookie->GetSRV()->GetHeapIndex();
 			spotLight.VolumetricLighting = true;
 			m_Lights.push_back(spotLight);
 		}
@@ -611,7 +611,6 @@ void DemoApp::Update()
 				int size = (i < 4) ? 2048 : 512;
 				pShadowMap = m_pDevice->CreateTexture(TextureDesc::CreateDepth(size, size, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), "Shadow Map");
 				++i;
-				m_pDevice->RegisterBindlessResource(pShadowMap.get());
 			}
 		}
 
@@ -623,7 +622,7 @@ void DemoApp::Update()
 			}
 		}
 
-		shadowData.ShadowMapOffset = m_pDevice->RegisterBindlessResource(m_ShadowMaps[0].get());
+		shadowData.ShadowMapOffset = m_ShadowMaps[0]->GetSRV()->GetHeapIndex();
 	}
 
 	{
@@ -648,7 +647,7 @@ void DemoApp::Update()
 	m_SceneData.pCamera = m_pCamera.get();
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.FrameIndex = m_Frame;
-	m_SceneData.SceneTLAS = m_pDevice->RegisterBindlessResource(m_pTLAS ? m_pTLAS->GetSRV() : nullptr);
+	m_SceneData.SceneTLAS = m_pTLAS ? m_pTLAS->GetSRV()->GetHeapIndex() : -1;
 	m_SceneData.pNormals = m_pNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 

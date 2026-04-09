@@ -26,7 +26,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, 
     DescriptorHandle currentOffset = m_StartHandle;
     for (uint32_t i = 0; i < numBlocks; i++)
     {
-        m_HeapBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, blockSize, 0));
+        m_HeapBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, blockSize));
         m_FreeBlocks.push(m_HeapBlocks.back().get());
         currentOffset.OffsetInline(blockSize, m_DescriptorSize);
     }
@@ -199,14 +199,13 @@ void PersistentDescriptorAllocator::Free(DescriptorHandle& handle)
 	handle.Reset();
 }
 
-void PersistentDescriptorAllocator::Free(uint32_t& heapIndex)
+void PersistentDescriptorAllocator::Free(int32_t& heapIndex)
 {
 	std::lock_guard lock(m_AllocationLock);
 	check(m_HeapBlocks.size() > 0);
 	uint32_t index = heapIndex - m_HeapBlocks[0]->StartHandle.HeapIndex;
 	check(index >= 0);
-	check(index < m_NumAllocated);
 	--m_NumAllocated;
 	m_FreeHandles[m_NumAllocated] = index;
-	heapIndex = ~0u;
+	heapIndex = DescriptorHandle::InvalidHeapIndex;
 }

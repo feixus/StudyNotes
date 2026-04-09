@@ -299,30 +299,6 @@ GraphicsDevice::~GraphicsDevice()
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
 }
 
-int GraphicsDevice::RegisterBindlessResource(GraphicsTexture* pTexture, GraphicsTexture* pFallbackTexture)
-{
-	return RegisterBindlessResource(pTexture ? pTexture->GetSRV() : nullptr, pFallbackTexture ? pFallbackTexture->GetSRV() : nullptr);
-}
-
-int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, ResourceView* pFallback)
-{
-	auto it = m_ViewToDescriptorIndex.find(pResourceView);
-	if (it != m_ViewToDescriptorIndex.end())
-	{
-		return it->second;
-	}
-
-	if (pResourceView)
-	{
-		DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
-		m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, pResourceView->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		m_ViewToDescriptorIndex[pResourceView] = handle.HeapIndex;
-		return handle.HeapIndex;
-	}
-
-	return pFallback ? RegisterBindlessResource(pFallback) : -1;
-}
-
 CommandQueue* GraphicsDevice::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 {
 	return m_CommandQueues.at(type).get();
@@ -399,9 +375,12 @@ uint32_t GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
 	return handle.HeapIndex;
 }
 
-void GraphicsDevice::FreeViewDescriptor(uint32_t& heapIndex)
+void GraphicsDevice::FreeViewDescriptor(int32_t& heapIndex)
 {
-	m_pPersistentViewHeap->Free(heapIndex);
+	if (heapIndex != DescriptorHandle::InvalidHeapIndex)
+	{
+		m_pPersistentViewHeap->Free(heapIndex);
+	}
 }
 
 std::unique_ptr<GraphicsTexture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName)

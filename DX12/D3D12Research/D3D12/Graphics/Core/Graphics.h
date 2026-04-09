@@ -143,9 +143,6 @@ public:
 	void TickFrame();
 	void IdleGPU();
 
-	int RegisterBindlessResource(GraphicsTexture* pTexture, GraphicsTexture* pFallback = nullptr);
-	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
-
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
@@ -201,7 +198,7 @@ public:
 	}
 
 	uint32_t StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view);
-	void FreeViewDescriptor(uint32_t& heapIndex);
+	void FreeViewDescriptor(int32_t& heapIndex);
 
 	std::unique_ptr<GraphicsTexture> CreateTexture(const TextureDesc& desc, const char* pName);
 	std::unique_ptr<GraphicsBuffer> CreateBuffer(const BufferDesc& desc, const char* pName);
@@ -250,8 +247,6 @@ private:
 	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
 	std::mutex m_ContextAllocationMutex;
-
-	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
 
 	int m_SampleCount{1};
 

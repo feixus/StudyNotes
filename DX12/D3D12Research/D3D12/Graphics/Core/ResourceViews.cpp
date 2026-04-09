@@ -56,8 +56,8 @@ void ShaderResourceView::Create(GraphicsBuffer* pBuffer, const BufferSRVDesc& de
 			m_Descriptor = pBuffer->GetGraphics()->AllocateDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>();
 		}
 	    m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, m_Descriptor);
-		m_HeapIndex = m_pParent->GetGraphics()->StoreViewDescriptor(m_Descriptor);
     }
+	m_HeapIndex = m_pParent->GetGraphics()->StoreViewDescriptor(m_Descriptor);
 }
 
 void ShaderResourceView::Create(GraphicsTexture* pTexture, const TextureSRVDesc& desc)
