@@ -179,7 +179,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
             context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
             context.SetComputeRootSignature(m_pCBTRS.get());
     
-            context.SetComputeDynamicConstantBufferView(0, commonArgs);
+			context.SetComputeRootConstants(0, commonArgs);
             context.SetComputeDynamicConstantBufferView(1, updateData);
     
             context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
@@ -195,7 +195,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	cbtUpdateIndirectArgs.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
         context.SetComputeRootSignature(m_pCBTRS.get());
-        context.SetComputeDynamicConstantBufferView(0, commonArgs);
+		context.SetComputeRootConstants(0, commonArgs);
 
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
         context.BindResource(2, 1, m_pCBTIndirectArgs->GetUAV());
@@ -213,8 +213,8 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 
         context.SetGraphicsRootSignature(m_pCBTRS.get());
         context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
-        
-        context.SetGraphicsDynamicConstantBufferView(0, commonArgs);
+
+		context.SetComputeRootConstants(0, commonArgs);
         context.SetGraphicsDynamicConstantBufferView(1, updateData);
         
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
@@ -240,7 +240,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResource& resources)
 	{
 		context.SetComputeRootSignature(m_pCBTRS.get());
-		context.SetComputeDynamicConstantBufferView(0, commonArgs);
+		context.SetComputeRootConstants(0, commonArgs);
 
 		context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
@@ -265,7 +265,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResource& resources)
 	{
 		context.SetComputeRootSignature(m_pCBTRS.get());
-		context.SetComputeDynamicConstantBufferView(0, commonArgs);
+		context.SetComputeRootConstants(0, commonArgs);
 
 		context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
@@ -286,7 +286,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	cbtSumReduction.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
         context.SetComputeRootSignature(m_pCBTRS.get());
-        context.SetComputeDynamicConstantBufferView(0, commonArgs);
+		context.SetComputeRootConstants(0, commonArgs);
 
         context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
@@ -323,7 +323,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
             context.SetPipelineState(m_pCBTDebugVisualizePSO);
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-            context.SetComputeDynamicConstantBufferView(0, commonArgs);
+			context.SetComputeRootConstants(0, commonArgs);
             context.SetComputeDynamicConstantBufferView(1, updateData);
 
             context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
@@ -372,7 +372,13 @@ void CBTTessellation::SetupPipelines()
     };
 
     m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
-    m_pCBTRS->FinalizeFromShader("CBT RS", m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS", defines));
+    //m_pCBTRS->FinalizeFromShader("CBT RS", m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS", defines));
+	m_pCBTRS->SetRootConstants<uint32_t>(0, 0);
+	m_pCBTRS->SetConstantBufferView(1, 1);
+	m_pCBTRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+	m_pCBTRS->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+	m_pCBTRS->AddDefaultTables();
+	m_pCBTRS->Finalize("CBT");
 
     {
         PipelineStateInitializer psoDesc;
