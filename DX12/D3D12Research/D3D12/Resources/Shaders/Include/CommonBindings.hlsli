@@ -24,7 +24,9 @@ Texture2D tTexture2DTable[] :                            register(t0, space100);
 Texture2D tTexture3DTable[] :                            register(t0, space101);
 Texture2D tTextureCubeTable[] :                          register(t0, space102);
 ByteAddressBuffer tBufferTable[] :                       register(t0, space103);
-RaytracingAccelerationStructure tTLASTable[] :           register(t0, space104);
+RaytracingAccelerationStructure tTLASTable[] :           register(t0, space105);
+// bindless UAVs
+RWByteAddressBuffer uRWBufferTable[] :					 register(u0, space100);
 
 // static samplers
 SamplerState sLinearWarp :                           register(s10);
@@ -49,11 +51,22 @@ SamplerState sLinearMipPoint :                       register(s21);
         "SRV(t0, numDescriptors = unbounded, space = 102, offset = 0), "\
         "SRV(t0, numDescriptors = unbounded, space = 103, offset = 0), "\
         "SRV(t0, numDescriptors = unbounded, space = 104, offset = 0), "\
-        "UAV(u0, numDescriptors = unbounded, space = 105, offset = 0), "\
-        "UAV(u0, numDescriptors = unbounded, space = 106, offset = 0), "\
-        "UAV(u0, numDescriptors = unbounded, space = 107, offset = 0), "\
-        "UAV(u0, numDescriptors = unbounded, space = 108, offset = 0), "\
-        "UAV(u0, numDescriptors = unbounded, space = 109, offset = 0), "\
+		"SRV(t0, numDescriptors = unbounded, space = 105, offset = 0), "\
+		"SRV(t0, numDescriptors = unbounded, space = 106, offset = 0), "\
+		"SRV(t0, numDescriptors = unbounded, space = 107, offset = 0), "\
+		"SRV(t0, numDescriptors = unbounded, space = 108, offset = 0), "\
+		"SRV(t0, numDescriptors = unbounded, space = 109, offset = 0), "\
+		\
+        "UAV(u0, numDescriptors = unbounded, space = 100, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 101, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 102, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 103, offset = 0), "\
+        "UAV(u0, numDescriptors = unbounded, space = 104, offset = 0), "\
+		"UAV(u0, numDescriptors = unbounded, space = 105, offset = 0), "\
+		"UAV(u0, numDescriptors = unbounded, space = 106, offset = 0), "\
+		"UAV(u0, numDescriptors = unbounded, space = 107, offset = 0), "\
+		"UAV(u0, numDescriptors = unbounded, space = 108, offset = 0), "\
+		"UAV(u0, numDescriptors = unbounded, space = 109, offset = 0), "\
     "visibility = SHADER_VISIBILITY_ALL), "\
     "DescriptorTable("\
         "Sampler(s0, numDescriptors = unbounded, space = 100, offset = 0), visibility = SHADER_VISIBILITY_ALL), "  \

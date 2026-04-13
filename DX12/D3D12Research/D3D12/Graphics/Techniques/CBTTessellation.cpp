@@ -126,8 +126,14 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     struct CommonArgs
     {
         uint32_t NumElements;
+		int32_t HeightmapIndex;
+		int32_t CBTIndex;
+		int32_t IndirectArgsIndex;
     } commonArgs;
     commonArgs.NumElements = (uint32_t)m_pCBTBuffer->GetSize() / sizeof(uint32_t);
+	commonArgs.HeightmapIndex = m_pHeightmap->GetSRV()->GetHeapIndex();
+	commonArgs.CBTIndex = m_pCBTBuffer->GetUAV()->GetHeapIndex();
+	commonArgs.IndirectArgsIndex = m_pCBTIndirectArgs->GetUAV()->GetHeapIndex();
 
     struct UpdateData
     {
@@ -182,9 +188,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 			context.SetComputeRootConstants(0, commonArgs);
             context.SetComputeDynamicConstantBufferView(1, updateData);
     
-            context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-            context.BindResource(3, 0, m_pHeightmap->GetSRV());
-    
             context.SetPipelineState(m_pCBTUpdatePSO);
             context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchArgsOffset);
             context.InsertUavBarrier(m_pCBTBuffer.get());
@@ -196,9 +199,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     {
         context.SetComputeRootSignature(m_pCBTRS.get());
 		context.SetComputeRootConstants(0, commonArgs);
-
-        context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-        context.BindResource(2, 1, m_pCBTIndirectArgs->GetUAV());
 
         context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         context.SetPipelineState(m_pCBTIndirectArgsPSO);
@@ -214,11 +214,9 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         context.SetGraphicsRootSignature(m_pCBTRS.get());
         context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
 
-		context.SetComputeRootConstants(0, commonArgs);
+		// the AS/MS/PS only the graphics root constants, not compute root constants.
+		context.SetGraphicsRootConstants(0, commonArgs);
         context.SetGraphicsDynamicConstantBufferView(1, updateData);
-        
-        context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-        context.BindResource(3, 0, m_pHeightmap->GetSRV());
         
         context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
         if (CBTSettings::MeshShader)
@@ -241,8 +239,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	{
 		context.SetComputeRootSignature(m_pCBTRS.get());
 		context.SetComputeRootConstants(0, commonArgs);
-
-		context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
 		struct SumReductionData
 		{
@@ -267,8 +263,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 		context.SetComputeRootSignature(m_pCBTRS.get());
 		context.SetComputeRootConstants(0, commonArgs);
 
-		context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-
 		struct SumReductionData
 		{
 			uint32_t Depth;
@@ -287,8 +281,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
     {
         context.SetComputeRootSignature(m_pCBTRS.get());
 		context.SetComputeRootConstants(0, commonArgs);
-
-        context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
         struct SumReductionData
         {
@@ -325,8 +317,6 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 
 			context.SetComputeRootConstants(0, commonArgs);
             context.SetComputeDynamicConstantBufferView(1, updateData);
-
-            context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
             context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture.get(), RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
             context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
@@ -373,10 +363,8 @@ void CBTTessellation::SetupPipelines()
 
     m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
     //m_pCBTRS->FinalizeFromShader("CBT RS", m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS", defines));
-	m_pCBTRS->SetRootConstants<uint32_t>(0, 0);
+	m_pCBTRS->SetRootConstants<IntVector4>(0, 0);
 	m_pCBTRS->SetConstantBufferView(1, 1);
-	m_pCBTRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pCBTRS->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
 	m_pCBTRS->AddDefaultTables();
 	m_pCBTRS->Finalize("CBT");
 
