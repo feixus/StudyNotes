@@ -288,7 +288,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	uint8_t smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
-	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);
+	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
+	m_pShaderManager->AddIncludeDir("Resources/Shaders/", true /*CommandLine::GetBool("shaderhotreload")*/);
+	m_pShaderManager->AddIncludeDir("Graphics/Core");
 	E_LOG(Info, "ShaderModel:%d-%d", smMaj, smMin);
 }
 
@@ -535,7 +537,7 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	MeshShaderSupport = m_FeatureSupport.MeshShaderTier();
 	SamplerFeedbackSupport = m_FeatureSupport.SamplerFeedbackTier();
 	ShaderModel = (uint16_t)m_FeatureSupport.HighestShaderModel();
-	ShaderModel = D3D_SHADER_MODEL::D3D_SHADER_MODEL_6_6;	//temp
+	ShaderModel = D3D_SHADER_MODEL::D3D_SHADER_MODEL_6_5;	//temp
 
 	BarycentricsSupported = m_FeatureSupport.BarycentricsSupported();
 	if (!BarycentricsSupported)

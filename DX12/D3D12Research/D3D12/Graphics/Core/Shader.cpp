@@ -7,12 +7,24 @@
 
 namespace ShaderCompiler
 {
+	constexpr const char* pCompilerPath = "dxcompiler.dll";
 	constexpr const char* pShaderSymbolsPath = "_Temp/ShaderSymbols/";
 
 	static ComPtr<IDxcUtils> pUtils;
 	static ComPtr<IDxcCompiler3> pCompiler3;
 	static ComPtr<IDxcValidator> pValidator;
 	static ComPtr<IDxcIncludeHandler> pDefaultIncludeHandler;
+
+	struct CompileJob
+	{
+		std::string FilePath;
+		std::string EntryPoint;
+		std::string Target;
+		std::vector<ShaderDefine> Defines;
+		std::vector<std::string> IncludeDirs;
+		uint8_t MajVersion;
+		uint8_t MinVersion;
+	};
 
 	struct CompileResult
 	{
@@ -45,34 +57,52 @@ namespace ShaderCompiler
 
 	void LoadDXC()
 	{
-		HMODULE lib = LoadLibraryA("dxcompiler.dll");
-		check(lib);
-		DxcCreateInstanceProc createInstance = (DxcCreateInstanceProc)GetProcAddress(lib, "DxcCreateInstance");
-		check(createInstance);
-		VERIFY_HR(createInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
-		VERIFY_HR(createInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
-		VERIFY_HR(createInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
+		FN_PROC(DxcCreateInstance);
+
+		HMODULE lib = LoadLibraryA(pCompilerPath);
+		DxcCreateInstanceFn.Load(lib);
+		
+		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
+		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
+		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
 		VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
-		E_LOG(Info, "Loaded dxcompiler.dll");
+		E_LOG(Info, "Loaded %s", pCompilerPath);
 	}
 
-	CompileResult CompileDxc(const char* pFilePath, const char* pEntryPoint,
-							 const char* pTarget, uint8_t majVersion, uint8_t minVersion,
-							 const std::vector<ShaderDefine>& defines, const char* pShaderPath)
+	bool TryLoadFile(const char* pFilePath, const std::vector<std::string>& includeDirs, 
+					 ComPtr<IDxcBlobEncoding>* pFile, std::string* pFullPath)
+	{
+		for (const std::string& includeDir : includeDirs)
+		{
+			std::string path = Paths::Combine(includeDir, pFilePath);
+			if (Paths::FileExists(path))
+			{
+				if (SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(path.c_str()), nullptr, pFile->GetAddressOf())))
+				{
+					*pFullPath = path;
+					break;					
+				}
+			}
+		}
+		return *pFile;
+	}
+
+	CompileResult Compile(const CompileJob& compileJob)
 	{
 		CompileResult result;
 
 		ComPtr<IDxcBlobEncoding> pSource;
-		if (!SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(pFilePath), nullptr, pSource.GetAddressOf())))
+		std::string fullPath;
+		if (!TryLoadFile(compileJob.FilePath.c_str(), compileJob.IncludeDirs, &pSource, &fullPath))
 		{
-			result.ErrorMsg = Sprintf("Failed to load shader file: %s", pFilePath);
+			result.ErrorMsg = Sprintf("Failed to load shader file: %s", compileJob.FilePath.c_str());
 			return result;
 		}
 
 		bool debugShaders = true;// CommandLine::GetBool("debugshaders");
 		bool shaderSymbols = true;// CommandLine::GetBool("shadersymbols");
 
-		std::string target = Sprintf("%s_%d_%d", pTarget, majVersion, minVersion);
+		std::string target = Sprintf("%s_%d_%d", compileJob.Target.c_str(), compileJob.MajVersion, compileJob.MinVersion);
 
 		class CompileArguments
 		{
@@ -119,10 +149,12 @@ namespace ShaderCompiler
 			std::unordered_set<std::wstring> argumentStrings;
 		} arguments;
 
-		arguments.AddArgument(Paths::GetFileNameWithoutExtension(pFilePath).c_str());
-		arguments.AddArgument("-E", pEntryPoint);
+		arguments.AddArgument(Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str());
+		arguments.AddArgument("-E", compileJob.EntryPoint.c_str());
 		arguments.AddArgument("-T", target.c_str());
 		arguments.AddArgument(DXC_ARG_ALL_RESOURCES_BOUND);
+		arguments.AddArgument(DXC_ARG_WARNINGS_ARE_ERRORS);
+		arguments.AddArgument(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
 
 		// payload access qualifiers
 		// if (majVersion >= 6 && minVersion >= 6)
@@ -156,13 +188,17 @@ namespace ShaderCompiler
 			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
 		}
 
-		arguments.AddArgument(DXC_ARG_WARNINGS_ARE_ERRORS);
-		arguments.AddArgument(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
+		arguments.AddArgument("-I", Sprintf("%sInclude/", Paths::GetDirectoryPath(fullPath).c_str()).c_str());
+		for (const std::string& includeDir : compileJob.IncludeDirs)
+		{
+			arguments.AddArgument("-I", includeDir.c_str());
+		}
 
-		arguments.AddArgument("-I", pShaderPath);
-		arguments.AddArgument("-I", Paths::Combine(pShaderPath, "include").c_str());
+		arguments.AddDefine(std::format("_SM_MAJ={}", compileJob.MajVersion).c_str());
+		arguments.AddDefine(std::format("_SM_MIN={}", compileJob.MinVersion).c_str());
+		arguments.AddDefine("_DXC");
 
-		for (const ShaderDefine& define : defines)
+		for (const ShaderDefine& define : compileJob.Defines)
 		{
 			arguments.AddDefine(define.Value.c_str());
 		}
@@ -181,6 +217,7 @@ namespace ShaderCompiler
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
 				if (!Paths::FileExists(path))
 				{
+					*ppIncludeSource = nullptr;
 					return E_FAIL;
 				}
 				if (IncludedFiles.find(path) != IncludedFiles.end())
@@ -314,18 +351,6 @@ namespace ShaderCompiler
 
 		return result;
 	}
-
-	CompileResult Compile(const char* pFilePath, const char* pTarget, 
-						  const char* pEntryPoint, uint8_t majVersion, 
-						  uint8_t minVersion, const std::vector<ShaderDefine>& defines, const char* pShaderPath)
-	{
-		std::vector<ShaderDefine> definesActual = defines;
-		definesActual.push_back(std::format("_SM_MAJ={}", majVersion));
-		definesActual.push_back(std::format("_SM_MIN={}", minVersion));
-
-		definesActual.emplace_back("_DXC=1");
-		return CompileDxc(pFilePath, pEntryPoint, pTarget, majVersion, minVersion, definesActual, pShaderPath);
-	}
 }
 
 void* ShaderBase::GetByteCode() const
@@ -338,16 +363,10 @@ uint32_t ShaderBase::GetByteCodeSize() const
 	return (uint32_t)m_pByteCode->GetBufferSize();
 }
 
-ShaderManager::ShaderManager(const char* shaderSourcePath, uint8_t shaderModelMajor, uint8_t shaderModelMinor)
-	: m_ShaderSourcePath(shaderSourcePath), m_ShaderModelMajor(shaderModelMajor), m_ShaderModelMinor(shaderModelMinor)
+ShaderManager::ShaderManager(uint8_t shaderModelMajor, uint8_t shaderModelMinor)
+	: m_ShaderModelMajor(shaderModelMajor), m_ShaderModelMinor(shaderModelMinor)
 {
 	ShaderCompiler::LoadDXC();
-	//if (CommandLine::GetBool("shaderhotreload"))
-	{
-		m_pFileWatcher = std::make_unique<FileWatcher>();
-		m_pFileWatcher->StartWatching(shaderSourcePath, true);
-		E_LOG(Info, "Shader Hot-Reload enabled: \"%s\"", shaderSourcePath);
-	}
 }
 
 ShaderManager::~ShaderManager()
@@ -440,15 +459,16 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 
 Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines)
 {
-	std::string filePath = Paths::Combine(m_ShaderSourcePath, pShaderPath);
+	ShaderCompiler::CompileJob compileJob;
+	compileJob.FilePath = pShaderPath;
+	compileJob.EntryPoint = pEntryPoint;
+	compileJob.Defines = defines;
+	compileJob.IncludeDirs = m_IncludeDirs;
+	compileJob.MajVersion = m_ShaderModelMajor;
+	compileJob.MinVersion = m_ShaderModelMinor;
+	compileJob.Target = ShaderCompiler::GetShaderTarget(shaderType);
 
-	auto result = ShaderCompiler::Compile(filePath.c_str(), 
-										ShaderCompiler::GetShaderTarget(shaderType),
-										pEntryPoint, 
-										m_ShaderModelMajor,
-										m_ShaderModelMinor,
-										defines,
-										m_ShaderSourcePath);
+	auto result = ShaderCompiler::Compile(compileJob);
 	if (!result.Success())
 	{
 		E_LOG(Warning, "Failed to compile shader '%s:%s': %s", pShaderPath, pEntryPoint, result.ErrorMsg.c_str());
@@ -473,8 +493,15 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 
 ShaderLibrary* ShaderManager::LoadLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines)
 {
-	std::string filePath = Paths::Combine(m_ShaderSourcePath, pShaderPath);
-	auto result = ShaderCompiler::Compile(filePath.c_str(), "lib", "", m_ShaderModelMajor, m_ShaderModelMinor, defines, m_ShaderSourcePath);
+	ShaderCompiler::CompileJob compileJob;
+	compileJob.FilePath = pShaderPath;
+	compileJob.Defines = defines;
+	compileJob.IncludeDirs = m_IncludeDirs;
+	compileJob.MajVersion = m_ShaderModelMajor;
+	compileJob.MinVersion = m_ShaderModelMinor;
+	compileJob.Target = "lib";
+
+	auto result = ShaderCompiler::Compile(compileJob);
 	if (!result.Success())
 	{
 		E_LOG(Warning, "Failed to compile shader library '%s': %s", pShaderPath, result.ErrorMsg.c_str());
@@ -521,4 +548,17 @@ ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const std::vec
 	}
 
 	return LoadLibrary(pShaderPath, defines);
+}
+
+void ShaderManager::AddIncludeDir(const std::string& includeDir, bool watch)
+{
+	m_IncludeDirs.push_back(includeDir);
+
+	if (watch)
+	{
+		checkf(!m_pFileWatcher, "Can only have a single watch include directory");
+		m_pFileWatcher = std::make_unique<FileWatcher>();
+		m_pFileWatcher->StartWatching(includeDir.c_str(), true);
+		E_LOG(Info, "Shader Hot-Reload enabled: \"%s\"", includeDir.c_str());
+	}
 }

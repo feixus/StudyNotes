@@ -11,12 +11,14 @@
 #define TextureCube 5
 #define TextureCubeArray 6
 
-cbuffer Data : register(b0)
+struct ConstantsData
 {
-    float4x4 cViewProj;
+    float4x4 ViewProj;
     uint TextureID;
     uint TextureType;
-}
+};
+
+ConstantBuffer<ConstantsData> cConstants : register(b0);
 
 struct VS_INPUT
 {
@@ -34,18 +36,18 @@ struct PS_INPUT
 
 float4 SampleTexture(float2 texCoord)
 {
-    if (TextureType == Texture2D)
+    if (cConstants.TextureType == Texture2D)
     {
-        return tTexture2DTable[TextureID].SampleLevel(sMaterialSampler, texCoord, 0);
+        return tTexture2DTable[cConstants.TextureID].SampleLevel(sMaterialSampler, texCoord, 0);
     }
-    // if (TextureType == Texture3D)
+    // if (cConstants.TextureType == Texture3D)
     // {
-    //     float4 c = tTexture3DTable[TextureID].SampleLevel(sMaterialSampler, float3(texCoord, 0), 0);
+    //     float4 c = tTexture3DTable[cConstants.TextureID].SampleLevel(sMaterialSampler, float3(texCoord, 0), 0);
     //     return float4(c.xyz, 1.0f);
     // }
-    // if (TextureType == TextureCube)
+    // if (cConstants.TextureType == TextureCube)
     // {
-    //     float4 c = tTextureCubeTable[TextureID].SampleLevel(sMaterialSampler, float3(texCoord, 0), 0);
+    //     float4 c = tTextureCubeTable[cConstants.TextureID].SampleLevel(sMaterialSampler, float3(texCoord, 0), 0);
     //     return float4(c.xyz, 1.0f);
     // }
     return float4(1, 0, 1, 1);
@@ -56,7 +58,7 @@ PS_INPUT VSMain(VS_INPUT input)
 {
     PS_INPUT output = (PS_INPUT)0;
     
-    output.position = mul(float4(input.position.xy, 0.5f, 1.f), cViewProj);
+    output.position = mul(float4(input.position.xy, 0.5f, 1.f), cConstants.ViewProj);
     output.color = input.color;
     output.texCoord = input.texCoord;
     

@@ -2,6 +2,10 @@ ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
 
+function runtimeDependency(source, destination)
+	postbuildcommands { ("{COPY} \"$(SolutionDir)" .. source .. "\" \"$(OutDir)" .. destination .. "/\"") }
+end
+
 workspace (ENGINE_NAME)
     basedir (ROOT)
     configurations { "Debug", "Release", "DebugASAN" }
@@ -12,12 +16,14 @@ workspace (ENGINE_NAME)
     defines { "x64" }
     architecture "x64"
     symbols "On"
-	kind "WindowedApp"
     characterset "MBCS"
 	flags { "MultiProcessorCompile", "ShadowedVariables"}
 	rtti "Off"
     conformancemode "On"
     warnings "Extra"
+	kind "WindowedApp"
+	targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
+	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
 
     disablewarnings { "4100" }
 
@@ -46,17 +52,12 @@ workspace (ENGINE_NAME)
     	linkoptions  { "-fsanitize=address" }
 
 		toolset "clang"
-		
-		-- libdirs {
-        -- 	"D:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/lib/clang/17/lib/windows"
-    	-- }
 
     filter {}
 
 project (ENGINE_NAME)
     location (ROOT .. ENGINE_NAME)
-    targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
-	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
+    
 
     -- Precompiled header
     pchheader "stdafx.h"
@@ -82,7 +83,6 @@ project (ENGINE_NAME)
         SOURCE_DIR .. "**.c",
         SOURCE_DIR .. "**.natvis",
         SOURCE_DIR .. "**.editorconfig",
-		SOURCE_DIR .. "Resources/Shaders/Interop/**",
 		--SOURCE_DIR .. "**.hlsl*",
     }
 	
@@ -90,7 +90,6 @@ project (ENGINE_NAME)
 	{
 		--{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
 		--{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
-		{["Shaders/Interop"] = (SOURCE_DIR .. "**/Interop/**.h")}
 	}
 
     filter ("files:" .. SOURCE_DIR .. "External/**")
@@ -108,27 +107,27 @@ project (ENGINE_NAME)
 	
 		includedirs (ROOT .. "D3D12/External/D3D12/include")
 		includedirs (ROOT .. "D3D12/External/D3D12/include/d3dx12")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\D3D12Core.dll\" \"$(OutDir)\\D3D12\\\"") }
-		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\D3D12\\bin\\d3d12SDKLayers.dll\" \"$(OutDir)\\D3D12\\\"") }
+		runtimeDependency("D3D12/External/D3D12/bin/D3D12Core.dll", "D3D12")
+		runtimeDependency("D3D12/External/D3D12/bin/d3d12SDKLayers.dll", "D3D12")
 
 		-- pix
 		includedirs (ROOT .. "D3D12/External/Pix/include")
 		libdirs (ROOT .. "D3D12/External/Pix/lib")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+		runtimeDependency("D3D12/External/Pix/bin/WinPixEventRuntime.dll", "")
 		links { "WinPixEventRuntime" }
 
 		-- dxc
 		links { "dxcompiler" }
 		includedirs (ROOT .. "D3D12/External/Dxc")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
-		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
+		runtimeDependency("D3D12/External/Dxc/dxcompiler.dll", "")
+		runtimeDependency("D3D12/External/Dxc/dxil.dll", "")
 
 		-- optick
 		links { "OptickCore" }
 		includedirs (ROOT .. "D3D12/External/Optick/include")
 		libdirs	(ROOT .. "D3D12/External/Optick/lib")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)D3D12/External\\Optick\\bin\\OptickCore.dll\" \"$(OutDir)\"") }
-		
+		runtimeDependency("D3D12/External/Optick/bin/OptickCore.dll", "")
+
 newaction {
 	trigger     = "clean",
 	description = "Remove all binaries and generated files",

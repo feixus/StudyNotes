@@ -69,10 +69,11 @@ public:
 class ShaderManager
 {
 public:
-	ShaderManager(const char* pShaderSourcePath, uint8_t shaderModelMajor, uint8_t shaderModelMinor);
+	ShaderManager(uint8_t shaderModelMajor, uint8_t shaderModelMinor);
 	~ShaderManager();
 
 	void ConditionallyReloadShaders();
+	void AddIncludeDir(const std::string& includeDir, bool watch = false);
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
@@ -95,6 +96,7 @@ private:
 
 	void RecompileFromFileChange(const std::string& filePath);
 
+	std::vector<std::string> m_IncludeDirs;
 	std::unique_ptr<FileWatcher> m_pFileWatcher;
 
 	using ShaderPtr = std::unique_ptr<Shader>;
@@ -112,7 +114,6 @@ private:
 	};
 	std::unordered_map<ShaderStringHash, ShadersInFileMap> m_FilepathToObjectMap;
 
-	const char* m_ShaderSourcePath;
 	uint8_t m_ShaderModelMajor;
 	uint8_t m_ShaderModelMinor;
 

@@ -4,7 +4,7 @@
 #include "Graphics/Core/DescriptorHandle.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/SceneView.h"
-#include "ShaderCommon.h"
+#include "Graphics/Core/ShaderInterop.h"
 
 class CommandContext;
 class ImGuiRenderer;

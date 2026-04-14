@@ -19,14 +19,11 @@
 // Misc
 #include <mutex>
 
-#include "Core/CoreTypes.h"
+
 #include "Core/MinWindows.h"
-
 #include <wrl/client.h>
-template<typename T>
-using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-#include <d3d12.h>
+#include "d3d12.h"
 #include <dxgi1_6.h>
 
 #define D3DX12_NO_STATE_OBJECT_HELPERS
@@ -67,6 +64,7 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 #define validateOnce(expression) validateOncef(expression, "")
 
+#include "Core/CoreTypes.h"
 #include "Core/String.h"
 #include "Core/Thread.h"
 #include "Math/MathTypes.h"
