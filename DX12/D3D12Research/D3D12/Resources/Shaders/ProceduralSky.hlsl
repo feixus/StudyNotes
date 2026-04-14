@@ -1,8 +1,8 @@
 #include "CommonBindings.hlsli"
 #include "SkyCommon.hlsli"
 
-#define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-                "CBV(b0, visibility = SHADER_VISIBILITY_ALL)")
+// #define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+//                 "CBV(b0, visibility = SHADER_VISIBILITY_ALL)")
 
 static const float4 CUBE[] = 
 {
@@ -44,13 +44,14 @@ static const float4 CUBE[] =
 	float4(-1.0,1.0,-1.0,1.0),
 };
 
-cbuffer VSConstants : register(b0)
+struct Constants
 {
-    float4x4 cView;
-    float4x4 cProjection;
-    float3 cBias;
-    float3 cSunDirection;
-}
+    float4x4 View;
+    float4x4 Projection;
+    float3 SunDirection;
+};
+
+ConstantBuffer<Constants> cConstants : register(b0);
 
 struct VSOutput
 {
@@ -58,13 +59,13 @@ struct VSOutput
     float3 TexCoord : TEXCOORD;
 };
 
-[RootSignature(RootSig)]
+// [RootSignature(RootSig)]
 VSOutput VSMain(uint vertexId : SV_VertexID)
 {
     VSOutput output;
 
-    float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cView);
-    output.PositionCS = mul(float4(positionVS, 1.0f), cProjection);
+    float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cConstants.View);
+    output.PositionCS = mul(float4(positionVS, 1.0f), cConstants.Projection);
     output.PositionCS.z = 0.0001f;
     output.TexCoord = CUBE[vertexId].xyz;
 
@@ -74,5 +75,5 @@ VSOutput VSMain(uint vertexId : SV_VertexID)
 float4 PSMain(in VSOutput input) : SV_TARGET
 {
     float3 dir = normalize(input.TexCoord);
-    return float4(CIESky(dir, cSunDirection), 1.0f);
+    return float4(CIESky(dir, cConstants.SunDirection), 1.0f);
 }

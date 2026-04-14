@@ -357,14 +357,14 @@ void CBTTessellation::SetupPipelines()
         ShaderDefine(std::format("DEBUG_ALWAYS_SUBDIVIDE={}", CBTSettings::AlwaysSubdivide ? 1 : 0)),
         ShaderDefine(std::format("MESH_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::MeshShaderSubD * 2, 6))),
         ShaderDefine(std::format("AMPLIFICATION_SHADER_SUBD_LEVEL={}", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0))),
-		//ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
+		ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
 		ShaderDefine(std::format("COLOR_LEVELS={}", CBTSettings::ColorLevels ? 1 : 0)),
     };
 
     m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
     //m_pCBTRS->FinalizeFromShader("CBT RS", m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS", defines));
-	m_pCBTRS->SetRootConstants<IntVector4>(0, 0);
-	m_pCBTRS->SetConstantBufferView(1, 1);
+	m_pCBTRS->AddRootConstants<IntVector4>(0);
+	m_pCBTRS->AddConstantBufferView(1);
 	m_pCBTRS->AddDefaultTables();
 	m_pCBTRS->Finalize("CBT");
 

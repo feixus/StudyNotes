@@ -45,5 +45,5 @@ private:
         return *static_cast<MulticastDelegate<Args...>*>(m_DelegateMap[name].get());
     }
 
-    inline static std::unordered_map<StringHash, std::unique_ptr<MulticastDelegateBase>> m_DelegateMap;
+    inline static std::unordered_map<StringHash, std::unique_ptr<DelegateBase>> m_DelegateMap;
 };

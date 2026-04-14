@@ -91,6 +91,7 @@ public:
     IDelegateBase() = default;
 	virtual ~IDelegateBase() noexcept = default;
 	virtual const void* GetOwner() const { return nullptr; }
+    virtual void Clone(void* pDestination) = 0;
 };
 
 // base type for delegates
@@ -110,8 +111,12 @@ class StaticDelegate<RetVal(Args...), Args2...> : public IDelegate<RetVal, Args.
 public:
     using DelegateFunction = RetVal(*)(Args..., Args2...);
 
-    StaticDelegate(DelegateFunction function, Args2&&... args)
-        : m_Function(function), m_Payload(std::forward<Args2>(args)...)
+    StaticDelegate(DelegateFunction function, Args2&&... payload)
+        : m_Function(function), m_Payload(std::forward<Args2>(payload)...)
+    {}
+
+    StaticDelegate(DelegateFunction function, const std::tuple<Args2...>& payload)
+        : m_Function(function), m_Payload(payload)
     {}
 
     virtual RetVal Execute(Args&&... args) override
@@ -124,6 +129,11 @@ public:
         },
         m_Payload
         );
+    }
+
+    virtual void Clone(void* pDestination) override
+    {
+        new (pDestination) StaticDelegate(m_Function, m_Payload);
     }
 
 private:
@@ -140,8 +150,12 @@ class RawDelegate<IsConst, T, RetVal(Args...), Args2...> : public IDelegate<RetV
 public:
     using DelegateFunction = typename _DelegateInternal::MemberFunction<IsConst, T, RetVal, Args..., Args2...>::Type;
 
-    RawDelegate(T* pObject,DelegateFunction function, Args2&&... args)
-        : m_pObject(pObject), m_Function(function), m_Payload(std::forward<Args2>(args)...)
+    RawDelegate(T* pObject,DelegateFunction function, Args2&&... payload)
+        : m_pObject(pObject), m_Function(function), m_Payload(std::forward<Args2>(payload)...)
+    {}
+
+    RawDelegate(T* pObject, DelegateFunction function, const std::tuple<Args2...>& payload)
+        : m_pObject(pObject), m_Function(function), m_Payload(payload)
     {}
 
     virtual RetVal Execute(Args&&... args) override
@@ -162,6 +176,11 @@ public:
         return m_pObject;
     }
 
+    virtual void Clone(void* pDestination) override
+    {
+        new (pDestination) RawDelegate(m_pObject, m_Function, m_Payload);
+    }
+
 private:
     T* m_pObject;
     DelegateFunction m_Function;
@@ -175,8 +194,12 @@ template<typename TLambda, typename RetVal, typename... Args, typename... Args2>
 class LambdaDelegate<TLambda, RetVal(Args...), Args2...> : public IDelegate<RetVal, Args...>
 {
 public:
-    LambdaDelegate(TLambda&& lambda, Args2&&... args)
-        : m_Lambda(std::forward<TLambda>(lambda)), m_Payload(std::forward<Args2>(args)...)
+    explicit LambdaDelegate(TLambda&& lambda, Args2&&... payload)
+        : m_Lambda(std::forward<TLambda>(lambda)), m_Payload(std::forward<Args2>(payload)...)
+    {}
+
+    explicit LambdaDelegate(const TLambda& lambda, const std::tuple<Args2...>& payload)
+        : m_Lambda(lambda), m_Payload(payload)
     {}
 
     virtual RetVal Execute(Args&&... args) override
@@ -189,6 +212,11 @@ public:
         },
         m_Payload
         );
+    }
+
+    virtual void Clone(void* pDestination) override
+    {
+        new (pDestination) LambdaDelegate(m_Lambda, m_Payload);
     }
 
 private:
@@ -205,8 +233,12 @@ class SPDelegate<IsConst, T, RetVal(Args...), Args2...> : public IDelegate<RetVa
 public:
     using DelegateFunction = typename _DelegateInternal::MemberFunction<IsConst, T, RetVal, Args..., Args2...>::Type;
 
-    SPDelegate(const std::shared_ptr<T>& pObject, DelegateFunction function, Args2&&... args)
-        : m_pObject(pObject), m_Function(function), m_Payload(std::forward<Args2>(args)...)
+    SPDelegate(std::shared_ptr<T> pObject, DelegateFunction function, Args2&&... payload)
+        : m_pObject(pObject), m_Function(function), m_Payload(std::forward<Args2>(payload)...)
+    {}
+
+    SPDelegate(std::weak_ptr<T> pObject, DelegateFunction function, const std::tuple<Args2...>& payload)
+        : m_pObject(pObject), m_Function(function), m_Payload(payload)
     {}
 
     virtual RetVal Execute(Args&&... args) override
@@ -238,8 +270,12 @@ public:
         return m_pObject.lock().get();
     }
 
-private:
+    virtual void Clone(void* pDestination) override
+    {
+        new (pDestination) SPDelegate(m_pObject, m_Function, m_Payload);
+    }
 
+private:
     std::weak_ptr<T> m_pObject;
     DelegateFunction m_Function;
     std::tuple<Args2...> m_Payload;
@@ -446,12 +482,23 @@ public:
 	}
 
 	// copy constructor
-    DelegateBase(const DelegateBase& other) : m_Allocator(other.m_Allocator) {}
+    DelegateBase(const DelegateBase& other)
+    {
+        if (other.m_Allocator.HasAllocation())
+        {
+            m_Allocator.Allocate(other.m_Allocator.GetSize());
+            other.GetDelegate()->Clone(m_Allocator.GetAllocation());
+        }
+    }
 	// copy assignment operator
     DelegateBase& operator=(const DelegateBase& other)
 	{
 		Release();
-		m_Allocator = other.m_Allocator;
+		if (other.m_Allocator.HasAllocation())
+        {
+            m_Allocator.Allocate(other.m_Allocator.GetSize());
+            other.GetDelegate()->Clone(m_Allocator.GetAllocation());
+        }
 		return *this;
 	}
 
@@ -656,15 +703,9 @@ private:
     }
 };
 
-class MulticastDelegateBase
-{
-public:
-    virtual ~MulticastDelegateBase() = default;
-};
-
 // delegate that can be bound to by multiple objects
 template<typename... Args>
-class MulticastDelegate : public MulticastDelegateBase
+class MulticastDelegate : public DelegateBase
 {
 public:
 	using DelegateT = Delegate<void, Args...>;
