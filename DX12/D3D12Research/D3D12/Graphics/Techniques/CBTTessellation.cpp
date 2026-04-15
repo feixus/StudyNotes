@@ -359,6 +359,7 @@ void CBTTessellation::SetupPipelines()
         ShaderDefine(std::format("AMPLIFICATION_SHADER_SUBD_LEVEL={}", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0))),
 		ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
 		ShaderDefine(std::format("COLOR_LEVELS={}", CBTSettings::ColorLevels ? 1 : 0)),
+		ShaderDefine(std::format("SUPPORT_BARYCENTRIC={}", m_pDevice->GetCapabilities().BarycentricsSupported ? 1 : 0)),
     };
 
     m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);

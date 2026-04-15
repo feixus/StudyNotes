@@ -188,20 +188,20 @@ namespace ShaderCompiler
 			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
 		}
 
-		arguments.AddArgument("-I", Sprintf("%sInclude/", Paths::GetDirectoryPath(fullPath).c_str()).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
 		{
 			arguments.AddArgument("-I", includeDir.c_str());
 		}
 
-		arguments.AddDefine(std::format("_SM_MAJ={}", compileJob.MajVersion).c_str());
-		arguments.AddDefine(std::format("_SM_MIN={}", compileJob.MinVersion).c_str());
-		arguments.AddDefine("_DXC");
-
 		for (const ShaderDefine& define : compileJob.Defines)
 		{
 			arguments.AddDefine(define.Value.c_str());
 		}
+
+		// why these argument must at the last after pass defines, due to miss entry point for CBT::RenderGS and missing volumetric fog.
+		arguments.AddDefine(std::format("_SM_MAJ={}", compileJob.MajVersion).c_str());
+		arguments.AddDefine(std::format("_SM_MIN={}", compileJob.MinVersion).c_str());
+		arguments.AddDefine("_DXC");
 
 		DxcBuffer sourceBuffer;
 		sourceBuffer.Ptr = pSource->GetBufferPointer();

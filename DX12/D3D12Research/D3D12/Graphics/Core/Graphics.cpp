@@ -290,7 +290,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
 	m_pShaderManager->AddIncludeDir("Resources/Shaders/", true /*CommandLine::GetBool("shaderhotreload")*/);
-	m_pShaderManager->AddIncludeDir("Graphics/Core");
+	// the tonemap folder need this to check include files.
+	m_pShaderManager->AddIncludeDir("Resources/Shaders/Include/", false);
+	m_pShaderManager->AddIncludeDir("Graphics/Core/");
 	E_LOG(Info, "ShaderModel:%d-%d", smMaj, smMin);
 }
 
