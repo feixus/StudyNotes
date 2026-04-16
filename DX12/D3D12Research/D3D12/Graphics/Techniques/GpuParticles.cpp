@@ -184,7 +184,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 			parameters.EmitCount = (uint32_t)floor(m_ParticlesToSpawn);
             m_ParticlesToSpawn -= parameters.EmitCount;
 
-			context.SetComputeDynamicConstantBufferView(0, parameters);
+			context.SetRootCBV(0, parameters);
 
 			context.Dispatch(1, 1, 1);
 			context.InsertUavBarrier();
@@ -218,7 +218,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 			    });
             parameters.Origin = Vector3(150, 3, 0);
 
-		    context.SetComputeDynamicConstantBufferView(0, parameters);
+		    context.SetRootCBV(0, parameters);
 		    context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDispatchSignature(), 1, m_pEmitArguments.get(), m_pEmitArguments.get());
 		    context.InsertUavBarrier();
         });
@@ -251,7 +251,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 		    parameters.Near = camera.GetNear();
 		    parameters.Far = camera.GetFar();
 
-		    context.SetComputeDynamicConstantBufferView(0, parameters);
+		    context.SetRootCBV(0, parameters);
 		    context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDispatchSignature(), 1, m_pSimulateArguments.get(), nullptr);
 		    context.InsertUavBarrier();
         });
@@ -305,7 +305,7 @@ void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsText
 			frameData.Projection = camera.GetProjection();
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetGraphicsDynamicConstantBufferView(0, frameData);
+			context.SetRootCBV(0, frameData);
 
 			context.BindResource(1, 0, m_pParticleBuffer->GetSRV());
 			context.BindResource(1, 1, m_pAliveList1->GetSRV());

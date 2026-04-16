@@ -185,8 +185,8 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
             context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
             context.SetComputeRootSignature(m_pCBTRS.get());
     
-			context.SetComputeRootConstants(0, commonArgs);
-            context.SetComputeDynamicConstantBufferView(1, updateData);
+			context.SetRootConstants(0, commonArgs);
+            context.SetRootCBV(1, updateData);
     
             context.SetPipelineState(m_pCBTUpdatePSO);
             context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchArgsOffset);
@@ -198,7 +198,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	cbtUpdateIndirectArgs.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
         context.SetComputeRootSignature(m_pCBTRS.get());
-		context.SetComputeRootConstants(0, commonArgs);
+		context.SetRootConstants(0, commonArgs);
 
         context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         context.SetPipelineState(m_pCBTIndirectArgsPSO);
@@ -215,8 +215,8 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
 
 		// the AS/MS/PS only the graphics root constants, not compute root constants.
-		context.SetGraphicsRootConstants(0, commonArgs);
-        context.SetGraphicsDynamicConstantBufferView(1, updateData);
+		context.SetRootConstants(0, commonArgs);
+        context.SetRootCBV(1, updateData);
         
         context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
         if (CBTSettings::MeshShader)
@@ -238,7 +238,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResource& resources)
 	{
 		context.SetComputeRootSignature(m_pCBTRS.get());
-		context.SetComputeRootConstants(0, commonArgs);
+		context.SetRootConstants(0, commonArgs);
 
 		struct SumReductionData
 		{
@@ -247,7 +247,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 
 		int32_t currentDepth = CBTSettings::CBTDepth;
 		reductionArgs.Depth = currentDepth;
-		context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+		context.SetRootCBV(1, reductionArgs);
 
 		context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
 		context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
@@ -261,7 +261,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResource& resources)
 	{
 		context.SetComputeRootSignature(m_pCBTRS.get());
-		context.SetComputeRootConstants(0, commonArgs);
+		context.SetRootConstants(0, commonArgs);
 
 		struct SumReductionData
 		{
@@ -270,7 +270,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 
 		int32_t currentDepth = CBTSettings::CBTDepth;
 		reductionArgs.Depth = currentDepth;
-		context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+		context.SetRootCBV(1, reductionArgs);
 
 		context.SetPipelineState(m_pCBTCacheBitfieldPSO);
 		context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
@@ -280,7 +280,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
 	cbtSumReduction.Bind([=](CommandContext& context, const RGPassResource& resources)
     {
         context.SetComputeRootSignature(m_pCBTRS.get());
-		context.SetComputeRootConstants(0, commonArgs);
+		context.SetRootConstants(0, commonArgs);
 
         struct SumReductionData
         {
@@ -291,7 +291,7 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
         for (currentDepth = currentDepth - 1; currentDepth >= 0; currentDepth--)
         {
             reductionArgs.Depth = currentDepth;
-            context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+            context.SetRootCBV(1, reductionArgs);
     
             context.SetPipelineState(m_pCBTSumReductionPSO);
             context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
@@ -315,8 +315,8 @@ void CBTTessellation::Execute(RGGraph& graph, GraphicsTexture* pRenderTarget, Gr
             context.SetPipelineState(m_pCBTDebugVisualizePSO);
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-			context.SetComputeRootConstants(0, commonArgs);
-            context.SetComputeDynamicConstantBufferView(1, updateData);
+			context.SetRootConstants(0, commonArgs);
+            context.SetRootCBV(1, updateData);
 
             context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture.get(), RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
             context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);

@@ -197,7 +197,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				context.InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.FlushResourceBarriers();
 
-				context.SetComputeDynamicConstantBufferView(0, &Constants, sizeof(Constants));
+				context.SetRootCBV(0, &Constants, sizeof(Constants));
 				context.BindResource(1, 0, m_pWorleyNoiseTexture->GetUAV());
 		
 				context.Dispatch(Resolution / 8, Resolution / 8, Resolution / 8);
@@ -241,7 +241,7 @@ void Clouds::Render(RGGraph& graph, GraphicsTexture* pSceneTexture, GraphicsText
 				sCloudParameters.SunDirection = Vector4(sunLight.Direction);
 				sCloudParameters.SunColor = sunLight.Colour;
 
-				context.SetGraphicsDynamicConstantBufferView(0, &sCloudParameters, sizeof(sCloudParameters));
+				context.SetRootCBV(0, &sCloudParameters, sizeof(sCloudParameters));
 
 				context.BindResource(1, 0, pSceneTexture->GetSRV());
 				context.BindResource(1, 1, pDepthTexture->GetSRV());

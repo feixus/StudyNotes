@@ -96,7 +96,7 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Graphic
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
 			context.SetGraphicsRootSignature(m_pRS.get());
 
-			context.SetGraphicsDynamicConstantBufferView(0, viewProjection);
+			context.SetRootCBV(0, viewProjection);
 
             constexpr uint32_t VertexStride = (uint32_t)(sizeof(DebugLine) * 0.5f);
 			if (linePrimitives != 0)

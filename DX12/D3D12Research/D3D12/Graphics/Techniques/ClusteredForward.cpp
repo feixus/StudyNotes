@@ -114,7 +114,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
                 constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
 
-                context.SetComputeDynamicConstantBufferView(0, constantBuffer);
+                context.SetRootCBV(0, constantBuffer);
                 context.BindResource(1, 0, m_pAabbBuffer->GetUAV());
 
                 // Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
@@ -154,7 +154,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 			constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
             constantBuffer.LightCount = inputResource.pLightBuffer->GetNumElements();
 
-            context.SetComputeDynamicConstantBufferView(0, constantBuffer);
+            context.SetRootCBV(0, constantBuffer);
             context.BindResource(1, 0, inputResource.pLightBuffer->GetSRV());
             context.BindResource(1, 1, m_pAabbBuffer->GetSRV());
 
@@ -241,8 +241,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 					inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
 				};
 
-				context.SetComputeDynamicConstantBufferView(0, constantBuffer);
-				context.SetComputeDynamicConstantBufferView(1, *inputResource.pShadowData);
+				context.SetRootCBV(0, constantBuffer);
+				context.SetRootCBV(1, *inputResource.pShadowData);
 				context.BindResource(2, 0, pDestinationVolume->GetUAV());
 				context.BindResources(3, 0, srvs, std::size(srvs));
 
@@ -275,8 +275,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                     inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
                 };
 
-                context.SetComputeDynamicConstantBufferView(0, constantBuffer);
-                context.SetComputeDynamicConstantBufferView(1, *inputResource.pShadowData);
+                context.SetRootCBV(0, constantBuffer);
+                context.SetRootCBV(1, *inputResource.pShadowData);
                 context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
                 context.BindResources(3, 0, srvs, std::size(srvs));
 
@@ -373,8 +373,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-            context.SetGraphicsDynamicConstantBufferView(1, frameData);
-            context.SetGraphicsDynamicConstantBufferView(2, *inputResource.pShadowData);
+            context.SetRootCBV(1, frameData);
+            context.SetRootCBV(2, *inputResource.pShadowData);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
@@ -437,7 +437,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                     Matrix View;
                 } constantBuffer;
                 constantBuffer.View = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
-                context.SetGraphicsDynamicConstantBufferView(0, constantBuffer);
+                context.SetRootCBV(0, constantBuffer);
                 
                 D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
                     m_pAabbBuffer->GetSRV()->GetDescriptor(),
@@ -499,7 +499,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
             context.SetPipelineState(m_pVisualizeLightsPSO);
             context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
 
-            context.SetComputeDynamicConstantBufferView(0, constantBuffer);
+            context.SetRootCBV(0, constantBuffer);
 
             context.BindResource(1, 0, pTarget->GetSRV());
             context.BindResource(1, 1, pDepth->GetSRV());

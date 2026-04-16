@@ -80,7 +80,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
 			data.LightCount = (uint32_t)inputResource.pLightBuffer->GetNumElements();
 			data.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
 
-			context.SetComputeDynamicConstantBufferView(0, data);
+			context.SetRootCBV(0, data);
             context.BindResource(1, 0, m_pLightIndexCounter->GetUAV());
             context.BindResource(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
             context.BindResource(1, 2, m_pLightGridOpaque->GetUAV());
@@ -171,8 +171,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-            context.SetGraphicsDynamicConstantBufferView(1, frameData);
-            context.SetGraphicsDynamicConstantBufferView(2, *inputResource.pShadowData);
+            context.SetRootCBV(1, frameData);
+            context.SetRootCBV(2, *inputResource.pShadowData);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				inputResource.pLightBuffer->GetSRV()->GetDescriptor(),
@@ -248,7 +248,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Graphic
             context.SetPipelineState(m_pVisualizeLightsPSO);
             context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
 
-            context.SetComputeDynamicConstantBufferView(0, constantData);
+            context.SetRootCBV(0, constantData);
 
             context.BindResource(1, 0, pTarget->GetSRV());
             context.BindResource(1, 1, pDepth->GetSRV());

@@ -26,7 +26,8 @@ struct BufferView;
 enum class CommandListContext
 {
 	Graphics,
-	Compute
+	Compute,
+	Invalid,
 };
 
 enum class RenderTargetLoadAction : uint8_t
@@ -89,7 +90,7 @@ struct RenderPassInfo
 		bool Write{true};
 	};
 
-	RenderPassInfo() {}
+	RenderPassInfo() = default;
 
 	RenderPassInfo(GraphicsTexture* pDepthBuffer, RenderPassAccess access, bool uavWrites = false)
 		: RenderTargetCount(0)
@@ -157,6 +158,8 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
+	friend class CommandQueue;
+
 	CommandContext(GraphicsDevice* pGraphics, ID3D12GraphicsCommandList* pCommandList,
 					D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap,
 					DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
@@ -193,7 +196,7 @@ public:
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(GraphicsTexture* pSource, uint32_t sourceSubResource, GraphicsTexture* pTarget, uint32_t targetSubResource, DXGI_FORMAT format);
 	
-	void PrepareDraw(CommandListContext type);
+	
 
 	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values = nullptr);
 	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
@@ -205,12 +208,6 @@ public:
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
 
-	void BindResource(int rootIndex, int offset, ResourceView* pView);
-	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count = 1);
-	void BindResourceTable(int rootIndex, D3D12_GPU_DESCRIPTOR_HANDLE handle, CommandListContext context);
-	
-	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData);
-	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
 	void SetVertexBuffer(const VertexBufferView& buffer);
 	void SetVertexBuffers(const VertexBufferView* pBuffers, int bufferCount);
@@ -221,43 +218,35 @@ public:
 	void SetShadingRate(D3D12_SHADING_RATE shadingRate = D3D12_SHADING_RATE_1X1);
 	void SetShadingRateImage(GraphicsTexture* pTexture);
 
-	// compute
-	void SetComputeRootSignature(RootSignature* pRootSignature);
-	void SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetComputeRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetComputeRootConstants(int rootIndex, uint32_t count, const void* pConstants);
-	template<typename T>
-	void SetComputeRootConstants(int rootIndex, const T& data)
-	{
-		SetComputeRootConstants(rootIndex, sizeof(T) / sizeof(int32_t), &data);
-	}
-	void SetComputeDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize);
-	template<typename T>
-	void SetComputeDynamicConstantBufferView(int rootIndex, const T& data)
-	{
-		static_assert(!std::is_pointer<T>::value, "provided type is a pointer. this is probably unintentional.");
-		SetComputeDynamicConstantBufferView(rootIndex, &data, sizeof(T));
-	}
-
-	// graphics
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
-	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetGraphicsRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetGraphicsRootConstants(int rootIndex, uint32_t count, const void* pConstants);
+	void SetComputeRootSignature(RootSignature* pRootSignature);
+	
+	void BindResource(int rootIndex, int offset, ResourceView* pView);
+	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count = 1);
+	
+	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData);
+	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
+
+	void SetRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	
+	void SetRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	template<typename T>
-	void SetGraphicsRootConstants(int rootIndex, const T& data)
-	{
-		SetGraphicsRootConstants(rootIndex, sizeof(T) / sizeof(int32_t), &data);
-	}
-	void SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32_t dataSize);
-	template<typename T>
-	void SetGraphicsDynamicConstantBufferView(int rootIndex, const T& data)
+	void SetRootConstants(int rootIndex, const T& data)
 	{
 		static_assert(!std::is_pointer<T>::value, "provided type is a pointer. this is probably unintentional.");
-		SetGraphicsDynamicConstantBufferView(rootIndex, &data, sizeof(T));
+		SetRootConstants(rootIndex, sizeof(T) / sizeof(int32_t), &data);
 	}
 
-	DynamicAllocation AllocateTransientMemory(uint64_t size, uint32_t alignment = 256);
+	void SetRootCBV(int rootIndex, const void* pData, uint32_t dataSize);
+	template<typename T>
+	void SetRootCBV(int rootIndex, const T& data)
+	{
+		static_assert(!std::is_pointer<T>::value, "provided type is a pointer. this is probably unintentional.");
+		SetRootCBV(rootIndex, &data, sizeof(T));
+	}
+
+	DynamicAllocation AllocateTransientMemory(uint64_t size, uint32_t alignment = 256u);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return m_pRaytracingCommandList.Get(); }
@@ -265,13 +254,18 @@ public:
 	
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
+	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandListType, D3D12_RESOURCE_STATES state);
+
+private:
+	void PrepareDraw();
+
 	struct PendingBarrier
 	{
 		GraphicsResource* pResource;
 		ResourceState State;
 		uint32_t SubResource;
 	};
-	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
+	std::vector<PendingBarrier> m_PendingBarriers;
 
 	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32_t subResource) const
 	{
@@ -290,9 +284,6 @@ public:
 		 return it->second.Get(subResource);
 	}
 
-	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandListType, D3D12_RESOURCE_STATES state);
-
-private:
 	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 
 	ResourceBarrierBatcher m_BarrierBatcher;
@@ -305,8 +296,8 @@ private:
 	ID3D12CommandAllocator* m_pAllocator{};
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
-	std::vector<PendingBarrier> m_PendingBarriers;
 
+	CommandListContext m_CurrentCommandContext = CommandListContext::Invalid;
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass{ false };
 	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubresourceParameters{};

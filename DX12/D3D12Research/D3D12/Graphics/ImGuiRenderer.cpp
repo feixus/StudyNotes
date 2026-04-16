@@ -216,7 +216,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, GraphicsT
 							drawData.TextureIndex = textureData.pTexture->GetSRV()->GetHeapIndex();
 							drawData.TextureType = textureData.pTexture->GetDesc().Dimension;
 						}
-						context.SetGraphicsDynamicConstantBufferView(0, drawData);
+						context.SetRootCBV(0, drawData);
 						context.DrawIndexed(pCmd->ElemCount, indexOffset, 0);
 					}
 					indexOffset += pCmd->ElemCount;
