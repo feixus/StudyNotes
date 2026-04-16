@@ -544,7 +544,7 @@ public:
 
 	inline void ClearIfBoundTo(void* pObj)
 	{
-		if (pObj != nullptr && IsBoundTo(pObj))
+		if (IsBoundTo(pObj))
 		{
 			Release();
 		}

@@ -381,6 +381,11 @@ uint32_t ShaderBase::GetByteCodeSize() const
 ShaderManager::ShaderManager(uint8_t shaderModelMajor, uint8_t shaderModelMinor)
 	: m_ShaderModelMajor(shaderModelMajor), m_ShaderModelMinor(shaderModelMinor)
 {
+	// if (CommandLine::GetBool("shaderhotreload"))
+	{
+		m_pFileWatcher = std::make_unique<FileWatcher>();
+	}
+
 	ShaderCompiler::LoadDXC();
 }
 
@@ -404,17 +409,17 @@ void ShaderManager::ConditionallyReloadShaders()
 		return;
 	}
 
-	FileWatcher::FileEvent fileEvent;
+	FileEvent fileEvent;
 	while(m_pFileWatcher->GetNextChange(fileEvent))
 	{
 		switch (fileEvent.EventType)
 		{
-			case FileWatcher::FileEvent::Type::Added:
-			case FileWatcher::FileEvent::Type::Modified:
-			case FileWatcher::FileEvent::Type::Renamed:
+			case FileEvent::Type::Added:
+			case FileEvent::Type::Modified:
+			case FileEvent::Type::Renamed:
 				RecompileFromFileChange(fileEvent.Path);
 				break;
-			case FileWatcher::FileEvent::Type::Removed:
+			case FileEvent::Type::Removed:
 				break;
 		}
 	}
@@ -565,15 +570,13 @@ ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const std::vec
 	return LoadLibrary(pShaderPath, defines);
 }
 
-void ShaderManager::AddIncludeDir(const std::string& includeDir, bool watch)
+void ShaderManager::AddIncludeDir(const std::string& includeDir)
 {
 	m_IncludeDirs.push_back(includeDir);
 
-	if (watch)
+	if (m_pFileWatcher)
 	{
-		checkf(!m_pFileWatcher, "Can only have a single watch include directory");
-		m_pFileWatcher = std::make_unique<FileWatcher>();
 		m_pFileWatcher->StartWatching(includeDir.c_str(), true);
-		E_LOG(Info, "Shader Hot-Reload enabled: \"%s\"", includeDir.c_str());
+		E_LOG(Info, "Shader Hot-Reload enabled for: \"%s\"", includeDir.c_str());
 	}
 }
