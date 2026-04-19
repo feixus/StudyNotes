@@ -68,6 +68,9 @@ private:
 	void UpdateImGui();
 	void UpdateTLAS(CommandContext& context);
 
+	void LoadMesh(const std::string& filePath, CommandContext& context);
+	void UploadSceneData(CommandContext& context);
+
 	GraphicsTexture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_pResolveDepthStencil.get(); }
@@ -209,6 +212,7 @@ private:
 
 	GraphicsTexture* m_pVisualizeTexture{nullptr};
 
+	HWND m_Window{nullptr};
 	uint32_t m_SampleCount{1};
 	bool m_CapturePix{false};
 };

@@ -148,6 +148,11 @@ uint64_t CommandQueue::ExecuteCommandList(CommandContext** pCommandContexts, uin
 	return fenceValue;  
 }
 
+void CommandQueue::InsertWait(uint64_t fenceValue)
+{
+	m_pFence->GpuWait(this, fenceValue);
+}
+
 ID3D12CommandAllocator* CommandQueue::RequestAllocator()
 {
 	std::scoped_lock lock(m_AllocationMutex);

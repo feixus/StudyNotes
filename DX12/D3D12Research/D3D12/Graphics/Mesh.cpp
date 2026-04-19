@@ -352,7 +352,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 	bufferSize += normalStream.size() * sizeof(VS_Normal);
 	bufferSize += (positionsStream.size() * 3 + indicesStream.size()) * sBufferAlignment;
 	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh GeometryBuffer");
-	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
 	const tinygltf::Scene& gltfScene = model.scenes[Math::Max(0, model.defaultScene)];
 	for (size_t i = 0; i < gltfScene.nodes.size(); i++)
@@ -462,9 +461,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		subMesh.pParent = this;
 		m_Meshes.push_back(subMesh);
 	}
-
-	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COMMON);
-	pContext->FlushResourceBarriers();
 
 	GenerateBLAS(pGraphicDevice, pContext);
 	return true;
@@ -687,7 +683,6 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 	bufferSize += normalStream.size() * sizeof(VS_Normal);
 	bufferSize += (positionsStream.size() * 3 + indicesStream.size()) * sBufferAlignment;
 	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh GeometryBuffer");
-	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
 	uint64_t dataOffset = 0;
 	auto CopyData = [&](void* pSource, uint64_t size)
@@ -730,9 +725,6 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 		subMesh.pParent = this;
 		m_Meshes.push_back(subMesh);
 	}
-
-	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COMMON);
-	pContext->FlushResourceBarriers();
 
 	GenerateBLAS(pGraphicDevice, pContext);
 	return true;

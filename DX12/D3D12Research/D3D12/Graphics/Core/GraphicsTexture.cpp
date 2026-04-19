@@ -21,11 +21,13 @@ GraphicsTexture::~GraphicsTexture()
 
 D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetRTV() const
 {
+	check(EnumHasAllFlags(m_Desc.Usage, TextureFlag::RenderTarget));
 	return m_Rtv;
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetDSV(bool writeable) const
 {
+	check(EnumHasAllFlags(m_Desc.Usage, TextureFlag::DepthStencil));
 	return writeable ? m_Rtv : m_ReadOnlyDsv;
 }
 
