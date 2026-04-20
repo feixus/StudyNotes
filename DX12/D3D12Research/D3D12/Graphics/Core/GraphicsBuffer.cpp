@@ -120,12 +120,6 @@ void GraphicsBuffer::Create(const BufferDesc& bufferDesc)
 	}
 }
 
-void GraphicsBuffer::SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint64_t offset /*= 0*/)
-{
-	check(dataSize + offset <= GetSize());
-	pContext->InitializeBuffer(this, pData, dataSize, (uint32_t)offset);
-}
-
 void GraphicsBuffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
 {
 	if (*pView == nullptr)
@@ -146,4 +140,14 @@ void GraphicsBuffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& 
 	}
 
 	(*pView)->Create(this, desc);
+}
+
+int32_t GraphicsBuffer::GetSRVIndex() const
+{
+    return m_pSrv ? m_pSrv->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+}
+
+int32_t GraphicsBuffer::GetUAVIndex() const
+{
+    return m_pUav ? m_pUav->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
 }

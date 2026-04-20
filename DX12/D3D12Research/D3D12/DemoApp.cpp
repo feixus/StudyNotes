@@ -219,7 +219,6 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	InitializePipelines();
 	InitializeAssets(*pContext);
 	SetupScene(*pContext);
-	UpdateTLAS(*pContext);
 	pContext->Execute(true);
 }
 
@@ -293,7 +292,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		{
 			Light spotLight = Light::Spot(Vector3(-8, 10, 25), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1, 0.7f, 0.3f, 1.0f));
 			spotLight.CastShadows = true;
-			spotLight.LightTexture = m_pLightCookie->GetSRV()->GetHeapIndex();
+			spotLight.LightTexture = m_pLightCookie->GetSRVIndex();
 			spotLight.VolumetricLighting = true;
 			m_Lights.push_back(spotLight);
 		}
@@ -306,25 +305,16 @@ void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
 
+	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
+	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
+	UpdateImGui();
+
 	CommandContext* pUploadContext = m_pDevice->AllocateCommandContext();
 	{
 		GPU_PROFILE_SCOPE("UploadGPUScene", pUploadContext);
 		UploadSceneData(*pUploadContext);
 	}
 	pUploadContext->Execute(false);
-
-	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
-
-	UpdateImGui();
-
-	PROFILE_BEGIN("UpdateGameState");
-	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
-
-	for (Batch& b : m_SceneData.Batches)
-	{
-		b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
-		b.Radius = Vector3(b.Bounds.Extents).Length();
-	}
 
 	EditTransform(*m_pCamera, spotMatrix);
 	Vector3 scale, position;
@@ -559,7 +549,7 @@ void DemoApp::Update()
 			}
 		}
 
-		shadowData.ShadowMapOffset = m_ShadowMaps[0]->GetSRV()->GetHeapIndex();
+		shadowData.ShadowMapOffset = m_ShadowMaps[0]->GetSRVIndex();
 	}
 
 	{
@@ -585,10 +575,8 @@ void DemoApp::Update()
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.SceneTLAS = m_pTLAS ? m_pTLAS->GetSRV()->GetHeapIndex() : -1;
-	m_SceneData.pNormals = m_pNormals.get();
+	m_SceneData.pNormals = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
-
-	PROFILE_END();
 
 	////////////////////////////////
 	// Rendering Begin
@@ -1398,9 +1386,9 @@ void DemoApp::OnResize(int width, int height)
 	if (m_SampleCount > 1)
 	{
 		m_pMultiSampleRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Target");
+		m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount), "MSAA Normals");
 	}
 
-	m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount), "MSAA Normals");
 	m_pResolvedNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget), "Normals");
 	m_pHDRRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "HDR Target");
 	m_pPreviousColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource), "Previous Color");
@@ -2064,6 +2052,8 @@ void DemoApp::UploadSceneData(CommandContext &context)
 			b.LocalBounds = parentMesh.Bounds;
 			b.pMesh = &parentMesh;
 			b.WorldMatrix = node.Transform;
+			b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
+			b.Radius = Vector3(b.Bounds.Extents).Length();
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaBlend : Batch::Blending::Opaque;
 			sceneBatches.push_back(b);
 		}

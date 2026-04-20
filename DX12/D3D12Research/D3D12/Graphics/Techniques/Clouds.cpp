@@ -110,7 +110,7 @@ void Clouds::Initialize(GraphicsDevice* pGraphicsDevice)
 
 		m_pQuadVertexBuffer = std::make_unique<GraphicsBuffer>(pGraphicsDevice, "Quad Vertex Buffer");
 		m_pQuadVertexBuffer->Create(BufferDesc::CreateVertexBuffer(6, sizeof(Vertex)));
-		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
+		pContext->InitializeBuffer(m_pQuadVertexBuffer.get(), vertices, sizeof(Vertex) * 6);
 
 		m_pIntermediateColor = std::make_unique<GraphicsTexture>(pGraphicsDevice, "Cloud Intermediate Color");
 	}

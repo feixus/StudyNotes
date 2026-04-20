@@ -423,7 +423,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 	uint64_t dataOffset = 0;
 	auto CopyData = [&](void* pSource, uint64_t size)
 	{
-		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
+		pContext->InitializeBuffer(m_pGeometryData.get(), pSource, size, dataOffset);
 		dataOffset += size;
 		dataOffset = Math::AlignUp<uint64_t>(dataOffset, sBufferAlignment);
 	};
@@ -687,7 +687,7 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 	uint64_t dataOffset = 0;
 	auto CopyData = [&](void* pSource, uint64_t size)
 	{
-		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
+		pContext->InitializeBuffer(m_pGeometryData.get(), pSource, size, dataOffset);
 		dataOffset += size;
 		dataOffset = Math::AlignUp<uint64_t>(dataOffset, sBufferAlignment);
 	};

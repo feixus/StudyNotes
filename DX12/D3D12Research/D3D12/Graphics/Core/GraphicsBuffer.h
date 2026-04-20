@@ -13,14 +13,14 @@ struct BufferUAVDesc;
 enum class BufferFlag
 {
 	None = 0,
-	UnorderedAccess = 1 << 0,
-	ShaderResource = 1 << 1,
-	Upload = 1 << 2,
-	Readback = 1 << 3,
-	Structured = 1 << 4,
-	ByteAddress = 1 << 5,
-	IndirectArgument = 1 << 6,
-	AccelerationStructure = 1 << 7,
+	UnorderedAccess 		= 1 << 0,
+	ShaderResource 			= 1 << 1,
+	Upload 					= 1 << 2,
+	Readback 				= 1 << 3,
+	Structured 				= 1 << 4,
+	ByteAddress				= 1 << 5,
+	IndirectArgument 		= 1 << 6,
+	AccelerationStructure 	= 1 << 7,
 
 	MAX = 1 << 7
 };
@@ -136,7 +136,6 @@ public:
 	~GraphicsBuffer();
 
 	void Create(const BufferDesc& desc);
-	void SetData(CommandContext* pContext, const void* pData, uint64_t dataSize, uint64_t offset = 0);
 
 	inline uint64_t GetSize() const { return m_Desc.Size; }
 	inline uint32_t GetNumElements() const { return m_Desc.NumElements(); }
@@ -147,6 +146,9 @@ public:
 
 	ShaderResourceView* GetSRV() const { return m_pSrv; }
 	UnorderedAccessView* GetUAV() const { return m_pUav; }
+
+	int32_t GetSRVIndex() const;
+	int32_t GetUAVIndex() const;
 
 	GraphicsBuffer* GetCounter() const { return m_pCounter.get(); }
 

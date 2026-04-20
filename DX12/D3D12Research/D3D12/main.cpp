@@ -38,6 +38,15 @@ public:
 
 		Thread::SetMainThread();
 		CommandLine::Parse(GetCommandLineA());
+
+		if (CommandLine::GetBool("debuggerwait"))
+		{
+			while (!::IsDebuggerPresent())
+			{
+				::Sleep(100);
+			}
+		}
+
 		Console::Initialize();
 		CVarManager::Initialize();
 		TaskQueue::Initialize(std::thread::hardware_concurrency());

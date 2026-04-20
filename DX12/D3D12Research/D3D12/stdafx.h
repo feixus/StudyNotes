@@ -19,9 +19,7 @@
 // Misc
 #include <mutex>
 
-
 #include "Core/MinWindows.h"
-#include <wrl/client.h>
 
 #include "d3d12.h"
 #include <dxgi1_6.h>
@@ -37,14 +35,6 @@
 #define OPTICK_ENABLE_GPU_D3D12 1
 #define OPTICK_ENABLE_GPU_VULKAN 0
 #include "optick.h"
-
-#ifndef D3D12_USE_RENDERPASSES
-#define D3D12_USE_RENDERPASSES 1
-#endif
-
-#ifndef WITH_CONSOLE
-#define WITH_CONSOLE 1
-#endif
 
 #define CONCAT_IMPL(x, y) x##y
 #define MACRO_CONCAT(x, y) CONCAT_IMPL(x, y)

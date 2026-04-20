@@ -360,6 +360,16 @@ void GraphicsTexture::CreateSRV(ShaderResourceView** pView, const TextureSRVDesc
 	(*pView)->Create(this, desc);
 }
 
+int32_t GraphicsTexture::GetSRVIndex() const
+{
+    return m_pSrv ? m_pSrv->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+}
+
+int32_t GraphicsTexture::GetUAVIndex() const
+{
+    return m_pUav ? m_pUav->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+}
+
 void GraphicsTexture::CreateForSwapChain(ID3D12Resource* pTexture)
 {
 	Release();

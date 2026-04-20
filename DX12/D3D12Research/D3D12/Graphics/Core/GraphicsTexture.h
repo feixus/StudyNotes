@@ -236,6 +236,9 @@ public:
 	UnorderedAccessView* GetUAV() const { return m_pUav; };
 	ShaderResourceView* GetSRV() const { return m_pSrv; };
 
+	int32_t GetSRVIndex() const;
+	int32_t GetUAVIndex() const;
+
 	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 
@@ -247,6 +250,6 @@ private:
 	ShaderResourceView* m_pSrv{ nullptr };
 	UnorderedAccessView* m_pUav{ nullptr };
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv{D3D12_DEFAULT};
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv{D3D12_DEFAULT};
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv{};
+	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv{};
 };

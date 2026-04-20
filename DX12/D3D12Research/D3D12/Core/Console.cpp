@@ -58,14 +58,12 @@ static std::deque<Console::LogEntry> sHistory;
 
 void Console::Initialize()
 {
-#if WITH_CONSOLE
     if (!CommandLine::GetBool("noconsole"))
     {
         sConsoleHandle = Win32Console::Open();
     }
 
     E_LOG(Info, "Startup Console");
-#endif
 }
 
 void Console::Shutdown()
