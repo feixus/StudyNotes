@@ -34,10 +34,7 @@ float4 VSMain(uint vertexId : SV_VertexID) : SV_POSITION
 void PSMain(
     float4 position : SV_POSITION,
     uint primitiveIndex : SV_PrimitiveID,
-    float3 barycentrics : SV_Barycentrics,
-    out uint outPrimitiveMask : SV_Target0,
-    out float2 outBarycentrics : SV_Target1)
+    out uint outPrimitiveMask : SV_Target0)
 {
     outPrimitiveMask = (cObjectData.Index << 16) | (primitiveIndex & 0xFFFF);
-    outBarycentrics = barycentrics.xy;
 }

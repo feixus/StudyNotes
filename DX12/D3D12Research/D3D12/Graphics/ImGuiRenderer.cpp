@@ -131,7 +131,10 @@ void ImGuiRenderer::CreatePipeline(GraphicsDevice* pGraphicsDevice)
 
 	// root signature
 	m_pRootSignature = std::make_unique<RootSignature>(pGraphicsDevice);
-	m_pRootSignature->FinalizeFromShader("imgui", pVertexShader);
+	// m_pRootSignature->FinalizeFromShader("imgui", pVertexShader);
+	m_pRootSignature->AddConstantBufferView(0);
+	m_pRootSignature->AddDefaultTables();
+	m_pRootSignature->Finalize("ImGui", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	VertexElementLayout inputLayout;
     inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32_FLOAT);

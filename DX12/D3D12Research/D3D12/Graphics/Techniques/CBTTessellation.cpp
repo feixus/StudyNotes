@@ -350,16 +350,16 @@ void CBTTessellation::CreateResources()
 void CBTTessellation::SetupPipelines()
 {
     std::vector<ShaderDefine> defines = {
-        ShaderDefine(std::format("RENDER_WIREFRAME={}", CBTSettings::Wireframe ? 1 : 0)),
-        ShaderDefine(std::format("FRUSTUM_CULL={}", CBTSettings::FrustumCull ? 1 : 0)),
-        ShaderDefine(std::format("DISPLACEMENT_LOD={}", CBTSettings::DisplacementLOD ? 1 : 0)),
-        ShaderDefine(std::format("DISTANCE_LOD={}", CBTSettings::DistanceLOD ? 1 : 0)),
-        ShaderDefine(std::format("DEBUG_ALWAYS_SUBDIVIDE={}", CBTSettings::AlwaysSubdivide ? 1 : 0)),
-        ShaderDefine(std::format("MESH_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::MeshShaderSubD * 2, 6))),
-        ShaderDefine(std::format("AMPLIFICATION_SHADER_SUBD_LEVEL={}", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0))),
-		ShaderDefine(std::format("GEOMETRY_SHADER_SUBD_LEVEL={}", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4))),
-		ShaderDefine(std::format("COLOR_LEVELS={}", CBTSettings::ColorLevels ? 1 : 0)),
-		ShaderDefine(std::format("SUPPORT_BARYCENTRIC={}", m_pDevice->GetCapabilities().BarycentricsSupported ? 1 : 0)),
+        ShaderDefine("RENDER_WIREFRAME", CBTSettings::Wireframe ? 1 : 0),
+        ShaderDefine("FRUSTUM_CULL", CBTSettings::FrustumCull ? 1 : 0),
+        ShaderDefine("DISPLACEMENT_LOD", CBTSettings::DisplacementLOD ? 1 : 0),
+        ShaderDefine("DISTANCE_LOD", CBTSettings::DistanceLOD ? 1 : 0),
+        ShaderDefine("DEBUG_ALWAYS_SUBDIVIDE", CBTSettings::AlwaysSubdivide ? 1 : 0),
+        ShaderDefine("MESH_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::MeshShaderSubD * 2, 6)),
+        ShaderDefine("AMPLIFICATION_SHADER_SUBD_LEVEL", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0)),
+		ShaderDefine("GEOMETRY_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4)),
+		ShaderDefine("COLOR_LEVELS", CBTSettings::ColorLevels ? 1 : 0),
+		ShaderDefine("SUPPORT_BARYCENTRIC", m_pDevice->GetCapabilities().BarycentricsSupported ? 1 : 0),
     };
 
     m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);

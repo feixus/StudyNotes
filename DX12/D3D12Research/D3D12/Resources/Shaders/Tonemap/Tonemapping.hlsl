@@ -2,9 +2,9 @@
 #include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 2), visibility = SHADER_VISIBILITY_ALL)")
+#define RootSig ROOT_SIG("CBV(b0), " \
+                "DescriptorTable(UAV(u0, numDescriptors = 1)), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 2))")
 
 #define BLOCK_SIZE 16
 #define TONEMAP_REINHARD 0

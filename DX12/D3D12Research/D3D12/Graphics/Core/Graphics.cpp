@@ -212,8 +212,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pDeviceRemovalFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_DeviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, m_DeviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 
-	ID3D12InfoQueue* pInfoQueue = nullptr;
-	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+	ComPtr<ID3D12InfoQueue> pInfoQueue;
+	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
 	{
 		// Suppress messages based on their severity level
 		D3D12_MESSAGE_SEVERITY Severities[] =
@@ -238,14 +238,30 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 		NewFilter.DenyList.NumIDs = _countof(DenyIds);
 		NewFilter.DenyList.pIDList = DenyIds;
 
-		if (CommandLine::GetBool("d3dbreakvalidation"))
+		// if (CommandLine::GetBool("d3dbreakvalidation"))
 		{
 			VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
 			E_LOG(Warning, "D3D Validation Break on Serverity Enabled");
 		}
 
 		pInfoQueue->PushStorageFilter(&NewFilter);
-		pInfoQueue->Release();
+		
+		ComPtr<ID3D12InfoQueue1> pInfoQueue1;
+		if (SUCCEEDED(pInfoQueue.As(&pInfoQueue1)))
+		{
+			auto MessageCallback = [](
+				D3D12_MESSAGE_CATEGORY Category,
+				D3D12_MESSAGE_SEVERITY Severity,
+				D3D12_MESSAGE_ID ID,
+				LPCSTR pDescription,
+				void* pContext)
+			{
+				E_LOG(Warning, "D3D12 Validation Layer: %s", pDescription);
+			};
+
+			DWORD callbackCookie = 0;
+			VERIFY_HR(pInfoQueue1->RegisterMessageCallback(MessageCallback, D3D12_MESSAGE_CALLBACK_FLAG_NONE, nullptr, &callbackCookie));
+		}
 	}
 
 	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
@@ -262,7 +278,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 
-	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 100000);
 	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
 	m_pPersistentViewHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalViewHeap.get());
 	m_pPersistentSamplerHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalSamplerHeap.get());

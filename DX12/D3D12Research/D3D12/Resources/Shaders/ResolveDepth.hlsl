@@ -2,8 +2,8 @@
 
 #define BLOCK_SIZE 16
 
-#define RootSig ROOT_SIG("DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL)")
+#define RootSig ROOT_SIG("DescriptorTable(UAV(u0, numDescriptors = 1)), " \
+                "DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 #ifndef DEPTH_RESOLVE_MIN
 #define DEPTH_RESOLVE_MIN 1

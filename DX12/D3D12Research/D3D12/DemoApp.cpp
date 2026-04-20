@@ -180,7 +180,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	instanceFlags |= CommandLine::GetBool("dred") ? GraphicsInstanceFlags::DRED: GraphicsInstanceFlags::None;
 	instanceFlags |= CommandLine::GetBool("gpuvalidation") ? GraphicsInstanceFlags::GpuValidation : GraphicsInstanceFlags::None;
 	instanceFlags |= CommandLine::GetBool("pix") ? GraphicsInstanceFlags::Pix : GraphicsInstanceFlags::None;
-	//instanceFlags |= GraphicsInstanceFlags::DebugDevice | GraphicsInstanceFlags::DRED | GraphicsInstanceFlags::GpuValidation;
+	instanceFlags |= GraphicsInstanceFlags::DebugDevice | GraphicsInstanceFlags::DRED | GraphicsInstanceFlags::GpuValidation;
 	std::unique_ptr<GraphicsInstance> pInstance = GraphicsInstance::CreateInstance(instanceFlags);
 
 	ComPtr<IDXGIAdapter4> pAdapter = pInstance->EnumerateAdapter(CommandLine::GetBool("warp"));
@@ -1020,23 +1020,13 @@ void DemoApp::Update()
 	if (m_RenderPath == RenderPath::Visibility)
 	{
 		RGPassBuilder visibilityPass = graph.AddPass("Visibility Buffer");
-		sceneData.DepthStencil = visibilityPass.Write(sceneData.DepthStencil);
 		visibilityPass.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
 			{
-				GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
-
+				GraphicsTexture* pDepthStencil = GetDepthStencil();
 				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-				renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-				RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
-				info.RenderTargetCount = 2;
-				info.RenderTargets[0].Target = m_pVisibilityTexture.get();
-				info.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
-				info.RenderTargets[1].Target = m_pBarycentricsTexture.get();
-				info.RenderTargets[1].Access = RenderPassAccess::DontCare_Store;
-
-				renderContext.BeginRenderPass(info);
+				renderContext.BeginRenderPass(RenderPassInfo(m_pVisibilityTexture.get(), RenderPassAccess::DontCare_Store, pDepthStencil, RenderPassAccess::Clear_Store, true));
 				renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
@@ -1069,7 +1059,6 @@ void DemoApp::Update()
 		shadingPass.Bind([=](CommandContext& renderContext, const RGPassResource& resources)
 			{
 				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				renderContext.SetComputeRootSignature(m_pVisibilityShadingRS.get());
@@ -1097,63 +1086,52 @@ void DemoApp::Update()
 					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 					m_pVisibilityTexture->GetSRV()->GetDescriptor(),
-					m_pBarycentricsTexture->GetSRV()->GetDescriptor(),
 				};
 
 				renderContext.BindResources(1, 0, srvs, std::size(srvs));
 				renderContext.BindResource(2, 0, GetCurrentRenderTarget()->GetUAV());
 
 				renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
+				renderContext.InsertUavBarrier();
 			});
-
-		//m_pVisualizeTexture = m_pVisibilityTexture.get();
 	}
 
 	// tonemap
 	{
-		bool downscaleTonemap = true;
-		GraphicsTexture* pTonemapInput = downscaleTonemap ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
-		RGResourceHandle toneMappingInput = graph.ImportTexture("Tonemap Input", pTonemapInput);
+		GraphicsTexture* pTonemapInput = m_pDownscaledColor.get();
 
-		if (downscaleTonemap)
-		{
-			RGPassBuilder downsampleColor = graph.AddPass("Downsample Color");
-			toneMappingInput = downsampleColor.Write(toneMappingInput);
-			downsampleColor.Bind([=](CommandContext& context, const RGPassResource& resources)
+		RGPassBuilder downsampleColor = graph.AddPass("Downsample Color");
+		downsampleColor.Bind([=](CommandContext& context, const RGPassResource& resources)
+			{
+				context.InsertResourceBarrier(pTonemapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+				context.SetPipelineState(m_pGenerateMipsPSO);
+				context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+
+				struct DownscaleParameters
 				{
-					GraphicsTexture* pTonemapInput = resources.GetTexture(toneMappingInput);
-					context.InsertResourceBarrier(pTonemapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					IntVector2 TargetDimensions;
+					Vector2 TargetDimensionsInv;
+				} parameters{};
 
-					context.SetPipelineState(m_pGenerateMipsPSO);
-					context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+				parameters.TargetDimensions.x = pTonemapInput->GetWidth();
+				parameters.TargetDimensions.y = pTonemapInput->GetHeight();
+				parameters.TargetDimensionsInv = Vector2(1.0f / pTonemapInput->GetWidth(), 1.0f / pTonemapInput->GetHeight());
 
-					struct DownscaleParameters
-					{
-						IntVector2 TargetDimensions;
-						Vector2 TargetDimensionsInv;
-					} parameters{};
+				context.SetRootCBV(0, parameters);
+				context.BindResource(1, 0, pTonemapInput->GetUAV());
+				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 
-					parameters.TargetDimensions.x = pTonemapInput->GetWidth();
-					parameters.TargetDimensions.y = pTonemapInput->GetHeight();
-					parameters.TargetDimensionsInv = Vector2(1.0f / pTonemapInput->GetWidth(), 1.0f / pTonemapInput->GetHeight());
-
-					context.SetRootCBV(0, parameters);
-					context.BindResource(1, 0, pTonemapInput->GetUAV());
-					context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
-
-					context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 8), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 8));
-				});
-		}
+				context.Dispatch(Math::DivideAndRoundUp(pTonemapInput->GetWidth(), 8), Math::DivideAndRoundUp(pTonemapInput->GetHeight(), 8));
+			});
+		
 
 		// exposure adjustment
 		// luminance histogram, collect the pixel count into a 256 bins histogram with luminance
 		RGPassBuilder luminanceHistogram = graph.AddPass("Luminance Histogram");
-		toneMappingInput = luminanceHistogram.Read(toneMappingInput);
 		luminanceHistogram.Bind([=](CommandContext& context, const RGPassResource& resources)
 			{
-				GraphicsTexture* pTonemapInput = resources.GetTexture(toneMappingInput);
-
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(pTonemapInput, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
@@ -1242,11 +1220,6 @@ void DemoApp::Update()
 
 		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram.Get())
 		{
-			if (!m_pDebugHistogramTexture)
-			{
-				m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram Texture");
-			}
-
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResource& resources)
 				{
@@ -1275,12 +1248,6 @@ void DemoApp::Update()
 					context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
-
-			ImGui::Begin("Luminance Histogram");
-			ImVec2 cursor = ImGui::GetCursorPos();
-			ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
-			ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), std::format("{:.2f}", Tweakables::g_MinLogLuminance.Get()).c_str());
-			ImGui::End();
 		}
 	}
 
@@ -1398,7 +1365,6 @@ void DemoApp::OnResize(int width, int height)
 	m_pTAASource = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "TAA Target");
 	m_pAmbientOcclusion = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "SSAO");
 	m_pVisibilityTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32_UINT, TextureFlag::ShaderResource | TextureFlag::RenderTarget), "Visibility Buffer");
-	m_pBarycentricsTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget), "Barycentrics Buffer");
 
 	m_pTiledForward->OnResize(width, height);
 	m_pClusteredForward->OnResize(width, height);
@@ -1490,6 +1456,7 @@ void DemoApp::InitializePipelines()
 
 		m_pLuminanceHistogram = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32_t) * 256), "Luminance Histogram");
 		m_pAverageLuminance= m_pDevice->CreateBuffer(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "Average Luminance");
+		m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram Texture");
 	}
 
 	// draw histogram
@@ -1652,11 +1619,7 @@ void DemoApp::InitializePipelines()
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			DXGI_FORMAT rtFormats[] = {
-				DXGI_FORMAT_R32_UINT,
-				DXGI_FORMAT_R32G32_FLOAT,
-			};
-			psoDesc.SetRenderTargetFormats(rtFormats, std::size(rtFormats), GraphicsDevice::DEPTH_STENCIL_FORMAT, m_SampleCount);
+			psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R32_UINT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
 			psoDesc.SetName("Visibility Rendering");
 			m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 		}
@@ -1703,6 +1666,10 @@ void DemoApp::UpdateImGui()
 			{
 				showImguiDemo = !showImguiDemo;
 			}
+			if (ImGui::MenuItem("Luminance Histogram", 0, Tweakables::g_DrawHistogram.Get()))
+			{
+				Tweakables::g_DrawHistogram.SetValue(!Tweakables::g_DrawHistogram.GetBool());
+			}
 			if (ImGui::MenuItem("Load Mesh", nullptr, nullptr))
 			{
 				OPENFILENAME ofn = {0};
@@ -1716,7 +1683,7 @@ void DemoApp::UpdateImGui()
 				ofn.lpstrFileTitle = nullptr;
 				ofn.nMaxFileTitle = 0;
 				ofn.lpstrInitialDir = nullptr;
-				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
 				if (GetOpenFileName(&ofn) == TRUE)
 				{
@@ -1893,6 +1860,15 @@ void DemoApp::UpdateImGui()
 		}
 	}
 	ImGui::End();
+
+	if (Tweakables::g_DrawHistogram)
+	{
+		ImGui::Begin("Luminance Histogram");
+		ImVec2 cursor = ImGui::GetCursorPos();
+		ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), std::format("{:.2f}", Tweakables::g_MinLogLuminance.Get()).c_str());
+		ImGui::End();
+	}
 
 	//m_pVisualizeTexture = m_pVisualizeTexture != nullptr ? m_pVisualizeTexture : m_pAmbientOcclusion.get();
 	if (m_pVisualizeTexture)
