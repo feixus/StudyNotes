@@ -7,11 +7,6 @@ Input& Input::Instance()
 	return i;
 }
 
-void Input::SetWindow(HWND window)
-{
-	m_pWindow = window;
-}
-
 void Input::Update()
 {
 	m_CurrentKeyStates.ClearAll();
@@ -19,11 +14,6 @@ void Input::Update()
 	
 	m_MouseWheel = 0;
 	m_MouseDelta = Vector2(0, 0);
-
-	POINT p;
-	::GetCursorPos(&p);
-	::ScreenToClient(m_pWindow, &p);
-	UpdateMousePosition((float)p.x, (float)p.y);
 }
 
 void Input::UpdateKey(uint32_t keyCode, bool isDown)

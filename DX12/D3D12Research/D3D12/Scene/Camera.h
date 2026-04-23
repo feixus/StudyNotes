@@ -8,23 +8,26 @@ public:
     virtual void Update();
 
     void SetPosition(const Vector3& position);
+    const Vector3& GetPosition() const { return m_Position; }
     void SetRotation(const Quaternion& rotation);
+    const Quaternion& GetRotation() const { return m_Rotation; }
+
     void SetFoV(float fov);
+    float GetFoV() const { return m_FoV; }
+    void SetNearPlane(float nearPlane);
+    float GetNear() const { return m_NearPlane; }
+    void SetFarPlane(float farPlane);
+    float GetFar() const { return m_FarPlane; }
+
+    void SetViewport(const FloatRect& rect);
     void SetClippingPlanes(float nearPlane, float farPlane);
     void SetOrthographic(bool orthographic, float size = -1.0f);
-    void SetNearPlane(float nearPlane);
-    void SetFarPlane(float farPlane);
-    void SetViewport(const FloatRect& rect);
     void SetDirty() { m_Dirty = true; }
+    
     void SetJitterWeight(float weight);
-
-    const Vector3& GetPosition() const { return m_Position; }
-    const Quaternion& GetRotation() const { return m_Rotation; }
-    float GetNear() const { return m_NearPlane; }
-    float GetFar() const { return m_FarPlane; }
-    float GetFoV() const { return m_FoV; }
     const Vector2& GetJitter() const { return m_Jitter; }
     const Vector2& GetPrevJitter() const { return m_PrevJitter; }
+
     const Matrix& GetView() const;
     const Matrix& GetProjection() const;
     const Matrix& GetViewProjection() const;
@@ -32,6 +35,7 @@ public:
     const Matrix& GetViewInverse() const;
     const Matrix& GetProjectionInverse() const;
     const Matrix& GetPreviousViewProjection() const { return m_PreviousViewProjection; }
+    
     const BoundingFrustum& GetFrustum() const;
     Ray GetMouseRay(uint32_t windowWidth, uint32_t windowHeight) const;
 

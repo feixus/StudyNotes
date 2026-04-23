@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include "Core/input.h"
-#include "External/ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo/ImGuizmo.h"
 
 void Camera::SetPosition(const Vector3& position)
 {
@@ -186,7 +186,7 @@ void FreeCamera::Update()
     Vector3 movement;
 	if (Input::Instance().IsMouseDown(VK_LBUTTON))
 	{
-        if (ImGui::IsAnyItemActive() == false && !ImGuizmo::IsUsing())
+        if (!ImGui::IsAnyItemActive() && !ImGuizmo::IsUsing())
         {
             Vector2 mouseDelta = Input::Instance().GetMouseDelta();
             Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);

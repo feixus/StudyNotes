@@ -3,11 +3,12 @@
 #include "Lighting.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b1, visibility = SHADER_VISIBILITY_ALL),"      \
-    "DescriptorTable(SRV(t5, numDescriptors = 10)),"    \
-    "DescriptorTable(UAV(u0, numDescriptors = 1))")
+    "DescriptorTable(SRV(t5, numDescriptors = 13)),"    \
+    "DescriptorTable(UAV(u0, numDescriptors = 2))")
 
 Texture2D<uint> tVisibilityTexture : register(t13);
 RWTexture2D<float4> uTarget : register(u0);
+RWTexture2D<float4> uNormalsTarget : register(u1);
 
 struct PerViewData
 {
@@ -182,7 +183,6 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint visibilityMask = tVisibilityTexture.Load(int3(dispatchThreadId.xy, 0));
     if (visibilityMask == 0)
     {
-        uTarget[dispatchThreadId.xy] = 0;
         return;
     }
     uint objIndex = visibilityMask >> 16;
@@ -237,4 +237,5 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     float3 output = (result.Diffuse + result.Specular) * color.rgb * light.Intensity;
 
     uTarget[dispatchThreadId.xy] = float4(output, 1.0f);
+    uNormalsTarget[dispatchThreadId.xy] = float4(N, 0.1f);
 }

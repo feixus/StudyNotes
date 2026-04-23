@@ -144,7 +144,19 @@ void Console::Log(const char* message, LogType type)
 	
     if (type == LogType::Error)
     {
-        __debugbreak();
+        if (IsDebuggerPresent())
+        {
+            LPCSTR msg = &message[0];
+            int res = MessageBoxA(NULL, msg, "Assert failed", MB_YESNOCANCEL | MB_ICONERROR);
+            if (res == IDYES)
+            {
+                __debugbreak();
+            }
+            else if (res == IDCANCEL)
+            {
+                abort();
+            }
+        }
     }
     else if (type == LogType::FatalError)
     {

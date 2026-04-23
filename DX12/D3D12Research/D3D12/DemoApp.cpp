@@ -664,7 +664,7 @@ void DemoApp::Update()
 				GraphicsTexture* pDepthStencil = GetDepthStencil();
 				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-
+				
 				renderContext.BeginRenderPass(RenderPassInfo(m_pVisibilityTexture.get(), RenderPassAccess::DontCare_Store, pDepthStencil, RenderPassAccess::Clear_Store, true));
 				renderContext.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -699,6 +699,7 @@ void DemoApp::Update()
 			{
 				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_SceneData.pNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				renderContext.SetComputeRootSignature(m_pVisibilityShadingRS.get());
 				renderContext.SetPipelineState(m_pVisibilityShadingPSO);
@@ -728,14 +729,19 @@ void DemoApp::Update()
 				};
 
 				renderContext.BindResources(1, 0, srvs, std::size(srvs));
-				renderContext.BindResource(2, 0, GetCurrentRenderTarget()->GetUAV());
+
+				const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+					GetCurrentRenderTarget()->GetUAV()->GetDescriptor(),
+					m_SceneData.pNormals->GetUAV()->GetDescriptor(),
+				};
+				renderContext.BindResources(2, 0, uavs, std::size(uavs));
 
 				renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
 				renderContext.InsertUavBarrier();
 			});
 	}
 
-	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
+	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
 		m_pGpuParticles->Simulate(graph, GetResolveDepthStencil(), *m_pCamera);
 
@@ -784,7 +790,10 @@ void DemoApp::Update()
 					context.EndRenderPass();
 				}
 			});
+	}
 
+	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
+	{
 		// depth prepass
 		// - depth only pass that renders the entire scene
 		// - optimization that prevents wasteful lighting calculations during the base pass
@@ -830,7 +839,10 @@ void DemoApp::Update()
 
 				renderContext.EndRenderPass();
 			});
+	}
 
+	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
+	{
 		// [with MSAA] depth resolve
 		//  - if MSAA is enabled, run a compute shader to resolve the depth buffer
 		if (m_SampleCount > 1)
@@ -1355,10 +1367,10 @@ void DemoApp::OnResize(int width, int height)
 	if (m_SampleCount > 1)
 	{
 		m_pMultiSampleRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Target");
-		m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount), "MSAA Normals");
+		m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget | TextureFlag::UnorderedAccess, m_SampleCount), "MSAA Normals");
 	}
 
-	m_pResolvedNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget), "Normals");
+	m_pResolvedNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "Normals");
 	m_pHDRRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "HDR Target");
 	m_pPreviousColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource), "Previous Color");
 	m_pTonemapTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "Tonemap Target");
