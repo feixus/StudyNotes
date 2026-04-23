@@ -83,14 +83,7 @@ project (ENGINE_NAME)
         SOURCE_DIR .. "**.c",
         SOURCE_DIR .. "**.natvis",
         SOURCE_DIR .. "**.editorconfig",
-		--SOURCE_DIR .. "**.hlsl*",
     }
-	
-	vpaths
-	{
-		--{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
-		--{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
-	}
 
     filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
