@@ -45,7 +45,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	E_LOG(Info, "Startup hello dx12");
 
-	Window app("D3D12", 960, 540);
+	Window app(960, 540);
+	app.SetTitle("D3D12");
+
 	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
 	app.OnKeyInput += [](uint32_t character, bool isDown)

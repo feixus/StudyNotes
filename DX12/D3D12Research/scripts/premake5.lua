@@ -121,6 +121,9 @@ project (ENGINE_NAME)
 		libdirs	(ROOT .. "D3D12/External/Optick/lib")
 		runtimeDependency("D3D12/External/Optick/bin/OptickCore.dll", "")
 
+		-- DirectXMath
+		includedirs (ROOT .. "D3D12/External/DirectXMath/Inc")
+
 newaction {
 	trigger     = "clean",
 	description = "Remove all binaries and generated files",
