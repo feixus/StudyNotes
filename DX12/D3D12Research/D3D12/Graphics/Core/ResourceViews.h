@@ -68,12 +68,13 @@ public:
 
 	GraphicsResource* GetParent() const { return m_pParent; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptor() const { return m_Descriptor; }
-	int32_t GetHeapIndex() const { return m_HeapIndex; }
+	int32_t GetHeapIndex() const { return m_GpuDescriptor.HeapIndex; }
+	uint64_t GetGpuView() const { return m_GpuDescriptor.GpuHandle.ptr; }
 
 protected:
 	GraphicsResource* m_pParent{ nullptr };
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Descriptor{ D3D12_DEFAULT };
-	int32_t m_HeapIndex{DescriptorHandle::InvalidHeapIndex};
+	DescriptorHandle m_GpuDescriptor;
 };
 
 class ShaderResourceView : public ResourceView

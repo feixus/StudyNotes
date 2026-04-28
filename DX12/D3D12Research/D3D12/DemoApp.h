@@ -61,6 +61,7 @@ public:
 	void OnResize(int width, int height);
 
 private:
+    void OnResizeViewport(int width, int height);
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void SetupScene(CommandContext& context);
@@ -75,7 +76,6 @@ private:
 	GraphicsTexture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	GraphicsTexture* GetResolveDepthStencil() const { return m_pResolveDepthStencil.get(); }
 	GraphicsTexture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
-	GraphicsTexture* GetCurrentBackbuffer() const { return m_pSwapChain->GetBackBuffer(); }
 
 	uint32_t GetMultiSampleCount() const { return m_SampleCount; }
 	GraphicsDevice* GetDevice() const { return m_pDevice.get(); }

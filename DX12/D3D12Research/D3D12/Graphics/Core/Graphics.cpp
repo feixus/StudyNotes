@@ -133,12 +133,15 @@ ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 				DXGI_OUTPUT_DESC1 outputDesc;
 				pOutput1->GetDesc1(&outputDesc);
 
-				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP",
+				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP - Min Lum %f -Max Lum %f - MaxFFL %f",
 					outputIndex,
 					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
 					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
 					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
-					outputDesc.BitsPerColor);
+					outputDesc.BitsPerColor,
+					outputDesc.MinLuminance,
+					outputDesc.MaxLuminance,
+					outputDesc.MaxFullFrameLuminance);
 			}
 		}
 		m_pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf()));
@@ -387,19 +390,19 @@ void GraphicsDevice::IdleGPU()
 	}
 }
 
-uint32_t GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
+DescriptorHandle GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
 {
 	DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
 
 	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	return handle.HeapIndex;
+	return handle;
 }
 
-void GraphicsDevice::FreeViewDescriptor(int32_t& heapIndex)
+void GraphicsDevice::FreeViewDescriptor(DescriptorHandle descriptorHandle)
 {
-	if (heapIndex != DescriptorHandle::InvalidHeapIndex)
+	if (descriptorHandle.HeapIndex != DescriptorHandle::InvalidHeapIndex)
 	{
-		m_pPersistentViewHeap->Free(heapIndex);
+		m_pPersistentViewHeap->Free(descriptorHandle.HeapIndex);
 	}
 }
 
@@ -555,7 +558,9 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	MeshShaderSupport = m_FeatureSupport.MeshShaderTier();
 	SamplerFeedbackSupport = m_FeatureSupport.SamplerFeedbackTier();
 	ShaderModel = (uint16_t)m_FeatureSupport.HighestShaderModel();
-	ShaderModel = D3D_SHADER_MODEL::D3D_SHADER_MODEL_6_5;	//temp
+
+	//temp
+	ShaderModel = SupportsRaytracing() ? D3D_SHADER_MODEL::D3D_SHADER_MODEL_6_6 : D3D_SHADER_MODEL::D3D_SHADER_MODEL_6_5;
 
 	BarycentricsSupported = m_FeatureSupport.BarycentricsSupported();
 	if (!BarycentricsSupported)

@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "DemoApp.h"
 #include "Scene/Camera.h"
-#include "ImGuizmo/ImGuizmo.h"
 #include "Content/image.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/Mesh.h"
@@ -31,6 +30,8 @@
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
 #include "Core/Utils.h"
+#include "ImGuizmo/ImGuizmo.h"
+#include "imgui/imgui_internal.h"
 
 static const uint32_t FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -157,8 +158,6 @@ namespace Tweakables
 
 	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
 
-	bool g_EnableUI = true;
-
 	// lighting
 	float g_SunInclination = 0.2f;
 	float g_SunOrientation = -3.055f;
@@ -197,7 +196,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 		m_pMultiSampleRenderTarget = std::make_unique<GraphicsTexture>(GetDevice(), "MSAA Render Target");
 	}
 
-	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get());
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get(), hWnd, FRAME_COUNT);
 
 	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice.get());
 	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice.get());
@@ -214,6 +213,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
 	OnResize(m_WindowWidth, m_WindowHeight);
+	OnResizeViewport(m_WindowWidth, m_WindowHeight);
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	InitializePipelines();
@@ -349,11 +349,6 @@ void DemoApp::Update()
 		{
 			DebugRenderer::Get()->AddLight(light);
 		}
-	}
-
-	if (Input::Instance().IsKeyPressed('U'))
-	{
-		Tweakables::g_EnableUI = !Tweakables::g_EnableUI;
 	}
 
 	// shadow map partitioning
@@ -1232,7 +1227,7 @@ void DemoApp::Update()
 				context.Dispatch(Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16), Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16));
 			});
 
-		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram.Get())
+		if (Tweakables::g_DrawHistogram.Get())
 		{
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResource& resources)
@@ -1406,6 +1401,10 @@ void DemoApp::OnResize(int width, int height)
 	}
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
+}
+
+void DemoApp::OnResizeViewport(int width, int height)
+{
 }
 
 void DemoApp::InitializePipelines()

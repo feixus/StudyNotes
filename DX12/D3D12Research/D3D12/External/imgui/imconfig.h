@@ -15,7 +15,8 @@
 #pragma once
 
 //---- Define assertion handler. Defaults to calling assert().
-// If your macro uses multiple statements, make sure is enclosed in a 'do { .. } while (0)' block so it can be used as a single statement.
+// - If your macro uses multiple statements, make sure is enclosed in a 'do { .. } while (0)' block so it can be used as a single statement.
+// - Compiling with NDEBUG will usually strip out assert() to nothing, which is NOT recommended because we use asserts to notify of programmer mistakes.
 //#define IM_ASSERT(_EXPR)  MyAssert(_EXPR)
 //#define IM_ASSERT(_EXPR)  ((void)(_EXPR))     // Disable asserts
 
@@ -28,7 +29,7 @@
 //#define IMGUI_API __attribute__((visibility("default")))  // GCC/Clang: override visibility when set is hidden
 
 //---- Don't define obsolete functions/enums/behaviors. Consider enabling from time to time after updating to clean your code of obsolete function/names.
-#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+//#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS
 
 //---- Disable all of Dear ImGui or don't implement standard windows/tools.
 // It is very strongly recommended to NOT disable the demo windows and debug tool during development. They are extremely useful in day to day work. Please read comments in imgui_demo.cpp.
@@ -37,9 +38,9 @@
 //#define IMGUI_DISABLE_DEBUG_TOOLS                         // Disable metrics/debugger and other debug tools: ShowMetricsWindow(), ShowDebugLogWindow() and ShowIDStackToolWindow() will be empty.
 
 //---- Don't implement some functions to reduce linkage requirements.
-#define IMGUI_DISABLE_WIN32_DEFAULT_CLIPBOARD_FUNCTIONS   // [Win32] Don't implement default clipboard handler. Won't use and link with OpenClipboard/GetClipboardData/CloseClipboard etc. (user32.lib/.a, kernel32.lib/.a)
+//#define IMGUI_DISABLE_WIN32_DEFAULT_CLIPBOARD_FUNCTIONS   // [Win32] Don't implement default clipboard handler. Won't use and link with OpenClipboard/GetClipboardData/CloseClipboard etc. (user32.lib/.a, kernel32.lib/.a)
 //#define IMGUI_ENABLE_WIN32_DEFAULT_IME_FUNCTIONS          // [Win32] [Default with Visual Studio] Implement default IME handler (require imm32.lib/.a, auto-link for Visual Studio, -limm32 on command-line for MinGW)
-#define IMGUI_DISABLE_WIN32_DEFAULT_IME_FUNCTIONS         // [Win32] [Default with non-Visual Studio compilers] Don't implement default IME handler (won't require imm32.lib/.a)
+//#define IMGUI_DISABLE_WIN32_DEFAULT_IME_FUNCTIONS         // [Win32] [Default with non-Visual Studio compilers] Don't implement default IME handler (won't require imm32.lib/.a)
 //#define IMGUI_DISABLE_WIN32_FUNCTIONS                     // [Win32] Won't use and link with any Win32 function (clipboard, IME).
 //#define IMGUI_ENABLE_OSX_DEFAULT_CLIPBOARD_FUNCTIONS      // [OSX] Implement default OSX clipboard handler (need to link with '-framework ApplicationServices', this is why this is not the default).
 //#define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS             // Don't implement default platform_io.Platform_OpenInShellFn() handler (Win32: ShellExecute(), require shell32.lib/.a, Mac/Linux: use system("")).
@@ -48,7 +49,7 @@
 //#define IMGUI_DISABLE_FILE_FUNCTIONS                      // Don't implement ImFileOpen/ImFileClose/ImFileRead/ImFileWrite and ImFileHandle at all (replace them with dummies)
 //#define IMGUI_DISABLE_DEFAULT_FILE_FUNCTIONS              // Don't implement ImFileOpen/ImFileClose/ImFileRead/ImFileWrite and ImFileHandle so you can implement them yourself if you don't want to link with fopen/fclose/fread/fwrite. This will also disable the LogToTTY() function.
 //#define IMGUI_DISABLE_DEFAULT_ALLOCATORS                  // Don't implement default allocators calling malloc()/free() to avoid linking with them. You will need to call ImGui::SetAllocatorFunctions().
-//#define IMGUI_DISABLE_DEFAULT_FONT                        // Disable default embedded font (ProggyClean.ttf), remove ~9.5 KB from output binary. AddFontDefault() will assert.
+//#define IMGUI_DISABLE_DEFAULT_FONT                        // Disable default embedded fonts (ProggyClean/ProggyForever), remove ~9 KB + ~14 KB from output binary. AddFontDefaultXXX() functions will assert.
 //#define IMGUI_DISABLE_SSE                                 // Disable use of SSE intrinsics even if available
 
 //---- Enable Test Engine / Automation features.
@@ -56,7 +57,7 @@
 
 //---- Include imgui_user.h at the end of imgui.h as a convenience
 // May be convenient for some users to only explicitly include vanilla imgui.h and have extra stuff included.
-#define IMGUI_INCLUDE_IMGUI_USER_H
+//#define IMGUI_INCLUDE_IMGUI_USER_H
 //#define IMGUI_USER_H_FILENAME         "my_folder/my_imgui_user.h"
 
 //---- Pack vertex colors as BGRA8 instead of RGBA8 (to avoid converting from one to another). Need dedicated backend support.
@@ -83,6 +84,7 @@
 
 //---- Use FreeType to build and rasterize the font atlas (instead of stb_truetype which is embedded by default in Dear ImGui)
 // Requires FreeType headers to be available in the include path. Requires program to be compiled with 'misc/freetype/imgui_freetype.cpp' (in this repository) + the FreeType library (not provided).
+// Note that imgui_freetype.cpp may be used _without_ this define, if you manually call ImFontAtlas::SetFontLoader(). The define is simply a convenience.
 // On Windows you may use vcpkg with 'vcpkg install freetype --triplet=x64-windows' + 'vcpkg integrate install'.
 //#define IMGUI_ENABLE_FREETYPE
 
@@ -110,7 +112,7 @@
         operator MyVec4() const { return MyVec4(x,y,z,w); }
 */
 //---- ...Or use Dear ImGui's own very basic math operators.
-#define IMGUI_DEFINE_MATH_OPERATORS
+//#define IMGUI_DEFINE_MATH_OPERATORS
 
 //---- Use 32-bit vertex indices (default is 16-bit) is one way to allow large meshes with more than 64K vertices.
 // Your renderer backend will need to support it (most example renderer backends support both 16/32-bit indices).
@@ -129,6 +131,10 @@
 //#define IM_DEBUG_BREAK  IM_ASSERT(0)
 //#define IM_DEBUG_BREAK  __debugbreak()
 
+//---- Debug Tools: Enable highlight ID conflicts _before_ hovering items. When io.ConfigDebugHighlightIdConflicts is set.
+// (THIS WILL SLOW DOWN DEAR IMGUI. Only use occasionally and disable after use)
+//#define IMGUI_DEBUG_HIGHLIGHT_ALL_ID_CONFLICTS
+
 //---- Debug Tools: Enable slower asserts
 //#define IMGUI_DEBUG_PARANOID
 
@@ -139,40 +145,3 @@ namespace ImGui
     void MyFunction(const char* name, MyMatrix44* mtx);
 }
 */
-//
-#define ImTextureID ImTextureData
-class GraphicsTexture;
-
-#ifdef _WIN64
-using ImIntPtr = __int64;
-#else
-using ImIntPtr = int;
-#endif
-
-struct ImTextureData
-{
-    ImTextureData(GraphicsTexture* pTexture)
-        : pTexture(pTexture)
-    {}
-
-    ImTextureData() : pTexture(nullptr)
-    {}
-
-    bool operator==(const ImTextureData& rhs) const
-    {
-        return pTexture == rhs.pTexture;
-    }
-
-    bool operator!=(const ImTextureData& rhs) const
-    {
-        return pTexture != rhs.pTexture;
-    }
-
-    operator ImIntPtr() const
-    {
-        return (ImIntPtr)(pTexture);
-    }
-
-	GraphicsTexture* pTexture{ nullptr };
-};
-

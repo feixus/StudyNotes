@@ -524,7 +524,7 @@ void RenderMS(
 // why the macro may not define from C++ side? because these macro defines need prefix of "-D" when compiling HLSL shaders on IDxcCompiler3::Compile
 #define GEOMETRY_SHADER_SUB_D (1u << GEOMETRY_SHADER_SUBD_LEVEL)
 
-#if GEOMETRY_SHADER_SUBD_LEVEL > 0
+#if USING_MESH_SHADER <= 0
 
 uint RenderVS(uint instanceID : SV_InstanceID) : INSTANCE_ID
 {
