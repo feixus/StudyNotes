@@ -6,9 +6,9 @@
 #include "Graphics/Core/Graphics.h"
 #include "Content/Image.h"
 
-#include "Stb/stb_image.h"
-#include "Stb/stb_image_write.h"
-#include "json/json.hpp"
+#include "stb_image.h"
+#include "stb_image_write.h"
+#include "json.hpp"
 
 #define TINYGLTF_NO_INCLUDE_JSON
 #define TINYGLTF_NO_EXTERNAL_IMAGE 
@@ -16,12 +16,12 @@
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
 #define TINYGLTF_IMPLEMENTATION
 
-#include "tinygltf/tiny_gltf.h"
+#include "tiny_gltf.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
 #define CGLTF_IMPLEMENTATION
-#include "cgltf/cgltf.h"
+#include "cgltf.h"
 #pragma warning(pop)
 
 struct VS_Position

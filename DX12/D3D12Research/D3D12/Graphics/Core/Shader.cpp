@@ -3,7 +3,7 @@
 #include "Core/Paths.h"
 #include "Core/CommandLine.h"
 #include "Core/FileWatcher.h"
-#include "Dxc/dxcapi.h"
+#include "dxcapi.h"
 
 namespace ShaderCompiler
 {

@@ -26,7 +26,7 @@
 
 #define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "d3dx12/d3dx12.h"
-#include "imgui/imgui.h"
+#include "imgui.h"
 
 #define USE_PIX 1
 

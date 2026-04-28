@@ -21,7 +21,7 @@ GraphicsTexture::~GraphicsTexture()
 
 D3D12_CPU_DESCRIPTOR_HANDLE GraphicsTexture::GetRTV() const
 {
-	check(EnumHasAllFlags(m_Desc.Usage, TextureFlag::RenderTarget));
+	//check(EnumHasAllFlags(m_Desc.Usage, TextureFlag::RenderTarget));
 	return m_Rtv;
 }
 

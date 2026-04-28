@@ -64,7 +64,12 @@ project (ENGINE_NAME)
     pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
     includedirs { "$(ProjectDir)" }
 	
-	includedirs (ROOT .. "D3D12/External")
+	--includedirs (ROOT .. "D3D12/External")
+	for i, dir in pairs(os.matchdirs(SOURCE_DIR .. "External/*")) do
+		dirname = string.explode(dir, "/")
+		dir = dirname[#dirname]
+		includedirs ("$(ProjectDir)External/" .. dir)
+	end
 	includedirs (ROOT .. "D3D12/Resources/Shaders/Interop")
 
     -- Windows SDK & toolset (Visual Studio only)

@@ -5,11 +5,12 @@
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/ImGuiRenderer.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
 #include "Core/Input.h"
-#include "imgui/imgui_internal.h"
+#include "imgui_internal.h"
 
 constexpr uint32_t IndirectDispatchArgsOffset = 0;
 constexpr uint32_t IndirectDispatchMeshArgsOffset = IndirectDispatchArgsOffset + sizeof(D3D12_DISPATCH_ARGUMENTS);

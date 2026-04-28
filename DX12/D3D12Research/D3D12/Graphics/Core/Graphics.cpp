@@ -22,7 +22,7 @@
 #include "Core/TaskQueue.h"
 #include "Content/image.h"
 #include "Core/Paths.h"
-#include "ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo.h"
 #include "pix3.h"
 
 // setup the Agility D3D12 SDK
