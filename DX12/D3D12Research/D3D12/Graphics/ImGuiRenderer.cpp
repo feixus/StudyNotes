@@ -135,18 +135,6 @@ ImGuiRenderer::~ImGuiRenderer()
 
 void ImGuiRenderer::NewFrame(uint32_t width, uint32_t height)
 {
-	//ImGuiIO& io = ImGui::GetIO();
-	//io.DisplaySize = ImVec2((float)width, (float)height);
-
-	//io.MouseDown[0] = Input::Instance().IsMouseDown(VK_LBUTTON);  // left button
-	//io.MouseDown[1] = Input::Instance().IsMouseDown(VK_RBUTTON);	 // right button
-	//io.MouseDown[2] = Input::Instance().IsMouseDown(VK_MBUTTON);	 // middle button
-	//io.MouseWheel = Input::Instance().GetMouseWheelDelta();
-
-	//Vector2 mousePos = Input::Instance().GetMousePosition();
-	//io.MousePos.x = mousePos.x;
-	//io.MousePos.y = mousePos.y;
-
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 

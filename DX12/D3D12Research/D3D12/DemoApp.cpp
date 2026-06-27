@@ -1317,8 +1317,8 @@ void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 
-	m_pDepthStencil = m_pDevice->CreateTexture(TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, GraphicsDevice::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)), "Depth Stencil");
-	m_pResolveDepthStencil = m_pDevice->CreateTexture(TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Resolved Depth Stencil");
+	m_pDepthStencil = m_pDevice->CreateTexture(TextureDesc::CreateDepth(width, height, GraphicsDevice::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)), "Depth Stencil");
+	m_pResolveDepthStencil = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Resolved Depth Stencil");
 
 	if (m_SampleCount > 1)
 	{
@@ -1757,7 +1757,6 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
-	m_pVisualizeTexture = GetDepthStencil();// GetResolveDepthStencil();
 	if (m_pVisualizeTexture)
 	{
 		std::string tabName = std::format("Visualize Texture: {}", m_pVisualizeTexture->GetName());
