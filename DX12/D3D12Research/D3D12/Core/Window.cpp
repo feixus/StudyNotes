@@ -196,32 +196,32 @@ LRESULT Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     }
     case WM_LBUTTONDOWN:
     {
-        OnMouseKeyInput.Broadcast(VK_LBUTTON, true);
+        OnMouseInput.Broadcast(VK_LBUTTON, true);
         break;	
     }
     case WM_LBUTTONUP:
     {
-        OnMouseKeyInput.Broadcast(VK_LBUTTON, false);
+        OnMouseInput.Broadcast(VK_LBUTTON, false);
         break;	
     }
     case WM_MBUTTONDOWN:
     {
-        OnMouseKeyInput.Broadcast(VK_MBUTTON, true);
+        OnMouseInput.Broadcast(VK_MBUTTON, true);
         break;	
     }
     case WM_MBUTTONUP:
     {
-        OnMouseKeyInput.Broadcast(VK_MBUTTON, false);
+        OnMouseInput.Broadcast(VK_MBUTTON, false);
         break;	
     }
     case WM_RBUTTONDOWN:
     {
-        OnMouseKeyInput.Broadcast(VK_RBUTTON, true);
+        OnMouseInput.Broadcast(VK_RBUTTON, true);
         break;	
     }
     case WM_RBUTTONUP:
     {
-        OnMouseKeyInput.Broadcast(VK_RBUTTON, false);
+        OnMouseInput.Broadcast(VK_RBUTTON, false);
         break;	
     }
     case WM_ENTERSIZEMOVE: // resizing or moving window with the mouse

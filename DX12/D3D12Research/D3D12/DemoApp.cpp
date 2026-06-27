@@ -850,8 +850,8 @@ void DemoApp::Update()
 					GraphicsTexture* pDepthStencil = resources.GetTexture(sceneData.DepthStencil);
 					GraphicsTexture* pDepthStencilResolve = resources.GetTexture(sceneData.DepthStencilResolved);
 
-					renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(pDepthStencilResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
 					renderContext.SetPipelineState(m_pResolveDepthPSO);
@@ -1249,6 +1249,7 @@ void DemoApp::Update()
 					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 					context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
+
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
 		}
@@ -1267,20 +1268,14 @@ void DemoApp::Update()
 	}
 
 	// UI
-	m_pImGuiRenderer->Render(graph, m_SceneData, m_pTonemapTarget.get());
-	RGPassBuilder tempBarriers = graph.AddPass("Temp Barriers");
-	tempBarriers.Bind([=](CommandContext& context, const RGPassResource& resources)
-		{
-			context.CopyTexture(m_pTonemapTarget.get(), m_pSwapChain->GetBackBuffer());
-			context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(m_pSwapChain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
-		});
-	/*m_pImGuiRenderer->Render(graph, m_SceneData, m_pSwapChain->GetBackBuffer());
+	GraphicsTexture* pBackbuffer = m_pSwapChain->GetBackBuffer();
+	m_pImGuiRenderer->Render(graph, m_SceneData, pBackbuffer);
+
 	RGPassBuilder tempBarriers = graph.AddPass("Present Barriers");
 	tempBarriers.Bind([=](CommandContext& context, const RGPassResource& resources)
 		{
-			context.InsertResourceBarrier(m_pSwapChain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
-		});*/
+			context.InsertResourceBarrier(pBackbuffer, D3D12_RESOURCE_STATE_PRESENT);
+		});
 
 	graph.Compile();
 	if (Tweakables::g_DumpRenderGraph)
@@ -1303,8 +1298,8 @@ void DemoApp::Update()
 	//  - present the frame buffer
 	//  - wait for the next frame to be finished to start queueing work for it
 	Profiler::Get()->Resolve(m_pSwapChain.get(), m_pDevice.get(), m_Frame);
-	m_pSwapChain->Present();
 	m_pDevice->TickFrame();
+	m_pSwapChain->Present();
 	++m_Frame;
 }
 
@@ -1324,6 +1319,7 @@ void DemoApp::OnResizeViewport(int width, int height)
 
 	m_pDepthStencil = m_pDevice->CreateTexture(TextureDesc::CreateDepth(m_WindowWidth, m_WindowHeight, GraphicsDevice::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)), "Depth Stencil");
 	m_pResolveDepthStencil = m_pDevice->CreateTexture(TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Resolved Depth Stencil");
+
 	if (m_SampleCount > 1)
 	{
 		m_pMultiSampleRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Target");
@@ -1610,7 +1606,6 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Visibility Shading");
 		m_pVisibilityShadingPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
-	
 }
 
 void DemoApp::UpdateImGui()
@@ -1621,7 +1616,7 @@ void DemoApp::UpdateImGui()
 	static bool showProfiler = false;
 	static bool showImguiDemo = false;
 
-	//ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
+	ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
 	if (ImGui::BeginMainMenuBar())
 	{
@@ -1700,7 +1695,7 @@ void DemoApp::UpdateImGui()
 		ImGui::EndMainMenuBar();
 	}
 
-	/*ImGui::Begin("Viewport", 0, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImGui::Begin("Viewport", 0, ImGuiWindowFlags_NoScrollbar);
 	float widthDelta = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
 	float heightDelta = ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y;
 	uint32_t width = (uint32_t)Math::Max(4.0f, widthDelta);
@@ -1711,7 +1706,7 @@ void DemoApp::UpdateImGui()
 		OnResizeViewport(width, height);
 	}
 	ImGui::Image(m_pTonemapTarget.get(), ImVec2((float)width, (float)height));
-	ImGui::End();*/
+	ImGui::End();
 
 	if (Tweakables::g_VisualizeLightDensity)
 	{
@@ -1753,6 +1748,42 @@ void DemoApp::UpdateImGui()
 		ImGui::ShowDebugLogWindow();
 	}
 
+	if (Tweakables::g_DrawHistogram)
+	{
+		ImGui::Begin("Luminance Histogram");
+		ImVec2 cursor = ImGui::GetCursorPos();
+		ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), std::format("{:.2f}", Tweakables::g_MinLogLuminance.Get()).c_str());
+		ImGui::End();
+	}
+
+	m_pVisualizeTexture = GetDepthStencil();// GetResolveDepthStencil();
+	if (m_pVisualizeTexture)
+	{
+		std::string tabName = std::format("Visualize Texture: {}", m_pVisualizeTexture->GetName());
+		if (ImGui::Begin(tabName.c_str()))
+		{
+			ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
+			ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
+		}
+		ImGui::End();
+	}
+
+	if (Tweakables::g_VisualizeShadowCascades.Get() && m_ShadowMaps.size() >= 4)
+	{
+		float imageSize = 230;
+		if (ImGui::Begin("Shadow Cascades"))
+		{
+			const Light& sunLight = m_Lights[0];
+			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
+			{
+				ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
+				ImGui::SameLine();
+			}
+		}
+		ImGui::End();
+	}
+
 	if (showProfiler)
 	{
 		if (ImGui::Begin("Profiler", &showProfiler))
@@ -1772,11 +1803,6 @@ void DemoApp::UpdateImGui()
 
 	if (ImGui::Begin("Parameters"))
 	{
-		ImGui::Text("CameraP: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
-		Vector3 eulerAngle = m_pCamera->GetRotation().ToEuler() * Math::RadiansToDegrees;
-		ImGui::Text("CameraR: [%.2f, %.2f, %.2f]", eulerAngle.x, eulerAngle.y, eulerAngle.z);
-		ImGui::SliderInt("CameraSpeed: ", &m_pCamera->GetVelocityFactor(), 1, 50);
-
 		static const char* renderModeNames[] =
 		{
 			"Tiles",
@@ -1803,8 +1829,15 @@ void DemoApp::UpdateImGui()
 				}
 				ImGui::EndCombo();
 			}
-			
-			ImGui::Text("Camera");
+		}
+
+		if (ImGui::CollapsingHeader("Camera"))
+		{
+			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
+			Vector3 eulerAngle = m_pCamera->GetRotation().ToEuler() * Math::RadiansToDegrees;
+			ImGui::Text("Rotation: [%.2f, %.2f, %.2f]", eulerAngle.x, eulerAngle.y, eulerAngle.z);
+			ImGui::SliderInt("Speed: ", &m_pCamera->GetVelocityFactor(), 1, 50);
+
 			float fov = m_pCamera->GetFoV();
 			if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
 			{
@@ -1892,44 +1925,6 @@ void DemoApp::UpdateImGui()
 		}
 	}
 	ImGui::End();
-
-	if (Tweakables::g_DrawHistogram)
-	{
-		ImGui::Begin("Luminance Histogram");
-		ImVec2 cursor = ImGui::GetCursorPos();
-		ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
-		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), std::format("{:.2f}", Tweakables::g_MinLogLuminance.Get()).c_str());
-		ImGui::End();
-	}
-
-	//m_pVisualizeTexture = m_pVisualizeTexture != nullptr ? m_pVisualizeTexture : m_pAmbientOcclusion.get();
-	if (m_pVisualizeTexture)
-	{
-		std::string tabName = std::format("Visualize Texture: {}", m_pVisualizeTexture->GetName());
-		if (ImGui::Begin(tabName.c_str()))
-		{
-			ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
-			ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
-		}
-		ImGui::End();
-	}
-
-	if (Tweakables::g_VisualizeShadowCascades.Get() && m_ShadowMaps.size() >= 4)
-	{
-		float imageSize = 230;
-		ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
-		ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
-		if (ImGui::Begin("Shadow Cascades"))
-		{
-			const Light& sunLight = m_Lights[0];
-			for (int i = 0; i < 4; ++i)
-			{
-				ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
-				ImGui::SameLine();
-			}
-		}
-		ImGui::End();
-	}
 }
 
 void DemoApp::UpdateTLAS(CommandContext& context)

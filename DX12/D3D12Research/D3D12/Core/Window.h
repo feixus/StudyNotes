@@ -28,7 +28,7 @@ public:
     OnKeyInputDelegate OnKeyInput;
 
     DECLARE_MULTICAST_DELEGATE(OnMouseInputDelegate, uint32_t, bool);
-    OnMouseInputDelegate OnMouseKeyInput;
+    OnMouseInputDelegate OnMouseInput;
 
     DECLARE_MULTICAST_DELEGATE(OnMouseMoveDelegate, uint32_t, uint32_t);
     OnMouseMoveDelegate OnMouseMove;

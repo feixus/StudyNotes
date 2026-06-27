@@ -23,10 +23,10 @@ void SSAO::OnResize(int widowWidth, int windowHeight)
 
 void SSAO::Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneView& sceneData)
 {
-	float g_AoPower = 3;
-	float g_AoThreshold = 0.0025f;
-	float g_AoRadius = 0.5;
-	int g_AoSamples = 16;
+	static float g_AoPower = 3;
+	static float g_AoThreshold = 0.0025f;
+	static float g_AoRadius = 0.5;
+	static int g_AoSamples = 16;
 
 	if (ImGui::Begin("Parameters"))
 	{
@@ -79,6 +79,7 @@ void SSAO::Execute(RGGraph& graph, GraphicsTexture* pTarget, const SceneView& sc
 			shaderParameters.Radius = g_AoRadius;
 			shaderParameters.Threshold = g_AoThreshold;
 			shaderParameters.Samples = g_AoSamples;
+			shaderParameters.FrameIndex = sceneData.FrameIndex;
 
 			renderContext.SetRootCBV(0, shaderParameters);
 			renderContext.BindResource(1, 0, pTarget->GetUAV());

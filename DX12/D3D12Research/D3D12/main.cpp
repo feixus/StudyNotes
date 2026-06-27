@@ -50,20 +50,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
-	app.OnKeyInput += [](uint32_t character, bool isDown)
-	{
-		Input::Instance().UpdateKey(character, isDown);
-		ImGuiKey key = ImGui_ImplWin32_VirtualKeyToImGuiKey(character);
-		if (key != ImGuiKey_None)
-		{
-			ImGui::GetIO().AddKeyEvent(key, isDown);
-		}
-	};
-
-	app.OnMouseKeyInput += [](uint32_t mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
+	app.OnKeyInput += [](uint32_t character, bool isDown){Input::Instance().UpdateKey(character, isDown);};
+	app.OnMouseInput += [](uint32_t mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
 	app.OnMouseMove += [](uint32_t x, uint32_t y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
 	app.OnResize += [&graphics](uint32_t width, uint32_t height) { graphics.OnResize(width, height); };
-	app.OnCharInput += [](uint32_t character) { ImGui::GetIO().AddInputCharacter(character); };
 	app.OnMouseScroll += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
 
 	Time::Reset();

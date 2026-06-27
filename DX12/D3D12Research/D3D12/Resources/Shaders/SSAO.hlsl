@@ -21,6 +21,7 @@ struct ShaderParameters
     float AoRadius;
     float AoDepthThreshold;
     int AoSamples;
+	uint FrameIndex;
 };
 
 ConstantBuffer<ShaderParameters> cData : register(b0);
@@ -44,10 +45,10 @@ void CSMain(CS_INPUT input)
     float2 texCoord = (float2)input.DispatchThreadId.xy * dimInv;
     float depth = tDepthTexture.SampleLevel(sLinearClamp, texCoord, 0).r;
     float3 normal = NormalFromDepth(tDepthTexture, sLinearClamp, texCoord, dimInv, cData.ProjectionInverse);
-    float3 viewPos = ViewFromDepth(texCoord.xy, depth, cData.ProjectionInverse);
+    float3 viewPos = ViewFromDepth(texCoord.xy, depth, cData.ProjectionInverse).xyz;
 
     // tangent space to view space 
-    uint state = SeedThread(input.DispatchThreadId.x + input.DispatchThreadId.y * cData.Dimensions.x);
+    uint state = SeedThread(input.DispatchThreadId.xy, cData.Dimensions, cData.FrameIndex);
     float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
     float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
 	float3 bitangent = cross(tangent, normal);

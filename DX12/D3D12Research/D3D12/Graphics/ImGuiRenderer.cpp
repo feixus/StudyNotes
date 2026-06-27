@@ -17,14 +17,30 @@
 #include "imgui_impl_win32.h"
 #include "imgui_internal.h"
 
+void ImGui::Image(GraphicsTexture* pTexture, const ImVec2& size, const ImVec2& uv0, const ImVec2& uv1, const ImVec4& tint_col, const ImVec4& border_col)
+{
+	ImGui::Image((void*)pTexture->GetSRV()->GetGpuView(), size, uv0, uv1, tint_col, border_col);
+}
+
+void ImGui::ImageAutoSize(GraphicsTexture* textureId, const ImVec2& imageDimensions)
+{
+	ImVec2 windowSize = GetContentRegionAvail();
+	float width = imageDimensions.x;
+	float height = windowSize.x * imageDimensions.y / imageDimensions.x;
+	if (imageDimensions.x / windowSize.x < imageDimensions.y / windowSize.y)
+	{
+		width = windowSize.y * imageDimensions.x / imageDimensions.y;
+		height = imageDimensions.y;
+	}
+	Image(textureId, ImVec2(width, height));
+}
+
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pGraphicsDevice, WindowHandle window, uint32_t numBufferedFrames)
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO();
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
 
@@ -106,7 +122,8 @@ ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pGraphicsDevice, WindowHandle windo
 	DescriptorHandle descHandle = pGraphicsDevice->StoreViewDescriptor(srvHandle);
 
 	ImGui_ImplWin32_Init(window);
-	ImGui_ImplDX12_Init(pGraphicsDevice->GetDevice(), numBufferedFrames, DXGI_FORMAT_R8G8B8A8_UNORM, pGraphicsDevice->GetGlobalViewHeap()->GetHeap(), descHandle.CpuHandle, descHandle.GpuHandle);
+	ImGui_ImplDX12_Init(pGraphicsDevice->GetDevice(), numBufferedFrames, DXGI_FORMAT_R8G8B8A8_UNORM,
+		pGraphicsDevice->GetGlobalViewHeap()->GetHeap(), descHandle.CpuHandle, descHandle.GpuHandle);
 }
 
 ImGuiRenderer::~ImGuiRenderer()
@@ -118,17 +135,17 @@ ImGuiRenderer::~ImGuiRenderer()
 
 void ImGuiRenderer::NewFrame(uint32_t width, uint32_t height)
 {
-	ImGuiIO& io = ImGui::GetIO();
-	io.DisplaySize = ImVec2((float)width, (float)height);
+	//ImGuiIO& io = ImGui::GetIO();
+	//io.DisplaySize = ImVec2((float)width, (float)height);
 
-	io.MouseDown[0] = Input::Instance().IsMouseDown(VK_LBUTTON);  // left button
-	io.MouseDown[1] = Input::Instance().IsMouseDown(VK_RBUTTON);	 // right button
-	io.MouseDown[2] = Input::Instance().IsMouseDown(VK_MBUTTON);	 // middle button
-	io.MouseWheel = Input::Instance().GetMouseWheelDelta();
+	//io.MouseDown[0] = Input::Instance().IsMouseDown(VK_LBUTTON);  // left button
+	//io.MouseDown[1] = Input::Instance().IsMouseDown(VK_RBUTTON);	 // right button
+	//io.MouseDown[2] = Input::Instance().IsMouseDown(VK_MBUTTON);	 // middle button
+	//io.MouseWheel = Input::Instance().GetMouseWheelDelta();
 
-	Vector2 mousePos = Input::Instance().GetMousePosition();
-	io.MousePos.x = mousePos.x;
-	io.MousePos.y = mousePos.y;
+	//Vector2 mousePos = Input::Instance().GetMousePosition();
+	//io.MousePos.x = mousePos.x;
+	//io.MousePos.y = mousePos.y;
 
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
@@ -162,22 +179,4 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, GraphicsT
 				ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
 			});
 	}
-}
-
-void ImGui::Image(GraphicsTexture *pTexture, const ImVec2 &size, const ImVec2 &uv0, const ImVec2 &uv1, const ImVec4 &tint_col, const ImVec4 &border_col)
-{
-	ImGui::Image((void*)pTexture->GetSRV()->GetGpuView(), size, uv0, uv1, tint_col, border_col);
-}
-
-void ImGui::ImageAutoSize(GraphicsTexture *textureId, const ImVec2 &imageDimensions)
-{
-	ImVec2 windowSize = GetContentRegionAvail();
-	float width = imageDimensions.x;
-	float height = windowSize.x * imageDimensions.y / imageDimensions.x;
-	if (imageDimensions.x / windowSize.x < imageDimensions.y / windowSize.y)
-	{
-		width = windowSize.y * imageDimensions.x / imageDimensions.y;
-		height = imageDimensions.y;
-	}
-	Image(textureId, ImVec2(width, height));
 }
