@@ -20,7 +20,13 @@ PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pG
     ShaderLibrary* pLibrary = pGraphicsDevice->GetLibrary("PathTracing.hlsl");
 
     m_pRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
-    m_pRS->FinalizeFromShader("PathTracing RS", pLibrary);
+    //m_pRS->FinalizeFromShader("PathTracing RS", pLibrary);
+	m_pRS->AddConstantBufferView(0);
+	m_pRS->AddConstantBufferView(2);
+	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+	m_pRS->AddDefaultTables();
+	m_pRS->Finalize("Global");
 
     StateObjectInitializer desc{};
     desc.Name = "Path Tracing";

@@ -55,7 +55,7 @@ public:
 	bool Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, Vector3 scale = Vector3::One);
 	bool LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandContext* pContext, float uniformScale = 1);
     int GetMeshCount() const { return (int)m_Meshes.size();  }
-	const SubMesh& GetMesh(int index) const { return m_Meshes[index]; }
+	SubMesh& GetMesh(int index) { return m_Meshes[index]; }
     const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
     const std::vector<Material>& GetMaterials() const { return m_Materials; }

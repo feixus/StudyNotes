@@ -462,7 +462,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		m_Meshes.push_back(subMesh);
 	}
 
-	GenerateBLAS(pGraphicDevice, pContext);
+	//GenerateBLAS(pGraphicDevice, pContext);
 	return true;
 }
 
@@ -726,7 +726,7 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 		m_Meshes.push_back(subMesh);
 	}
 
-	GenerateBLAS(pGraphicDevice, pContext);
+	//GenerateBLAS(pGraphicDevice, pContext);
 	return true;
 
 	return true;

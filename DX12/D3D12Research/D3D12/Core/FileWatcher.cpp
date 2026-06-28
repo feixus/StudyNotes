@@ -35,12 +35,14 @@ bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch)
 
     if (!fileHandle) return false;
 
-    std::scoped_lock lock(m_Mutex);
     std::unique_ptr<DirectoryWatch> pWatch = std::make_unique<DirectoryWatch>();
     pWatch->Recursive = recursiveWatch;
     pWatch->FileHandle = fileHandle;
     m_IOCP = CreateIoCompletionPort(fileHandle, m_IOCP, (ULONG_PTR)pWatch.get(), 0);
     check(m_IOCP);
+
+	std::scoped_lock lock(m_Mutex);
+
     m_Watches.push_back(std::move(pWatch));
 
     if (!m_Thread.IsRunning())
