@@ -19,8 +19,6 @@ class RootSignature : public GraphicsObject
 public:
 	RootSignature(GraphicsDevice* pParent);
 
-	void AddDefaultTables();
-
 	template<typename T>
 	uint32_t AddRootConstants(uint32_t shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL)
 	{
@@ -37,7 +35,7 @@ public:
 
 	void AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc);
 
-	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE);
+	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE, bool addDefaultTables = true);
 	void FinalizeFromShader(const char* pName, const ShaderBase* pShader);
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
@@ -51,6 +49,8 @@ public:
 	uint32_t GetBindlessSamplerIndex() const { return m_BindlessSamplerIndex; }
 
 private:
+	void AddDefaultTables();
+
 	CD3DX12_ROOT_PARAMETER& Get(uint32_t index)
 	{
 		check(index < MAX_NUM_ROOT_PARAMETERS);

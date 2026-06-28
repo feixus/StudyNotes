@@ -59,7 +59,7 @@ void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDes
     m_StaticSamplers.push_back(CD3DX12_STATIC_SAMPLER_DESC(samplerDesc));
 }
 
-void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags)
+void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags, bool addDefaultTables)
 {
     D3D12_ROOT_SIGNATURE_FLAGS visibilityFlags =
         D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
@@ -73,6 +73,11 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
     {
         visibilityFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS | 
                            D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
+    }
+
+    if (addDefaultTables)
+    {
+        AddDefaultTables();
     }
 
     for (size_t i = 0; i < m_NumParameters; i++)
@@ -189,7 +194,7 @@ void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase* pSha
 	m_BindlessViewsIndex = m_NumParameters - 2;
 	m_BindlessSamplerIndex = m_NumParameters - 1;
 
-    Finalize(pName, rsDesc.Flags);
+    Finalize(pName, rsDesc.Flags, false);
 }
 
 uint32_t RootSignature::GetDWordSize() const

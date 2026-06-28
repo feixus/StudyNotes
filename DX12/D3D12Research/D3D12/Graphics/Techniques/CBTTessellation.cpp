@@ -368,7 +368,6 @@ void CBTTessellation::SetupPipelines()
     //m_pCBTRS->FinalizeFromShader("CBT RS", m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS", defines));
 	m_pCBTRS->AddRootConstants<IntVector4>(0);
 	m_pCBTRS->AddConstantBufferView(1);
-	m_pCBTRS->AddDefaultTables();
 	m_pCBTRS->Finalize("CBT");
 
     {
