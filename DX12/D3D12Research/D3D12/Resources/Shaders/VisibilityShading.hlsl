@@ -190,15 +190,17 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     MeshInstance instance = tMeshInstances[NonUniformResourceIndex(objIndex)];
     MeshData mesh = tMeshes[NonUniformResourceIndex(instance.Mesh)];
-    uint3 indices = tBufferTable[NonUniformResourceIndex(mesh.IndexStream)].Load<uint3>(primitiveIndex * sizeof(uint3));
+    ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
+
+    uint3 indices = meshBuffer.Load<uint3>(mesh.IndicesOffset + primitiveIndex * sizeof(uint3));
 
     VertexAttribute vertices[3];
     for (uint i = 0; i < 3; i++)
 	{
         uint vertexId = indices[i];
-        vertices[i].Position = UnpackHalf3(LoadByteAddressData<uint2>(NonUniformResourceIndex(mesh.PositionStream), vertexId));
-        vertices[i].UV = UnpackHalf2(LoadByteAddressData<uint>(NonUniformResourceIndex(mesh.UVStream), vertexId));
-        NormalData normalData = LoadByteAddressData<NormalData>(NonUniformResourceIndex(mesh.NormalStream), vertexId);
+        vertices[i].Position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
+        vertices[i].UV = UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint)));
+        NormalData normalData = meshBuffer.Load<NormalData>(mesh.NormalsOffset + vertexId * sizeof(NormalData));
 		vertices[i].Normal += normalData.Normal;
 		vertices[i].Tangent += normalData.Tangent;
 	}

@@ -13,14 +13,12 @@ struct SubMesh
     int PositionsStride{0};
     int MaterialId{0};
     DXGI_FORMAT PositionsFormat{DXGI_FORMAT_R32G32B32_FLOAT};
-    ShaderResourceView* pPositionStreamSRV{nullptr};
-    ShaderResourceView* pUVStreamSRV{nullptr};
-    ShaderResourceView* pNormalStreamSRV{nullptr};
-    ShaderResourceView* pIndexSRV{nullptr};
+
     VertexBufferView PositionStreamLocation;
     VertexBufferView UVStreamLocation;
     VertexBufferView NormalStreamLocation;
     IndexBufferView IndicesLocation;
+
     BoundingBox Bounds;
     Mesh* pParent{nullptr};
 
@@ -60,6 +58,7 @@ public:
 	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
     const std::vector<Material>& GetMaterials() const { return m_Materials; }
     const std::vector<SubMesh>& GetMeshes() const { return m_Meshes; }
+    GraphicsBuffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
     void GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext);

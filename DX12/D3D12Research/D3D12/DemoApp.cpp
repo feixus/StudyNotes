@@ -2086,10 +2086,12 @@ void DemoApp::UploadSceneData(CommandContext &context)
 		for (const SubMesh& subMesh : pMesh->GetMeshes())
 		{
 			ShaderInterop::MeshData mesh;
-			mesh.IndexStream = subMesh.pIndexSRV->GetHeapIndex();
-			mesh.PositionStream = subMesh.pPositionStreamSRV->GetHeapIndex();
-			mesh.NormalStream = subMesh.pNormalStreamSRV->GetHeapIndex();
-			mesh.UVStream = subMesh.pUVStreamSRV->GetHeapIndex();
+			mesh.BufferIndex = pMesh->GetData()->GetSRVIndex();
+			mesh.IndicesOffset = (uint32_t)subMesh.IndicesLocation.OffsetFromStart;
+			mesh.PositionsOffset = (uint32_t)subMesh.PositionStreamLocation.OffsetFromStart;
+			mesh.NormalsOffset = (uint32_t)subMesh.NormalStreamLocation.OffsetFromStart;
+			mesh.UVsOffset = (uint32_t)subMesh.UVStreamLocation.OffsetFromStart;
+
 			meshes.push_back(mesh);
 		}
 

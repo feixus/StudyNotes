@@ -223,6 +223,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 
 	std::vector<uint32_t> indicesStream;
 	std::vector<VS_Position> positionsStream;
+	std::vector<Vector3> positionsStreamFull;
 	std::vector<VS_UV> uvStream;
 	std::vector<VS_Normal> normalStream;
 	
@@ -294,6 +295,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 					if (meshData.NumVertices == 0)
 					{
 						positionsStream.resize(positionsStream.size() + accessor.count);
+						positionsStreamFull.resize(positionsStreamFull.size() + accessor.count);
 						uvStream.resize(uvStream.size() + accessor.count);
 						normalStream.resize(normalStream.size() + accessor.count);
 						meshData.NumVertices = (uint32_t)accessor.count;
@@ -307,6 +309,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 						for (size_t i = 0; i < accessor.count; ++i)
 						{
 							positionsStream[vertexOffset + i].Position = PackedVector3(pPositions[i].x, pPositions[i].y, pPositions[i].z, 0);
+							positionsStreamFull[vertexOffset + i] = pPositions[i];
 							positions.push_back(pPositions[i]);
 						}
 						meshData.Bounds.CreateFromPoints(meshData.Bounds, positions.size(), positions.data(), sizeof(Vector3));
@@ -420,7 +423,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		}
 	}
 
-	uint64_t dataOffset = 0;
+	uint32_t dataOffset = 0;
 	auto CopyData = [&](void* pSource, uint64_t size)
 	{
 		pContext->InitializeBuffer(m_pGeometryData.get(), pSource, size, dataOffset);
@@ -437,25 +440,17 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pGraphicDevice, CommandCo
 		subMesh.PositionsFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		subMesh.PositionsStride = sizeof(VS_Position);
 
-		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position));
-		subMesh.pPositionStreamSRV = new ShaderResourceView();
-		subMesh.pPositionStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_Position)));
+		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position), dataOffset);
 		CopyData(&positionsStream[meshData.VertexOffset], sizeof(VS_Position) * meshData.NumVertices);
 		
-		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal));
-		subMesh.pNormalStreamSRV = new ShaderResourceView();
-		subMesh.pNormalStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_Normal)));
+		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal), dataOffset);
 		CopyData(&normalStream[meshData.VertexOffset], sizeof(VS_Normal) * meshData.NumVertices);
 
-		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV));
-		subMesh.pUVStreamSRV = new ShaderResourceView();
-		subMesh.pUVStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_UV)));
+		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV), dataOffset);
 		CopyData(&uvStream[meshData.VertexOffset], sizeof(VS_UV) * meshData.NumVertices);
 
-		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT);
+		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT, dataOffset);
 		subMesh.IndicesLocation = ibv;
-		subMesh.pIndexSRV = new ShaderResourceView();
-		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumIndices * sizeof(uint32_t)));
 		CopyData(&indicesStream[meshData.IndexOffset], sizeof(uint32_t) * meshData.NumIndices);
 
 		subMesh.pParent = this;
@@ -562,6 +557,7 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 
 	std::vector<uint32_t> indicesStream;
 	std::vector<VS_Position> positionsStream;
+	std::vector<Vector3> positionsStreamFull;
 	std::vector<VS_UV> uvStream;
 	std::vector<VS_Normal> normalStream;
 
@@ -605,6 +601,7 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 				if (meshData.NumVertices == 0)
 				{
 					positionsStream.resize(positionsStream.size() + attribute.data->count);
+					positionsStreamFull.resize(positionsStreamFull.size() + attribute.data->count);
 					uvStream.resize(uvStream.size() + attribute.data->count);
 					normalStream.resize(normalStream.size() + attribute.data->count);
 					meshData.NumVertices = (uint32_t)attribute.data->count;
@@ -618,6 +615,7 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 						Vector3 position;
 						check(cgltf_accessor_read_float(attribute.data, i, &position.x, 3));
 						positionsStream[i + vertexOffset].Position = PackedVector3(position.x, position.y, position.z, 0);
+						positionsStreamFull[i + vertexOffset] = position;
 						positions.push_back(position);
 					}
 					meshData.Bounds.CreateFromPoints(meshData.Bounds, positions.size(), (DirectX::XMFLOAT3*)positions.data(), sizeof(Vector3));
@@ -684,7 +682,7 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 	bufferSize += (positionsStream.size() * 3 + indicesStream.size()) * sBufferAlignment;
 	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh GeometryBuffer");
 
-	uint64_t dataOffset = 0;
+	uint32_t dataOffset = 0;
 	auto CopyData = [&](void* pSource, uint64_t size)
 	{
 		pContext->InitializeBuffer(m_pGeometryData.get(), pSource, size, dataOffset);
@@ -701,25 +699,17 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 		subMesh.PositionsFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		subMesh.PositionsStride = sizeof(VS_Position);
 
-		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position));
-		subMesh.pPositionStreamSRV = new ShaderResourceView();
-		subMesh.pPositionStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_Position)));
+		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position), dataOffset);
 		CopyData(&positionsStream[meshData.VertexOffset], sizeof(VS_Position) * meshData.NumVertices);
 		
-		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal));
-		subMesh.pNormalStreamSRV = new ShaderResourceView();
-		subMesh.pNormalStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_Normal)));
+		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal), dataOffset);
 		CopyData(&normalStream[meshData.VertexOffset], sizeof(VS_Normal) * meshData.NumVertices);
 
-		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV));
-		subMesh.pUVStreamSRV = new ShaderResourceView();
-		subMesh.pUVStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumVertices * sizeof(VS_UV)));
+		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV), dataOffset);
 		CopyData(&uvStream[meshData.VertexOffset], sizeof(VS_UV) * meshData.NumVertices);
 
-		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT);
+		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT, dataOffset);
 		subMesh.IndicesLocation = ibv;
-		subMesh.pIndexSRV = new ShaderResourceView();
-		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32_t)dataOffset, meshData.NumIndices * sizeof(uint32_t)));
 		CopyData(&indicesStream[meshData.IndexOffset], sizeof(uint32_t) * meshData.NumIndices);
 
 		subMesh.pParent = this;
@@ -727,8 +717,6 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 	}
 
 	//GenerateBLAS(pGraphicDevice, pContext);
-	return true;
-
 	return true;
 }
 
@@ -799,11 +787,6 @@ void Mesh::GenerateBLAS(GraphicsDevice* pGraphicDevice, CommandContext* pContext
 
 void SubMesh::Destroy()
 {
-	delete pIndexSRV;
-	delete pPositionStreamSRV;
-	delete pNormalStreamSRV;
-	delete pUVStreamSRV;
-
 	delete pBLAS;
 	delete pBLASScratch;
 }

@@ -162,12 +162,14 @@ protected:
 
 struct VertexBufferView
 {
-	VertexBufferView() : Location(~0u), Elements(0), Stride(0)
+	VertexBufferView() : Location(~0u), Elements(0), Stride(0), OffsetFromStart(0)
 	{}
 
-	VertexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32_t elements, uint32_t stride)
-		: Location(location), Elements(elements), Stride(stride)
-	{}
+	VertexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32_t elements, uint32_t stride, uint64_t offsetFromStart)
+		: Location(location), Elements(elements), Stride(stride), OffsetFromStart((uint32_t)offsetFromStart)
+	{
+		checkf(offsetFromStart <= std::numeric_limits<uint32_t>::max(), "buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
+	}
 
 	VertexBufferView(GraphicsBuffer* pBuffer)
 	{
@@ -179,16 +181,19 @@ struct VertexBufferView
 	D3D12_GPU_VIRTUAL_ADDRESS Location;
 	uint32_t Elements;
 	uint32_t Stride;
+	uint32_t OffsetFromStart;
 };
 
 struct IndexBufferView
 {
-	IndexBufferView() : Location(~0u), Elements(0), Format(DXGI_FORMAT_R32_UINT)
+	IndexBufferView() : Location(~0u), Elements(0), Format(DXGI_FORMAT_R32_UINT), OffsetFromStart(0)
 	{}
 
-	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32_t elements, DXGI_FORMAT format = DXGI_FORMAT_R32_UINT)
-		: Location(location), Elements(elements), Format(format)
-	{}
+	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32_t elements, DXGI_FORMAT format, uint64_t offsetFromStart)
+		: Location(location), Elements(elements), Format(format), OffsetFromStart((uint32_t)offsetFromStart)
+	{
+		
+	}
 
 	uint32_t Stride() const
 	{
@@ -197,8 +202,8 @@ struct IndexBufferView
 
 	D3D12_GPU_VIRTUAL_ADDRESS Location;
 	uint32_t Elements;
-	bool SmallIndices;
 	DXGI_FORMAT Format;
+	uint32_t OffsetFromStart;
 };
 
 
