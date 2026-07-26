@@ -146,8 +146,10 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
         int shadowIndex = GetShadowIndex(light, pos, worldPos);
 
         attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-        attenuation *= CastShadowRay(OffsetRay(worldPos, geometryNormal), L);
-    }
+		float3 rayOrigin = worldPos;
+		//float3 rayOrigin = OffsetRay(worldPos, geometryNormal);
+		attenuation *= CastShadowRay(rayOrigin, L);
+	}
 
     L = normalize(L);
 	result = DefaultLitBxDF(surface.Specular, surface.Roughness, surface.Diffuse, N, V, L, attenuation);
@@ -347,7 +349,7 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
     {
         return false;
     }
-    sampleWeight = (totalWeights / (float)cViewData.NumLights) / samplePdfG;
+    sampleWeight = (totalWeights / (float)RIS_CANDIDATES_LIGHTS) / samplePdfG;
     return true;
 }
 
@@ -394,7 +396,7 @@ void RayGen()
         // if the ray didn't hit anything, accumulate the sky and break the loop
         if (!payload.IsHit())
         {
-            const float3 skyColor = CIESky(rayDesc.Direction, -tLights[0].Direction, false);
+            const float3 skyColor = 1; //CIESky(rayDesc.Direction, -tLights[0].Direction, false);
             radiance += throughput * skyColor;
             break;
         }
@@ -431,7 +433,7 @@ void RayGen()
         {
             LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, geometryNormal, brdfData);
             radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
-        }
+		}
 
         // if we're at the last bounce, no point in computing the next ray
         if (i == cViewData.NumBounces - 1)
@@ -483,7 +485,7 @@ void RayGen()
 
     if (cViewData.AccumulatedFrames > 1)
     {
-        float3 previousColor = uOutput[DispatchRaysIndex().xy].rgb;
+		float3 previousColor = uAccumulation[DispatchRaysIndex().xy].rgb;
         radiance += previousColor;
     }
     uAccumulation[DispatchRaysIndex().xy] = float4(radiance, 1);
