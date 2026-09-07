@@ -184,6 +184,7 @@ public:
 	void Dispatch(const IntVector3& groupCounts);
 	void Dispatch(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
 	void DispatchMesh(uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1);
+	void DispatchMesh(const IntVector3& groupCounts);
 
 	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, GraphicsBuffer* pIndirectArguments, GraphicsBuffer* pCountBuffer, uint32_t argumentsOffset = 0, uint32_t countOffset = 0);
 	void Draw(int vertexStart, int vertexCount);

@@ -128,6 +128,9 @@ project (ENGINE_NAME)
 
 		-- DirectXMath
 		includedirs (ROOT .. "D3D12/External/DirectXMath/Inc")
+		
+		--meshoptimizer
+		includedirs (ROOT .. "D3D12/External/meshoptimizer")
 
 newaction {
 	trigger     = "clean",

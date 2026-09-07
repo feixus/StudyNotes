@@ -242,6 +242,11 @@ void CommandContext::DispatchMesh(uint32_t groupCountX, uint32_t groupCountY, ui
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
+void CommandContext::DispatchMesh(const IntVector3& groupCounts)
+{
+	DispatchMesh(groupCounts.x, groupCounts.y, groupCounts.z);
+}
+
 void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uint32_t height, uint32_t depth)
 {
 	check(m_CurrentCommandContext == CommandListContext::Compute);

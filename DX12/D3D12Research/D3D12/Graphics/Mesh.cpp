@@ -24,6 +24,8 @@
 #include "cgltf.h"
 #pragma warning(pop)
 
+#include "meshoptimizer.h"
+
 struct VS_Position
 {
 	PackedVector3 Position{0.0f, 0.0f, 0.0f, 0.0f};
@@ -48,6 +50,11 @@ struct MeshData
 	uint32_t NumVertices{0};
 	uint32_t VertexOffset{0};
 	uint32_t MaterialIndex{0};
+
+	std::vector<meshopt_Meshlet> meshlets;
+	std::vector<uint32_t> meshlet_vertices;
+	std::vector<uint32_t> meshlet_triangles;
+	std::vector<meshopt_Bounds> meshlet_bounds;
 };
 
 Mesh::~Mesh()
@@ -674,20 +681,67 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 
 	cgltf_free(pGltfData);
 
-	static constexpr uint64_t sBufferAlignment = 16;
-	uint64_t bufferSize = indicesStream.size() * sizeof(uint32_t);
+	uint64_t bufferSize = 0;
+
+	for (MeshData& meshData : meshDatas)
+	{
+		// meshlet generation
+		const size_t max_vertices = 64;
+		const size_t max_triangles = 124;
+		const float cone_weight = 0.0f;
+
+		size_t max_meshlets = meshopt_buildMeshletsBound(meshData.NumIndices, max_vertices, max_triangles);
+		meshData.meshlets.resize(max_meshlets);
+		meshData.meshlet_vertices.resize(max_meshlets * max_vertices);
+
+		std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+		size_t meshlet_count = meshopt_buildMeshlets(meshData.meshlets.data(),
+			meshData.meshlet_vertices.data(), meshlet_triangles.data(),
+			&indicesStream[meshData.IndexOffset], meshData.NumIndices,
+			&positionsStreamFull[meshData.VertexOffset].x, meshData.NumVertices,
+			sizeof(Vector3), max_vertices, max_triangles, cone_weight);
+
+		// trimming
+		const meshopt_Meshlet& last = meshData.meshlets[meshlet_count - 1];
+		meshData.meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+		meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
+		meshData.meshlets.resize(meshlet_count);
+
+		meshData.meshlet_bounds.reserve(meshlet_count);
+		for (const meshopt_Meshlet& meshlet : meshData.meshlets)
+		{
+			meshopt_Bounds bounds = meshopt_computeMeshletBounds(
+				&meshData.meshlet_vertices[meshlet.vertex_offset],
+				&meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count,
+				&positionsStreamFull[meshData.VertexOffset].x, meshData.NumVertices,
+				sizeof(Vector3));
+			meshData.meshlet_bounds.push_back(bounds);
+		}
+
+		meshData.meshlet_triangles.resize(meshlet_triangles.size());
+		for (size_t i = 0; i < meshlet_triangles.size(); i++)
+		{
+			meshData.meshlet_triangles[i] = meshlet_triangles[i];
+		}
+
+		bufferSize += meshData.meshlets.size() * sizeof(meshopt_Meshlet);
+		bufferSize += meshData.meshlet_vertices.size() * sizeof(uint32_t);
+		bufferSize += meshData.meshlet_triangles.size() * sizeof(uint32_t);
+		bufferSize += meshData.meshlet_bounds.size() * sizeof(meshopt_Bounds);
+	}
+
+	bufferSize += indicesStream.size() * sizeof(uint32_t);
 	bufferSize += positionsStream.size() * sizeof(VS_Position);
 	bufferSize += uvStream.size() * sizeof(VS_UV);
 	bufferSize += normalStream.size() * sizeof(VS_Normal);
-	bufferSize += (positionsStream.size() * 3 + indicesStream.size()) * sBufferAlignment;
 	m_pGeometryData = pGraphicDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Mesh GeometryBuffer");
 
 	uint32_t dataOffset = 0;
-	auto CopyData = [&](void* pSource, uint64_t size)
+	auto CopyData = [this, &dataOffset, &pContext](const void* pSource, uint64_t size)
 	{
 		pContext->InitializeBuffer(m_pGeometryData.get(), pSource, size, dataOffset);
 		dataOffset += size;
-		dataOffset = Math::AlignUp<uint64_t>(dataOffset, sBufferAlignment);
 	};
 
 	for (const MeshData& meshData : meshDatas)
@@ -708,9 +762,22 @@ bool Mesh::LoadByCgltf(const char* pFilePath, GraphicsDevice* pGraphicDevice, Co
 		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV), dataOffset);
 		CopyData(&uvStream[meshData.VertexOffset], sizeof(VS_UV) * meshData.NumVertices);
 
-		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT, dataOffset);
-		subMesh.IndicesLocation = ibv;
+		subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT, dataOffset);
 		CopyData(&indicesStream[meshData.IndexOffset], sizeof(uint32_t) * meshData.NumIndices);
+
+		subMesh.MeshletsLocation = dataOffset;
+		CopyData(meshData.meshlets.data(), sizeof(meshopt_Meshlet)* meshData.meshlets.size());
+
+		subMesh.MeshletVerticesLocation = dataOffset;
+		CopyData(meshData.meshlet_vertices.data(), sizeof(unsigned int) * meshData.meshlet_vertices.size());
+
+		subMesh.MeshletTrianglesLocation = dataOffset;
+		CopyData(meshData.meshlet_triangles.data(), sizeof(uint32_t)* meshData.meshlet_triangles.size());
+
+		subMesh.MeshletBoundsLocation = dataOffset;
+		CopyData(meshData.meshlet_bounds.data(), sizeof(meshopt_Bounds)* meshData.meshlet_bounds.size());
+
+		subMesh.NumMeshlets = (uint32_t)meshData.meshlets.size();
 
 		subMesh.pParent = this;
 		m_Meshes.push_back(subMesh);

@@ -56,6 +56,11 @@ private:
 	PipelineState* m_pDiffuseMaskedPSO{nullptr};
 	PipelineState* m_pDiffuseTransparencyPSO{nullptr};
 
+	// mesh shader
+	PipelineState* m_pMeshShaderDiffusePSO{ nullptr };
+	PipelineState* m_pMeshShaderDiffuseMaskedPSO{ nullptr };
+	PipelineState* m_pMeshShaderDiffuseTransparencyPSO{ nullptr };
+
     // cluster debug rendering
     std::unique_ptr<RootSignature> m_pVisualizeLightClustersRS;
     PipelineState* m_pVisualizeLightClustersPSO{nullptr};

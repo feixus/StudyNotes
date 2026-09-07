@@ -2069,8 +2069,8 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 void DemoApp::LoadMesh(const std::string &filePath, CommandContext &context)
 {
 	std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-	pMesh->Load(filePath.c_str(), m_pDevice.get(), &context, Vector3::One);
-	// pMesh->LoadByCgltf(filePath.c_str(), m_pDevice.get(), &context);
+	//pMesh->Load(filePath.c_str(), m_pDevice.get(), &context, Vector3::One);
+	 pMesh->LoadByCgltf(filePath.c_str(), m_pDevice.get(), &context);
 	m_Meshes.push_back(std::move(pMesh));
 }
 
@@ -2091,6 +2091,10 @@ void DemoApp::UploadSceneData(CommandContext &context)
 			mesh.PositionsOffset = (uint32_t)subMesh.PositionStreamLocation.OffsetFromStart;
 			mesh.NormalsOffset = (uint32_t)subMesh.NormalStreamLocation.OffsetFromStart;
 			mesh.UVsOffset = (uint32_t)subMesh.UVStreamLocation.OffsetFromStart;
+			mesh.MeshletOffset = subMesh.MeshletsLocation;
+			mesh.MeshletVertexOffset = subMesh.MeshletVerticesLocation;
+			mesh.MeshletTriangleOffset = subMesh.MeshletTrianglesLocation;
+			mesh.MeshletBoundsOffset = subMesh.MeshletBoundsLocation;
 
 			meshes.push_back(mesh);
 		}
