@@ -399,19 +399,19 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
             {
                 GPU_PROFILE_SCOPE("Opaque", &context);
                 context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffusePSO : m_pDiffusePSO);
-				DrawScene(context, inputResource, Batch::Blending::Opaque, useMeshShader);
+				DrawScene(context, inputResource, Batch::Blending::Opaque);
             }
 
             {
                 GPU_PROFILE_SCOPE("Opaque - Masked", &context);
                 context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
-				DrawScene(context, inputResource, Batch::Blending::AlphaMask, useMeshShader);
+				DrawScene(context, inputResource, Batch::Blending::AlphaMask);
             }
 
             {
                 GPU_PROFILE_SCOPE("Transparent", &context);
 				context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseTransparencyPSO : m_pDiffuseTransparencyPSO);
-				DrawScene(context, inputResource, Batch::Blending::AlphaBlend, useMeshShader);
+				DrawScene(context, inputResource, Batch::Blending::AlphaBlend);
             }
 
             context.EndRenderPass();

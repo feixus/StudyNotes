@@ -40,6 +40,9 @@ void CommandContext::Reset()
 
 	m_CurrentCommandContext = CommandListContext::Invalid;
 
+	m_pCurrentPSO = nullptr;
+	m_pCurrentSO = nullptr;
+
 	// GPU needs to know which heap(s) to read from when you bind descroptor tables.
 	ID3D12DescriptorHeap* pHeaps[] = 
 	{
@@ -224,6 +227,7 @@ void CommandContext::Dispatch(const IntVector3& groupCounts)
 
 void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Compute);
 	check(m_CurrentCommandContext == CommandListContext::Compute);
 	checkf(
 		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
@@ -236,6 +240,7 @@ void CommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32
 
 void CommandContext::DispatchMesh(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Mesh);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	check(m_pMeshShadingCommandList);
 	PrepareDraw();
@@ -249,6 +254,7 @@ void CommandContext::DispatchMesh(const IntVector3& groupCounts)
 
 void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uint32_t height, uint32_t depth)
 {
+	check(m_pCurrentSO);
 	check(m_CurrentCommandContext == CommandListContext::Compute);
 	check(m_pRaytracingCommandList);
 
@@ -266,11 +272,13 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uin
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, GraphicsBuffer* pIndirectArguments, GraphicsBuffer* pCountBuffer, uint32_t argumentsOffset, uint32_t countOffset)
 {
 	PrepareDraw();
+	check(m_pCurrentPSO);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
@@ -278,6 +286,7 @@ void CommandContext::Draw(int vertexStart, int vertexCount)
 
 void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
@@ -285,6 +294,7 @@ void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex)
 
 void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex, int instanceStart)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
@@ -588,12 +598,14 @@ void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 {
 	pPipelineState->ConditionallyReload();
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
+	m_pCurrentPSO = pPipelineState;
 }
 
 void CommandContext::SetPipelineState(StateObject* pStateObject)
 {
 	check(m_pRaytracingCommandList);
 	m_pRaytracingCommandList->SetPipelineState1(pStateObject->GetStateObject());
+	m_pCurrentSO = pStateObject;
 }
 
 void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)

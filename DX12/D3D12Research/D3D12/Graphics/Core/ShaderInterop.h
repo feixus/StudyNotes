@@ -53,6 +53,7 @@ namespace ShaderInterop
 		uint MeshletVertexOffset;
 		uint MeshletTriangleOffset;
 		uint MeshletBoundsOffset;
+		uint MeshletCount;
 	};
 
 	struct Meshlet

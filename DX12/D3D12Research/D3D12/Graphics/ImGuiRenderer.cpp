@@ -51,7 +51,14 @@ ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pGraphicsDevice, WindowHandle windo
 	ImFontConfig fontConfig;
 	fontConfig.OversampleH = 2;
 	fontConfig.OversampleV = 2;
-	io.Fonts->AddFontFromFileTTF("Resources/Fonts/Roboto-Bold.ttf", 15.0f, &fontConfig);
+	io.Fonts->AddFontFromFileTTF("Resources/Fonts/NotoSans-Regular.ttf", 20.0f, &fontConfig);
+
+	fontConfig.MergeMode = true;
+	fontConfig.PixelSnapH = true;
+	fontConfig.GlyphMinAdvanceX = 15.0f;
+	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
+	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FAS, 15.0f, &fontConfig, icon_ranges);
+
 	io.Fonts->Build();
 
 	ImGuiStyle& style = ImGui::GetStyle();

@@ -126,7 +126,7 @@ private:
 	};
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
 
-	RenderPath m_RenderPath = RenderPath::PathTracing;
+	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<GraphicsBuffer> m_pTLAS;

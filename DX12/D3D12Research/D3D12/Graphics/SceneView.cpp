@@ -2,15 +2,16 @@
 #include "SceneView.h"
 #include "Core/CommandContext.h"
 #include "Core/GraphicsBuffer.h"
+#include "Core/PipelineState.h"
 #include "Scene/Camera.h"
 #include "Mesh.h"
 
-void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes, bool meshShader)
+void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes)
 {
-	DrawScene(context, scene, scene.VisibilityMask, blendModes, meshShader);
+	DrawScene(context, scene, scene.VisibilityMask, blendModes);
 }
 
-void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes, bool meshShader)
+void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes)
 {
 	std::vector<const Batch*> meshes;
 	for (const Batch& b : scene.Batches)
@@ -34,8 +35,9 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 	{
 		objectData.Index = b->Index;
 		context.SetRootConstants(0, objectData);
-		if (meshShader)
+		if (context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
 		{
+			//context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b->pMesh->NumMeshlets, 32));
 			context.DispatchMesh(b->pMesh->NumMeshlets);
 		}
 		else

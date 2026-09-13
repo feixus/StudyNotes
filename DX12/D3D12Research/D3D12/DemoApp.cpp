@@ -1619,9 +1619,9 @@ void DemoApp::UpdateImGui()
 
 	if (ImGui::BeginMainMenuBar())
 	{
-		if (ImGui::BeginMenu("File"))
+		if (ImGui::BeginMenu(ICON_FA_FILE " File"))
 		{
-			if (ImGui::MenuItem("Load Mesh", nullptr, nullptr))
+			if (ImGui::MenuItem(ICON_FA_FILE " Load Mesh", nullptr, nullptr))
 			{
 				OPENFILENAME ofn = {0};
 				TCHAR szFile[260] = {0};
@@ -1647,14 +1647,14 @@ void DemoApp::UpdateImGui()
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::BeginMenu("Windows"))
+		if (ImGui::BeginMenu(ICON_FA_WINDOW_MAXIMIZE " Windows"))
 		{
-			if (ImGui::MenuItem("Profiler", 0, showProfiler))
+			if (ImGui::MenuItem(ICON_FA_CLOCK " Profiler", 0, showProfiler))
 			{
 				showProfiler = !showProfiler;
 			}
 			bool& showConsole = console.IsVisible();
-			if (ImGui::MenuItem("Output Log", 0, showConsole))
+			if (ImGui::MenuItem(ICON_FA_TERMINAL " Output Log", 0, showConsole))
 			{
 				showConsole = !showConsole;
 			}
@@ -1665,7 +1665,7 @@ void DemoApp::UpdateImGui()
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::BeginMenu("Tools"))
+		if (ImGui::BeginMenu(ICON_FA_WRENCH " Tools"))
 		{
 			if (ImGui::MenuItem("Dump RenderGraph"))
 			{
@@ -1682,7 +1682,7 @@ void DemoApp::UpdateImGui()
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::BeginMenu("Help"))
+		if (ImGui::BeginMenu(ICON_FA_QUESTION " Help"))
 		{
 			if (ImGui::MenuItem("ImGui Demo", 0, showImguiDemo))
 			{

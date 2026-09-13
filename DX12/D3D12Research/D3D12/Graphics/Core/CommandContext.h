@@ -161,15 +161,15 @@ public:
 	friend class CommandQueue;
 
 	CommandContext(GraphicsDevice* pGraphics, ID3D12GraphicsCommandList* pCommandList,
-					D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap,
-					DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
+		D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap,
+		DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
 	~CommandContext() = default;
 
 	void Reset();
 	uint64_t Execute(bool wait);
 	static uint64_t Execute(CommandContext** pContexts, uint32_t numContexts, bool wait);
 	void Free(uint64_t fenceValue);
-	
+
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32_t subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
 	void FlushResourceBarriers();
@@ -190,14 +190,14 @@ public:
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
-	
+
 	void DispatchRays(ShaderBindingTable& table, uint32_t width = 1, uint32_t height = 1, uint32_t depth = 1);
 
 	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.f, 0.f, 0.f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(GraphicsTexture* pSource, uint32_t sourceSubResource, GraphicsTexture* pTarget, uint32_t targetSubResource, DXGI_FORMAT format);
-	
-	
+
+
 
 	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32_t* values = nullptr);
 	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
@@ -221,16 +221,16 @@ public:
 
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
 	void SetComputeRootSignature(RootSignature* pRootSignature);
-	
+
 	void BindResource(int rootIndex, int offset, ResourceView* pView);
 	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handle, int count = 1);
-	
+
 	void SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 
 	void SetRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	
+
 	void SetRootConstants(int rootIndex, uint32_t count, const void* pConstants);
 	template<typename T>
 	void SetRootConstants(int rootIndex, const T& data)
@@ -251,9 +251,10 @@ public:
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return m_pRaytracingCommandList.Get(); }
-	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const {	return m_pMeshShadingCommandList.Get(); }
-	
+	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const { return m_pMeshShadingCommandList.Get(); }
+
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
+	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandListType, D3D12_RESOURCE_STATES state);
 
@@ -277,12 +278,12 @@ private:
 
 	D3D12_RESOURCE_STATES GetResourceStateWithFallback(GraphicsResource* pResource, uint32_t subResource) const
 	{
-		 auto it = m_ResourceStates.find(pResource);
-		 if (it == m_ResourceStates.end())
-		 {
+		auto it = m_ResourceStates.find(pResource);
+		if (it == m_ResourceStates.end())
+		{
 			return pResource->GetResourceState(subResource);
-		 }
-		 return it->second.Get(subResource);
+		}
+		return it->second.Get(subResource);
 	}
 
 	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
@@ -302,6 +303,9 @@ private:
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass{ false };
 	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubresourceParameters{};
+
+	PipelineState* m_pCurrentPSO{ nullptr };
+	StateObject* m_pCurrentSO{nullptr};
 };
 
 class CommandSignature : public GraphicsObject
