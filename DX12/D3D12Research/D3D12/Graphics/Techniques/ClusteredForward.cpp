@@ -87,6 +87,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 	ImGui::Checkbox("Mesh Shader", &useMeshShader);
 	ImGui::End();
 
+    useMeshShader = m_pMeshShaderDiffusePSO != nullptr && useMeshShader;
+
     Vector2 screenDimensions((float)inputResource.pRenderTarget->GetWidth(), (float)inputResource.pRenderTarget->GetHeight());
     float nearZ = inputResource.pCamera->GetNear();
     float farZ = inputResource.pCamera->GetFar();
@@ -303,6 +305,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 Matrix ViewProjection;
                 Matrix ReprojectionMatrix;
                 Vector4 ViewPosition;
+                Vector4 FrustumPlanes[6];
 				Vector2 InvScreenDimensions;
 				float NearZ;
 				float FarZ;
@@ -317,7 +320,18 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 				IntVector3 VolumeFogDimensions;
 			} frameData{};
 
-			frameData.View = inputResource.pCamera->GetView();
+            Matrix view = inputResource.pCamera->GetView();
+
+            DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
+            inputResource.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &left, &right, &top, &bottom);
+            frameData.FrustumPlanes[0] = Vector4(nearPlane);
+            frameData.FrustumPlanes[1] = Vector4(farPlane);
+            frameData.FrustumPlanes[2] = Vector4(left);
+            frameData.FrustumPlanes[3] = Vector4(right);
+            frameData.FrustumPlanes[4] = Vector4(top);
+            frameData.FrustumPlanes[5] = Vector4(bottom);
+
+			frameData.View = view;
 			frameData.Projection = inputResource.pCamera->GetProjection();
             frameData.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
             frameData.ViewProjection = inputResource.pCamera->GetViewProjection();
@@ -559,8 +573,10 @@ void ClusteredForward::SetupPipelines()
 	// diffuse
 	{
 		Shader* pVertexShader = m_pGraphicsDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
-		Shader* pMeshShader = m_pGraphicsDevice->GetShader("Diffuse.hlsl", ShaderType::Mesh, "MSMain", { "CLUSTERED_FORWARD" });
 		Shader* pPixelShader = m_pGraphicsDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
+
+		Shader* pMeshShader = m_pGraphicsDevice->GetShader("Diffuse.hlsl", ShaderType::Mesh, "MSMain", { "CLUSTERED_FORWARD" });
+		Shader* pAmplificationShader = m_pGraphicsDevice->GetShader("Diffuse.hlsl", ShaderType::Amplification, "ASMain", { "CLUSTERED_FORWARD" });
 
 		m_pDiffuseRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
@@ -592,12 +608,14 @@ void ClusteredForward::SetupPipelines()
 			m_pDiffuseTransparencyPSO = m_pGraphicsDevice->CreatePipeline(psoDesc);
 		}
 
+        if (m_pGraphicsDevice->GetCapabilities().MeshShaderSupport >= D3D12_MESH_SHADER_TIER_1)
 		{
 			// opaque
 			PipelineStateInitializer psoDesc;
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetBlendMode(BlendMode::Replace, false);
 			psoDesc.SetMeshShader(pMeshShader);
+            psoDesc.SetAmplificationShader(pAmplificationShader);
 			psoDesc.SetPixelShader(pPixelShader);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);

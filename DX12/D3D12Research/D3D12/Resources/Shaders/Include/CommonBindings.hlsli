@@ -1,5 +1,4 @@
-#ifndef __INCLUDE_COMMON_BINDINGS__
-#define __INCLUDE_COMMON_BINDINGS__
+#pragma once
 
 #include "Common.hlsli"
 
@@ -106,5 +105,3 @@ float4 SampleGrad2D(int index, SamplerState s, float2 uv, float2 ddx, float2 ddy
 {
     return tTexture2DTable[index].SampleGrad(s, uv, ddx, ddy, offset);
 }
-
-#endif

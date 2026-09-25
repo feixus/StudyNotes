@@ -1,5 +1,4 @@
-#ifndef __RANDOM_INCLUDE__
-#define __RANDOM_INCLUDE__
+#pragma once
 
 //Pseudo-Random Number Generator
 
@@ -97,5 +96,3 @@ float3 HemisphereSampleCosineWeight(float2 u, out float pdf)
     pdf = result.z * INV_PI;
     return result;
 }
-
-#endif

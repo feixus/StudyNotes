@@ -1,5 +1,4 @@
-#ifndef __TONEMAPPINGCOMMON_INCLUDE__
-#define __TONEMAPPINGCOMMON_INCLUDE__
+#pragma once
 
 #include "Common.hlsli"
 
@@ -87,5 +86,3 @@ float Exposure(float ev100)
 {
     return 1.0f / (pow(2.0f, ev100) * 1.2f);
 }
-
-#endif

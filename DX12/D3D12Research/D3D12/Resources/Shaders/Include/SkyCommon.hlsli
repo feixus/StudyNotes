@@ -1,5 +1,4 @@
-#ifndef __SKYCOMMON_INCLUDE__
-#define __SKYCOMMON_INCLUDE__
+#pragma once
 
 float AngleBetween(float3 dir0, float3 dir1)
 {
@@ -44,5 +43,3 @@ float3 CIESky(float3 dir, float3 sunDir, bool withSun = true)
 
     return max(color * luminance, 0);
 }
-
-#endif

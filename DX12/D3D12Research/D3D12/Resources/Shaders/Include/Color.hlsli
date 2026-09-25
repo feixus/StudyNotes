@@ -1,5 +1,4 @@
-#ifndef __COLOR_INCLUDE__
-#define __COLOR_INCLUDE__
+#pragma once
 
 // https://web.archive.org/web/20191027010220/http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
 float3 sRGB_to_XYZ(float3 rgb)
@@ -63,5 +62,3 @@ float3 YCoCg_to_RGB(float3 c)
     // B = Y - Co - Cg
     return float3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z);
 }
-
-#endif

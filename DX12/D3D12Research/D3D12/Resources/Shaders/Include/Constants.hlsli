@@ -1,5 +1,4 @@
-#ifndef __CONSTANTS_INCLUDE__
-#define __CONSTANTS_INCLUDE__
+#pragma once
 
 #define UINT_MAX 0xFFFFFFFFu
 #define INT_MAX  0x7FFFFFFF
@@ -22,6 +21,4 @@
 #else
 #define RAYPAYLOAD
 #define RAYQUALIFIER(qualifiers)
-#endif
-
 #endif

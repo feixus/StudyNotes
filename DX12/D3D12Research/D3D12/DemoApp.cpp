@@ -2095,6 +2095,7 @@ void DemoApp::UploadSceneData(CommandContext &context)
 			mesh.MeshletVertexOffset = subMesh.MeshletVerticesLocation;
 			mesh.MeshletTriangleOffset = subMesh.MeshletTrianglesLocation;
 			mesh.MeshletBoundsOffset = subMesh.MeshletBoundsLocation;
+			mesh.MeshletCount = subMesh.NumMeshlets;
 
 			meshes.push_back(mesh);
 		}

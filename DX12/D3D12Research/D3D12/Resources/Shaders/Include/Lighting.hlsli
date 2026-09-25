@@ -1,5 +1,4 @@
-#ifndef __LIGHTING_INCLUDE__
-#define __LIGHTING_INCLUDE__
+#pragma once
 
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
@@ -212,5 +211,3 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
     return result;
 }
-
-#endif
