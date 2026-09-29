@@ -188,6 +188,31 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 
 	m_pDevice->SetMultiSampleCount(m_SampleCount);
 
+	// Log mesh shader hardware output limits
+	if (m_pDevice->GetCapabilities().MeshShaderSupport >= D3D12_MESH_SHADER_TIER_1)
+	{
+		// The vendored d3d12.h predates the extended OPTIONS11 struct, so mirror the current SDK layout
+		struct MeshShaderNodeOutputLimits
+		{
+			UINT MaximumNodeOutputVertices;
+			UINT MaximumNodeOutputPrimitives;
+			UINT MaximumPipelineNodeOutputVertices;
+			UINT MaximumPipelineNodeOutputPrimitives;
+		};
+
+		MeshShaderNodeOutputLimits limits = {};
+		HRESULT result = m_pDevice->GetDevice()->CheckFeatureSupport((D3D12_FEATURE)D3D12_FEATURE_D3D12_OPTIONS11, &limits, sizeof(limits));
+		if (SUCCEEDED(result))
+		{
+			E_LOG(Info, "Mesh Shader Limits: MaxVertices=%u MaxPrimitives=%u", limits.MaximumNodeOutputVertices, limits.MaximumNodeOutputPrimitives);
+		}
+		else
+		{
+			// Fall back to the guaranteed tier 1 limits (D3D12_MSlimits1_1)
+			E_LOG(Info, "Mesh Shader Limits: MaxVertices=64 MaxPrimitives=126 (fallback)");
+		}
+	}
+
 	m_pDepthStencil = std::make_unique<GraphicsTexture>(GetDevice(), "Depth Stencil");
 	m_pResolveDepthStencil = std::make_unique<GraphicsTexture>(GetDevice(), "Resolved Depth Stencil");
 
@@ -2069,8 +2094,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 void DemoApp::LoadMesh(const std::string &filePath, CommandContext &context)
 {
 	std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-	//pMesh->Load(filePath.c_str(), m_pDevice.get(), &context, Vector3::One);
-	 pMesh->LoadByCgltf(filePath.c_str(), m_pDevice.get(), &context);
+	pMesh->Load(filePath.c_str(), m_pDevice.get(), &context);
 	m_Meshes.push_back(std::move(pMesh));
 }
 
