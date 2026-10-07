@@ -10,15 +10,16 @@
 #define CURSOR_COLOR float4(1, 0, 1, 1.0f)
 #define TARGET_COLOR float4(1, 1, 1, 1.0f)
 
+struct PassParameters
+{
+    float MinLogLuminance;
+    float InverseLogLuminanceRange;
+};
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
 RWTexture2D<float4> uOutTexture : register(u0);
 ByteAddressBuffer tLuminanceHistogram : register(t0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
-
-cbuffer LuminanceHistogramBuffer : register(b0)
-{
-    float cMinLogLuminance;
-    float cInverseLogLuminanceRange;
-}
 
 groupshared uint gsHistogram[NUM_HISTOGRAM_BINS];
 
@@ -50,8 +51,8 @@ void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV
 
     float currentAverage = tAverageLuminance[0];
     float targetAverage = tAverageLuminance[1];
-    float tCurrent = (log2(currentAverage) - cMinLogLuminance) * cInverseLogLuminanceRange;
-    float tTarget = (log2(targetAverage) - cMinLogLuminance) * cInverseLogLuminanceRange;
+    float tCurrent = (log2(currentAverage) - cPassParameters.MinLogLuminance) * cPassParameters.InverseLogLuminanceRange;
+    float tTarget = (log2(targetAverage) - cPassParameters.MinLogLuminance) * cPassParameters.InverseLogLuminanceRange;
 
     // megenta shows the average luminance position
     float4 outColor = BACKGROUND_COLOR;

@@ -13,23 +13,20 @@
 TEXTURE_OUTPUT_TYPE uOutput : register(u0);
 TEXTURE_INPUT_TYPE tInput : register(t0);
 
-cbuffer ShaderParameters : register(b0)
+struct PassParameters
 {
-    uint2 cTargetDimensions;
-    float2 cTargetDimensionsInv;
-}
-
-struct CS_INPUT
-{
-    uint3 DispatchThreadId : SV_DispatchThreadID;
+    uint2 TargetDimensions;
+    float2 TargetDimensionsInv;
 };
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void CSMain(CS_INPUT input)
+void CSMain(uint3 threadID : SV_DispatchThreadID)
 {
-    if (input.DispatchThreadId.x < cTargetDimensions.x && input.DispatchThreadId.y < cTargetDimensions.y)
+    if (threadID.x < cPassParameters.TargetDimensions.x && threadID.y < cPassParameters.TargetDimensions.y)
     {
-        uOutput[input.DispatchThreadId.xy] = tInput.SampleLevel(sLinearClamp, ((float2)input.DispatchThreadId.xy + 0.5f) * cTargetDimensionsInv, 0);
+        uOutput[threadID.xy] = tInput.SampleLevel(sLinearClamp, ((float2)threadID.xy + 0.5f) * cPassParameters.TargetDimensionsInv, 0);
     }
 }

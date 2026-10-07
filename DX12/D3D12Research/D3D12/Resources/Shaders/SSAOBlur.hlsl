@@ -9,13 +9,15 @@
 #define BLUR_WEIGHTS 2 * KERNEL_LENGTH + 1
 #define GS_CACHE_SIZE (KERNEL_LENGTH + THREAD_GROUP_SIZE + KERNEL_LENGTH)
 
-cbuffer ShaderParameters : register(b0)
+struct PassParameters
 {
-    float2 cInvDimensions;
-    int cHorizontal;
-    float cFar;
-    float cNear;
-}
+    float2 InvDimensions;
+    int Horizontal;
+    float Far;
+    float Near;
+};
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 Texture2D tDepthTexture : register(t0);
 Texture2D tAmbientOcclusion : register(t1);
@@ -49,23 +51,26 @@ struct CS_INPUT
 
 [RootSignature(RootSig)]
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
-void CSMain(CS_INPUT input)
+void CSMain(uint3 threadID : SV_DispatchThreadID, 
+    uint groupIndex : SV_GroupIndex, 
+    uint3 groupId : SV_GroupID, 
+    uint3 groupThreadId : SV_GroupThreadID)
 {
-    float2 direction = float2(cHorizontal, 1 - cHorizontal);
+    float2 direction = float2(cPassParameters.Horizontal, 1 - cPassParameters.Horizontal);
     uint2 multiplier = direction * THREAD_GROUP_SIZE + (1 - direction) * 1;
-    uint2 groupBegin = input.GroupId.xy * multiplier;
+    uint2 groupBegin = groupId.xy * multiplier;
 
     int i;
-    for (i = input.GroupIndex; i < GS_CACHE_SIZE; i += THREAD_GROUP_SIZE)
+    for (i = groupIndex; i < GS_CACHE_SIZE; i += THREAD_GROUP_SIZE)
     {
-        float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cInvDimensions;
+        float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cPassParameters.InvDimensions;
         gAoCache[i] = tAmbientOcclusion.SampleLevel(sLinearClamp, uv, 0).r;
-        gDepthCache[i] = LinearizeDepth01(tDepthTexture.SampleLevel(sLinearClamp, uv, 0).r, cNear, cFar);
+        gDepthCache[i] = LinearizeDepth01(tDepthTexture.SampleLevel(sLinearClamp, uv, 0).r, cPassParameters.Near, cPassParameters.Far);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    uint center = input.GroupIndex + KERNEL_LENGTH;
+    uint center = groupIndex + KERNEL_LENGTH;
     float currentAo = gAoCache[center];
     float currentSceneDepth = gDepthCache[center];
 
@@ -78,6 +83,6 @@ void CSMain(CS_INPUT input)
         avgOcclusion += lerp(gAoCache[samplePoint], currentAo, weight) * s_BlurWeightsNormalized[i];
     }
 
-    int2 pixel = groupBegin + input.GroupIndex * direction;
+    int2 pixel = groupBegin + groupIndex * direction;
     uAmbientOcclusion[pixel] = avgOcclusion;
 }

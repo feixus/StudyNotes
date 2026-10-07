@@ -35,15 +35,15 @@ struct PerViewData
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
 ConstantBuffer<PerViewData> cViewData : register(b1);
 
-struct PSInput
+struct InterpolantsVSToPS
 {
-    float4 position : SV_POSITION;
-    float3 positionWS : POSITION_WS;
-    float3 positionVS : POSITION_VS;
-    float2 texCoord : TEXCOORD;
-    float3 normal : NORMAL;
-    float4 tangent : TANGENT;
-    uint seed : SEED;
+    float4 Position : SV_Position;
+    float3 PositionWS : POSITION_WS;
+    float3 PositionVS : POSITION_VS;
+    float2 UV : TEXCOORD;
+    float3 Normal : NORMAL;
+    float4 Tangent : TANGENT;
+    uint Seed : SEED;
 };
 
 Texture3D<float4> tLightScattering : register(t2);
@@ -153,7 +153,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
     return totalResult;
 }
 
-float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R, inout float ssrWeight)
+float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, float3 V, float R, inout float ssrWeight)
 {
     float3 ssr = 0;
     const float roughnessThreshold = 0.6f;
@@ -165,12 +165,12 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
         if (dot(V, reflectionWs) <= reflectionThreshold)
         {
             uint frameIndex = cViewData.FrameIndex;
-            float jitter = InterleavedGradientNoise(position.xy, frameIndex) - 1.0f;
+            float jitter = InterleavedGradientNoise(Position.xy, frameIndex) - 1.0f;
 
             uint maxSteps = cViewData.SsrSamples;
 
-            float3 rayStartVS = positionVS;
-            float linearDepth = positionVS.z;
+            float3 rayStartVS = PositionVS;
+            float linearDepth = PositionVS.z;
             float3 reflectionVs = mul(reflectionWs, (float3x3)cViewData.View);
             float3 rayEndVs = rayStartVS + (reflectionVs * linearDepth);
 
@@ -220,12 +220,12 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
             float4 hitColor = 0;
             if (hitIndex > 0)
             {
-                float4 texCoord = float4(bestHit.xy, 0, 1);
-                texCoord = mul(texCoord, cViewData.ReprojectionMatrix);
-                float2 distanceFromCenter = float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - float2(1.0f, 1.0f);
+                float4 UV = float4(bestHit.xy, 0, 1);
+                UV = mul(UV, cViewData.ReprojectionMatrix);
+                float2 distanceFromCenter = float2(UV.x, 1.0f - UV.y) * 2.0f - float2(1.0f, 1.0f);
                 float edgeAttenuation = saturate((1.0f - (float(hitIndex) / maxSteps)) * 4.0f);
                 edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0f - dot(distanceFromCenter, distanceFromCenter)));
-                float3 reflectionResult = tPreviousSceneColor.SampleLevel(sLinearClamp, texCoord.xy, 0).xyz;
+                float3 reflectionResult = tPreviousSceneColor.SampleLevel(sLinearClamp, UV.xy, 0).xyz;
                 hitColor = float4(reflectionResult, edgeAttenuation);
             }
 
@@ -244,21 +244,21 @@ T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
     return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
 }
 
-PSInput FetchVertexAttributes(MeshInstance instance, MeshData mesh, uint vertexId)
+InterpolantsVSToPS FetchVertexAttributes(MeshInstance instance, MeshData mesh, uint vertexId)
 {
-    PSInput result;
+    InterpolantsVSToPS result;
     float3 position = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
-    result.positionWS = mul(float4(position, 1.0f), instance.World).xyz;
-    result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
-    result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
+    result.PositionWS = mul(float4(position, 1.0f), instance.World).xyz;
+    result.PositionVS = mul(float4(result.PositionWS, 1.0f), cViewData.View).xyz;
+    result.Position = mul(float4(result.PositionWS, 1.0f), cViewData.ViewProjection);
 
-    result.texCoord = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+    result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
     NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-    result.normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
-    result.tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
+    result.Normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
+    result.Tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
     
-    result.seed = mesh.PositionsOffset;
+    result.Seed = mesh.PositionsOffset;
 
     return result;
 }
@@ -330,7 +330,7 @@ void MSMain(
     in uint groupThreadID : SV_GroupIndex,
     in payload PayloadData payload,
     in uint groupID : SV_GroupID,
-    out vertices PSInput verts[MESHLET_MAX_VERTICES],
+    out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
     out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
 {
     MeshInstance instance = tMeshInstances[cObjectData.Index];
@@ -349,8 +349,8 @@ void MSMain(
     for (uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
     {
         uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
-        PSInput result = FetchVertexAttributes(instance, mesh, vertexId);
-        result.seed = meshletIndex;
+        InterpolantsVSToPS result = FetchVertexAttributes(instance, mesh, vertexId);
+        result.Seed = meshletIndex;
         verts[i] = result;
     }
 
@@ -398,34 +398,34 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
 }
 
 [RootSignature(RootSig)]
-PSInput VSMain(uint vertexId : SV_VertexID)
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
     MeshInstance instance = tMeshInstances[cObjectData.Index];
     MeshData mesh = tMeshes[instance.Mesh];
-    PSInput result = FetchVertexAttributes(instance, mesh, vertexId);
+    InterpolantsVSToPS result = FetchVertexAttributes(instance, mesh, vertexId);
     return result;
 }
 
-void PSMain(PSInput input,
+void PSMain(InterpolantsVSToPS input,
             float3 bary : SV_Barycentrics,
             out float4 outColor : SV_Target0,
             out float4 outNormalRoughness : SV_Target1)
 {
-    float2 screenUV = (float2)input.position.xy * cViewData.InvScreenDimensions;
+    float2 screenUV = (float2)input.Position.xy * cViewData.InvScreenDimensions;
     float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r; 
-    float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
+    float3 V = normalize(cViewData.ViewPosition.xyz - input.PositionWS);
 
     MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MaterialProperties material = GetMaterialProperties(instance.Material, input.texCoord);
-    float3x3 TBN = CreateTangentToWorld(normalize(input.normal), float4(normalize(input.tangent.xyz), 1));
+    MaterialProperties material = GetMaterialProperties(instance.Material, input.UV);
+    float3x3 TBN = CreateTangentToWorld(normalize(input.Normal), float4(normalize(input.Tangent.xyz), 1));
     float3 N = TangentSpaceNormalMapping(material.NormalTS, TBN);
 
     BrdfData brdf = GetBrdfData(material);
 
     float ssrWeight = 0.0f;
-    float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, brdf.Roughness, ssrWeight);
+    float3 ssr = ScreenSpaceReflections(input.Position, input.PositionVS, N, V, brdf.Roughness, ssrWeight);
 
-    LightResult lighting = DoLight(input.position, input.positionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
+    LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
 
     float3 outRadiance = 0;
     outRadiance += lighting.Diffuse + lighting.Specular;
@@ -435,7 +435,7 @@ void PSMain(PSInput input,
 
 // hack: volfog only working in clustered path right now...
 #if CLUSTERED_FORWARD
-    float fogSlice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
+    float fogSlice = sqrt((input.PositionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
     float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
     outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 #else
@@ -449,9 +449,9 @@ void PSMain(PSInput input,
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
-    outNormalRoughness = float4(input.normal, 0);
+    outNormalRoughness = float4(input.Normal, 0);
 
-    uint seed = SeedThread(input.seed);
+    uint seed = SeedThread(input.Seed);
     outColor = float4(Random01(seed), Random01(seed), Random01(seed), 1);
 
     float3 deltas = fwidth(bary);

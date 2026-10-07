@@ -13,11 +13,13 @@
 #define TONEMAP_UNREAL3 3
 #define TONEMAP_UNCHARTED2 4
 
-cbuffer Parameters : register(b0)
+struct PassParameters
 {
-    float cWhitePoint;
-    uint cTonemapper;
-}
+    float WhitePoint;
+    uint Tonemapper;
+};
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 Texture2D tColorTexture : register(t0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
@@ -47,13 +49,13 @@ void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
     float exposure = tAverageLuminance[2];
     value *= (exposure + 1);
 
-    switch(cTonemapper)
+    switch(cPassParameters.Tonemapper)
     {
     case TONEMAP_REINHARD:
         value = Reinhard(value);
         break;
     case TONEMAP_REINHARD_EXTENDED:
-        value = ReinhardExtended(value, cWhitePoint);
+        value = ReinhardExtended(value, cPassParameters.WhitePoint);
         break;
     case TONEMAP_ACES_FAST:
         value = ACES_Fast(value);
@@ -73,7 +75,7 @@ void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
     rgb = value;
 #endif
 
-    if (cTonemapper != TONEMAP_UNREAL3)
+    if (cPassParameters.Tonemapper != TONEMAP_UNREAL3)
     {
         rgb = LinearToSrgbFast(rgb);
     }

@@ -7,36 +7,32 @@
 #define BLOCK_SIZE 16
 #define THREAD_COUNT (BLOCK_SIZE * BLOCK_SIZE)
 
+struct PassParameters
+{
+    float Near;
+    float Far;
+};
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
+
 #if WITH_MSAA
-Texture2DMS<float> tDepthMap : register(t0);
+    Texture2DMS<float> tDepthMap : register(t0);
 #else
-Texture2D<float> tDepthMap : register(t0);
+    Texture2D<float> tDepthMap : register(t0);
 #endif
 
 Texture2D<float2> tReductionMap : register(t0);
 RWTexture2D<float2> uOutputMap : register(u0);
-
-cbuffer ShaderParameters : register(b0)
-{
-    float cNear;
-    float cFar;
-}
-
-struct CS_INPUT
-{
-    uint3 DispatchThreadId : SV_DispatchThreadID;
-    uint GroupIndex : SV_GroupIndex;
-    uint3 GroupId : SV_GroupID;
-    uint3 GroupThreadId : SV_GroupThreadID;
-};
-
 groupshared float2 gsDepthSamples[BLOCK_SIZE * BLOCK_SIZE];
 
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void PrepareReduceDepth(CS_INPUT input)
+void PrepareReduceDepth(uint3 threadID : SV_DispatchThreadID, 
+    uint groupIndex : SV_GroupIndex, 
+    uint3 groupId : SV_GroupID, 
+    uint3 groupThreadId : SV_GroupThreadID)
 {
-    uint2 samplePos = input.GroupId.xy * BLOCK_SIZE + input.GroupThreadId.xy;
+    uint2 samplePos = groupId.xy * BLOCK_SIZE + groupThreadId.xy;
 
 #if WITH_MSAA
     uint2 dimensions;
@@ -52,12 +48,12 @@ void PrepareReduceDepth(CS_INPUT input)
         float depth = tDepthMap.Load(samplePos, sampleIdx);
         if (depth > 0.0f)
         {
-            depth = LinearizeDepth01(depth, cNear, cFar);
+            depth = LinearizeDepth01(depth, cPassParameters.Near, cPassParameters.Far);
             depthMin = min(depthMin, depth);
             depthMax = max(depthMax, depth);
         }
     }
-    gsDepthSamples[input.GroupIndex] = float2(depthMin, depthMax);
+    gsDepthSamples[groupIndex] = float2(depthMin, depthMax);
 #else
     uint2 dimensions;
     tDepthMap.GetDimensions(dimensions.x, dimensions.y);
@@ -65,57 +61,60 @@ void PrepareReduceDepth(CS_INPUT input)
     float depth = tDepthMap[samplePos];
     if (depth > 0.0f)
     {
-        depth = LinearizeDepth01(depth, cNear, cFar);
+        depth = LinearizeDepth01(depth, cPassParameters.Near, cPassParameters.Far);
     }
-    gsDepthSamples[input.GroupIndex] = float2(depth, depth);
+    gsDepthSamples[groupIndex] = float2(depth, depth);
 #endif
 
     GroupMemoryBarrierWithGroupSync();
 
     for (uint s = THREAD_COUNT / 2; s > 0; s >>= 1)
     {
-        if (input.GroupIndex < s)
+        if (groupIndex < s)
         {
-            gsDepthSamples[input.GroupIndex].x = min(gsDepthSamples[input.GroupIndex].x, gsDepthSamples[input.GroupIndex + s].x);
-            gsDepthSamples[input.GroupIndex].y = max(gsDepthSamples[input.GroupIndex].y, gsDepthSamples[input.GroupIndex + s].y);
+            gsDepthSamples[groupIndex].x = min(gsDepthSamples[groupIndex].x, gsDepthSamples[groupIndex + s].x);
+            gsDepthSamples[groupIndex].y = max(gsDepthSamples[groupIndex].y, gsDepthSamples[groupIndex + s].y);
         }
         GroupMemoryBarrierWithGroupSync();
     }
 
-    if (input.GroupIndex == 0)
+    if (groupIndex == 0)
     {
-        uOutputMap[input.GroupId.xy] = gsDepthSamples[0];
+        uOutputMap[groupId.xy] = gsDepthSamples[0];
     }
 }
 
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void ReduceDepth(CS_INPUT input)
+void ReduceDepth(uint3 threadID : SV_DispatchThreadID, 
+    uint groupIndex : SV_GroupIndex, 
+    uint3 groupId : SV_GroupID, 
+    uint3 groupThreadId : SV_GroupThreadID)
 {
     uint2 dimensions;
     tReductionMap.GetDimensions(dimensions.x, dimensions.y);
 
-    uint2 samplePos = input.GroupId.xy * BLOCK_SIZE + input.GroupThreadId.xy;
+    uint2 samplePos = groupId.xy * BLOCK_SIZE + groupThreadId.xy;
     samplePos = min(samplePos, dimensions - 1);
 
     float minDepth = tReductionMap[samplePos].x;
     float maxDepth = tReductionMap[samplePos].y;
-    gsDepthSamples[input.GroupIndex] = float2(minDepth, maxDepth);
+    gsDepthSamples[groupIndex] = float2(minDepth, maxDepth);
 
     GroupMemoryBarrierWithGroupSync();
 
     for (uint s = THREAD_COUNT / 2; s > 0; s >>= 1)
     {
-        if (input.GroupIndex < s)
+        if (groupIndex < s)
         {
-            gsDepthSamples[input.GroupIndex].x = min(gsDepthSamples[input.GroupIndex].x, gsDepthSamples[input.GroupIndex + s].x);
-            gsDepthSamples[input.GroupIndex].y = max(gsDepthSamples[input.GroupIndex].y, gsDepthSamples[input.GroupIndex + s].y);
+            gsDepthSamples[groupIndex].x = min(gsDepthSamples[groupIndex].x, gsDepthSamples[groupIndex + s].x);
+            gsDepthSamples[groupIndex].y = max(gsDepthSamples[groupIndex].y, gsDepthSamples[groupIndex + s].y);
         }
         GroupMemoryBarrierWithGroupSync();
     }
 
-    if (input.GroupIndex == 0)
+    if (groupIndex == 0)
     {
-        uOutputMap[input.GroupId.xy] = gsDepthSamples[0];
+        uOutputMap[groupId.xy] = gsDepthSamples[0];
     }
 }

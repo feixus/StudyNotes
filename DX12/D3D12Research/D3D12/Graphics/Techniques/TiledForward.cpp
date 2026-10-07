@@ -105,6 +105,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 Matrix ViewProjection;
                 Matrix ReprojectionMatrix;
                 Vector4 ViewPosition;
+                Vector4 FrustumPlanes[6];
                 Vector2 InvScreenDimensions;
                 float NearZ;
                 float FarZ;
@@ -114,6 +115,14 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
 				int padd;
             } frameData{};
 
+            DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
+            inputResource.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &left, &right, &top, &bottom);
+            frameData.FrustumPlanes[0] = Vector4(nearPlane);
+            frameData.FrustumPlanes[1] = Vector4(farPlane);
+            frameData.FrustumPlanes[2] = Vector4(left);
+            frameData.FrustumPlanes[3] = Vector4(right);
+            frameData.FrustumPlanes[4] = Vector4(top);
+            frameData.FrustumPlanes[5] = Vector4(bottom);
             frameData.View = inputResource.pCamera->GetView();
             frameData.Projection = inputResource.pCamera->GetProjection();
             frameData.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();

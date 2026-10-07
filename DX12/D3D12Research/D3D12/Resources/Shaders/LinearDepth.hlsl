@@ -6,28 +6,25 @@
 
 #define BLOCK_SIZE 16
 
+struct PassParameters
+{
+    float Near;
+    float Far;
+};
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
+
 RWTexture2D<float> uOutput : register(u0);
 Texture2D<float> tInput : register(t0);
 
-cbuffer ShaderParameters : register(b0)
-{
-    float cNear;
-    float cFar;
-}
-
-struct CS_INPUT
-{
-    uint3 DispatchThreadId : SV_DispatchThreadID;
-};
-
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void CSMain(CS_INPUT input)
+void CSMain(uint3 threadID : SV_DispatchThreadID)
 {
     uint width, height;
     uOutput.GetDimensions(width, height);
-    if (input.DispatchThreadId.x < width && input.DispatchThreadId.y < height)
+    if (threadID.x < width && threadID.y < height)
     {
-        uOutput[input.DispatchThreadId.xy] = LinearizeDepth01(tInput[input.DispatchThreadId.xy], cNear, cFar);
+        uOutput[threadID.xy] = LinearizeDepth01(tInput[threadID.xy], cPassParameters.Near, cPassParameters.Far);
     }
 }

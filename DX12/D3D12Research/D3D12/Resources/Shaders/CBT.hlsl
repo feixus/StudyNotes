@@ -435,7 +435,7 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 
 struct VertexOut
 {
-	float4 Position : SV_POSITION;
+	float4 Position : SV_Position;
 	float2 UV : TEXCOORD;
 	uint HeapIndex : HEAP_INDEX;
 };
@@ -578,7 +578,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 
 #if SUPPORT_BARYCENTRIC <= 0
 
-float4 RenderPS(VertexOut vertex) : SV_TARGET
+float4 RenderPS(VertexOut vertex) : SV_Target
 {
 	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1, -1)).r;
 	float t = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(0, -1)).r;
@@ -607,14 +607,14 @@ float4 RenderPS(VertexOut vertex) : SV_TARGET
 	return output;
 }
 
-float4 DebugVisualizePS(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+float4 DebugVisualizePS(float4 position : SV_Position, float4 color : COLOR) : SV_Target
 {
 	return color;
 }
 
 #else
 
-float4 RenderPS(VertexOut vertex, float3 bary : SV_Barycentrics) : SV_TARGET
+float4 RenderPS(VertexOut vertex, float3 bary : SV_Barycentrics) : SV_Target
 {
 	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1, -1)).r;
 	float t = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(0, -1)).r;
@@ -653,9 +653,9 @@ float4 RenderPS(VertexOut vertex, float3 bary : SV_Barycentrics) : SV_TARGET
 }
 
 float4 DebugVisualizePS(
- 	float4 position : SV_POSITION,
+ 	float4 position : SV_Position,
  	float4 color : COLOR,
- 	float3 bary : SV_Barycentrics) : SV_TARGET
+ 	float3 bary : SV_Barycentrics) : SV_Target
 {
 	float3 deltas = fwidth(bary);
 	float3 smoothing = deltas * 1;
@@ -667,7 +667,7 @@ float4 DebugVisualizePS(
 
 #endif
 
-void DebugVisualizeVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out float4 pos : SV_POSITION, out float4 color : COLOR)
+void DebugVisualizeVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out float4 pos : SV_Position, out float4 color : COLOR)
 {
 	CBT cbt;
 	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);

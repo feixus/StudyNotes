@@ -12,21 +12,22 @@ struct ParticleData
     float Size;
 };
 
-cbuffer FrameData : register(b0)
+struct PassParameters
 {
-    float4x4 cViewInverse;
-    float4x4 cView;
-    float4x4 cProjection;
-}
+    float4x4 ViewInverse;
+    float4x4 View;
+    float4x4 Projection;
+};
 
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
 StructuredBuffer<ParticleData> tParticleData : register(t0);
 StructuredBuffer<uint> tAliveList : register(t1);
 
-struct PS_INPUT
+struct InterpolantsVSToPS
 {
-    float4 position : SV_POSITION;
-    float2 texCoord : TEXCOORD0;
-    float4 color : COLOR;
+    float4 Position : SV_Position;
+    float2 UV : TEXCOORD0;
+    float4 Color : COLOR;
 };
 
 static const float3 BILLBOARD[] = {
@@ -40,9 +41,9 @@ static const float3 BILLBOARD[] = {
 };
 
 [RootSignature(RootSig)]
-PS_INPUT VSMain(uint vertexId : SV_VertexID)
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-    PS_INPUT output;
+    InterpolantsVSToPS output;
 
     uint vertexID = vertexId % 6;
     uint instanceId = vertexId / 6;
@@ -51,23 +52,23 @@ PS_INPUT VSMain(uint vertexId : SV_VertexID)
     ParticleData particle = tParticleData[particleIndex];
     float3 quadPos = particle.Size * BILLBOARD[vertexID];
 
-    output.position = float4(mul(quadPos, (float3x3)cViewInverse), 1);
-    output.position.xyz += particle.Position;
-    output.position = mul(output.position, cView);
-    output.position = mul(output.position, cProjection);
+    output.Position = float4(mul(quadPos, (float3x3)cPassParameters.ViewInverse), 1);
+    output.Position.xyz += particle.Position;
+    output.Position = mul(output.Position, cPassParameters.View);
+    output.Position = mul(output.Position, cPassParameters.Projection);
     
     // Calculate color based on lifetime
     float lifeFactor = particle.LifeTime / 4.0f; // Assuming max lifetime is 4
-    output.color = float4(1.0f - lifeFactor, lifeFactor, 0.0f, 1.0f); // Gradient from red to green
-    output.texCoord = BILLBOARD[vertexID].xy * 0.5f + 0.5f;
+    output.Color = float4(1.0f - lifeFactor, lifeFactor, 0.0f, 1.0f); // Gradient from red to green
+    output.UV = BILLBOARD[vertexID].xy * 0.5f + 0.5f;
 
     return output;
 }
 
-float4 PSMain(PS_INPUT input) : SV_TARGET
+float4 PSMain(InterpolantsVSToPS input) : SV_TARGET
 {
-    float alpha = 1 - saturate(2 * length(input.texCoord - 0.5f));
-    return float4(input.color.xyz, alpha);
+    float alpha = 1 - saturate(2 * length(input.UV - 0.5f));
+    return float4(input.Color.xyz, alpha);
 }
 
 

@@ -26,27 +26,31 @@ struct CS_INPUT
     uint GroupIndex : SV_GROUPINDEX;
 };
 
-cbuffer SimulationParameters : register(b0)
+struct SimulationParameters
 {
-    int cEmitCount;
-}
+    int EmitCount;
+};
 
-cbuffer EmitParameters : register(b0)
+struct EmitParameters
 {
-    float4 cRandomDirections[64];
-    float4 cOrigin;
-}
+    float4 RandomDirections[64];
+    float4 Origin;
+};
 
-cbuffer SimulateParameters : register(b0)
+struct SimulateParameters
 {
-    float4x4 cViewProjection;
-    float4x4 cViewProjectionInv;
-    float2 cViewDimensionsInv;
-    float cDeltaTime;
-    float cParticleLifetime;
-    float cNear;
-    float cFar;
-}
+    float4x4 ViewProjection;
+    float4x4 ViewProjectionInv;
+    float2 ViewDimensionsInv;
+    float DeltaTime;
+    float ParticleLifetime;
+    float Near;
+    float Far;
+};
+
+ConstantBuffer<SimulationParameters> cSimulationParameters : register(b0);
+ConstantBuffer<EmitParameters> cEmitParameters : register(b0);
+ConstantBuffer<SimulateParameters> cSimulateParameters : register(b0);
 
 RWByteAddressBuffer uCounters : register(u0);
 RWByteAddressBuffer uEmitArguments : register(u1);
@@ -76,7 +80,7 @@ void UpdateSimulationParameters(CS_INPUT input)
     uint deadCount = uCounters.Load(DEAD_LIST_COUNTER);
     uint aliveParticleCount = uCounters.Load(ALIVE_LIST_2_COUNTER);
 
-    uint emitCount = min(deadCount, cEmitCount);
+    uint emitCount = min(deadCount, cSimulationParameters.EmitCount);
 
     uEmitArguments.Store3(0, uint3(ceil((float)emitCount / 128), 1, 1));
     uint simulateCount = ceil((float)(aliveParticleCount + emitCount) / 128);
@@ -101,7 +105,7 @@ void Emit(CS_INPUT input)
 
         ParticleData p;
         p.LifeTime = 0;
-        p.Position = cOrigin.xyz;
+        p.Position = cEmitParameters.Origin.xyz;
         p.Velocity = (Random01(seed) + 1) * 30 * RandomDirection(seed);
         p.Size = (float)Random(deadSlot, 10, 30) / 100.0f;
         uParticleData[particleIndex] = p;
@@ -120,20 +124,20 @@ void Simulate(CS_INPUT input)
     {
         uint particleIndex = uAliveList1[input.DispatchThreadId.x];
         ParticleData p = uParticleData[particleIndex];
-        if (p.LifeTime < cParticleLifetime)
+        if (p.LifeTime < cSimulateParameters.ParticleLifetime)
         {
-            float4 screenPos = mul(float4(p.Position, 1), cViewProjection);
+            float4 screenPos = mul(float4(p.Position, 1), cSimulateParameters.ViewProjection);
             screenPos.xyz /= screenPos.w;
             if (screenPos.x > -1 && screenPos.x < 1 && screenPos.y > -1 && screenPos.y < 1)
             {
                 float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
                 float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
-                float linerarDepth = LinearizeDepth(depth, cNear, cFar);
+                float linearDepth = LinearizeDepth(depth, cSimulateParameters.Near, cSimulateParameters.Far);
                 const float thickness = 1.0f;
 
-                if (screenPos.w + p.Size > linerarDepth && screenPos.w - p.Size - thickness < linerarDepth)
+                if (screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
                 {
-                    float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cViewDimensionsInv, cViewProjectionInv);
+                    float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cSimulateParameters.ViewDimensionsInv, cSimulateParameters.ViewProjectionInv);
                     if (dot(normal, p.Velocity) < 0)
                     {
                         p.Velocity = reflect(p.Velocity, normal) * 0.85f;
@@ -141,9 +145,9 @@ void Simulate(CS_INPUT input)
                 }
             }
 
-            p.Velocity += float3(0, -9.81f * cDeltaTime * 5, 0);
-            p.Position += p.Velocity * cDeltaTime;
-            p.LifeTime += cDeltaTime;
+            p.Velocity += float3(0, -9.81f * cSimulateParameters.DeltaTime * 5, 0);
+            p.Position += p.Velocity * cSimulateParameters.DeltaTime;
+            p.LifeTime += cSimulateParameters.DeltaTime;
             uParticleData[particleIndex] = p;
 
             uint aliveSlot;

@@ -10,18 +10,20 @@
 #define BLOCK_SIZE 16
 #define SPLITZ_CULLING 1
 
-cbuffer ShaderParameters : register(b0)
+struct ShaderParameters
 {
-	float4x4 cView;
-    float4x4 cProjectionInverse;
-	uint4 cNumThreadGroups;
-    float2 cScreenDimensionsInv;
-    uint cLightCount;
-}
+	float4x4 View;
+    float4x4 ProjectionInverse;
+	uint4 NumThreadGroups;
+    float2 ScreenDimensionsInv;
+    uint LightCount;
+};
 
-StructuredBuffer<Light> tSceneLights : register(t1);
+ConstantBuffer<ShaderParameters> cShaderParameters : register(b0);
 
 Texture2D tDepthTexture : register(t0);
+StructuredBuffer<Light> tSceneLights : register(t1);
+
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uOpaqueLightIndexList : register(u1);
 RWTexture2D<uint2> uOpaqueOutLightGrid : register(u2);
@@ -45,14 +47,6 @@ groupshared uint TransparentLightList[MAX_LIGHTS_PER_TILE];
 #if SPLITZ_CULLING
 groupshared uint DepthMask;
 #endif
-
-struct CS_INPUT
-{
-	uint3 GroupId : SV_GroupID;						// 3D index of the group in the dispatch
-	uint3 GroupThreadId : SV_GroupThreadID;			// local 3D index of a thread
-	uint3 DispatchThreadId : SV_DispatchThreadID;	// global 3D index of a thread
-	uint GroupIndex : SV_GroupIndex;				// index of the thread in the group
-};
 
 void AddLightForOpaque(uint lightIndex)
 {
@@ -92,16 +86,16 @@ uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
 
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void CSMain(CS_INPUT input)
+void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_GroupThreadID, uint groupIndex : SV_GroupIndex)
 {
-    int2 texCoord = input.DispatchThreadId.xy;
+    int2 texCoord = threadID.xy;
     float fDepth = tDepthTexture[texCoord].r;
     
     // convert to uint because cant use interlocked functions on float
     uint depth = asuint(fDepth);
     
     // initialize the groupshared data only on the first thread of the group
-    if (input.GroupIndex == 0)
+    if (groupIndex == 0)
     {
         MinDepth = 0xffffffff;
         MaxDepth = 0;
@@ -126,17 +120,17 @@ void CSMain(CS_INPUT input)
     float fMaxDepth = asfloat(MinDepth);
 
     // generate the frustum and AABB for the threadgroup
-    if (input.GroupIndex == 0)
+    if (groupIndex == 0)
     {
         float3 viewSpace[8];
-        viewSpace[0] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
-        viewSpace[1] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
-        viewSpace[2] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
-        viewSpace[3] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
-        viewSpace[4] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
-        viewSpace[5] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
-        viewSpace[6] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
-        viewSpace[7] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cScreenDimensionsInv, cProjectionInverse);
+        viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
+        viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
+        viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
+        viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
+        viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
+        viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
+        viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
+        viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
 
         GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
         GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
@@ -149,13 +143,13 @@ void CSMain(CS_INPUT input)
     }
     
     // convert depth values to view space
-    float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
-    float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
-    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cScreenDimensionsInv, cProjectionInverse).z;
+    float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse).z;
+    float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse).z;
+    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse).z;
 
 #if SPLITZ_CULLING
     // save all the depth in a bitmask on the thread group
-    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
+    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse).z;
     float depthRange = 31.0f / (maxDepthVS - minDepthVS);
     uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
     InterlockedOr(DepthMask, 1u << cellIndex);
@@ -169,14 +163,14 @@ void CSMain(CS_INPUT input)
     GroupMemoryBarrierWithGroupSync();
 
     // perform the light culling
-    for (uint i = input.GroupIndex; i < cLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint i = groupIndex; i < cShaderParameters.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
         Light light = tSceneLights[i];
         if (light.IsPoint())
         {
             Sphere sphere;
             sphere.Radius = light.Range;
-            sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
+            sphere.Position = mul(float4(light.Position, 1.0f), cShaderParameters.View).xyz;
 
             if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
             {
@@ -197,7 +191,7 @@ void CSMain(CS_INPUT input)
         {
             Sphere sphere;
             sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
-            sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
+            sphere.Position = mul(float4(light.Position, 1.0f), cShaderParameters.View).xyz + mul(light.Direction, (float3x3)cShaderParameters.View) * sphere.Radius;
 
             if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
             {
@@ -224,24 +218,24 @@ void CSMain(CS_INPUT input)
     GroupMemoryBarrierWithGroupSync();
 
     // populate the light grid only on the first thread in the group
-    if (input.GroupIndex == 0)
+    if (groupIndex == 0)
     {
         InterlockedAdd(uLightIndexCounter[0], OpaqueLightCount, OpaqueLightIndexStartOffset);
-        uOpaqueOutLightGrid[input.GroupId.xy] = uint2(OpaqueLightIndexStartOffset, OpaqueLightCount);
+        uOpaqueOutLightGrid[groupId.xy] = uint2(OpaqueLightIndexStartOffset, OpaqueLightCount);
 
         InterlockedAdd(uLightIndexCounter[1], TransparentLightCount, TransparentLightIndexStartOffset);
-        uTransparentOutLightGrid[input.GroupId.xy] = uint2(TransparentLightIndexStartOffset, TransparentLightCount);
+        uTransparentOutLightGrid[groupId.xy] = uint2(TransparentLightIndexStartOffset, TransparentLightCount);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
     // distribute populating the light index light amonst threads in the thread group
-    for (uint j = input.GroupIndex; j < OpaqueLightCount; j += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint j = groupIndex; j < OpaqueLightCount; j += BLOCK_SIZE * BLOCK_SIZE)
     {
         uOpaqueLightIndexList[OpaqueLightIndexStartOffset + j] = OpaqueLightList[j];
     }
 
-    for (uint k = input.GroupIndex; k < TransparentLightCount; k += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint k = groupIndex; k < TransparentLightCount; k += BLOCK_SIZE * BLOCK_SIZE)
     {
         uTransparentLightIndexList[TransparentLightIndexStartOffset + k] = TransparentLightList[k];
     }

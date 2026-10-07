@@ -3,33 +3,35 @@
 #define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
                 "CBV(b0, visibility=SHADER_VISIBILITY_VERTEX)")
 
-cbuffer Parameters : register(b0)
+struct PassParameters
 {
-    float4x4 cViewProj;
-}
-
-struct VS_Input
-{
-    float3 position : POSITION;
-    uint color : COLOR;
+    float4x4 ViewProj;
 };
 
-struct PS_Input
+struct VertexInput
 {
-    float4 position : SV_POSITION;
-    float4 color : COLOR;
+    float3 Position : POSITION;
+    uint Color : COLOR;
 };
+
+struct InterpolantsVSToPS
+{
+    float4 Position : SV_Position;
+    float4 Color : COLOR;
+};
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 [RootSignature(RootSig)]
-PS_Input VSMain(VS_Input input)
+InterpolantsVSToPS VSMain(VertexInput input)
 {
-    PS_Input output;
-    output.position = mul(float4(input.position, 1.0), cViewProj);
-    output.color = UIntToColor(input.color);
+    InterpolantsVSToPS output = (InterpolantsVSToPS)0;
+    output.Position = mul(float4(input.Position, 1.0), cPassParameters.ViewProj);
+    output.Color = UIntToColor(input.Color);
     return output;
 }
 
-float4 PSMain(PS_Input input) : SV_TARGET
+float4 PSMain(InterpolantsVSToPS input) : SV_Target
 {
-    return input.color;
+    return input.Color;
 }

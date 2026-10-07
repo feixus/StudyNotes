@@ -5,28 +5,30 @@
 
 #define MAX_LIGHTS_PER_BUCKET 10
 
-cbuffer PerFrameData : register(b0)
+struct GSInput
 {
-    float4x4 cProjection;
-}
+    float4 Color : COLOR;
+    float4 Center : CENTER;
+    float4 Extents : EXTENTS;
+    int LightCount : LIGHTCOUNT;
+};
+
+struct InterpolantsVSToPS
+{
+    float4 Position : SV_POSITION;
+    float4 Color : COLOR;
+};
+
+struct PassParameters
+{
+    float4x4 Projection;
+};
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 StructuredBuffer<AABB> tAABBs : register(t0);
 StructuredBuffer<uint2> tLightGrid : register(t1);
 Texture2D tHeatmapTexture : register(t2);
-
-struct GSInput
-{
-    float4 color : COLOR;
-    float4 center : CENTER;
-    float4 extents : EXTENTS;
-    int lightCount : LIGHTCOUNT;
-};
-
-struct PSInput
-{
-    float4 position : SV_POSITION;
-    float4 color : COLOR;
-};
 
 [RootSignature(RootSigVS)]
 GSInput VSMain(uint vertexId : SV_VertexID)
@@ -36,25 +38,25 @@ GSInput VSMain(uint vertexId : SV_VertexID)
     uint clusterIndex = vertexId;
     AABB aabb = tAABBs[clusterIndex];
 
-    output.center = aabb.Center;
-    output.extents = aabb.Extents;
+    output.Center = aabb.Center;
+    output.Extents = aabb.Extents;
 
-    output.lightCount = tLightGrid[clusterIndex].y;
-    output.color = tHeatmapTexture.SampleLevel(sLinearClamp, float2((float)output.lightCount / MAX_LIGHTS_PER_BUCKET, 0), 0);
+    output.LightCount = tLightGrid[clusterIndex].y;
+    output.Color = tHeatmapTexture.SampleLevel(sLinearClamp, float2((float)output.LightCount / MAX_LIGHTS_PER_BUCKET, 0), 0);
 
     return output;
 }
 
 [maxvertexcount(16)]
-void GSMain(point GSInput input[1], inout TriangleStream<PSInput> outStream)
+void GSMain(point GSInput input[1], inout TriangleStream<InterpolantsVSToPS> outStream)
 {
-    if (input[0].lightCount == 0)
+    if (input[0].LightCount == 0)
     {
         return;
     }
 
-    float4 center = input[0].center;
-    float4 extents = input[0].extents;
+    float4 center = input[0].Center;
+    float4 extents = input[0].Extents;
 
     float4 positions[8] = {
         center + float4(-extents.x, -extents.y, -extents.z, 1.0f),
@@ -85,15 +87,15 @@ void GSMain(point GSInput input[1], inout TriangleStream<PSInput> outStream)
         }
         else
         {
-            PSInput output;
-            output.position = mul(positions[indices[i]], cProjection);
-            output.color = input[0].color;
+            InterpolantsVSToPS output;
+            output.Position = mul(positions[indices[i]], cPassParameters.Projection);
+            output.Color = input[0].Color;
             outStream.Append(output);
         }
     }
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+float4 PSMain(InterpolantsVSToPS input) : SV_Target
 {
-    return float4(input.color.rgb, 0.2f);
+    return float4(input.Color.rgb, 0.2f);
 }

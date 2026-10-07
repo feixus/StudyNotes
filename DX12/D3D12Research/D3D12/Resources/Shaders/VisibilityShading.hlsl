@@ -174,8 +174,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         vertices[i].Position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
         vertices[i].UV = UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint)));
         NormalData normalData = meshBuffer.Load<NormalData>(mesh.NormalsOffset + vertexId * sizeof(NormalData));
-		vertices[i].Normal += normalData.Normal;
-		vertices[i].Tangent += normalData.Tangent;
+		vertices[i].Normal = normalData.Normal;
+		vertices[i].Tangent = normalData.Tangent;
 	}
 
     float2 ndc = (float2)dispatchThreadId.xy * rcp(cViewData.ScreenDimensions) * 2.0f - 1.0f;

@@ -4,50 +4,52 @@
                 "CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 4), visibility = SHADER_VISIBILITY_PIXEL)")
                 
-struct VSInput
+struct VertexInput
 {
-    float3 position : POSITION;
-    float2 texCoord : TEXCOORD;
+    float3 Position : POSITION;
+    float2 UV : TEXCOORD;
 };
 
-struct PSInput
+struct InterpolantsVSToPS
 {
-    float4 position : SV_POSITION;
-    float2 texCoord : TEXCOORD;
-    float4 ray : RAY;
+    float4 Position : SV_POSITION;
+    float2 UV : TEXCOORD;
+    float4 Ray : RAY;
 };
+
+struct PassParameters
+{
+    float4 NoiseWeights;
+    float4 FrustumCorners[4];
+    float4x4 ViewInverse;
+    float FarPlane;
+    float NearPlane;
+
+    float CloudScale;
+    float CloudThreshold;
+    float3 CloudOffset;
+    float CloudDensity;
+
+    float3 MinExtents;
+    float3 MaxExtents;
+    float3 SunDirection;
+    float3 SunColor;
+};
+
+ConstantBuffer<PassParameters> cPassParameters : register(b0); 
 
 Texture2D tSceneTexture : register(t0);
 Texture2D tDepthTexture : register(t1);
 Texture3D tCloudsTexture : register(t2);
 Texture2D tVerticalDensity : register(t3);
 
-cbuffer Constants : register(b0)
-{
-    float4 cNoiseWeights;
-    float4 cFrustumCorners[4];
-    float4x4 cViewInverse;
-    float cFarPlane;
-    float cNearPlane;
-
-    float cCloudScale;
-    float cCloudThreshold;
-    float3 cCloudOffset;
-    float cCloudDensity;
-
-    float3 cMinExtents;
-    float3 cMaxExtents;
-    float3 cSunDirection;
-    float3 cSunColor;
-}
-
 [RootSignature(RootSig)]
-PSInput VSMain(VSInput input)
+InterpolantsVSToPS VSMain(VertexInput input)
 {
-    PSInput output;
-    output.position = float4(input.position.xy, 0, 1);
-    output.texCoord = input.texCoord;
-    output.ray = mul(cFrustumCorners[int(input.position.z)], cViewInverse);
+    InterpolantsVSToPS output;
+    output.Position = float4(input.Position.xy, 0, 1);
+    output.UV = input.UV;
+    output.Ray = mul(cPassParameters.FrustumCorners[int(input.Position.z)], cPassParameters.ViewInverse);
     return output;
 }
 
@@ -72,21 +74,21 @@ float2 RayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, floa
 //https://iolite-engine.com/blog_posts/reverse_z_cheatsheet
 float GetLinearDepth(float c)
 {
-    return cFarPlane * cNearPlane / (cNearPlane + c * (cFarPlane - cNearPlane));
+    return cPassParameters.FarPlane * cPassParameters.NearPlane / (cPassParameters.NearPlane + c * (cPassParameters.FarPlane - cPassParameters.NearPlane));
 }
 
 float SampleDensity(float3 position)
 {
-    float3 uvw = position * cCloudScale + cCloudOffset;
+    float3 uvw = position * cPassParameters.CloudScale + cPassParameters.CloudOffset;
     float4 shape = tCloudsTexture.SampleLevel(sLinearClamp, uvw, 0);
-    float s = shape.r * cNoiseWeights.x + shape.g * cNoiseWeights.y + shape.b * cNoiseWeights.z + shape.a * cNoiseWeights.w;
-    return max(0, cCloudThreshold - s) * cCloudDensity;
+    float s = shape.r * cPassParameters.NoiseWeights.x + shape.g * cPassParameters.NoiseWeights.y + shape.b * cPassParameters.NoiseWeights.z + shape.a * cPassParameters.NoiseWeights.w;
+    return max(0, cPassParameters.CloudThreshold - s) * cPassParameters.CloudDensity;
 }
 
 float3 LightMarch(float3 position)
 {
-    float3 lightDirection = -cSunDirection;
-    float boxDistance = RayBoxDistance(cMinExtents, cMaxExtents, position, lightDirection).y;
+    float3 lightDirection = -cPassParameters.SunDirection;
+    float boxDistance = RayBoxDistance(cPassParameters.MinExtents, cPassParameters.MaxExtents, position, lightDirection).y;
     float stepSize = boxDistance / 6;
     float totalDensity = 0;
     float offset = InterleavedGradientNoise(position.xy);
@@ -101,16 +103,16 @@ float3 LightMarch(float3 position)
     return 0.01f + transmittance * (1 - 0.01f);
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+float4 PSMain(InterpolantsVSToPS input) : SV_Target
 {
-    float3 ro = cViewInverse[3].xyz;
-    float3 rd = normalize(input.ray.xyz);
-    float2 boxResult = RayBoxDistance(cMinExtents, cMaxExtents, ro, rd);
+    float3 ro = cPassParameters.ViewInverse[3].xyz;
+    float3 rd = normalize(input.Ray.xyz);
+    float2 boxResult = RayBoxDistance(cPassParameters.MinExtents, cPassParameters.MaxExtents, ro, rd);
 
-    float4 color = tSceneTexture.Sample(sLinearClamp, input.texCoord);
+    float4 color = tSceneTexture.Sample(sLinearClamp, input.UV);
 
-    float depth = GetLinearDepth(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
-    float maxDepth = depth * length(input.ray.xyz);
+    float depth = GetLinearDepth(tDepthTexture.Sample(sLinearClamp, input.UV).r);
+    float maxDepth = depth * length(input.Ray.xyz);
 
     float distanceTravelled = 0;
     float stepSize = boxResult.y / 150;
@@ -120,13 +122,13 @@ float4 PSMain(PSInput input) : SV_TARGET
     float3 totalLight = 0;
     float transmittance = 1;
 
-    float offset = InterleavedGradientNoise(input.texCoord);
+    float offset = InterleavedGradientNoise(input.UV);
     ro += offset - 1;
 
     while (distanceTravelled < dstLimit)
     {
         float3 rayPos = ro + rd * (boxResult.x + distanceTravelled);
-        float height = (cMaxExtents.y - rayPos.y) / (cMaxExtents.y - cMinExtents.y);
+        float height = (cPassParameters.MaxExtents.y - rayPos.y) / (cPassParameters.MaxExtents.y - cPassParameters.MinExtents.y);
         float densityMultiplier = tVerticalDensity.Sample(sLinearClamp, float2(0, height)).r;
         float density = SampleDensity(rayPos) * stepSize * densityMultiplier;
         if (density > 0)
@@ -140,5 +142,5 @@ float4 PSMain(PSInput input) : SV_TARGET
         }
         distanceTravelled += stepSize;
     }
-    return float4(color.xyz * transmittance + totalLight * cSunColor.rgb, 1);
+    return float4(color.xyz * transmittance + totalLight * cPassParameters.SunColor.rgb, 1);
 }
