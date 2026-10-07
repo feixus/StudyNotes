@@ -272,7 +272,7 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32_t width, uin
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32_t maxCount, GraphicsBuffer* pIndirectArguments, GraphicsBuffer* pCountBuffer, uint32_t argumentsOffset, uint32_t countOffset)
 {
 	PrepareDraw();
-	check(m_pCurrentPSO);
+	check(m_pCurrentPSO || m_pCurrentSO);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 

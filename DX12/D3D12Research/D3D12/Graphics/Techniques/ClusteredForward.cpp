@@ -83,11 +83,17 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
     RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
 	static bool useMeshShader = true;
-	ImGui::Begin("Parameters");
-	ImGui::Checkbox("Mesh Shader", &useMeshShader);
+	if (ImGui::Begin("Parameters"))
+    {
+        if (ImGui::CollapsingHeader("Base Pass"))
+        {
+            if (ImGui::Checkbox("Mesh Shader", &useMeshShader))
+            {
+                useMeshShader = m_pMeshShaderDiffuseMaskedPSO ? useMeshShader : false;
+            }
+        }
+    }
 	ImGui::End();
-
-    useMeshShader = m_pMeshShaderDiffusePSO != nullptr && useMeshShader;
 
     Vector2 screenDimensions((float)inputResource.pRenderTarget->GetWidth(), (float)inputResource.pRenderTarget->GetHeight());
     float nearZ = inputResource.pCamera->GetNear();

@@ -162,6 +162,6 @@ void Simulate(CS_INPUT input)
 [numthreads(1, 1, 1)]
 void SimulateEnd(CS_INPUT input)
 {
-    uint particleCount = uCounters.Load(ALIVE_LIST_2_COUNTER);
+    uint particleCount = tCounters.Load(ALIVE_LIST_2_COUNTER);
     uDrawArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
 }

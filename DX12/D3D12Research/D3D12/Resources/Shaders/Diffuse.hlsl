@@ -258,7 +258,7 @@ PSInput FetchVertexAttributes(MeshInstance instance, MeshData mesh, uint vertexI
     result.normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
     result.tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
     
-    result.seed = vertexId;
+    result.seed = mesh.PositionsOffset;
 
     return result;
 }
@@ -276,10 +276,7 @@ bool IsVisible(MeshInstance instance, MeshData mesh, uint meshlet)
 
     float4 center = mul(float4(cullData.Center, 1), instance.World);
 
-#define FRUSTUM_CULL 1
-#define CONE_CULL 0
-
-#if FRUSTUM_CULL
+    // Frustum cull
     for (int i = 0; i < 6; i++)
     {
         if (dot(center, cViewData.FrustumPlanes[i]) > cullData.Radius)
@@ -287,18 +284,16 @@ bool IsVisible(MeshInstance instance, MeshData mesh, uint meshlet)
             return false;
         }
     }
-#endif
 
-#if CONE_CULL
+    // Cone cull
     float3 viewLocation = cViewData.ViewPosition.xyz;
     float3 coneApex = mul(float4(cullData.ConeApex, 1), instance.World).xyz;
-    float3 coneAxis = mul(cullData.coneAxis, (float3x3)instance.World);
+    float3 coneAxis = mul(cullData.ConeAxis, (float3x3)instance.World);
     float3 view = normalize(viewLocation - coneApex);
     if (dot(view, coneAxis) >= cullData.ConeCutoff)
     {
         return false;
     }
-#endif
 
     return true;
 }
@@ -366,6 +361,42 @@ void MSMain(
     }
 }
 
+MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
+{
+    MaterialData material = tMaterials[materialIndex];
+    MaterialProperties properties;
+    float4 baseColor = material.BaseColorFactor;
+    if (material.Diffuse >= 0)
+    {
+        baseColor *= Sample2D(material.Diffuse, sMaterialSampler, UV);
+    }
+    properties.BaseColor = baseColor.rgb;
+    properties.Opacity = baseColor.a;
+
+    properties.Roughness = material.RoughnessFactor;
+    properties.Metalness = material.MetalnessFactor;
+    if (material.RoughnessMetalness >= 0)
+    {
+        float4 roughnessMetalness = Sample2D(material.RoughnessMetalness, sMaterialSampler, UV);
+        properties.Roughness *= roughnessMetalness.g;
+        properties.Metalness *= roughnessMetalness.b;
+    }
+    properties.Emissive = material.EmissiveFactor.rgb;
+    if (material.Emissive >= 0)
+    {
+        properties.Emissive *= Sample2D(material.Emissive, sMaterialSampler, UV).rgb;
+    }
+    properties.Specular = 0.5f;
+
+    properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
+    if (material.Normal >= 0)
+    {
+        properties.NormalTS = Sample2D(material.Normal, sMaterialSampler, UV).xyz;
+    }
+
+    return properties;
+}
+
 [RootSignature(RootSig)]
 PSInput VSMain(uint vertexId : SV_VertexID)
 {
@@ -382,59 +413,25 @@ void PSMain(PSInput input,
 {
     float2 screenUV = (float2)input.position.xy * cViewData.InvScreenDimensions;
     float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r; 
-
-    // surface shader begin
-    MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MaterialData material = tMaterials[instance.Material];
-    float3 specular = 0.5f;
-
-    float4 baseColor = material.BaseColorFactor;
-    if (material.Diffuse >= 0)
-    {
-        baseColor *= Sample2D(material.Diffuse, sMaterialSampler, input.texCoord);
-    }
-
-    float roughness = material.RoughnessFactor;
-    float metalness = material.MetalnessFactor;
-    if (material.RoughnessMetalness >= 0)
-    {
-        float4 roughnessMetalness = Sample2D(material.RoughnessMetalness, sMaterialSampler, input.texCoord);
-        roughness *= roughnessMetalness.g;
-        metalness *= roughnessMetalness.b;
-    }
-
-    float4 emissive = material.EmissiveFactor;
-    if (material.Emissive >= 0)
-    {
-        emissive *= Sample2D(material.Emissive, sMaterialSampler, input.texCoord);
-    }
-
-    float3 N = normalize(input.normal);
-    if (material.Normal >= 0)
-    {
-        float3 T = normalize(input.tangent.xyz);
-        float3 B = cross(N, T) * input.tangent.w;
-        float3x3 TBN = float3x3(T, B, N);
-        float3 tangentNormal = Sample2D(material.Normal, sMaterialSampler, input.texCoord).xyz;
-        N = TangentSpaceNormalMapping(tangentNormal, TBN);
-    }
-// surface shader end
-    
-    float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
-    float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
-
     float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
-    
-    float ssrWeight = 0.0f;
-    float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, roughness, ssrWeight);
 
-    LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, roughness);
+    MeshInstance instance = tMeshInstances[cObjectData.Index];
+    MaterialProperties material = GetMaterialProperties(instance.Material, input.texCoord);
+    float3x3 TBN = CreateTangentToWorld(normalize(input.normal), float4(normalize(input.tangent.xyz), 1));
+    float3 N = TangentSpaceNormalMapping(material.NormalTS, TBN);
+
+    BrdfData brdf = GetBrdfData(material);
+
+    float ssrWeight = 0.0f;
+    float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, brdf.Roughness, ssrWeight);
+
+    LightResult lighting = DoLight(input.position, input.positionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
 
     float3 outRadiance = 0;
     outRadiance += lighting.Diffuse + lighting.Specular;
-    outRadiance += ApplyAmbientLight(diffuseColor, ambientOcclusion, tLights[0].GetColor().rgb * 0.1f);
+    outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, tLights[0].GetColor().rgb * 0.1f);
     outRadiance += ssr * ambientOcclusion;
-    outRadiance += emissive.rgb;
+    outRadiance += material.Emissive;
 
 // hack: volfog only working in clustered path right now...
 #if CLUSTERED_FORWARD
@@ -445,13 +442,13 @@ void PSMain(PSInput input,
     float4 scatteringTransmittance = 1;
 #endif
 
-    outColor = float4(outRadiance, baseColor.a);
+    outColor = float4(outRadiance, material.Opacity);
 
-    float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
+    float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
     outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 
-    return;
-    
+#define DEBUG_MESHLETS 0
+#if DEBUG_MESHLETS
     outNormalRoughness = float4(input.normal, 0);
 
     uint seed = SeedThread(input.seed);
@@ -463,4 +460,5 @@ void PSMain(PSInput input,
     bary = smoothstep(thickness, thickness + smoothing, bary);
     float minBary = min(bary.x, min(bary.y, bary.z));
     outColor = float4(outColor.rgb * saturate(minBary + 0.6), 1);
+#endif
 }

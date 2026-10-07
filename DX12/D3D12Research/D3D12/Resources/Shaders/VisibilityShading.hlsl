@@ -35,17 +35,6 @@ struct VertexAttribute
     float4 Tangent;
 };
 
-struct MaterialProperties
-{
-	float3 BaseColor;
-    float3 NormalTS;
-    float Metalness;
-	float3 Emissive;
-	float Roughness;
-	float Opacity;
-	float Specular;
-};
-
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float2 dx, float2 dy)
 {
     MaterialProperties properties;
@@ -83,22 +72,6 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float2 d
 	}
 	
 	return properties;
-}
-
-struct BrdfData
-{
-    float3 Diffuse;
-    float3 Specular;
-    float Roughness;
-};
-
-BrdfData GetBrdfData(MaterialProperties material)
-{
-    BrdfData data;
-    data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
-    data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
-    data.Roughness = material.Roughness;
-    return data;
 }
 
 struct BaryDerivatives

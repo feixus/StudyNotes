@@ -5,6 +5,22 @@
 
 #define SUPPORT_BC5 1
 
+struct BrdfData
+{
+    float3 Diffuse;
+    float3 Specular;
+    float Roughness;
+};
+
+BrdfData GetBrdfData(MaterialProperties material)
+{
+    BrdfData brdf;
+    brdf.Diffuse = ComputeDiffuseColor(material.BaseColor.rgb, material.Metalness);
+    brdf.Specular = ComputeF0(material.Specular, material.BaseColor.rgb, material.Metalness);
+    brdf.Roughness = material.Roughness;
+    return brdf;
+}
+
 // Unpacks a 2 channel BC5 nromal to xyz
 float3 UnpackBC5Normal(float2 packedNormal)
 {

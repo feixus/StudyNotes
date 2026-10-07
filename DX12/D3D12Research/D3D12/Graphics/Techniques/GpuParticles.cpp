@@ -37,8 +37,9 @@ GpuParticles::GpuParticles(GraphicsDevice* pGraphicsDevice)
     CommandContext* pContext = pGraphicsDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
     m_pCounterBuffer = pGraphicsDevice->CreateBuffer(BufferDesc::CreateByteAddress(4 * sizeof(uint32_t)), "GpuParticle CounterBuffer");
-    uint32_t aliveCount = cMaxParticleCount;
-    pContext->InitializeBuffer(m_pCounterBuffer.get(), &aliveCount, sizeof(uint32_t), 0);
+    // counters layout: dead list count | alive list 1 count | alive list 2 count | emit count
+    uint32_t counters[4] = {cMaxParticleCount, 0, 0, 0};
+    pContext->InitializeBuffer(m_pCounterBuffer.get(), counters, sizeof(counters), 0);
 
     BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32_t));
     m_pAliveList1 = pGraphicsDevice->CreateBuffer(particleBufferDesc, "GpuParticle AliveList1");
@@ -123,12 +124,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pGraphicsDevice)
 
 void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const Camera& camera)
 {
-    if (!g_Simulate || !g_Enable)
-    {
-        return;
-    }
-
-	if (ImGui::Begin("Parameters"))
+    if (ImGui::Begin("Parameters"))
     {
         if (ImGui::CollapsingHeader("Particles"))
         {
@@ -139,6 +135,11 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
         }
     }
     ImGui::End();
+
+    if (!g_Simulate || !g_Enable)
+    {
+        return;
+    }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 		m_pCounterBuffer->GetUAV()->GetDescriptor(),
@@ -216,7 +217,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 			    v.Normalize();
 			    return v;
 			    });
-            parameters.Origin = Vector3(150, 3, 0);
+            parameters.Origin = Vector3(0, 3, 0);
 
 		    context.SetRootCBV(0, parameters);
 		    context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDispatchSignature(), 1, m_pEmitArguments.get(), m_pEmitArguments.get());
