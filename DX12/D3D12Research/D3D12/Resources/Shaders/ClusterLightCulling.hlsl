@@ -67,7 +67,7 @@ void LightCulling(uint3 dispatchThreadID : SV_DispatchThreadID)
         for (uint i = 0; i < cViewData.LightCount; i++)
         {
             Light light = tSceneLights[i];
-            if (light.IsPoint())
+            if (light.IsPoint)
             {
                 Sphere sphere;
                 sphere.Radius = light.Range;
@@ -77,7 +77,7 @@ void LightCulling(uint3 dispatchThreadID : SV_DispatchThreadID)
                     AddLight(clusterIndex, i);
                 }
             }
-            else if (light.IsSpot())
+            else if (light.IsSpot)
             {
                 Sphere sphere;
                 sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));

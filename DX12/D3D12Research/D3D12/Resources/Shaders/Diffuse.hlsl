@@ -134,7 +134,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
 #define SCREEN_SPACE_SHADOWS 0
 #if SCREEN_SPACE_SHADOWS
         float3 L = normalize(light.Position - wPos);
-        if (light.IsDirectional())
+        if (light.IsDirectional)
         {
             L = -light.Direction;
         }
@@ -235,13 +235,6 @@ float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, floa
         }
     }
     return ssr;
-}
-
-template<typename T>
-T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
-{
-    ByteAddressBuffer buffer = tBufferTable[bufferIndex];
-    return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
 }
 
 InterpolantsVSToPS FetchVertexAttributes(MeshInstance instance, MeshData mesh, uint vertexId)

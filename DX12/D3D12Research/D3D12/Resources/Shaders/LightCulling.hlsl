@@ -166,7 +166,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_GroupThreadID, uint 
     for (uint i = groupIndex; i < cShaderParameters.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
         Light light = tSceneLights[i];
-        if (light.IsPoint())
+        if (light.IsPoint)
         {
             Sphere sphere;
             sphere.Radius = light.Range;
@@ -187,7 +187,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_GroupThreadID, uint 
                 }
             }
         }
-        else if (light.IsSpot())
+        else if (light.IsSpot)
         {
             Sphere sphere;
             sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);

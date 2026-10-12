@@ -27,43 +27,24 @@ struct Light
 
 	ShaderInterop::Light GetData() const
 	{
-		ShaderInterop::Light data = {
+		ShaderInterop::Light data = 
+		{
 			.Position = Position,
-			.Flags = 0,
-			.Direction = Direction,
 			.Color = Math::EncodeRGBA(Colour),
-			.SpotlightAngles = Vector2(cos(PenumbraAngleDegrees * 0.5f * Math::DegreesToRadians), cos(UmbraAngleDegrees * 0.5f * Math::DegreesToRadians)),
+			.Direction = Direction,
 			.Intensity = Intensity,
+			.SpotlightAngles = Vector2(cos(PenumbraAngleDegrees * 0.5f * Math::DegreesToRadians), cos(UmbraAngleDegrees * 0.5f * Math::DegreesToRadians)),
 			.Range = Range,
 			.ShadowIndex = CastShadows ? ShadowIndex : -1,
 			.InvShadowSize = 1.0f / ShadowMapSize,
 			.LightTexture = LightTexture,
+			.IsEnabled = Intensity > 0 ? static_cast<ShaderInterop::uint>(1) : 0,
+			.IsSpot = Type == LightType::Spot,
+			.IsPoint = Type == LightType::Point,
+			.IsDirectional = Type == LightType::Directional,
+			.IsVolumetric = VolumetricLighting,
+			.CastShadows = CastShadows,
 		};
-
-		if (VolumetricLighting)
-		{
-			data.Flags |= ShaderInterop::LF_Volumetrics;
-		}
-		if (Intensity > 0.0f)
-		{
-			data.Flags |= ShaderInterop::LF_Enabled;
-		}
-		if (CastShadows)
-		{
-			data.Flags |= ShaderInterop::LF_CastShadows;
-		}
-		if (Type == LightType::Point)
-		{
-			data.Flags |= ShaderInterop::LF_PointLight;
-		}
-		else if (Type == LightType::Spot)
-		{
-			data.Flags |= ShaderInterop::LF_SpotLight;
-		}
-		else if (Type == LightType::Directional)
-		{
-			data.Flags |= ShaderInterop::LF_DirectionalLight;
-		}
 
 		return data;
 	}

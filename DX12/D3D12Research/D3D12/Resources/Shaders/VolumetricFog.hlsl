@@ -156,7 +156,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
         {
             int lightIndex = tLightIndexGrid[lightOffset + i];
             Light light = tLights[lightIndex];
-            if (!light.IsEnabled() || !light.IsVolumetric())
+            if (!light.IsEnabled || !light.IsVolumetric)
             {
                 continue;
             }
@@ -167,7 +167,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
                 continue;
             }
 
-            if (light.CastShadows())
+            if (light.CastShadows)
             {
                 int shadowIndex = GetShadowIndex(light, pos, worldPosition);
                 attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
@@ -175,7 +175,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
             }
 
             float3 L = normalize(light.Position - worldPosition);
-            if (light.IsDirectional())
+            if (light.IsDirectional)
             {
                 L = normalize(light.Direction);
             }

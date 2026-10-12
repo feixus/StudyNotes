@@ -507,6 +507,7 @@ namespace D3D
 		case DXGI_FORMAT_R16G16_UNORM:
 		case DXGI_FORMAT_R16G16_FLOAT:
 		case DXGI_FORMAT_R32_FLOAT:
+		case DXGI_FORMAT_D32_FLOAT:
 		case DXGI_FORMAT_R24G8_TYPELESS:
 		case DXGI_FORMAT_R32_TYPELESS:
 		case DXGI_FORMAT_R32_UINT:
@@ -546,6 +547,7 @@ namespace D3D
 		case DXGI_FORMAT_R32G32B32_FLOAT:
 			return width * 3 * sizeof(float);
 		case DXGI_FORMAT_R32G32_FLOAT:
+		case DXGI_FORMAT_R32G32_UINT:
 			return width * 2 * sizeof(float);
 		default:
 			assert(false);

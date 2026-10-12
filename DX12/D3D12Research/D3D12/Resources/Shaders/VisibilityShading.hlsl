@@ -159,13 +159,13 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         return;
     }
     uint objIndex = visibilityMask >> 16;
-    uint primitiveIndex = visibilityMask & 0xFFFF;
+    uint triangleIndex = visibilityMask & 0xFFFF;
 
     MeshInstance instance = tMeshInstances[NonUniformResourceIndex(objIndex)];
     MeshData mesh = tMeshes[NonUniformResourceIndex(instance.Mesh)];
     ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
-    uint3 indices = meshBuffer.Load<uint3>(mesh.IndicesOffset + primitiveIndex * sizeof(uint3));
+    uint3 indices = GetPrimitive(mesh, triangleIndex);
 
     VertexAttribute vertices[3];
     for (uint i = 0; i < 3; i++)

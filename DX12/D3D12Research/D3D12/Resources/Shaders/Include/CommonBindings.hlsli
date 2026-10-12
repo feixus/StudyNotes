@@ -86,9 +86,10 @@ SamplerState sLinearMipPoint :                       register(s21);
     "StaticSampler(s21, filter = FILTER_MIN_MAG_LINEAR_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP), "\
     
 template<typename T>
-T LoadByteAddressData(uint bufferIndex, uint elementIndex)
+T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
 {
-    return tBufferTable[bufferIndex].Load<T>(elementIndex * sizeof(T));
+    ByteAddressBuffer buffer = tBufferTable[bufferIndex];
+    return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
 }
 
 float4 Sample2D(int index, SamplerState s, float2 uv, uint2 offset = 0)
@@ -104,4 +105,38 @@ float4 SampleLevel2D(int index, SamplerState s, float2 uv, float level, uint2 of
 float4 SampleGrad2D(int index, SamplerState s, float2 uv, float2 ddx, float2 ddy, uint2 offset = 0)
 {
     return tTexture2DTable[index].SampleGrad(s, uv, ddx, ddy, offset);
+}
+
+uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)
+{
+    uint3 indices;
+    if (mesh.IndexByteSize == 4)
+    {
+        indices = BufferLoad<uint3>(mesh.BufferIndex, primitiveIndex, mesh.IndicesOffset);
+    }
+    else
+    {
+        uint byteOffset = primitiveIndex * 3 * 2;   // one triangle has 3 indices, each index is 2 bytes
+        uint alignedByteOffset = byteOffset & ~3;   // align to 4 bytes
+        uint2 four16BitIndices = BufferLoad<uint2>(mesh.BufferIndex, 0, mesh.IndicesOffset + alignedByteOffset);
+
+        // little-endian
+        if (byteOffset == alignedByteOffset)
+        {
+            // even triangle index(t = 0, 2, 4... -> 6t = 0 mod 4)
+            // the triangle starts on a dword boundary, the loaded widow x|y(8 bytes) covers the 6 needed bytes plus 2 wasted
+            indices.x = four16BitIndices.x & 0xFFFF;    // low 16 bits
+            indices.y = four16BitIndices.x >> 16;    // high 16 bits
+            indices.z = four16BitIndices.y & 0xFFFF;    // low 16 bits
+        }
+        else
+        {
+            // odd triangle index(t = 1, 3, 5... -> 6t = 2 mod 4)
+            // the triangle starts in the upper half of the first dword, so the window begins 2 bytes early
+            indices.x = four16BitIndices.x >> 16;    // high 16 bits
+            indices.y = four16BitIndices.y & 0xFFFF;    // low 16 bits
+            indices.z = four16BitIndices.y >> 16;    // high 16 bits
+        }
+    }
+    return indices;
 }
