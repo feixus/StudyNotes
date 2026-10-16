@@ -18,8 +18,6 @@
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
 #define TINYGLTF_IMPLEMENTATION
 
-#include "tiny_gltf.h"
-
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
 #define CGLTF_IMPLEMENTATION

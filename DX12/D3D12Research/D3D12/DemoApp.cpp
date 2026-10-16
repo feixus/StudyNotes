@@ -334,12 +334,15 @@ void DemoApp::Update()
 	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 	UpdateImGui();
 
-	CommandContext* pUploadContext = m_pDevice->AllocateCommandContext();
-	{
-		GPU_PROFILE_SCOPE("UploadGPUScene", pUploadContext);
-		UploadSceneData(*pUploadContext);
-	}
-	pUploadContext->Execute(false);
+	RGGraph renderGraph(m_pDevice.get());
+	RGPassBuilder updateScenePass = renderGraph.AddPass("Update GPU Scene");
+	updateScenePass.Bind([=](CommandContext& context, const RGPassResource& resources)
+		{
+			UploadSceneData(context);
+
+		});
+	renderGraph.Compile();	
+	renderGraph.Execute();
 
 	//EditTransform(*m_pCamera, spotMatrix);
 	Vector3 scale, position;
@@ -419,6 +422,8 @@ void DemoApp::Update()
 			cascadeSplits[i] = d - nearPlane;
 		}
 
+		Matrix vpInverse = m_pCamera->GetProjectionInverse() * m_pCamera->GetViewInverse();
+
 		for (size_t i = 0; i < m_Lights.size(); ++i)
 		{
 			Light& light = m_Lights[i];
@@ -450,8 +455,7 @@ void DemoApp::Update()
 					// retrieve frustum corners in world space
 					for (Vector3& corner : frustumCorners)
 					{
-						corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
-						corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+						corner = Vector3::Transform(corner, vpInverse);
 					}
 
 					// adjust frustum corners based on cascade splits
@@ -500,8 +504,8 @@ void DemoApp::Update()
 						}
 					}
 
-					Matrix shadowView = Math::CreateLookToMatrix(center + light.Direction * -400, light.Direction, Vector3::Up);
-					Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
+					Matrix shadowView = Math::CreateLookToMatrix(center + light.Direction * -100, light.Direction, Vector3::Up);
+					Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 200, 0);
 					Matrix lightViewProjection = shadowView * projectionMatrix;
 
 					// snap projection to shadowmap texels to avoid flickering edges
@@ -2008,15 +2012,14 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 
 			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 			context.InsertUavBarrier(pBLAS.get());
-			context.FlushResourceBarriers();
-
+			
 			subMesh.pBLAS = pBLAS.release();
 		}
 	}
 
-	// top level acceleration structure
-	bool isUpdate = m_pTLAS != nullptr;
+	context.FlushResourceBarriers();
 
+	// top level acceleration structure
 	std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 	for (uint32_t instanceIndex = 0; instanceIndex < (uint32_t)m_SceneData.Batches.size(); ++instanceIndex)
 	{
@@ -2053,19 +2056,19 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 		instanceDescs.push_back(instanceDesc);
 	}
 
-	if (!isUpdate)
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
+		.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
+		.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+				D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
+		.NumDescs = (uint32_t)instanceDescs.size(),
+		.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
+	};
+
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+	m_pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+	if (!m_pTLAS || m_pTLAS->GetSize() < info.ResultDataMaxSizeInBytes)
 	{
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo = {
-			.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
-			.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION,
-			.NumDescs = (uint32_t)instanceDescs.size(),
-			.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-		};
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-		m_pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
 		m_pTLASScratch = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64_t>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None),  "TLAS Scratch");
 		m_pTLAS = m_pDevice->CreateBuffer(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64_t>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)), "TLAS");
 	}

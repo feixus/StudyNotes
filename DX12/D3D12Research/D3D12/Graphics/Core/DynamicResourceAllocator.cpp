@@ -91,7 +91,8 @@ GraphicsBuffer* DynamicAllocationManager::AllocatePage(uint64_t size)
 
 GraphicsBuffer* DynamicAllocationManager::CreateNewPage(uint64_t size)
 {
-	std::unique_ptr<GraphicsBuffer> pNewPage = GetGraphics()->CreateBuffer(BufferDesc::CreateBuffer(size, m_BufferFlags), "Dynamic Allocation Buffer");
+	std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * size);
+	std::unique_ptr<GraphicsBuffer> pNewPage = GetGraphics()->CreateBuffer(BufferDesc::CreateBuffer(size, m_BufferFlags), name.c_str());
 	pNewPage->Map();
 	return pNewPage.release();
 }
@@ -118,13 +119,4 @@ void DynamicAllocationManager::FreeLargePages(uint64_t fenceValue, const std::ve
 	{
 		m_DeleteQueue.emplace(fenceValue, pPage);
 	}
-}
-
-void DynamicAllocationManager::CollectGrabage()
-{
-	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
-	GetGraphics()->IdleGPU();
-	m_Pages.clear();
-	m_FreedPages = {};
-	m_DeleteQueue = {};
 }

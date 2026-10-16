@@ -62,6 +62,7 @@ private:
 	std::vector<uint32_t> m_FreeHandles;
 	int32_t m_NumAllocated{0};
 	std::mutex m_AllocationLock;
+    std::queue<std::pair<uint32_t, uint64_t>> m_DeletionQueue;
 };
 
 class OnlineDescriptorAllocator : public GraphicsObject

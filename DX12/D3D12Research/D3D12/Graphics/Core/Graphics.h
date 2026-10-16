@@ -218,12 +218,16 @@ public:
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
 
+	Fence* GetFrameFence() const { return m_pFrameFence.get(); }
+
 private:
 	bool m_IsTearingDown{false};
 	GraphicsCapabilities m_Capabilities;
 
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
+
+	std::unique_ptr<Fence> m_pFrameFence;
 
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;

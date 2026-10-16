@@ -279,6 +279,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
+	m_pFrameFence = std::make_unique<Fence>(this, 1, "Frame Fence");
+
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1000, 10000);
@@ -357,6 +359,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 void GraphicsDevice::TickFrame()
 {
 	m_DeleteQueue.Clean();
+	m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
 }
 
 void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
@@ -381,6 +384,9 @@ void GraphicsDevice::WaitForFence(uint64_t fenceValue)
 
 void GraphicsDevice::IdleGPU()
 {
+	TickFrame();
+	m_pFrameFence->CpuWait(m_pFrameFence->GetLastSignaledValue());
+
 	for (auto& pCommandQueue : m_CommandQueues)
 	{
 		if (pCommandQueue)
@@ -434,7 +440,7 @@ ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, 
 
 void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
 {
-	m_DeleteQueue.EnqueueResource(pResource, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetFence());
+	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
