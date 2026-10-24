@@ -1,20 +1,19 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0, visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 2)), " \
-                "DescriptorTable(UAV(u0, numDescriptors = 2))")
+            "CBV(b100), " \
+            "DescriptorTable(SRV(t0, numDescriptors = 2)), " \
+            "DescriptorTable(UAV(u0, numDescriptors = 2))")
 
 #define MAX_LIGHTS_PER_TILE 32
 #define THREAD_COUNT 4
 
-struct ViewData
+struct PassData
 {
-    float4x4 View;
     int3 ClusterDimensions;
-    uint LightCount;
 };
 
-ConstantBuffer<ViewData> cViewData : register(b0);
+ConstantBuffer<PassData> cPassData : register(b0);
 
 StructuredBuffer<Light> tSceneLights : register(t0);
 StructuredBuffer<AABB> tClusterAABBs : register(t1);
@@ -36,8 +35,8 @@ bool ConeInSphere(float3 conePos, float3 coneDir, float coneRange, float2 coneAn
 
 uint GetClusterIndex1D(uint3 clusterIndex)
 {
-    return clusterIndex.z * (cViewData.ClusterDimensions.x * cViewData.ClusterDimensions.y) +
-           clusterIndex.y * cViewData.ClusterDimensions.x +
+    return clusterIndex.z * (cPassData.ClusterDimensions.x * cPassData.ClusterDimensions.y) +
+           clusterIndex.y * cPassData.ClusterDimensions.x +
            clusterIndex.x;
 }
 
@@ -58,20 +57,20 @@ void LightCulling(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
     uint3 clusterIndex3D = dispatchThreadID;
 
-    if (all(clusterIndex3D < cViewData.ClusterDimensions))
+    if (all(clusterIndex3D < cPassData.ClusterDimensions))
     {
         uint clusterIndex = GetClusterIndex1D(clusterIndex3D);
         AABB clusterAABB = tClusterAABBs[clusterIndex];
 
         [loop]
-        for (uint i = 0; i < cViewData.LightCount; i++)
+        for (uint i = 0; i < cViewUniforms.LightCount; i++)
         {
             Light light = tSceneLights[i];
             if (light.IsPoint)
             {
                 Sphere sphere;
                 sphere.Radius = light.Range;
-                sphere.Position = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
+                sphere.Position = mul(float4(light.Position, 1.0f), cViewUniforms.View).xyz;
                 if (SphereInAABB(sphere, clusterAABB))
                 {
                     AddLight(clusterIndex, i);
@@ -83,8 +82,8 @@ void LightCulling(uint3 dispatchThreadID : SV_DispatchThreadID)
                 sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
                 sphere.Position = clusterAABB.Center.xyz;
 
-                float3 conePosition = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
-                float3 coneDirection = mul(light.Direction, (float3x3)cViewData.View);
+                float3 conePosition = mul(float4(light.Position, 1.0f), cViewUniforms.View).xyz;
+                float3 coneDirection = mul(light.Direction, (float3x3)cViewUniforms.View);
                 float angle = acos(light.SpotlightAngles.y);
                 if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
                 {

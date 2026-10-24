@@ -1,19 +1,11 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
+#define RootSig ROOT_SIG("CBV(b100), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1)), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 2))")
 
 #define BLOCK_SIZE 16
 #define THREAD_COUNT (BLOCK_SIZE * BLOCK_SIZE)
-
-struct PassParameters
-{
-    float Near;
-    float Far;
-};
-
-ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 #if WITH_MSAA
     Texture2DMS<float> tDepthMap : register(t0);
@@ -48,7 +40,7 @@ void PrepareReduceDepth(uint3 threadID : SV_DispatchThreadID,
         float depth = tDepthMap.Load(samplePos, sampleIdx);
         if (depth > 0.0f)
         {
-            depth = LinearizeDepth01(depth, cPassParameters.Near, cPassParameters.Far);
+            depth = LinearizeDepth01(depth, cViewUniforms.NearZ, cViewUniforms.FarZ);
             depthMin = min(depthMin, depth);
             depthMax = max(depthMax, depth);
         }
@@ -61,7 +53,7 @@ void PrepareReduceDepth(uint3 threadID : SV_DispatchThreadID,
     float depth = tDepthMap[samplePos];
     if (depth > 0.0f)
     {
-        depth = LinearizeDepth01(depth, cPassParameters.Near, cPassParameters.Far);
+        depth = LinearizeDepth01(depth, cViewUniforms.NearZ, cViewUniforms.FarZ);
     }
     gsDepthSamples[groupIndex] = float2(depth, depth);
 #endif

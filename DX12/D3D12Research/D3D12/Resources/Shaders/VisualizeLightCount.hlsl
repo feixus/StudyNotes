@@ -1,20 +1,17 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 3)), " \
-                "DescriptorTable(UAV(u0, numDescriptors = 1))")
+            "CBV(b100), " \
+            "DescriptorTable(SRV(t0, numDescriptors = 3)), " \
+            "DescriptorTable(UAV(u0, numDescriptors = 1))")
               
 #define BLOCK_SIZE 16
 
 struct PassParameters
 {
-    float4x4 ProjectionInverse;
-    int4 ClusterDimensions;
+    int2 ClusterDimensions;
     int2 ClusterSize;
     float2 LightGridParams;
-    float Near;
-    float Far;
-    float FoV;
 };
 
 ConstantBuffer<PassParameters> cPassParameters : register(b0);
@@ -44,7 +41,7 @@ static float4 DEBUG_COLORS[] = {
 
 float EdgeDetection(uint2 index, uint width, uint height)
 {
-    float reference = LinearizeDepth01(tSceneDepth.Load(int3(index, 0)).r, cPassParameters.Near, cPassParameters.Far);
+    float reference = LinearizeDepth01(tSceneDepth.Load(int3(index, 0)).r, cViewUniforms.NearZ, cViewUniforms.FarZ);
     uint2 offsets[8] = {
         uint2(-1, -1),
         uint2(-1, 0),
@@ -59,7 +56,7 @@ float EdgeDetection(uint2 index, uint width, uint height)
     float sampledValue = 0;
     for (int j = 0; j < 8; ++j)
     {
-        sampledValue += LinearizeDepth01(tSceneDepth.Load(uint3(index + offsets[j], 0)), cPassParameters.Near, cPassParameters.Far);
+        sampledValue += LinearizeDepth01(tSceneDepth.Load(uint3(index + offsets[j], 0)), cViewUniforms.NearZ, cViewUniforms.FarZ);
     }
     sampledValue /= 8.0f;
     return lerp(1, 0, step(0.0002f, length(reference - sampledValue)));
@@ -85,7 +82,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
 #elif CLUSTERED_FORWARD
         
 #if 1
-        float fov = cPassParameters.FoV * 0.5f;
+        float fov = cViewUniforms.FoV * 0.5f;
         float height = 300.0f;
         
         int2 pos = threadId.xy;
@@ -99,7 +96,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
             float angleNormalized = InverseLerp(angle, -fov, fov);
             int widthSlice = floor(angleNormalized * cPassParameters.ClusterDimensions.x);
             
-            float viewDepth = (float) pos.y / height * (cPassParameters.Near - cPassParameters.Far) + cPassParameters.Far;
+            float viewDepth = (float) pos.y / height * (cViewUniforms.NearZ - cViewUniforms.FarZ) + cViewUniforms.FarZ;
             uint slice = floor(log(viewDepth) * cPassParameters.LightGridParams.x - cPassParameters.LightGridParams.y);
             uint lightCount = 0;
             for (uint i = 0; i < cPassParameters.ClusterDimensions.y; ++i)
@@ -114,7 +111,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
 #endif
         {
             float depth = tSceneDepth.Load(uint3(threadId.xy, 0));
-            float viewDepth = LinearizeDepth(depth, cPassParameters.Near, cPassParameters.Far);
+            float viewDepth = LinearizeDepth(depth, cViewUniforms.NearZ, cViewUniforms.FarZ);
             uint slice = floor(log(viewDepth) * cPassParameters.LightGridParams.x - cPassParameters.LightGridParams.y);
             uint3 clusterIndex3D = uint3(floor(threadId.xy / cPassParameters.ClusterSize), slice);
             uint clusterIndex1D = clusterIndex3D.x + cPassParameters.ClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cPassParameters.ClusterDimensions.y);

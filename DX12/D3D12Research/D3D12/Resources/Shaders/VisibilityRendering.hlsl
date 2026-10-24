@@ -5,13 +5,8 @@
                 "CBV(b1, visibility = SHADER_VISIBILITY_VERTEX), " \
                 "DescriptorTable(SRV(t10, numDescriptors = 3))")
 
-struct PerViewData
-{
-    float4x4 ViewProjection;
-};
-
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
-ConstantBuffer<PerViewData> cViewData : register(b1);
+ConstantBuffer<ViewUniforms> cViewData : register(b1);
 
 struct Vertex
 {

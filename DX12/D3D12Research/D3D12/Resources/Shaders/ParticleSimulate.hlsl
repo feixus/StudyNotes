@@ -2,6 +2,7 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0), " \
+                "CBV(b100), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 8)), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 2))")
                 
@@ -39,13 +40,8 @@ struct EmitParameters
 
 struct SimulateParameters
 {
-    float4x4 ViewProjection;
-    float4x4 ViewProjectionInv;
-    float2 ViewDimensionsInv;
     float DeltaTime;
     float ParticleLifetime;
-    float Near;
-    float Far;
 };
 
 ConstantBuffer<SimulationParameters> cSimulationParameters : register(b0);
@@ -126,18 +122,18 @@ void Simulate(CS_INPUT input)
         ParticleData p = uParticleData[particleIndex];
         if (p.LifeTime < cSimulateParameters.ParticleLifetime)
         {
-            float4 screenPos = mul(float4(p.Position, 1), cSimulateParameters.ViewProjection);
+            float4 screenPos = mul(float4(p.Position, 1), cViewUniforms.ViewProjection);
             screenPos.xyz /= screenPos.w;
             if (screenPos.x > -1 && screenPos.x < 1 && screenPos.y > -1 && screenPos.y < 1)
             {
                 float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
                 float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
-                float linearDepth = LinearizeDepth(depth, cSimulateParameters.Near, cSimulateParameters.Far);
+                float linearDepth = LinearizeDepth(depth, cViewUniforms.NearZ, cViewUniforms.FarZ);
                 const float thickness = 1.0f;
 
                 if (screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
                 {
-                    float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cSimulateParameters.ViewDimensionsInv, cSimulateParameters.ViewProjectionInv);
+                    float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cViewUniforms.ScreenDimensionsInv, cViewUniforms.ViewProjectionInverse);
                     if (dot(normal, p.Velocity) < 0)
                     {
                         p.Velocity = reflect(p.Velocity, normal) * 0.85f;

@@ -10,14 +10,7 @@ Texture2D<uint> tVisibilityTexture : register(t13);
 RWTexture2D<float4> uTarget : register(u0);
 RWTexture2D<float4> uNormalsTarget : register(u1);
 
-struct PerViewData
-{
-    float4x4 ViewProjection;
-    float4x4 ViewInverse;
-    uint2 ScreenDimensions;
-};
-
-ConstantBuffer<PerViewData> cViewData : register(b1);
+ConstantBuffer<ViewUniforms> cViewData : register(b1);
 
 struct VertexInput
 {

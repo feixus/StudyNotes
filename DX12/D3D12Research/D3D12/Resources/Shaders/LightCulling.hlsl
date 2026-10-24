@@ -1,7 +1,7 @@
 #include "CommonBindings.hlsli"
 #include "Constants.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
+#define RootSig ROOT_SIG("CBV(b100), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 5)), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 2))")
                 
@@ -9,17 +9,6 @@
 #define MAX_LIGHTS_PER_TILE 256
 #define BLOCK_SIZE 16
 #define SPLITZ_CULLING 1
-
-struct ShaderParameters
-{
-	float4x4 View;
-    float4x4 ProjectionInverse;
-	uint4 NumThreadGroups;
-    float2 ScreenDimensionsInv;
-    uint LightCount;
-};
-
-ConstantBuffer<ShaderParameters> cShaderParameters : register(b0);
 
 Texture2D tDepthTexture : register(t0);
 StructuredBuffer<Light> tSceneLights : register(t1);
@@ -123,14 +112,14 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_GroupThreadID, uint 
     if (groupIndex == 0)
     {
         float3 viewSpace[8];
-        viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
-        viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
-        viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
-        viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
-        viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
-        viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
-        viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
-        viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse);
+        viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse);
+        viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse);
+        viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse);
+        viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse);
+        viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse);
+        viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse);
+        viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse);
+        viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse);
 
         GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
         GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
@@ -143,13 +132,13 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_GroupThreadID, uint 
     }
     
     // convert depth values to view space
-    float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse).z;
-    float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse).z;
-    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse).z;
+    float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse).z;
+    float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse).z;
+    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse).z;
 
 #if SPLITZ_CULLING
     // save all the depth in a bitmask on the thread group
-    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cShaderParameters.ScreenDimensionsInv, cShaderParameters.ProjectionInverse).z;
+    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse).z;
     float depthRange = 31.0f / (maxDepthVS - minDepthVS);
     uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
     InterlockedOr(DepthMask, 1u << cellIndex);
@@ -163,14 +152,14 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_GroupThreadID, uint 
     GroupMemoryBarrierWithGroupSync();
 
     // perform the light culling
-    for (uint i = groupIndex; i < cShaderParameters.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint i = groupIndex; i < cViewUniforms.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
         Light light = tSceneLights[i];
         if (light.IsPoint)
         {
             Sphere sphere;
             sphere.Radius = light.Range;
-            sphere.Position = mul(float4(light.Position, 1.0f), cShaderParameters.View).xyz;
+            sphere.Position = mul(float4(light.Position, 1.0f), cViewUniforms.View).xyz;
 
             if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
             {
@@ -191,7 +180,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_GroupThreadID, uint 
         {
             Sphere sphere;
             sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
-            sphere.Position = mul(float4(light.Position, 1.0f), cShaderParameters.View).xyz + mul(light.Direction, (float3x3)cShaderParameters.View) * sphere.Radius;
+            sphere.Position = mul(float4(light.Position, 1.0f), cViewUniforms.View).xyz + mul(light.Direction, (float3x3)cViewUniforms.View) * sphere.Radius;
 
             if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
             {

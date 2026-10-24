@@ -10,23 +10,15 @@
 GlobalRootSignature GlobalRootSig =
 {
 	"CBV(b0),"
-    "CBV(b2),"
+    "CBV(b100),"
     "DescriptorTable(UAV(u0, numDescriptors=1)),"
     "DescriptorTable(SRV(t5, numDescriptors=8)),"
     DEFAULT_ROOT_SIG_PARAMS
 };
 
-struct ViewData
+struct PassParameters
 {
-	float4x4 View;
-	float4x4 ViewInverse;
-
-
-	float4x4 ProjectionInverse;\
-	uint NumLights;
 	float ViewPixelSpreadAngle;
-	uint TLASIndex;
-	uint FrameIndex;
 };
 
 struct RAYPAYLOAD ReflectionRayPayload
@@ -41,7 +33,7 @@ struct RAYPAYLOAD ShadowRayPayload
 };
 
 RWTexture2D<float4> uOutput : register(u0);
-ConstantBuffer<ViewData> cViewData : register(b0);
+ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 float CastShadowRay(float3 origin, float3 direction)
 {
@@ -56,7 +48,7 @@ float CastShadowRay(float3 origin, float3 direction)
 						RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 						RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
 
-	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
+	RaytracingAccelerationStructure TLAS = tTLASTable[cViewUniforms.TLASIndex];
 
 #if _INLINE_RT
 	RayQuery <rayFlags> rayQuery;
@@ -112,7 +104,7 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 {
 	RayCone cone;
 	cone.Width = 0;
-	cone.SpreadAngle = cViewData.ViewPixelSpreadAngle;
+	cone.SpreadAngle = cPassParameters.ViewPixelSpreadAngle;
 
 	ReflectionRayPayload payload;
 	payload.rayCone = PropagateRayCone(cone, 0.0f, T);
@@ -125,7 +117,7 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 	ray.TMax = RAY_MAX_T;
 
 	TraceRay(
-        tTLASTable[cViewData.TLASIndex],
+        tTLASTable[cViewUniforms.TLASIndex],
         0,
         0xFF,
         0,
@@ -153,13 +145,13 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 		L = RAY_MAX_T * -light.Direction;
 	}
 
-	float3 viewPosition = mul(float4(worldPos, 1.0f), cViewData.View).xyz;
+	float3 viewPosition = mul(float4(worldPos, 1.0f), cViewUniforms.View).xyz;
 	float4 pos = float4(0, 0, 0, viewPosition.z);
 	int shadowIndex = GetShadowIndex(light, pos, worldPos);
 	bool castShadowRay = true;
 	if (shadowIndex >= 0)
 	{
-		float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
+		float4x4 lightViewProjection = cViewUniforms.LightViewProjections[shadowIndex];
 		float4 lightPos = mul(float4(worldPos, 1.0f), lightViewProjection);
 		lightPos.xyz /= lightPos.w;
 		lightPos.x = lightPos.x * 0.5f + 0.5f;
@@ -168,7 +160,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 
 		if (all(lightPos >= 0) && all(lightPos.xy <= 1.0f))
 		{
-			Texture2D shadowTexture = tTexture2DTable[cShadowData.ShadowMapOffset + shadowIndex];
+			Texture2D shadowTexture = tTexture2DTable[cViewUniforms.ShadowMapOffset + shadowIndex];
 			attenuation *= shadowTexture.SampleCmpLevelZero(sDepthComparison, lightPos.xy, lightPos.z);
 			castShadowRay = false;
 		}
@@ -211,7 +203,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 	float3 N = vertex.Normal;
 
 	LightResult totalResult = (LightResult)0;
-	for (int i = 0; i < cViewData.NumLights; ++i)
+	for (int i = 0; i < cViewUniforms.LightCount; ++i)
 	{
 		Light light = tLights[i];
 		LightResult result = EvaluateLight(light, hitLocation, V, N, brdfData);
@@ -242,7 +234,7 @@ void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
 [shader("miss")]
 void ReflectionMiss(inout ReflectionRayPayload payload : SV_RayPayload)
 {
-	payload.output = CIESky(WorldRayDirection(), -tLights[0].Direction);
+	payload.output = CIESky(WorldRayDirection());
 }
 
 [shader("raygeneration")]
@@ -256,15 +248,15 @@ void RayGen()
 	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, texCoord, 0);
 	float4 reflectionSample = tSceneNormals.SampleLevel(sLinearClamp, texCoord, 0);
 
-	float3 view = ViewFromDepth(texCoord, depth, cViewData.ProjectionInverse);
-	float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;
+	float3 view = ViewFromDepth(texCoord, depth, cViewUniforms.ProjectionInverse);
+	float3 world = mul(float4(view, 1), cViewUniforms.ViewInverse).xyz;
 
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
 
 	if (depth > 0 && reflectivity > 0.0f)
 	{
-		float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
+		float3 V = normalize(world - cViewUniforms.ViewInverse[3].xyz);
 		float3 R = reflect(V, N);
 
 		ReflectionRayPayload payload = CastReflectionRay(world, R, depth);

@@ -15,6 +15,7 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/SceneView.h"
+#include "Graphics/SceneView.h"
 
 static bool g_Enable = true;
 static int32_t g_EmitCount = 30;
@@ -122,7 +123,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pGraphicsDevice)
     }
 }
 
-void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const Camera& camera)
+void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, GraphicsTexture* pSourceDepth)
 {
     if (ImGui::Begin("Parameters"))
     {
@@ -173,9 +174,6 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
 	        context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		
             context.SetComputeRootSignature(m_pSimulateRS.get());
-            context.BindResources(1, 0, uavs, (int)std::size(uavs));
-            context.BindResources(2, 0, srvs, (int)std::size(srvs));
-
 			context.SetPipelineState(m_pPrepareArgumentsPSO);
 
 			struct Parameters
@@ -186,6 +184,10 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
             m_ParticlesToSpawn -= parameters.EmitCount;
 
 			context.SetRootCBV(0, parameters);
+            BindViewParameters(1, context, resources);
+
+            context.BindResources(2, 0, uavs, (int)std::size(uavs));
+            context.BindResources(3, 0, srvs, (int)std::size(srvs));
 
 			context.Dispatch(1, 1, 1);
 			context.InsertUavBarrier();
@@ -198,9 +200,6 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
     emit.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.BindResources(1, 0, uavs, (int)std::size(uavs));
-			context.BindResources(2, 0, srvs, (int)std::size(srvs));
-
 		    context.SetPipelineState(m_pEmitPSO);
 
             struct Parameters
@@ -220,6 +219,11 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
             parameters.Origin = Vector3(0, 3, 0);
 
 		    context.SetRootCBV(0, parameters);
+            BindViewParameters(1, context, resources);
+
+            context.BindResources(2, 0, uavs, (int)std::size(uavs));
+			context.BindResources(3, 0, srvs, (int)std::size(srvs));
+
 		    context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDispatchSignature(), 1, m_pEmitArguments.get(), m_pEmitArguments.get());
 		    context.InsertUavBarrier();
         });
@@ -228,31 +232,22 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
     simulate.Bind([=](CommandContext& context, const RGPassResource& passResources)
         {
 		    context.SetComputeRootSignature(m_pSimulateRS.get());
-		    context.BindResources(1, 0, uavs, (int)std::size(uavs));
-		    context.BindResources(2, 0, srvs, (int)std::size(srvs));
-
 		    context.SetPipelineState(m_pSimulatePSO);
 
 		    struct Parameters
 		    {
-			    Matrix ViewProjection;
-                Matrix ViewProjectionInv;
-                Vector2 DimensionsInv;
 			    float DeltaTime{0};
 			    float ParticleLifetime{0};
-			    float Near{0};
-			    float Far{0};
 		    } parameters;
 		    parameters.DeltaTime = Time::DeltaTime();
 		    parameters.ParticleLifetime = g_LifeTime;
-		    parameters.ViewProjection = camera.GetViewProjection();
-            parameters.DimensionsInv.x = 1.0f / pSourceDepth->GetWidth();
-            parameters.DimensionsInv.y = 1.0f / pSourceDepth->GetHeight();
-            parameters.ViewProjectionInv = camera.GetViewProjectionInverse();
-		    parameters.Near = camera.GetNear();
-		    parameters.Far = camera.GetFar();
 
 		    context.SetRootCBV(0, parameters);
+            BindViewParameters(1, context, resources);
+
+            context.BindResources(2, 0, uavs, (int)std::size(uavs));
+		    context.BindResources(3, 0, srvs, (int)std::size(srvs));
+
 		    context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDispatchSignature(), 1, m_pSimulateArguments.get(), nullptr);
 		    context.InsertUavBarrier();
         });
@@ -263,8 +258,11 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
             context.InsertResourceBarrier(m_pCounterBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 		    context.SetComputeRootSignature(m_pSimulateRS.get());
-		    context.BindResources(1, 0, uavs, (int)std::size(uavs));
-		    context.BindResources(2, 0, srvs, (int)std::size(srvs));
+
+            BindViewParameters(1, context, resources);
+
+		    context.BindResources(2, 0, uavs, (int)std::size(uavs));
+		    context.BindResources(3, 0, srvs, (int)std::size(srvs));
 
 		    context.SetPipelineState(m_pSimulateEndPSO);
 		    context.Dispatch(1, 1, 1);
@@ -274,7 +272,7 @@ void GpuParticles::Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const
     std::swap(m_pAliveList1, m_pAliveList2);
 }
 
-void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera)
+void GpuParticles::Render(RGGraph& graph, const SceneView& resources, GraphicsTexture* pTarget, GraphicsTexture* pDepth)
 {
     if (!g_Enable)
     {
@@ -296,21 +294,16 @@ void GpuParticles::Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsText
 			context.SetPipelineState(m_pParticleRenderPSO);
 			context.SetGraphicsRootSignature(m_pParticleRenderRS.get());
 
-			struct FrameData
-			{
-				Matrix ViewInverse;
-				Matrix View;
-				Matrix Projection;
-			} frameData;
-			frameData.ViewInverse = camera.GetViewInverse();
-			frameData.View = camera.GetView();
-			frameData.Projection = camera.GetProjection();
-
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetRootCBV(0, frameData);
 
-			context.BindResource(1, 0, m_pParticleBuffer->GetSRV());
-			context.BindResource(1, 1, m_pAliveList1->GetSRV());
+            BindViewParameters(0, context, resources);
+
+            D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+                m_pParticleBuffer->GetSRV()->GetDescriptor(),
+                m_pAliveList1->GetSRV()->GetDescriptor(),
+            };
+
+			context.BindResources(1, 0, srvs, (int)std::size(srvs));
 
 			context.ExecuteIndirect(m_pGraphicsDevice->GetIndirectDrawSignature(), 1, m_pDrawArguments.get(), nullptr);
 			context.EndRenderPass();

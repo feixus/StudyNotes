@@ -2,25 +2,18 @@
 #include "Lighting.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0), " \
-        "CBV(b2), " \
+        "CBV(b100), " \
         "DescriptorTable(UAV(u0, numDescriptors = 1)), " \
         "DescriptorTable(SRV(t2, numDescriptors = 12))")
 
 struct ShaderData
 {
-    float4x4 ViewProjectionInv;
-    float4x4 Projection;
-    float4x4 PrevViewProjection;
     int3 ClusterDimensions;
-    int NumLights;
-    float3 InvClusterDimensions;
-    float NearZ;
-    float3 ViewLocation;
-    float FarZ;
     float Jitter;
+    float3 InvClusterDimensions;
     float LightClusterSizeFactor;
     float2 LightGridParams;
-    int3 LightClusterDimensions;
+    int2 LightClusterDimensions;
 };
 
 ConstantBuffer<ShaderData> cData : register(b0);
@@ -50,9 +43,9 @@ float3 GetWorldPosition(uint3 index, float offset, out float linearDepth)
 {
     float2 texelUV = ((float2)index.xy + 0.5f) * cData.InvClusterDimensions.xy;
     float z = (float)(index.z + offset) * cData.InvClusterDimensions.z;
-    linearDepth = cData.FarZ + Square(saturate(z)) * (cData.NearZ - cData.FarZ);
-    float ndcZ = LinearDepthToNDC(linearDepth, cData.Projection);
-    return WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
+    linearDepth = cViewUniforms.FarZ + Square(saturate(z)) * (cViewUniforms.NearZ - cViewUniforms.FarZ);
+    float ndcZ = LinearDepthToNDC(linearDepth, cViewUniforms.Projection);
+    return WorldFromDepth(texelUV, ndcZ, cViewUniforms.ViewProjectionInverse);
 }
 
 float3 GetWorldPosition(uint3 index, float offset)
@@ -95,14 +88,14 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     // compute reprojected UVW
     float3 voxelCenterWS = GetWorldPosition(cellIndex, 0.5f);
     // world space -> clip space -> NDC space from previous frame's projection
-    float4 reprojNDC = mul(float4(voxelCenterWS, 1), cData.PrevViewProjection);
+    float4 reprojNDC = mul(float4(voxelCenterWS, 1), cViewUniforms.PreviousViewProjection);
     reprojNDC.xyz /= reprojNDC.w;
 
     // convert ndc z to linear depth(view space z)
     float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
-    reprojUV.z = LinearizeDepth(reprojUV.z, cData.NearZ, cData.FarZ);
+    reprojUV.z = LinearizeDepth(reprojUV.z, cViewUniforms.NearZ, cViewUniforms.FarZ);
     // normalize to [0, 1] and apply sqrt
-    reprojUV.z = sqrt((reprojUV.z - cData.FarZ) / (cData.NearZ - cData.FarZ));
+    reprojUV.z = sqrt((reprojUV.z - cViewUniforms.FarZ) / (cViewUniforms.NearZ - cViewUniforms.FarZ));
     float4 prevScattering = tLightScattering.SampleLevel(sLinearMipPoint, reprojUV, 0);
 
     float3 inScattering = 0.0f;
@@ -144,7 +137,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
     
     if (dot(inScattering, float3(1, 1, 1)) > 0.0f)
     {
-        float3 V = normalize(cData.ViewLocation.xyz - worldPosition);
+        float3 V = normalize(cViewUniforms.ViewPosition.xyz - worldPosition);
         float4 pos = float4(cellIndex.xy, 0, z);
 
         uint tileIndex = GetLightCluster(cellIndex.xy, z);
@@ -212,7 +205,7 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
 
     float3 accumulatedLight = 0;
     float accumulatedTransmittance = 1.0f;
-    float3 previousPosition = cData.ViewLocation;
+    float3 previousPosition = cViewUniforms.ViewPosition.xyz;
 
     // each tiny slice of fog blocks a proportional amount of light. such as first slice blocks 10%, next slice blocks 10% of remaining 90
     for (int sliceIndex = 0; sliceIndex <= cData.ClusterDimensions.z; sliceIndex++)

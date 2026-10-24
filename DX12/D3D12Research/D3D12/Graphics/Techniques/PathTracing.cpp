@@ -22,7 +22,7 @@ PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pG
     m_pRS = std::make_unique<RootSignature>(m_pGraphicsDevice);
     //m_pRS->FinalizeFromShader("PathTracing RS", pLibrary);
 	m_pRS->AddConstantBufferView(0);
-	m_pRS->AddConstantBufferView(2);
+	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
 	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
 	m_pRS->Finalize("Global");
@@ -97,24 +97,10 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 
         struct Parameters
         {
-            Matrix View;
-            Matrix ViewInv;
-            Matrix Projection;
-            Matrix ProjectionInv;
-            uint32_t NumLights;
-            uint32_t TLASIndex;
-            uint32_t FrameIndex;
 			uint32_t NumBounces;
             uint32_t AccumulateFrames;
         } params{};
 
-        params.View = sceneData.pCamera->GetView();
-        params.ViewInv = sceneData.pCamera->GetViewInverse();
-        params.Projection = sceneData.pCamera->GetProjection();
-        params.ProjectionInv = sceneData.pCamera->GetProjectionInverse();
-        params.NumLights = sceneData.pLightBuffer->GetNumElements();
-        params.TLASIndex = sceneData.SceneTLAS;
-        params.FrameIndex = sceneData.FrameIndex;
 		params.NumBounces = numBounces;
         params.AccumulateFrames = m_NumAccumulatedFrames;
 
@@ -143,7 +129,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 		};
 
         context.SetRootCBV(0, params);
-        context.SetRootCBV(1, *sceneData.pShadowData);
+        BindViewParameters(1, context, sceneData);
         context.BindResources(2, 0, uavs, std::size(uavs));
         context.BindResources(3, 0, srvs, std::size(srvs));
 

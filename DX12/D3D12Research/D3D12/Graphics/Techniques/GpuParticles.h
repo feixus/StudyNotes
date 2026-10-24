@@ -8,6 +8,7 @@ class RootSignature;
 class PipelineState;
 class RGGraph;
 class Camera;
+struct SceneView;
 
 class GpuParticles
 {
@@ -15,8 +16,8 @@ public:
     GpuParticles(GraphicsDevice* pGraphicsDevice);
     ~GpuParticles() = default;
 
-    void Simulate(RGGraph& graph, GraphicsTexture* pSourceDepth, const Camera& camera);
-    void Render(RGGraph& graph, GraphicsTexture* pTarget, GraphicsTexture* pDepth, const Camera& camera);
+    void Simulate(RGGraph& graph, const SceneView& resources, GraphicsTexture* pSourceDepth);
+    void Render(RGGraph& graph, const SceneView& resources, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
 
 private:
     GraphicsDevice* m_pGraphicsDevice;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "ShadingModels.hlsli"
 
 #define SUPPORT_BC5 1
@@ -45,7 +45,7 @@ float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
     float mask = 1.0f;
     if (light.LightTexture >= 0)
     {
-        float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjections[shadowMapIndex]);
+        float4 lightPos = mul(float4(worldPosition, 1), cViewUniforms.LightViewProjections[shadowMapIndex]);
         lightPos.xyz /= lightPos.w;
         lightPos.xy = (lightPos.xy + 1) * 0.5f;
         mask = SampleLevel2D(light.LightTexture, sLinearClamp, lightPos.xy, 0).r;
@@ -56,7 +56,7 @@ float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
 float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
     // clip space via perspective divide to ndc space(positive Y is up), then to texture space(positive Y is down)
-    float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjections[shadowMapIndex]);
+    float4 lightPos = mul(float4(wPos, 1), cViewUniforms.LightViewProjections[shadowMapIndex]);
     lightPos.xyz /= lightPos.w;
     lightPos.x = lightPos.x / 2.0f + 0.5f;
     lightPos.y = lightPos.y / -2.0f + 0.5f;
@@ -65,7 +65,7 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
     float2 texCoord = lightPos.xy;
 
     // dynamic indexing into descriptor arrays where different threads in a wave/warp might access diffrent indices.
-    Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
+    Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cViewUniforms.ShadowMapOffset + shadowMapIndex)];
 
     const float Dilation = 2.0f;
     float d1 = Dilation * invShadowSize * 0.125f;
@@ -89,14 +89,14 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 
 float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
-    float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjections[shadowMapIndex]);
+    float4 lightPos = mul(float4(wPos, 1), cViewUniforms.LightViewProjections[shadowMapIndex]);
     lightPos.xyz /= lightPos.w;
     lightPos.x = lightPos.x / 2.0f + 0.5f;
     lightPos.y = lightPos.y / -2.0f + 0.5f;
     lightPos.z += 0.0001f;
         
     float2 texCoord = lightPos.xy;
-    Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
+    Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cViewUniforms.ShadowMapOffset + shadowMapIndex)];
 
     return shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord, lightPos.z);
 }
@@ -148,15 +148,15 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
     int shadowIndex = light.ShadowIndex;
     if (light.IsDirectional)
     {
-        float4 splits = pos.w > cShadowData.CascadeDepths;
-        float4 cascades = cShadowData.CascadeDepths > 0;
+        float4 splits = pos.w > cViewUniforms.CascadeDepths;
+        float4 cascades = cViewUniforms.CascadeDepths > 0;
         int cascadeIndex = dot(splits, cascades);
 
         const float cascadeFadeThreshold = 0.1f;
-        float nextSplit = cShadowData.CascadeDepths[cascadeIndex];
-        float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cShadowData.CascadeDepths[cascadeIndex - 1];
+        float nextSplit = cViewUniforms.CascadeDepths[cascadeIndex];
+        float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cViewUniforms.CascadeDepths[cascadeIndex - 1];
         float fadeFactor = (nextSplit - pos.w) / splitRange;
-        if (fadeFactor < cascadeFadeThreshold && cascadeIndex != cShadowData.NumCascades - 1)
+        if (fadeFactor < cascadeFadeThreshold && cascadeIndex != cViewUniforms.NumCascades - 1)
         {
             float lerpAmount = smoothstep(0.0f, cascadeFadeThreshold, fadeFactor);
             float dither = InterleavedGradientNoise(pos.xy);

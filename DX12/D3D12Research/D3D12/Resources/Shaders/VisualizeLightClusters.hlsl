@@ -1,6 +1,6 @@
 #include "CommonBindings.hlsli"
 
-#define RootSigVS ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
+#define RootSigVS ROOT_SIG("CBV(b100), " \
                 "DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_VERTEX)")
 
 #define MAX_LIGHTS_PER_BUCKET 10
@@ -18,13 +18,6 @@ struct InterpolantsVSToPS
     float4 Position : SV_POSITION;
     float4 Color : COLOR;
 };
-
-struct PassParameters
-{
-    float4x4 Projection;
-};
-
-ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 StructuredBuffer<AABB> tAABBs : register(t0);
 StructuredBuffer<uint2> tLightGrid : register(t1);
@@ -88,7 +81,7 @@ void GSMain(point GSInput input[1], inout TriangleStream<InterpolantsVSToPS> out
         else
         {
             InterpolantsVSToPS output;
-            output.Position = mul(positions[indices[i]], cPassParameters.Projection);
+            output.Position = mul(positions[indices[i]], cViewUniforms.Projection);
             output.Color = input[0].Color;
             outStream.Append(output);
         }

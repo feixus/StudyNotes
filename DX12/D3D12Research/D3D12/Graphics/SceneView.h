@@ -30,6 +30,14 @@ DECLARE_BITMASK_TYPE(Batch::Blending);
 
 using VisibilityMask = BitField<2048>;
 
+struct ShadowData
+{
+	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
+	Vector4 CascadeDepths;
+	uint32_t NumCascades;
+	uint32_t ShadowMapOffset;
+};
+
 struct SceneView
 {
 	GraphicsTexture* pDepthBuffer{ nullptr };
@@ -46,11 +54,12 @@ struct SceneView
 	GraphicsBuffer* pMeshBuffer{ nullptr };
 	GraphicsBuffer* pMeshInstanceBuffer{ nullptr };
 	Camera* pCamera{ nullptr };
-	ShaderInterop::ShadowData* pShadowData{ nullptr };
 	int SceneTLAS{ 0 };
 	int FrameIndex{ 0 };
 	VisibilityMask VisibilityMask;
+	ShadowData ShadowData;
 };
 
 void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
 void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
+void BindViewParameters(uint32_t rootIndex, CommandContext& context, const SceneView& scene);

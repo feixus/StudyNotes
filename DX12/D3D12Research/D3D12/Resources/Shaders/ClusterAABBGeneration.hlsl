@@ -1,16 +1,13 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))")
+            "CBV(b100), " \
+            "DescriptorTable(UAV(u0, numDescriptors = 1))")
 
 struct PassParameters
 {
-    float4x4 ProjectionInverse;
-    float2 ScreenDimensionsInv;
     int2 ClusterSize;
     int3 ClusterDimensions;
-    float NearZ;
-    float FarZ;
 };
 
 RWStructuredBuffer<AABB> uOutAABBs : register(u0);
@@ -18,7 +15,7 @@ PassParameters cPassParameters : register(b0);
 
 float GetDepthFromSlice(uint slice)
 {
-    return cPassParameters.NearZ * pow(cPassParameters.FarZ / cPassParameters.NearZ, (float)slice / cPassParameters.ClusterDimensions.z);
+    return cViewUniforms.NearZ * pow(cViewUniforms.FarZ / cViewUniforms.NearZ, (float)slice / cPassParameters.ClusterDimensions.z);
 }
 
 float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
@@ -42,8 +39,8 @@ void GenerateAABBs(uint3 threadID : SV_DISPATCHTHREADID)
     float2 minPoint_SS = float2(clusterIndex3D.x * cPassParameters.ClusterSize.x, clusterIndex3D.y * cPassParameters.ClusterSize.y);
     float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cPassParameters.ClusterSize.x, (clusterIndex3D.y + 1) * cPassParameters.ClusterSize.y);
 
-    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cPassParameters.ScreenDimensionsInv, cPassParameters.ProjectionInverse).xyz;
-    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cPassParameters.ScreenDimensionsInv, cPassParameters.ProjectionInverse).xyz;
+    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse).xyz;
+    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cViewUniforms.ScreenDimensionsInv, cViewUniforms.ProjectionInverse).xyz;
 
     float farZ = GetDepthFromSlice(clusterIndex3D.z);
     float nearZ = GetDepthFromSlice(clusterIndex3D.z + 1);

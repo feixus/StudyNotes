@@ -5,35 +5,15 @@
 #define BLOCK_SIZE 16
 #define RootSig ROOT_SIG("RootConstants(num32BitConstants = 2, b0), " \
                 "CBV(b1), " \
-                "CBV(b2, visibility = SHADER_VISIBILITY_PIXEL), " \
-                "DescriptorTable(SRV(t2, numDescriptors = 11))")
+                "CBV(b100), " \
+                "DescriptorTable(SRV(t2, numDescriptors = 8))")
 
-struct PerViewData
+struct PassData
 {
-    float4x4 View;
-    float4x4 Projection;
-    float4x4 projectionInverse;
-    float4x4 ViewProjection;
-    float4x4 ReprojectionMatrix;
-    float4 ViewPosition;
-    float4 FrustumPlanes[6];
-    float2 InvScreenDimensions;
-    float NearZ;
-    float FarZ;
-    int FrameIndex;
-    int SsrSamples;
-    int LightCount;
-    int padd;
-#if CLUSTERED_FORWARD
     int4 ClusterDimensions;
     int2 ClusterSize;
     float2 LightGridParams;
-#endif
-    int3 VolumeFogDimensions;
 };
-
-ConstantBuffer<PerObjectData> cObjectData : register(b0);
-ConstantBuffer<PerViewData> cViewData : register(b1);
 
 struct InterpolantsVSToPS
 {
@@ -46,6 +26,9 @@ struct InterpolantsVSToPS
     uint Seed : SEED;
 };
 
+ConstantBuffer<PerObjectData> cObjectData : register(b0);
+ConstantBuffer<PassData> cPassData : register(b1);
+
 Texture3D<float4> tLightScattering : register(t2);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 
@@ -53,7 +36,7 @@ StructuredBuffer<uint> tLightIndexList : register(t4);
     StructuredBuffer<uint> tLightGrid : register(t3);
     uint GetSliceFromDepth(float depth)
     {
-        return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
+        return floor(log(depth) * cPassData.LightGridParams.x - cPassData.LightGridParams.y);
     }
 #elif TILED_FORWARD
     Texture2D<uint2> tLightGrid : register(t3);
@@ -61,15 +44,15 @@ StructuredBuffer<uint> tLightIndexList : register(t4);
 
 float ScreenSpaceShadows(float3 worldPos, float3 lightDir, int stepCount, float rayLength, float ditherOffset)
 {
-    float4 rayStartPS = mul(float4(worldPos, 1), cViewData.ViewProjection);
-    float4 rayDirPS = mul(float4(lightDir * rayLength, 0), cViewData.ViewProjection);
+    float4 rayStartPS = mul(float4(worldPos, 1), cViewUniforms.ViewProjection);
+    float4 rayDirPS = mul(float4(lightDir * rayLength, 0), cViewUniforms.ViewProjection);
     float4 rayEndPS = rayStartPS + rayDirPS;
     rayStartPS.xyz /= rayStartPS.w;
     rayEndPS.xyz /= rayEndPS.w;
     float3 rayStep = rayEndPS.xyz - rayStartPS.xyz;
     float stepSize = 1.0f / stepCount;
 
-    float4 rayDepthClip = rayStartPS + mul(float4(0, 0, rayLength, 0), cViewData.Projection);
+    float4 rayDepthClip = rayStartPS + mul(float4(0, 0, rayLength, 0), cViewUniforms.Projection);
     rayDepthClip.z /= rayDepthClip.w;
     float tolerance = abs(rayDepthClip.z - rayStartPS.z) * stepSize * 2;
 
@@ -104,8 +87,8 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
 #if TILED_FORWARD
     uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
 #elif CLUSTERED_FORWARD
-    uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(pos.w));
-    uint tileIndex = clusterIndex3D.x + cViewData.ClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cViewData.ClusterDimensions.y);
+    uint3 clusterIndex3D = uint3(floor(pos.xy / cPassData.ClusterSize), GetSliceFromDepth(pos.w));
+    uint tileIndex = clusterIndex3D.x + cPassData.ClusterDimensions.x * (clusterIndex3D.y + clusterIndex3D.z * cPassData.ClusterDimensions.y);
 #endif
 
 #if TILED_FORWARD
@@ -115,7 +98,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
     uint startOffset = tLightGrid[tileIndex * 2];
     uint lightCount = tLightGrid[tileIndex * 2 + 1];
 #else
-    uint lightCount = cViewData.LightCount;
+    uint lightCount = cViewUniforms.LightCount;
 #endif
 
     LightResult totalResult = (LightResult)0;
@@ -139,8 +122,8 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
             L = -light.Direction;
         }
 
-        float ditherValue = InterleavedGradientNoise(pos.xy, cViewData.FrameIndex);
-        float length = 0.1f * pos.w * cViewData.projectionInverse[1][1];
+        float ditherValue = InterleavedGradientNoise(pos.xy, cViewUniforms.FrameIndex);
+        float length = 0.1f * pos.w * cViewUniforms.ProjectionInverse[1][1];
         float occlusion = ScreenSpaceShadows(wPos, L, 8, length, ditherValue);
         result.Diffuse *= occlusion;
         result.Specular *= occlusion;
@@ -164,18 +147,18 @@ float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, floa
         float3 reflectionWs = normalize(reflect(-V, N));
         if (dot(V, reflectionWs) <= reflectionThreshold)
         {
-            uint frameIndex = cViewData.FrameIndex;
+            uint frameIndex = cViewUniforms.FrameIndex;
             float jitter = InterleavedGradientNoise(Position.xy, frameIndex) - 1.0f;
 
-            uint maxSteps = cViewData.SsrSamples;
+            uint maxSteps = cViewUniforms.SsrSamples;
 
             float3 rayStartVS = PositionVS;
             float linearDepth = PositionVS.z;
-            float3 reflectionVs = mul(reflectionWs, (float3x3)cViewData.View);
+            float3 reflectionVs = mul(reflectionWs, (float3x3)cViewUniforms.View);
             float3 rayEndVs = rayStartVS + (reflectionVs * linearDepth);
 
-            float3 rayStart = ViewToWindow(rayStartVS, cViewData.Projection);
-            float3 rayEnd = ViewToWindow(rayEndVs, cViewData.Projection);
+            float3 rayStart = ViewToWindow(rayStartVS, cViewUniforms.Projection);
+            float3 rayEnd = ViewToWindow(rayEndVs, cViewUniforms.Projection);
 
             float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
             rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
@@ -221,7 +204,7 @@ float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, floa
             if (hitIndex > 0)
             {
                 float4 UV = float4(bestHit.xy, 0, 1);
-                UV = mul(UV, cViewData.ReprojectionMatrix);
+                UV = mul(UV, cViewUniforms.ReprojectionMatrix);
                 float2 distanceFromCenter = float2(UV.x, 1.0f - UV.y) * 2.0f - float2(1.0f, 1.0f);
                 float edgeAttenuation = saturate((1.0f - (float(hitIndex) / maxSteps)) * 4.0f);
                 edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0f - dot(distanceFromCenter, distanceFromCenter)));
@@ -242,8 +225,8 @@ InterpolantsVSToPS FetchVertexAttributes(MeshInstance instance, MeshData mesh, u
     InterpolantsVSToPS result;
     float3 position = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
     result.PositionWS = mul(float4(position, 1.0f), instance.World).xyz;
-    result.PositionVS = mul(float4(result.PositionWS, 1.0f), cViewData.View).xyz;
-    result.Position = mul(float4(result.PositionWS, 1.0f), cViewData.ViewProjection);
+    result.PositionVS = mul(float4(result.PositionWS, 1.0f), cViewUniforms.View).xyz;
+    result.Position = mul(float4(result.PositionWS, 1.0f), cViewUniforms.ViewProjection);
 
     result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
@@ -272,14 +255,14 @@ bool IsVisible(MeshInstance instance, MeshData mesh, uint meshlet)
     // Frustum cull
     for (int i = 0; i < 6; i++)
     {
-        if (dot(center, cViewData.FrustumPlanes[i]) > cullData.Radius)
+        if (dot(center, cViewUniforms.FrustumPlanes[i]) > cullData.Radius)
         {
             return false;
         }
     }
 
     // Cone cull
-    float3 viewLocation = cViewData.ViewPosition.xyz;
+    float3 viewLocation = cViewUniforms.ViewPosition.xyz;
     float3 coneApex = mul(float4(cullData.ConeApex, 1), instance.World).xyz;
     float3 coneAxis = mul(cullData.ConeAxis, (float3x3)instance.World);
     float3 view = normalize(viewLocation - coneApex);
@@ -296,8 +279,8 @@ void ASMain(uint threadID : SV_DispatchThreadID)
 {
     bool visible = false;
 
-    MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MeshData mesh = tMeshes[instance.Mesh];
+    MeshInstance instance = GetMeshInstance(cObjectData.Index);
+    MeshData mesh = GetMesh(instance.Mesh);
     if (threadID < mesh.MeshletCount)
     {
         visible = IsVisible(instance, mesh, threadID);
@@ -326,8 +309,8 @@ void MSMain(
     out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
     out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
 {
-    MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MeshData mesh = tMeshes[instance.Mesh];
+    MeshInstance instance = GetMeshInstance(cObjectData.Index);
+    MeshData mesh = GetMesh(instance.Mesh);
 
     uint meshletIndex = payload.Indices[groupID];
     if (meshletIndex >= mesh.MeshletCount)
@@ -356,7 +339,7 @@ void MSMain(
 
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
 {
-    MaterialData material = tMaterials[materialIndex];
+    MaterialData material = GetMaterial(materialIndex);
     MaterialProperties properties;
     float4 baseColor = material.BaseColorFactor;
     if (material.Diffuse >= 0)
@@ -393,8 +376,8 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
 [RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-    MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MeshData mesh = tMeshes[instance.Mesh];
+    MeshInstance instance = GetMeshInstance(cObjectData.Index);
+    MeshData mesh = GetMesh(instance.Mesh);
     InterpolantsVSToPS result = FetchVertexAttributes(instance, mesh, vertexId);
     return result;
 }
@@ -404,11 +387,11 @@ void PSMain(InterpolantsVSToPS input,
             out float4 outColor : SV_Target0,
             out float4 outNormalRoughness : SV_Target1)
 {
-    float2 screenUV = (float2)input.Position.xy * cViewData.InvScreenDimensions;
+    float2 screenUV = (float2)input.Position.xy * cViewUniforms.ScreenDimensionsInv;
     float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r; 
-    float3 V = normalize(cViewData.ViewPosition.xyz - input.PositionWS);
+    float3 V = normalize(cViewUniforms.ViewPosition.xyz - input.PositionWS);
 
-    MeshInstance instance = tMeshInstances[cObjectData.Index];
+    MeshInstance instance = GetMeshInstance(cObjectData.Index);
     MaterialProperties material = GetMaterialProperties(instance.Material, input.UV);
     float3x3 TBN = CreateTangentToWorld(normalize(input.Normal), float4(normalize(input.Tangent.xyz), 1));
     float3 N = TangentSpaceNormalMapping(material.NormalTS, TBN);
@@ -428,7 +411,7 @@ void PSMain(InterpolantsVSToPS input,
 
 // hack: volfog only working in clustered path right now...
 #if CLUSTERED_FORWARD
-    float fogSlice = sqrt((input.PositionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
+    float fogSlice = sqrt((input.PositionVS.z - cViewUniforms.FarZ) / (cViewUniforms.NearZ - cViewUniforms.FarZ));
     float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
     outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 #else

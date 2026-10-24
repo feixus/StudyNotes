@@ -44,15 +44,6 @@ static const float4 CUBE[] =
 	float4(-1.0,1.0,-1.0,1.0),
 };
 
-struct Constants
-{
-    float4x4 View;
-    float4x4 Projection;
-    float3 SunDirection;
-};
-
-ConstantBuffer<Constants> cConstants : register(b0);
-
 struct VSOutput
 {
     float4 PositionCS : SV_Position;
@@ -64,8 +55,8 @@ VSOutput VSMain(uint vertexId : SV_VertexID)
 {
     VSOutput output;
 
-    float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cConstants.View);
-    output.PositionCS = mul(float4(positionVS, 1.0f), cConstants.Projection);
+    float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cViewUniforms.View);
+    output.PositionCS = mul(float4(positionVS, 1.0f), cViewUniforms.Projection);
     output.PositionCS.z = 0.0001f;
     output.TexCoord = CUBE[vertexId].xyz;
 
@@ -75,5 +66,5 @@ VSOutput VSMain(uint vertexId : SV_VertexID)
 float4 PSMain(in VSOutput input) : SV_TARGET
 {
     float3 dir = normalize(input.TexCoord);
-    return float4(CIESky(dir, cConstants.SunDirection), 1.0f);
+    return float4(CIESky(dir), 1.0f);
 }

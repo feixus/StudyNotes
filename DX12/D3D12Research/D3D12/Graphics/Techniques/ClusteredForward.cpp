@@ -112,23 +112,16 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 
                 struct ConstantBuffer
                 {
-                    Matrix ProjectionInverse;
-                    Vector2 ScreenDimensionsInv;
                     IntVector2 ClusterSize;
                     IntVector3 ClusterDimensions;
-                    float NearZ{0};
-                    float FarZ{0};
                 } constantBuffer;
 
-                constantBuffer.ScreenDimensionsInv = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
-                constantBuffer.NearZ = inputResource.pCamera->GetFar();
-                constantBuffer.FarZ = inputResource.pCamera->GetNear();
-                constantBuffer.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
                 constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
                 constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
 
                 context.SetRootCBV(0, constantBuffer);
-                context.BindResource(1, 0, m_pAabbBuffer->GetUAV());
+                BindViewParameters(1, context, inputResource);
+                context.BindResource(2, 0, m_pAabbBuffer->GetUAV());
 
                 // Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
                 constexpr uint32_t threadGroupSize = 32;
@@ -158,21 +151,19 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 
             struct ConstantBuffer
             {
-                Matrix View;
 				IntVector3 ClusterDimensions;
-                int LightCount{ 0 };
             } constantBuffer{};
 
-            constantBuffer.View = inputResource.pCamera->GetView();
 			constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
-            constantBuffer.LightCount = inputResource.pLightBuffer->GetNumElements();
-
             context.SetRootCBV(0, constantBuffer);
-            context.BindResource(1, 0, inputResource.pLightBuffer->GetSRV());
-            context.BindResource(1, 1, m_pAabbBuffer->GetSRV());
 
-            context.BindResource(2, 0, m_pLightIndexGrid->GetUAV());
-            context.BindResource(2, 1, m_pLightGrid->GetUAV());
+            BindViewParameters(1, context, inputResource);
+
+            context.BindResource(2, 0, inputResource.pLightBuffer->GetSRV());
+            context.BindResource(2, 1, m_pAabbBuffer->GetSRV());
+
+            context.BindResource(3, 0, m_pLightIndexGrid->GetUAV());
+            context.BindResource(3, 1, m_pLightGrid->GetUAV());
 
             constexpr uint32_t threadGroupSize = 4;
             context.Dispatch(ComputeUtils::GetNumThreadGroups(
@@ -189,52 +180,23 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 		GraphicsTexture* pSourceVolume = m_pLightScatteringVolume[inputResource.FrameIndex % 2].get();
 		GraphicsTexture* pDestinationVolume = m_pLightScatteringVolume[(inputResource.FrameIndex + 1) % 2].get();
 
-        Matrix premult = {
-            2, 0, 0, 0,
-            0, -2, 0, 0,
-            0, 0, 1, 0,
-            -1, 1, 0, 1
-        };
-
-        Matrix postmult = {
-            0.5f, 0, 0, 0,
-            0, -0.5f, 0, 0,
-            0, 0, 1, 0,
-            0.5f, 0.5f, 0, 1
-        };
-        Matrix reprojectionMatrix = inputResource.pCamera->GetViewProjection().Invert() * inputResource.pCamera->GetPreviousViewProjection();
-
         struct ShaderData
         {
-            Matrix ViewProjectionInv;
-			Matrix Projection;
-            Matrix PrevViewProjection;
             IntVector3 ClusterDimensions;
-            int NumLights;
-            Vector3 InvClusterDimensions;
-            float NearZ;
-			Vector3 ViewLocation;
-            float FarZ;
             float Jitter;
+            Vector3 InvClusterDimensions;
             float LightClusterSizeFactor;
             Vector2 LightGridParams;
-            IntVector3 LightClusterDimensions;
+            IntVector2 LightClusterDimensions;
         }constantBuffer{};
 
 		constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
 		constantBuffer.InvClusterDimensions = Vector3(1.0f / constantBuffer.ClusterDimensions.x, 1.0f / constantBuffer.ClusterDimensions.y, 1.0f / constantBuffer.ClusterDimensions.z);
-		constantBuffer.ViewLocation = inputResource.pCamera->GetPosition();
-		constantBuffer.Projection = inputResource.pCamera->GetProjection();
-        constantBuffer.PrevViewProjection = inputResource.pCamera->GetPreviousViewProjection();
-		constantBuffer.ViewProjectionInv = inputResource.pCamera->GetProjectionInverse() * inputResource.pCamera->GetViewInverse();
-		constantBuffer.NumLights = inputResource.pLightBuffer->GetNumElements();
-		constantBuffer.NearZ = inputResource.pCamera->GetNear();
-		constantBuffer.FarZ = inputResource.pCamera->GetFar();
         constexpr Math::HaltonSequence<1024, 2> halton;
 		constantBuffer.Jitter = halton[inputResource.FrameIndex & 1023];
         constantBuffer.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
         constantBuffer.LightGridParams = lightGridParams;
-        constantBuffer.LightClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
+        constantBuffer.LightClusterDimensions = IntVector2(m_ClusterCountX, m_ClusterCountY);
 
 		RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volumetric Lights");
 		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResource& passResource)
@@ -255,7 +217,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 				};
 
 				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, *inputResource.pShadowData);
+                BindViewParameters(1, context, inputResource);
 				context.BindResource(2, 0, pDestinationVolume->GetUAV());
 				context.BindResources(3, 0, srvs, std::size(srvs));
 
@@ -289,7 +251,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 };
 
                 context.SetRootCBV(0, constantBuffer);
-                context.SetRootCBV(1, *inputResource.pShadowData);
+                BindViewParameters(1, context, inputResource);
                 context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
                 context.BindResources(3, 0, srvs, std::size(srvs));
 
@@ -305,71 +267,14 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
         {
 			struct PerFrameData
 			{
-				Matrix View;
-				Matrix Projection;
-                Matrix ProjectionInverse;
-                Matrix ViewProjection;
-                Matrix ReprojectionMatrix;
-                Vector4 ViewPosition;
-                Vector4 FrustumPlanes[6];
-				Vector2 InvScreenDimensions;
-				float NearZ;
-				float FarZ;
-                int FrameIndex;
-                int SsrSamples;
-                int LightCount;
-				int padd;
-				IntVector3 ClusterDimensions;
-                int pad;
+				IntVector4 ClusterDimensions;
 				IntVector2 ClusterSize;
 				Vector2 LightGridParams;
-				IntVector3 VolumeFogDimensions;
 			} frameData{};
 
-            Matrix view = inputResource.pCamera->GetView();
-
-            DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
-            inputResource.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &left, &right, &top, &bottom);
-            frameData.FrustumPlanes[0] = Vector4(nearPlane);
-            frameData.FrustumPlanes[1] = Vector4(farPlane);
-            frameData.FrustumPlanes[2] = Vector4(left);
-            frameData.FrustumPlanes[3] = Vector4(right);
-            frameData.FrustumPlanes[4] = Vector4(top);
-            frameData.FrustumPlanes[5] = Vector4(bottom);
-
-			frameData.View = view;
-			frameData.Projection = inputResource.pCamera->GetProjection();
-            frameData.ProjectionInverse = inputResource.pCamera->GetProjectionInverse();
-            frameData.ViewProjection = inputResource.pCamera->GetViewProjection();
-            frameData.ViewPosition = Vector4(inputResource.pCamera->GetPosition());
-			frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
-			frameData.InvScreenDimensions = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
-			frameData.NearZ = nearZ;
-			frameData.FarZ = farZ;
+            frameData.ClusterDimensions = IntVector4(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ, 0);
 			frameData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
 			frameData.LightGridParams = lightGridParams;
-            frameData.FrameIndex = inputResource.FrameIndex;
-            frameData.SsrSamples = Tweakables::g_SsrSamples;
-			frameData.LightCount = inputResource.pLightBuffer->GetNumElements();
-			frameData.VolumeFogDimensions = IntVector3(m_pFinalVolumeFog->GetWidth(), m_pFinalVolumeFog->GetHeight(), m_pFinalVolumeFog->GetDepth());
-
-            Matrix reprojectionMatrix = inputResource.pCamera->GetViewProjection().Invert() * inputResource.pCamera->GetPreviousViewProjection();
-            // tranform from uv to clip space: texcoord * 2 - 1
-            Matrix premult = {
-                2, 0, 0, 0,
-                0, -2, 0, 0,
-                0, 0, 1, 0,
-                -1, 1, 0, 1
-            };
-
-            // transform from clip space to uv space: texcoord * 0.5 + 0.5
-            Matrix postmult = {
-                0.5f, 0, 0, 0,
-                0, -0.5f, 0, 0,
-                0, 0, 1, 0,
-                0.5f, 0.5f, 0, 1
-            };
-            frameData.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 
             context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -399,7 +304,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
             context.SetRootCBV(1, frameData);
-            context.SetRootCBV(2, *inputResource.pShadowData);
+            BindViewParameters(2, context, inputResource);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
@@ -409,10 +314,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 				inputResource.pAO->GetSRV()->GetDescriptor(),
 				inputResource.pResolvedDepth->GetSRV()->GetDescriptor(),
 				inputResource.pPreviousColor->GetSRV()->GetDescriptor(),
-                inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
-				inputResource.pMaterialBuffer->GetSRV()->GetDescriptor(),
-                inputResource.pMeshBuffer->GetSRV()->GetDescriptor(),
-                inputResource.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 			};
 			context.BindResources(3, 0, srvs, std::size(srvs));
 
@@ -457,12 +358,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
                 context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS.get());
                 context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-                struct ConstantBuffer
-                {
-                    Matrix View;
-                } constantBuffer;
-                constantBuffer.View = m_DebugClusterViewMatrix * inputResource.pCamera->GetViewProjection();
-                context.SetRootCBV(0, constantBuffer);
+                BindViewParameters(0, context, inputResource);
                 
                 D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
                     m_pAabbBuffer->GetSRV()->GetDescriptor(),
@@ -482,15 +378,15 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
     }
 }
 
-void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, GraphicsTexture* pTarget, GraphicsTexture* pDepth)
+void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& inputResource, GraphicsTexture* pTarget, GraphicsTexture* pDepth)
 {
     if (!m_pVisualizeIntermediateTexture || m_pVisualizeIntermediateTexture->GetDesc() != pTarget->GetDesc())
     {
         m_pVisualizeIntermediateTexture = m_pGraphicsDevice->CreateTexture(pTarget->GetDesc(), "LightDensity Debug Texture");
     }
 
-    float nearZ = camera.GetNear();
-    float farZ = camera.GetFar();
+    float nearZ = inputResource.pCamera->GetNear();
+    float farZ = inputResource.pCamera->GetFar();
     Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClusterNumZ);
 
     RGPassBuilder visualizePass = graph.AddPass("Visualize Light Density");
@@ -498,23 +394,14 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
         {
             struct ConstantBuffer
             {
-                Matrix ProjectionInverse;
-                IntVector3 ClusterDimensions;
-                float padding;
+                IntVector2 ClusterDimensions;
                 IntVector2 ClusterSize;
                 Vector2 LightGridParams;
-                float Near;
-                float Far;
-                float FoV;
             } constantBuffer{};
 
-            constantBuffer.ProjectionInverse = camera.GetProjectionInverse();
-            constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClusterNumZ);
+            constantBuffer.ClusterDimensions = IntVector2(m_ClusterCountX, m_ClusterCountY);
             constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
             constantBuffer.LightGridParams = lightGridParams;
-            constantBuffer.Near = nearZ;
-            constantBuffer.Far = farZ;
-            constantBuffer.FoV = camera.GetFoV();
 
             context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -525,12 +412,13 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Gra
             context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
 
             context.SetRootCBV(0, constantBuffer);
+            BindViewParameters(1, context, inputResource);
 
-            context.BindResource(1, 0, pTarget->GetSRV());
-            context.BindResource(1, 1, pDepth->GetSRV());
-            context.BindResource(1, 2, m_pLightGrid->GetSRV());
+            context.BindResource(2, 0, pTarget->GetSRV());
+            context.BindResource(2, 1, pDepth->GetSRV());
+            context.BindResource(2, 2, m_pLightGrid->GetSRV());
             
-            context.BindResource(2, 0, m_pVisualizeIntermediateTexture->GetUAV());
+            context.BindResource(3, 0, m_pVisualizeIntermediateTexture->GetUAV());
 
             context.Dispatch(ComputeUtils::GetNumThreadGroups(
                 pTarget->GetWidth(), 16,

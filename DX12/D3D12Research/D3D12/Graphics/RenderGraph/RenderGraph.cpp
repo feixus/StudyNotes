@@ -239,7 +239,7 @@ int64_t RGGraph::Execute()
     return m_LastFenceValue;
 }
 
-void RGGraph::ExecutePass(RGPass* pPass, CommandContext& renderContext)
+void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
     PrepareResources(pPass);
 
@@ -249,8 +249,8 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& renderContext)
     // check if we're in a graphics pass and automatically call BeginRenderPass
 
     {
-        GPU_PROFILE_SCOPE(pPass->m_Name, &renderContext);
-        pPass->Execute(renderContext, resources);
+        GPU_PROFILE_SCOPE(pPass->m_Name, &context);
+        pPass->Execute(context, resources);
     }
     
 

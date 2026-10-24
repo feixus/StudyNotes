@@ -99,10 +99,10 @@ public:
     RGPass(RGGraph& graph, const char* pName, int id)
         : m_Name(pName), m_RenderGraph(graph), m_Id(id) {}
 
-    void Execute(CommandContext& renderContext, const RGPassResource& resources)
+    void Execute(CommandContext& context, const RGPassResource& resources)
     {
         check(m_ExecuteCallback.IsBound());
-        m_ExecuteCallback.Execute(renderContext, resources);
+        m_ExecuteCallback.Execute(context, resources);
     }
 
     template<typename ExecuteCallback>
@@ -272,7 +272,7 @@ public:
 
 private:
     RGPass& AddPass(RGPass* pPass);
-    void ExecutePass(RGPass* pPass, CommandContext& renderContext);
+    void ExecutePass(RGPass* pPass, CommandContext& context);
     void PrepareResources(RGPass* pPass);
     void ReleaseResources(RGPass* pPass);
     void DestroyData();

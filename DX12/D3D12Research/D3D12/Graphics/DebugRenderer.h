@@ -4,8 +4,9 @@ class GraphicsDevice;
 class RootSignature;
 class PipelineState;
 class RGGraph;
-struct Light;
 class GraphicsTexture;
+struct Light;
+struct SceneView;
 
 struct IntColor
 {
@@ -52,7 +53,7 @@ public:
 
     void Initialize(GraphicsDevice* pParent);
 	void Shutdown();
-    void Render(RGGraph& graph, const Matrix& viewProjection, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
+    void Render(RGGraph& graph, const SceneView& view, GraphicsTexture* pTarget, GraphicsTexture* pDepth);
 
     void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);
     void AddRay(const Vector3& start, const Vector3& direction, const IntColor& color);

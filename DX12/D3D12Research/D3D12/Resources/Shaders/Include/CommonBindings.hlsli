@@ -1,9 +1,12 @@
 #pragma once
 
+#ifndef COMMON_BINDINGS_HLSLI
+#define COMMON_BINDINGS_HLSLI
+
 #include "Common.hlsli"
 
 // CBVs
-ConstantBuffer<ShadowData> cShadowData : register(b2);
+ConstantBuffer<ViewUniforms> cViewUniforms : register(b100);
 
 // SRVs
 StructuredBuffer<Light> tLights :                        register(t5);
@@ -140,3 +143,29 @@ uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)
     }
     return indices;
 }
+
+MeshInstance GetMeshInstance(uint index)
+{
+    StructuredBuffer<MeshInstance> meshes = ResourceDescriptorHeap[cViewUniforms.MeshInstancesIndex];
+    return meshes[index];
+}
+
+MeshData GetMesh(uint index)
+{
+    StructuredBuffer<MeshData> meshes = ResourceDescriptorHeap[cViewUniforms.MeshesIndex];
+    return meshes[index];
+}
+
+MaterialData GetMaterial(uint index)
+{
+    StructuredBuffer<MaterialData> materials = ResourceDescriptorHeap[cViewUniforms.MaterialsIndex];
+    return materials[index];
+}
+
+Light GetLight(uint index)
+{
+    StructuredBuffer<Light> lights = ResourceDescriptorHeap[cViewUniforms.LightsIndex];
+    return lights[index];
+}
+
+#endif // COMMON_BINDINGS_HLSLI
