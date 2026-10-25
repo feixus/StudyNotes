@@ -2,11 +2,9 @@
 #include "Random.hlsli"
 
 #define RootSig ROOT_SIG("RootConstants(num32BitConstants = 2, b0), " \
-                "CBV(b1, visibility = SHADER_VISIBILITY_VERTEX), " \
-                "DescriptorTable(SRV(t10, numDescriptors = 3))")
+                "CBV(b100)")
 
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
-ConstantBuffer<ViewUniforms> cViewData : register(b1);
 
 struct Vertex
 {
@@ -19,12 +17,12 @@ struct Vertex
 [RootSignature(RootSig)]
 float4 VSMain(uint vertexId : SV_VertexID) : SV_POSITION
 {
-    MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MeshData mesh = tMeshes[instance.Mesh];
+    MeshInstance instance = GetMeshInstance(cObjectData.Index);
+    MeshData mesh = GetMesh(instance.Mesh);
     ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
     float3 position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
-    return mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);;
+    return mul(mul(float4(position, 1.0f), instance.World), cViewUniforms.ViewProjection);
 }
 
 void PSMain(

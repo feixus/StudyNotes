@@ -56,13 +56,10 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
                 sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
                 m_pSceneColor->GetSRV()->GetDescriptor(),
                 sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
-                sceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-                sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-                sceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
             };
 
             context.SetRootCBV(0, parameters);
-			BindViewParameters(1, context, sceneData);
+			context.SetRootCBV(1, GetViewUniforms(sceneData));
             context.BindResource(2, 0, sceneData.pResolvedTarget->GetUAV());
             context.BindResources(3, 0, srvs, (int)std::size(srvs));
 

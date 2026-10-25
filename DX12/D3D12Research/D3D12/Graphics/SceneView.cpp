@@ -49,11 +49,11 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 	}
 }
 
-void BindViewParameters(uint32_t rootIndex, CommandContext& context, const SceneView& scene)
+ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView)
 {
 	ShaderInterop::ViewUniforms parameters;
-	const Camera& camera = *scene.pCamera;
-	GraphicsTexture* pMainTexture = scene.pRenderTarget;
+	const Camera& camera = *sceneView.pCamera;
+	GraphicsTexture* pMainTexture = sceneView.pRenderTarget;
 
 	parameters.View = camera.GetView();
 	parameters.ViewInverse = camera.GetViewInverse();
@@ -101,20 +101,20 @@ void BindViewParameters(uint32_t rootIndex, CommandContext& context, const Scene
 	parameters.FarZ = camera.GetFar();
 	parameters.FoV = camera.GetFoV();
 
-	parameters.FrameIndex = scene.FrameIndex;
+	parameters.FrameIndex = sceneView.FrameIndex;
 	parameters.SsrSamples = 1;
-	parameters.LightCount = scene.pLightBuffer->GetNumElements();
+	parameters.LightCount = sceneView.pLightBuffer->GetNumElements();
 
-	memcpy(&parameters.LightViewProjections, &scene.ShadowData.LightViewProjections, sizeof(parameters.LightViewProjections));
-	parameters.CascadeDepths = scene.ShadowData.CascadeDepths;
-	parameters.NumCascades = scene.ShadowData.NumCascades;
-	parameters.ShadowMapOffset = scene.ShadowData.ShadowMapOffset;
+	memcpy(&parameters.LightViewProjections, &sceneView.ShadowData.LightViewProjections, sizeof(parameters.LightViewProjections));
+	parameters.CascadeDepths = sceneView.ShadowData.CascadeDepths;
+	parameters.NumCascades = sceneView.ShadowData.NumCascades;
+	parameters.ShadowMapOffset = sceneView.ShadowData.ShadowMapOffset;
 
-	parameters.TLASIndex = scene.SceneTLAS;
-	parameters.MeshesIndex = scene.pMeshBuffer->GetSRVIndex();
-	parameters.MaterialsIndex = scene.pMaterialBuffer->GetSRVIndex();
-	parameters.MeshInstancesIndex = scene.pMeshInstanceBuffer->GetSRVIndex();
-	parameters.LightsIndex = scene.pLightBuffer->GetSRVIndex();
+	parameters.TLASIndex = sceneView.SceneTLAS;
+	parameters.MeshesIndex = sceneView.pMeshBuffer->GetSRVIndex();
+	parameters.MaterialsIndex = sceneView.pMaterialBuffer->GetSRVIndex();
+	parameters.MeshInstancesIndex = sceneView.pMeshInstanceBuffer->GetSRVIndex();
+	parameters.LightsIndex = sceneView.pLightBuffer->GetSRVIndex();
 
-	context.SetRootCBV(rootIndex, parameters);
+	return parameters;
 }

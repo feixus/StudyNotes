@@ -3,7 +3,6 @@
 #define RootSig ROOT_SIG("RootConstants(num32BitConstants = 2, b0), " \
                 "CBV(b1, visibility = SHADER_VISIBILITY_ALL), " \
                 "CBV(b100, visibility = SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t11, numDescriptors = 1)), " \
                 "DescriptorTable(UAV(u1, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL)")
 
 struct ObjectData
@@ -50,8 +49,8 @@ struct PSInput
 PSInput MarkClusters_VS(uint VertexId : SV_VertexID)
 {
     PSInput output = (PSInput)0;
-    MeshData mesh = tMeshes[cObjectData.Mesh];
-    Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
+    MeshData mesh = GetMesh(cObjectData.Mesh);
+    Vertex input = tBufferTable[mesh.BufferIndex].Load<Vertex>(VertexId * sizeof(Vertex));
     float4 posWS = mul(float4(UnpackHalf3(input.position), 1.0f), mesh.World);
     output.positionVS = mul(posWS, cViewUniforms.View);
     output.position = mul(posWS, cViewUniforms.ViewProjection);

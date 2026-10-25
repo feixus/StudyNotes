@@ -179,7 +179,7 @@ DemoApp::DemoApp(HWND hWnd, const IntVector2& windowRect, int sampleCount) :
 	instanceFlags |= CommandLine::GetBool("dred") ? GraphicsInstanceFlags::DRED: GraphicsInstanceFlags::None;
 	instanceFlags |= CommandLine::GetBool("gpuvalidation") ? GraphicsInstanceFlags::GpuValidation : GraphicsInstanceFlags::None;
 	instanceFlags |= CommandLine::GetBool("pix") ? GraphicsInstanceFlags::Pix : GraphicsInstanceFlags::None;
-	//instanceFlags |= GraphicsInstanceFlags::DebugDevice | GraphicsInstanceFlags::DRED | GraphicsInstanceFlags::GpuValidation;
+	// instanceFlags |= Graphic-sInstanceFlags::DebugDevice | GraphicsInstanceFlags::DRED | GraphicsInstanceFlags::GpuValidation;
 	std::unique_ptr<GraphicsInstance> pInstance = GraphicsInstance::CreateInstance(instanceFlags);
 
 	ComPtr<IDXGIAdapter4> pAdapter = pInstance->EnumerateAdapter(CommandLine::GetBool("warp"));
@@ -694,15 +694,7 @@ void DemoApp::Update()
 
 				context.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
 
-				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-				};
-
-				context.BindResources(2, 0, srvs, std::size(srvs));
-
-				BindViewParameters(1, context, m_SceneData);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);
@@ -723,17 +715,10 @@ void DemoApp::Update()
 				context.SetComputeRootSignature(m_pVisibilityShadingRS.get());
 				context.SetPipelineState(m_pVisibilityShadingPSO);
 
-				BindViewParameters(0, context, m_SceneData);
+				context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
 				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_SceneData.pLightBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 					m_pVisibilityTexture->GetSRV()->GetDescriptor(),
 				};
 
@@ -761,7 +746,7 @@ void DemoApp::Update()
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pShadowRS.get());
 
-				ShaderInterop::ViewUniforms viewData{};
+				ShaderInterop::ViewUniforms viewData = GetViewUniforms(m_SceneData);
 
 				for (int i = 0; i < shadowIndex; ++i)
 				{
@@ -773,13 +758,6 @@ void DemoApp::Update()
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetRootCBV(1, viewData);
-
-					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-						m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-					};
-					context.BindResources(2, 0, srvs, std::size(srvs));
 
 					VisibilityMask mask;
 					mask.SetAll();
@@ -818,14 +796,7 @@ void DemoApp::Update()
 
 				context.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 
-				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-				};
-				context.BindResources(2, 0, srvs, std::size(srvs));
-
-				BindViewParameters(1, context, m_SceneData);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);
@@ -962,7 +933,7 @@ void DemoApp::Update()
 				context.SetGraphicsRootSignature(m_pSkyboxRS.get());
 				context.SetPipelineState(m_pSkyboxPSO);
 
-				BindViewParameters(0, context, m_SceneData);
+				context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
 				context.Draw(0, 36);
 
@@ -1020,7 +991,7 @@ void DemoApp::Update()
 					context.SetComputeRootSignature(m_pTemporalResolveRS.get());
 					context.SetPipelineState(m_pTemporalResolvePSO);
 
-					BindViewParameters(0, context, m_SceneData);
+					context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
 					context.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
 					context.BindResource(2, 0, m_pVelocity->GetSRV());
@@ -1049,7 +1020,7 @@ void DemoApp::Update()
 				context.SetComputeRootSignature(m_pReduceDepthRS.get());
 				context.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
-				BindViewParameters(0, context, m_SceneData);
+				context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 				
 				context.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
 				context.BindResource(2, 0, pDepthStencil->GetSRV());

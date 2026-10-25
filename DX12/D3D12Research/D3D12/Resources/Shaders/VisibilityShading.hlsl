@@ -2,15 +2,14 @@
 #include "Random.hlsli"
 #include "Lighting.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b1, visibility = SHADER_VISIBILITY_ALL),"      \
-    "DescriptorTable(SRV(t5, numDescriptors = 13)),"    \
+#define RootSig ROOT_SIG("CBV(b100),"      \
+    "DescriptorTable(SRV(t10, numDescriptors = 2)),"    \
     "DescriptorTable(UAV(u0, numDescriptors = 2))")
 
-Texture2D<uint> tVisibilityTexture : register(t13);
+StructuredBuffer<Light> tLightsInfo : register(t10);
+Texture2D<uint> tVisibilityTexture : register(t11);
 RWTexture2D<float4> uTarget : register(u0);
 RWTexture2D<float4> uNormalsTarget : register(u1);
-
-ConstantBuffer<ViewUniforms> cViewData : register(b1);
 
 struct VertexInput
 {
@@ -31,7 +30,7 @@ struct VertexAttribute
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float2 dx, float2 dy)
 {
     MaterialProperties properties;
-	MaterialData material = tMaterials[NonUniformResourceIndex(materialIndex)];
+	MaterialData material = GetMaterial(materialIndex);
 
 	float4 baseColor = material.BaseColorFactor;
 	if (material.Diffuse >= 0)
@@ -140,8 +139,8 @@ float3 InterpolateWithDeriv(BaryDerivatives deriv, float3 v0, float3 v1, float3 
 [RootSignature(RootSig)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-    if (dispatchThreadId.x >= cViewData.ScreenDimensions.x ||
-        dispatchThreadId.y >= cViewData.ScreenDimensions.y)
+    if (dispatchThreadId.x >= cViewUniforms.ScreenDimensions.x ||
+        dispatchThreadId.y >= cViewUniforms.ScreenDimensions.y)
     {
         return;
     }
@@ -154,8 +153,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint objIndex = visibilityMask >> 16;
     uint triangleIndex = visibilityMask & 0xFFFF;
 
-    MeshInstance instance = tMeshInstances[NonUniformResourceIndex(objIndex)];
-    MeshData mesh = tMeshes[NonUniformResourceIndex(instance.Mesh)];
+    MeshInstance instance = GetMeshInstance(objIndex);
+    MeshData mesh = GetMesh(instance.Mesh);
     ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
     uint3 indices = GetPrimitive(mesh, triangleIndex);
@@ -171,14 +170,14 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 		vertices[i].Tangent = normalData.Tangent;
 	}
 
-    float2 ndc = (float2)dispatchThreadId.xy * rcp(cViewData.ScreenDimensions) * 2.0f - 1.0f;
+    float2 ndc = (float2)dispatchThreadId.xy * rcp(cViewUniforms.ScreenDimensions) * 2.0f - 1.0f;
     ndc.y *= -1;
 
-    float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), instance.World), cViewData.ViewProjection);
-    float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), instance.World), cViewData.ViewProjection);
-    float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), instance.World), cViewData.ViewProjection);
+    float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), instance.World), cViewUniforms.ViewProjection);
+    float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), instance.World), cViewUniforms.ViewProjection);
+    float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), instance.World), cViewUniforms.ViewProjection);
 
-    BaryDerivatives derivs = InitBaryDerivatives(clipPos0, clipPos1, clipPos2, ndc, rcp(cViewData.ScreenDimensions));
+    BaryDerivatives derivs = InitBaryDerivatives(clipPos0, clipPos1, clipPos2, ndc, rcp(cViewUniforms.ScreenDimensions));
 
     float2 dx, dy;
     float2 UV = InterpolateWithDeriv(derivs, vertices[0].UV, vertices[1].UV, vertices[2].UV, dx, dy);
@@ -194,9 +193,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     N = TangentSpaceNormalMapping(properties.NormalTS, TBN);
 
     BrdfData brdfData = GetBrdfData(properties);
-    float3 V = normalize(P - cViewData.ViewInverse[3].xyz);
+    float3 V = normalize(P - cViewUniforms.ViewInverse[3].xyz);
 
-    Light light = tLights[0];
+    Light light = tLightsInfo[0];
     float3 L = -light.Direction;
 
     float4 color = light.GetColor();

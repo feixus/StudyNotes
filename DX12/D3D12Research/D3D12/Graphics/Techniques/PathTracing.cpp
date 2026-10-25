@@ -24,7 +24,7 @@ PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pG
 	m_pRS->AddConstantBufferView(0);
 	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
 	m_pRS->Finalize("Global");
 
     StateObjectInitializer desc{};
@@ -113,13 +113,6 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
         const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
         {
             sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
-            sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
-            sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
-            sceneData.pPreviousColor->GetSRV()->GetDescriptor(),
-            sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
-            sceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-            sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-            sceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
         };
 
 		const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] =
@@ -129,7 +122,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 		};
 
         context.SetRootCBV(0, params);
-        BindViewParameters(1, context, sceneData);
+        context.SetRootCBV(1, GetViewUniforms(sceneData));
         context.BindResources(2, 0, uavs, std::size(uavs));
         context.BindResources(3, 0, srvs, std::size(srvs));
 

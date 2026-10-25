@@ -96,7 +96,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, GraphicsTextur
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
 			context.SetGraphicsRootSignature(m_pRS.get());
 
-			BindViewParameters(0, context, view);
+			context.SetRootCBV(0, GetViewUniforms(view));
 
             constexpr uint32_t VertexStride = (uint32_t)(sizeof(DebugLine) * 0.5f);
 			if (linePrimitives != 0)

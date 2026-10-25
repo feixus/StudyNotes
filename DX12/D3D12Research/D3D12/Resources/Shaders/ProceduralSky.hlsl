@@ -46,7 +46,7 @@ static const float4 CUBE[] =
 
 struct VSOutput
 {
-    float4 PositionCS : SV_Position;
+    float4 Position : SV_Position;
     float3 TexCoord : TEXCOORD;
 };
 
@@ -56,8 +56,8 @@ VSOutput VSMain(uint vertexId : SV_VertexID)
     VSOutput output;
 
     float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cViewUniforms.View);
-    output.PositionCS = mul(float4(positionVS, 1.0f), cViewUniforms.Projection);
-    output.PositionCS.z = 0.0001f;
+    output.Position = mul(float4(positionVS, 1.0f), cViewUniforms.Projection);
+    output.Position.z = 0.0001f;
     output.TexCoord = CUBE[vertexId].xyz;
 
     return output;

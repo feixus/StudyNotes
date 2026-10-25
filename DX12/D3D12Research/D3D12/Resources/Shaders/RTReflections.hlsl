@@ -12,7 +12,7 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b0),"
     "CBV(b100),"
     "DescriptorTable(UAV(u0, numDescriptors=1)),"
-    "DescriptorTable(SRV(t5, numDescriptors=8)),"
+    "DescriptorTable(SRV(t5, numDescriptors=5)),"
     DEFAULT_ROOT_SIG_PARAMS
 };
 
@@ -66,7 +66,7 @@ float CastShadowRay(float3 origin, float3 direction)
 			// alpha test materials 
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				MeshInstance instance = tMeshInstances[rayQuery.CandidateInstanceID()];
+				MeshInstance instance = GetMeshInstance(rayQuery.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance,
 											rayQuery.CandidateTriangleBarycentrics(),
 											rayQuery.CandidatePrimitiveIndex(),
@@ -192,7 +192,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 {
 	payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
-	MeshInstance instance = tMeshInstances[InstanceID()];
+	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	float mipLevel = 2.0f;
 	MaterialProperties material = GetMaterialProperties(instance.Material, vertex.UV, mipLevel);
@@ -216,7 +216,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 [shader("anyhit")]
 void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	MeshInstance instance = tMeshInstances[InstanceID()];
+	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	MaterialProperties material = GetMaterialProperties(instance.Material, vertex.UV, 0);
 	if (material.Opacity < 0.5f)

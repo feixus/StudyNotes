@@ -184,7 +184,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Graphics
             m_ParticlesToSpawn -= parameters.EmitCount;
 
 			context.SetRootCBV(0, parameters);
-            BindViewParameters(1, context, resources);
+            context.SetRootCBV(1, GetViewUniforms(resources));
 
             context.BindResources(2, 0, uavs, (int)std::size(uavs));
             context.BindResources(3, 0, srvs, (int)std::size(srvs));
@@ -219,7 +219,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Graphics
             parameters.Origin = Vector3(0, 3, 0);
 
 		    context.SetRootCBV(0, parameters);
-            BindViewParameters(1, context, resources);
+            context.SetRootCBV(1, GetViewUniforms(resources));
 
             context.BindResources(2, 0, uavs, (int)std::size(uavs));
 			context.BindResources(3, 0, srvs, (int)std::size(srvs));
@@ -243,7 +243,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Graphics
 		    parameters.ParticleLifetime = g_LifeTime;
 
 		    context.SetRootCBV(0, parameters);
-            BindViewParameters(1, context, resources);
+            context.SetRootCBV(1, GetViewUniforms(resources));
 
             context.BindResources(2, 0, uavs, (int)std::size(uavs));
 		    context.BindResources(3, 0, srvs, (int)std::size(srvs));
@@ -259,7 +259,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Graphics
 
 		    context.SetComputeRootSignature(m_pSimulateRS.get());
 
-            BindViewParameters(1, context, resources);
+            context.SetRootCBV(1, GetViewUniforms(resources));
 
 		    context.BindResources(2, 0, uavs, (int)std::size(uavs));
 		    context.BindResources(3, 0, srvs, (int)std::size(srvs));
@@ -296,7 +296,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& resources, GraphicsTe
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-            BindViewParameters(0, context, resources);
+            context.SetRootCBV(0, GetViewUniforms(resources));
 
             D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
                 m_pParticleBuffer->GetSRV()->GetDescriptor(),

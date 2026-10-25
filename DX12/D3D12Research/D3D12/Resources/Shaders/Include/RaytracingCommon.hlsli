@@ -17,7 +17,7 @@ struct VertexAttribute
 VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycentrics, uint primitiveIndex, float4x3 worldMatrix)
 {
 	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
-	MeshData mesh = tMeshes[instance.Mesh];
+	MeshData mesh = GetMesh(instance.Mesh);
 
     uint3 indices = GetPrimitive(mesh, primitiveIndex);
 	VertexAttribute outData;
@@ -49,7 +49,7 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 uv, float mipLevel)
 {
     MaterialProperties properties;
-	MaterialData material = tMaterials[materialIndex];
+	MaterialData material = GetMaterial(materialIndex);
 	float4 baseColor = material.BaseColorFactor;
 	if (material.Diffuse >= 0)
 	{

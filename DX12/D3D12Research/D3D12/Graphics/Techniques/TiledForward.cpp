@@ -62,7 +62,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
             context.SetPipelineState(m_pComputeLightCullPipeline);
             context.SetComputeRootSignature(m_pComputeLightCullRS.get());
 
-            BindViewParameters(0, context, inputResource);
+            context.SetRootCBV(0, GetViewUniforms(inputResource));
 
             D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
                 m_pLightIndexCounter->GetUAV()->GetDescriptor(),
@@ -117,7 +117,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& inputResource)
             context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-            BindViewParameters(2, context, inputResource);
+            context.SetRootCBV(2, GetViewUniforms(inputResource));
 
             {
                 GPU_PROFILE_SCOPE("Opaque", &context);
@@ -200,7 +200,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, const SceneView& inputR
 
             context.SetRootCBV(0, constantData);
 
-            BindViewParameters(1, context, inputResource);
+            context.SetRootCBV(1, GetViewUniforms(inputResource));
 
             context.BindResource(2, 0, pTarget->GetSRV());
             context.BindResource(2, 1, pDepth->GetSRV());
