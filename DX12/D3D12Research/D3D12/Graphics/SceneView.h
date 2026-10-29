@@ -54,7 +54,7 @@ struct SceneView
 	GraphicsBuffer* pMeshBuffer{ nullptr };
 	GraphicsBuffer* pMeshInstanceBuffer{ nullptr };
 	Camera* pCamera{ nullptr };
-	int SceneTLAS{ 0 };
+	GraphicsBuffer* pSceneTLAS{ nullptr };
 	int FrameIndex{ 0 };
 	VisibilityMask VisibilityMask;
 	ShadowData ShadowData;

@@ -126,7 +126,7 @@ namespace ShaderInterop
 		float Range;
 		int ShadowIndex;
 		float InvShadowSize;
-		int LightTexture;
+		uint LightTexture;
 
         // flags
         uint IsEnabled : 1;

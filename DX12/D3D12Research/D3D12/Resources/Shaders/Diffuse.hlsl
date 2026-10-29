@@ -110,7 +110,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V, float3 diffuseC
 #else 
         uint lightIndex = i;
 #endif
-        Light light = tLights[lightIndex];
+        Light light = GetLight(lightIndex);
 
         LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, wPos, N, V);
 
@@ -342,7 +342,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
     MaterialData material = GetMaterial(materialIndex);
     MaterialProperties properties;
     float4 baseColor = material.BaseColorFactor;
-    if (material.Diffuse >= 0)
+    if (material.Diffuse != INVALID_HANDLE)
     {
         baseColor *= Sample2D(material.Diffuse, sMaterialSampler, UV);
     }
@@ -351,21 +351,21 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
 
     properties.Roughness = material.RoughnessFactor;
     properties.Metalness = material.MetalnessFactor;
-    if (material.RoughnessMetalness >= 0)
+    if (material.RoughnessMetalness != INVALID_HANDLE)
     {
         float4 roughnessMetalness = Sample2D(material.RoughnessMetalness, sMaterialSampler, UV);
         properties.Roughness *= roughnessMetalness.g;
         properties.Metalness *= roughnessMetalness.b;
     }
     properties.Emissive = material.EmissiveFactor.rgb;
-    if (material.Emissive >= 0)
+    if (material.Emissive != INVALID_HANDLE)
     {
         properties.Emissive *= Sample2D(material.Emissive, sMaterialSampler, UV).rgb;
     }
     properties.Specular = 0.5f;
 
     properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
-    if (material.Normal >= 0)
+    if (material.Normal != INVALID_HANDLE)
     {
         properties.NormalTS = Sample2D(material.Normal, sMaterialSampler, UV).xyz;
     }
@@ -405,7 +405,7 @@ void PSMain(InterpolantsVSToPS input,
 
     float3 outRadiance = 0;
     outRadiance += lighting.Diffuse + lighting.Specular;
-    outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, tLights[0].GetColor().rgb * 0.1f);
+    outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, GetLight(0).GetColor().rgb * 0.1f);
     outRadiance += ssr * ambientOcclusion;
     outRadiance += material.Emissive;
 

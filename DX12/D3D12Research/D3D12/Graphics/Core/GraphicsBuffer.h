@@ -147,8 +147,8 @@ public:
 	ShaderResourceView* GetSRV() const { return m_pSrv; }
 	UnorderedAccessView* GetUAV() const { return m_pUav; }
 
-	int32_t GetSRVIndex() const;
-	int32_t GetUAVIndex() const;
+	uint32_t GetSRVIndex() const;
+	uint32_t GetUAVIndex() const;
 
 	GraphicsBuffer* GetCounter() const { return m_pCounter.get(); }
 

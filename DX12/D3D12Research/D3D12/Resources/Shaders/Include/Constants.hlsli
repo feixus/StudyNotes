@@ -8,6 +8,8 @@
 #define PI_DIV_4 0.78539816339
 #define INV_PI 0.31830988618
 
+#define INVALID_HANDLE 0xFFFFFFFF
+
 #define TEXTURE_1D 0
 #define TEXTURE_2D 1
 #define TEXTURE_3D 2

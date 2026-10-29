@@ -3,10 +3,9 @@
 #include "Lighting.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b100),"      \
-    "DescriptorTable(SRV(t10, numDescriptors = 2)),"    \
+    "DescriptorTable(SRV(t11, numDescriptors = 1)),"    \
     "DescriptorTable(UAV(u0, numDescriptors = 2))")
 
-StructuredBuffer<Light> tLightsInfo : register(t10);
 Texture2D<uint> tVisibilityTexture : register(t11);
 RWTexture2D<float4> uTarget : register(u0);
 RWTexture2D<float4> uNormalsTarget : register(u1);
@@ -195,7 +194,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     BrdfData brdfData = GetBrdfData(properties);
     float3 V = normalize(P - cViewUniforms.ViewInverse[3].xyz);
 
-    Light light = tLightsInfo[0];
+    Light light = GetLight(0);
     float3 L = -light.Direction;
 
     float4 color = light.GetColor();

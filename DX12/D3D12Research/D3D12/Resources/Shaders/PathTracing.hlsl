@@ -309,7 +309,7 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
     {
         float candidateWeight = (float)cViewUniforms.LightCount;
         int candidate = Random(seed, 0, cViewUniforms.LightCount);
-        Light light = tLights[candidate];
+        Light light = GetLight(candidate);
         float3 L = normalize(light.Position - position);
         if (light.IsDirectional)
         {
@@ -415,7 +415,7 @@ void RayGen()
         float lightWeight = 0.0f;
         if (SampleLightRIS(seed, payload.Position, N, lightIndex, lightWeight))
         {
-            LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, geometryNormal, brdfData);
+            LightResult result = EvaluateLight(GetLight(lightIndex), payload.Position, V, N, geometryNormal, brdfData);
             radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
 		}
 

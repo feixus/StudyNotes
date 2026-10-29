@@ -5,6 +5,7 @@
 GlobalRootSignature GlobalRootSig = 
 {
     "CBV(b0),"
+    "CBV(b100),"
     "DescriptorTable(UAV(u0, numDescriptors=1)),"
     "DescriptorTable(SRV(t0, numDescriptors=1)),"
     DEFAULT_ROOT_SIG_PARAMS
@@ -15,14 +16,9 @@ Texture2D tSceneDepth : register(t0);
 
 struct Data
 {
-    float4x4 ViewInverse;
-    float4x4 ProjectionInverse;
-    float4x4 ViewProjectionInverse;
     float Power;
     float Radius;
     int Samples;
-    uint TLASIndex;
-    uint FrameIndex;
 };
 
 ConstantBuffer<Data> cData : register(b0);
@@ -81,10 +77,10 @@ void RayGen()
     float2 texCoord = (float2)launchIndex * dimInv;
 
     float depth = tSceneDepth.SampleLevel(sLinearClamp, texCoord, 0).r;
-    float3 world = WorldFromDepth(texCoord, depth, cData.ViewProjectionInverse);
-    float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, texCoord, dimInv, cData.ViewProjectionInverse);
+    float3 world = WorldFromDepth(texCoord, depth, cViewUniforms.ViewProjectionInverse);
+    float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, texCoord, dimInv, cViewUniforms.ViewProjectionInverse);
 
-    uint randSeed = SeedThread(launchIndex, launchDim, cData.FrameIndex);
+    uint randSeed = SeedThread(launchIndex, launchDim, cViewUniforms.FrameIndex);
     float accumulateAo = 0;
     for (int i = 0; i < cData.Samples; i++)
     {
@@ -101,7 +97,7 @@ void RayGen()
         // trace the ray
         TraceRay(
             // AccelerationStructure
-            tTLASTable[cData.TLASIndex],
+            tTLASTable[cViewUniforms.TLASIndex],
             
             // RayFlags
             RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER,

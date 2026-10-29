@@ -12,7 +12,7 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b0),"
     "CBV(b100),"
     "DescriptorTable(UAV(u0, numDescriptors=1)),"
-    "DescriptorTable(SRV(t5, numDescriptors=5)),"
+    "DescriptorTable(SRV(t7, numDescriptors=6)),"
     DEFAULT_ROOT_SIG_PARAMS
 };
 
@@ -205,7 +205,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 	LightResult totalResult = (LightResult)0;
 	for (int i = 0; i < cViewUniforms.LightCount; ++i)
 	{
-		Light light = tLights[i];
+		Light light = GetLight(i);
 		LightResult result = EvaluateLight(light, hitLocation, V, N, brdfData);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;

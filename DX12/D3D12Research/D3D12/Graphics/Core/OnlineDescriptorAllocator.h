@@ -54,7 +54,7 @@ public:
 	PersistentDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap);
 	DescriptorHandle Allocate();
 	void Free(DescriptorHandle& handle);
-	void Free(int32_t& heapIndex);
+	void Free(uint32_t& heapIndex);
 
 private:
 	GlobalOnlineDescriptorHeap* m_pHeapAllocator;

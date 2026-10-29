@@ -3,7 +3,7 @@
 
 #define RootSig ROOT_SIG("CBV(b100), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 5)), " \
-                "DescriptorTable(SRV(t0, numDescriptors = 2))")
+                "DescriptorTable(SRV(t0, numDescriptors = 1))")
                 
 
 #define MAX_LIGHTS_PER_TILE 256
@@ -11,7 +11,6 @@
 #define SPLITZ_CULLING 1
 
 Texture2D tDepthTexture : register(t0);
-StructuredBuffer<Light> tSceneLights : register(t1);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uOpaqueLightIndexList : register(u1);
@@ -154,7 +153,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_GroupThreadID, uint 
     // perform the light culling
     for (uint i = groupIndex; i < cViewUniforms.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
-        Light light = tSceneLights[i];
+        Light light = GetLight(i);
         if (light.IsPoint)
         {
             Sphere sphere;

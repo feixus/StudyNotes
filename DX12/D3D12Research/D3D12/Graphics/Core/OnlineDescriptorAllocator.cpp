@@ -200,7 +200,7 @@ void PersistentDescriptorAllocator::Free(DescriptorHandle& handle)
 	handle.Reset();
 }
 
-void PersistentDescriptorAllocator::Free(int32_t& heapIndex)
+void PersistentDescriptorAllocator::Free(uint32_t& heapIndex)
 {
 	std::lock_guard lock(m_AllocationLock);
 	check(m_HeapBlocks.size() > 0);

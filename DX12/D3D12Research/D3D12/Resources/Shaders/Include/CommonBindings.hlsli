@@ -9,13 +9,12 @@
 ConstantBuffer<ViewUniforms> cViewUniforms : register(b100);
 
 // SRVs
-StructuredBuffer<Light> tLights :                        register(t5);
 Texture2D tAO :                                          register(t6);
 Texture2D tDepth :                                       register(t7);
 Texture2D tPreviousSceneColor :                          register(t8);
 Texture2D tSceneNormals :                                register(t9);
-// Materials, meshes and mesh instances are no longer bound as SRV tables.
-// They are reached bindlessly through GetMaterial()/GetMesh()/GetMeshInstance() below.
+// Materials, meshes, mesh instances and lights are no longer bound as SRV tables.
+// They are reached bindlessly through GetMaterial()/GetMesh()/GetMeshInstance()/GetLight() below.
 
 // bindless samples
 SamplerState sSamplerTable[] :                           register(s0, space100);

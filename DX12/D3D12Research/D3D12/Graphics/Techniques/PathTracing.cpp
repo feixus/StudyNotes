@@ -24,7 +24,7 @@ PathTracing::PathTracing(GraphicsDevice* pGraphicsDevice) : m_pGraphicsDevice(pG
 	m_pRS->AddConstantBufferView(0);
 	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+	m_pRS->AddDescriptorTableSimple(7, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 	m_pRS->Finalize("Global");
 
     StateObjectInitializer desc{};
@@ -112,7 +112,9 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 
         const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
         {
-            sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
+            sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
+            sceneData.pPreviousColor->GetSRV()->GetDescriptor(),
+            sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
         };
 
 		const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] =

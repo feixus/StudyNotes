@@ -159,8 +159,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& inputResource)
 
             context.SetRootCBV(1, GetViewUniforms(inputResource));
 
-            context.BindResource(2, 0, inputResource.pLightBuffer->GetSRV());
-            context.BindResource(2, 1, m_pAabbBuffer->GetSRV());
+            context.BindResource(2, 0, m_pAabbBuffer->GetSRV());
 
             context.BindResource(3, 0, m_pLightIndexGrid->GetUAV());
             context.BindResource(3, 1, m_pLightGrid->GetUAV());

@@ -598,7 +598,7 @@ void DemoApp::Update()
 	m_SceneData.pCamera = m_pCamera.get();
 	m_SceneData.ShadowData = shadowData;
 	m_SceneData.FrameIndex = m_Frame;
-	m_SceneData.SceneTLAS = m_pTLAS ? m_pTLAS->GetSRV()->GetHeapIndex() : -1;
+	m_SceneData.pSceneTLAS = m_pTLAS.get();
 	m_SceneData.pNormals = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 
@@ -718,7 +718,6 @@ void DemoApp::Update()
 				context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
 				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					m_SceneData.pLightBuffer->GetSRV()->GetDescriptor(),
 					m_pVisibilityTexture->GetSRV()->GetDescriptor(),
 				};
 
